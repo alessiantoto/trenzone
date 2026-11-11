@@ -623,7 +623,7 @@ const Step1ExpressCheckout = ({
 
       if (calc.bundleDiscount > 0) {
         lineItems.push({
-          name: locale === 'ro' ? 'Reducere pachet (10%)' : 'Bundle discount (10%)',
+          name: locale === 'ro' ? `Reducere pachet (${calc.bundlePercent}%)` : `Bundle discount (${calc.bundlePercent}%)`,
           amount: -calc.bundleDiscount
         });
       }
@@ -724,7 +724,7 @@ const Step1ExpressCheckout = ({
 
       if (calc.bundleDiscount > 0) {
         lineItems.push({
-          name: locale === 'ro' ? 'Reducere pachet (10%)' : 'Bundle discount (10%)',
+          name: locale === 'ro' ? `Reducere pachet (${calc.bundlePercent}%)` : `Bundle discount (${calc.bundlePercent}%)`,
           amount: -calc.bundleDiscount
         });
       }

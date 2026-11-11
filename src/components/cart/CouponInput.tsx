@@ -5,32 +5,40 @@ import { useCartStore } from "@/store/useCartStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { validateCoupon } from "@/app/actions/coupons";
-import { useTranslations } from "next-intl";
-import { Loader2, Check, X, Ticket } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { Loader2, X, Ticket } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export function CouponInput() {
+interface CouponInputProps {
+  variant?: "checkout" | "cart";
+  onApplied?: () => void;
+}
+
+export function CouponInput({ variant = "checkout", onApplied }: CouponInputProps) {
   const t = useTranslations("Checkout");
+  const locale = useLocale();
+  const isEn = locale === "en";
   const { getTotals, setCoupon, appliedCoupon } = useCartStore();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { subtotal } = getTotals();
+  const { subtotal } = getTotals("RON");
 
   const handleApply = async () => {
-    if (!code) return;
+    if (!code.trim()) return;
     setLoading(true);
     setError(null);
 
     try {
-      const result = await validateCoupon(code, subtotal);
+      const result = await validateCoupon(code, subtotal, "RON");
       if (result.isValid && result.coupon) {
         setCoupon(result.coupon);
         setCode("");
+        onApplied?.();
       } else {
         setError(result.message || t('invalid_coupon'));
       }
-    } catch (err) {
+    } catch {
       setError(t('invalid_coupon'));
     } finally {
       setLoading(false);
@@ -44,6 +52,53 @@ export function CouponInput() {
       localStorage.removeItem("tz_referral_code");
     }
   };
+
+  if (variant === "cart") {
+    if (appliedCoupon) {
+      return null; // CartSheet renders the active coupon breakdown badge
+    }
+
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5 p-1 bg-zinc-50 rounded-xl border border-zinc-200/90 focus-within:border-[#e32f8c] focus-within:bg-white transition-all">
+          <Ticket className="w-3.5 h-3.5 text-zinc-400 ml-2 shrink-0" />
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => {
+              setCode(e.target.value.toUpperCase());
+              if (error) setError(null);
+            }}
+            onKeyDown={(e) => e.key === "Enter" && handleApply()}
+            placeholder={isEn ? "Promo / affiliate code..." : "Cod promo / partener..."}
+            className="flex-1 min-w-0 bg-transparent border-none h-8 px-1.5 text-[11px] font-black uppercase tracking-wider text-black placeholder:text-zinc-400 placeholder:normal-case placeholder:font-semibold focus:outline-none"
+            disabled={loading}
+          />
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={loading || !code.trim()}
+            className="h-8 px-3.5 rounded-lg bg-zinc-950 hover:bg-[#e32f8c] text-white text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer shrink-0 flex items-center justify-center"
+          >
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (isEn ? "Apply" : "Aplică")}
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {error && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="text-[10px] font-bold text-red-500 px-1"
+            >
+              {error}
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
 
   if (appliedCoupon) {
     return (

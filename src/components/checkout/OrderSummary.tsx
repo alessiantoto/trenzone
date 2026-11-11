@@ -45,7 +45,6 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
     return acc + itemWeight * item.quantity;
   }, 0);
 
-  const uniqueCount = new Set(items.map(item => String(item.id || '').replace(/^(.+)-bundle-\d+$/, '$1'))).size;
   const [shippingParams, setShippingParams] = useState<{country: string, type: 'hd' | 'pudo', serviceId?: string} | null>(null);
   const [shippingCost, setShippingCost] = useState(0);
   const [currentStep, setCurrentStep] = useState(propStep || 1);
@@ -81,7 +80,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
   // 🚀 RE-CALCULATE EVERYTHING WITH NEW SHIPPING CONTEXT
   // We call getTotals with the shipping cost so percentage coupons affect the shipping too
   const totals = getTotals(displayCurrency, rawShippingCost);
-  const { subtotal, discount, couponDiscount, shippingDiscount } = totals;
+  const { subtotal, discount, bundlePercent, itemCount, couponDiscount, shippingDiscount } = totals;
   
   // Threshold logic (must match cart-calculations.ts)
   const isRo = shippingParams?.country?.toUpperCase() === 'RO' || (!shippingParams && displayCurrency === 'RON');
@@ -225,13 +224,13 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                   <span className="font-semibold text-black">{formatPrice(subtotal, displayCurrency)}</span>
                 </div>
 
-                {/* 2. Bundle Discount */}
+                {/* 2. Tiered Bundle Discount */}
                 {discount > 0 && (
                   <div className="flex justify-between items-center text-sm bg-pink-500/10 p-2.5 rounded-xl border border-pink-500/20">
                     <span className="font-bold uppercase tracking-widest text-[10px] text-[#e32f8c] flex items-center gap-1.5">
                       {locale === 'ro' 
-                        ? `Reducere Pachet ${uniqueCount >= 2 ? uniqueCount : 2} Produse (-10%)` 
-                        : `${uniqueCount >= 2 ? uniqueCount : 2} Items Bundle Discount (-10%)`}
+                        ? `Reducere Pachet ${itemCount} Produse (-${bundlePercent}%)` 
+                        : `${itemCount} Items Bundle Discount (-${bundlePercent}%)`}
                     </span>
                     <span className="font-black text-[#e32f8c]">-{formatPrice(discount, displayCurrency)}</span>
                   </div>

@@ -8,10 +8,61 @@ export interface CartItem {
   price: any; // Supabase price (number or JSONB)
 }
 
+export interface BundleSummary {
+  itemCount: number;
+  bundlePercent: 0 | 5 | 10;
+  hasBundle: boolean;
+  nextTierMin: number | null;
+  nextTierPercent: 5 | 10 | null;
+  itemsToNextTier: number;
+  progressPercent: number;
+}
+
+export const BUNDLE_TIER_1_MIN = 2; // 2 items -> 5%
+export const BUNDLE_TIER_2_MIN = 3; // 3+ items -> 10%
+
+/**
+ * Calculates the tiered bundle discount state from cart items.
+ * - 2 total items -> 5% off
+ * - 3+ total items -> 10% off
+ */
+export function getBundleSummary(items: Array<{ id?: string; quantity?: number }>): BundleSummary {
+  const itemCount = (items || []).reduce((sum, item) => {
+    const qty = Math.max(0, Math.floor(Number(item?.quantity) || 0));
+    const bundleMatch = String(item?.id || '').match(/^(.+)-bundle-(\d+)$/);
+    const bundleMultiplier = bundleMatch ? parseInt(bundleMatch[2], 10) : 1;
+    return sum + qty * bundleMultiplier;
+  }, 0);
+
+  const bundlePercent: 0 | 5 | 10 =
+    itemCount >= BUNDLE_TIER_2_MIN ? 10 : itemCount >= BUNDLE_TIER_1_MIN ? 5 : 0;
+
+  const nextTierMin =
+    bundlePercent === 0 ? BUNDLE_TIER_1_MIN : bundlePercent === 5 ? BUNDLE_TIER_2_MIN : null;
+  const nextTierPercent =
+    bundlePercent === 0 ? 5 : bundlePercent === 5 ? 10 : null;
+  const itemsToNextTier = nextTierMin !== null ? Math.max(0, nextTierMin - itemCount) : 0;
+
+  // Map cleanly onto 2 visual milestones: 0 = 0%, 1 = 25%, 2 (-5%) = 50%, 3+ (-10%) = 100%
+  const progressPercent =
+    itemCount <= 0 ? 0 : itemCount === 1 ? 25 : itemCount === 2 ? 50 : 100;
+
+  return {
+    itemCount,
+    bundlePercent,
+    hasBundle: bundlePercent > 0,
+    nextTierMin,
+    nextTierPercent,
+    itemsToNextTier,
+    progressPercent,
+  };
+}
+
 export interface CalculationResult {
   currency: string;
   subtotal: number;       // All values in subunits (cents/bani)
   bundleDiscount: number;
+  bundlePercent: 0 | 5 | 10;
   couponDiscount: number;
   cardDiscount: number;
   shippingCost: number;
@@ -67,14 +118,13 @@ export function calculateOrderTotal(
     totalItemsCount += qty;
   });
 
-  // 2. 10% Bundle Discount for 2+ DIFFERENT products (e.g. X5 + X10)
-  const uniqueProductIds = new Set(
-    items.map(item => String(item.id || '').replace(/^(.+)-bundle-\d+$/, '$1'))
-  );
-  const hasBundleDiscount = uniqueProductIds.size >= 2;
-  const bundleDiscountSubunits = hasBundleDiscount ? Math.round(subtotalSubunits * 0.10) : 0;
+  // 2. Tiered Bundle Discount: 2 items -> 5%, 3+ items -> 10%
+  const { bundlePercent } = getBundleSummary(items);
+  const bundleDiscountSubunits = bundlePercent > 0
+    ? Math.round(subtotalSubunits * (bundlePercent / 100))
+    : 0;
 
-  // 3. Handle Coupon Discount (applied to effectiveSubtotal after bundle discount, matching useCartStore)
+  // 3. Handle Coupon Discount (stacks on top of bundle via effectiveSubtotalSubunits)
   const effectiveSubtotalSubunits = Math.max(0, subtotalSubunits - bundleDiscountSubunits);
   let couponDiscountSubunits = 0;
   if (coupon) {
@@ -145,6 +195,7 @@ export function calculateOrderTotal(
     currency: targetCurrency,
     subtotal: subtotalSubunits,
     bundleDiscount: bundleDiscountSubunits,
+    bundlePercent,
     couponDiscount: couponDiscountSubunits,
     cardDiscount: cardDiscountSubunits,
     shippingCost: shippingSubunits,

@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { Product } from "@/lib/api";
 import { Coupon } from "@/types/coupon";
 import { getProductPrice } from "@/utils/pricing";
+import { getBundleSummary } from "@/lib/cart-calculations";
 import toast from "react-hot-toast";
 
 export interface CartItem extends Product {
@@ -38,6 +39,8 @@ interface CartState {
   getTotals: (currency?: string, shippingCost?: number) => { 
     subtotal: number; 
     discount: number; 
+    bundlePercent: 0 | 5 | 10;
+    itemCount: number;
     couponDiscount: number; 
     shippingDiscount: boolean; 
     total: number; 
@@ -227,51 +230,57 @@ export const useCartStore = create<CartState>()(
       clearCart: () => set({ items: [], appliedCoupon: null }),
       getTotals: (currency: string = 'RON', shippingCost: number = 0) => {
         const state = get();
-        const subtotal = state.items.reduce(
-          (acc, item) => acc + getProductPrice(item.price, currency) * item.quantity,
+        const subtotalSubunits = state.items.reduce(
+          (acc, item) => acc + Math.round(getProductPrice(item.price, currency) * 100) * Math.max(0, Math.floor(item.quantity)),
           0
         );
-        
-        // 1. Bundle Discount (10% for 2+ DIFFERENT products, e.g. X5 + X10)
-        const uniqueProductIds = new Set(
-          state.items.map(item => String(item.id || '').replace(/^(.+)-bundle-\d+$/, '$1'))
-        );
-        const hasBundle = uniqueProductIds.size >= 2;
-        const discount = hasBundle ? Number((subtotal * 0.10).toFixed(2)) : 0;
+        const subtotal = subtotalSubunits / 100;
 
-        // 2. Coupon logic
-        let couponDiscount = 0;
+        // 1. Tiered Bundle Discount (2 items -> 5%, 3+ items -> 10%)
+        const { itemCount, bundlePercent, hasBundle } = getBundleSummary(state.items);
+        const bundleDiscountSubunits = bundlePercent > 0
+          ? Math.round(subtotalSubunits * (bundlePercent / 100))
+          : 0;
+        const discount = bundleDiscountSubunits / 100;
+
+        // 2. Coupon logic — always stacks cleanly on top of the bundle discount
+        let couponDiscountSubunits = 0;
         let shippingDiscount = false;
         const coupon = state.appliedCoupon;
 
-        const effectiveSubtotal = Math.max(0, subtotal - discount);
+        const effectiveSubtotalSubunits = Math.max(0, subtotalSubunits - bundleDiscountSubunits);
 
         if (coupon) {
           if (coupon.type === 'percentage') {
-            // Apply only to products (effective subtotal)
-            couponDiscount = effectiveSubtotal * (coupon.value / 100);
-            
+            couponDiscountSubunits = Math.round(effectiveSubtotalSubunits * (coupon.value / 100));
+
             if (coupon.max_discount && coupon.max_discount > 0) {
               const maxDisc = (currency === 'RON') ? coupon.max_discount : getProductPrice(coupon.max_discount, currency);
-              if (couponDiscount > maxDisc) {
-                couponDiscount = maxDisc;
+              const maxSubunits = Math.round(maxDisc * 100);
+              if (couponDiscountSubunits > maxSubunits) {
+                couponDiscountSubunits = maxSubunits;
               }
             }
           } else if (coupon.type === 'fixed_amount') {
-            couponDiscount = (currency === 'RON') ? coupon.value : getProductPrice(coupon.value, currency);
+            const fixedVal = (currency === 'RON') ? coupon.value : getProductPrice(coupon.value, currency);
+            couponDiscountSubunits = Math.round(fixedVal * 100);
           } else if (coupon.type === 'free_shipping') {
             shippingDiscount = true;
           }
-          couponDiscount = Math.min(effectiveSubtotal, couponDiscount);
+          couponDiscountSubunits = Math.min(effectiveSubtotalSubunits, couponDiscountSubunits);
         }
+
+        const couponDiscount = couponDiscountSubunits / 100;
 
         return {
           subtotal: Number(subtotal.toFixed(2)),
           discount: Number(discount.toFixed(2)),
+          bundlePercent,
+          itemCount,
           couponDiscount: Number(couponDiscount.toFixed(2)),
-          shippingDiscount: shippingDiscount,
+          shippingDiscount,
           total: Number(Math.max(0, subtotal - discount - couponDiscount + shippingCost).toFixed(2)),
-          hasBundle: hasBundle
+          hasBundle
         };
       },
     }),

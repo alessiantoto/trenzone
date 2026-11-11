@@ -1,21 +1,21 @@
 "use client";
 
-import { ShoppingCart, Minus, Plus, X, Lock, Trash2, ChevronLeft, ChevronRight, ShieldCheck, Sparkles, Clock, Check } from "lucide-react";
+import { ShoppingCart, Minus, Plus, X, Lock, Trash2, ChevronLeft, ChevronRight, ShieldCheck, Clock, Check, Ticket } from "lucide-react";
 import Image from "next/image";
 import { useCartStore, isPreorder } from "@/store/useCartStore";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
-import { useTranslations, useLocale } from "next-intl";
+import { useLocale } from "next-intl";
 import { useRegionStore } from "@/store/useRegionStore";
 import { formatPrice } from "@/utils/currency";
 import { getProductPrice } from "@/utils/pricing";
+import { getBundleSummary } from "@/lib/cart-calculations";
+import { CouponInput } from "@/components/cart/CouponInput";
 import { Link, useRouter } from "@/i18n/routing";
 import { cn, getLocalized, getVariantColorClass } from "@/lib/utils";
 import { Product } from "@/lib/api";
-
-const TRENZONE_PINK = "#e32f8c";
 
 export function CartSheet() {
   const { 
@@ -33,13 +33,13 @@ export function CartSheet() {
     resolvePreorderConflictWithReplace
   } = useCartStore();
   const { currency } = useRegionStore();
-  const { subtotal, discount, couponDiscount, total, hasBundle } = getTotals(currency);
+  const { subtotal, discount, bundlePercent, couponDiscount, total } = getTotals(currency);
   
   const [selectingProduct, setSelectingProduct] = useState<any | null>(null);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [showCouponField, setShowCouponField] = useState(false);
   
-  const t = useTranslations("Cart");
   const locale = useLocale();
   const isEn = locale === 'en';
   const router = useRouter();
@@ -61,13 +61,13 @@ export function CartSheet() {
 
   const scrollLeft = () => {
     if (carouselRef.current) {
-      carouselRef.current.scrollBy({ left: -160, behavior: 'smooth' });
+      carouselRef.current.scrollBy({ left: -170, behavior: 'smooth' });
     }
   };
 
   const scrollRight = () => {
     if (carouselRef.current) {
-      carouselRef.current.scrollBy({ left: 160, behavior: 'smooth' });
+      carouselRef.current.scrollBy({ left: 170, behavior: 'smooth' });
     }
   };
   
@@ -89,29 +89,29 @@ export function CartSheet() {
     };
   }, [isCartOpen, allProducts.length]);
 
-  const totalItemsCount = items.reduce((sum, item) => sum + item.quantity, 0);
-
-  // 🎯 Calculate unique different products in cart (ignoring variant/bundle suffixes)
-  const uniqueProductIds = new Set(
-    items.map(item => String(item.id || '').replace(/^(.+)-bundle-\d+$/, '$1'))
-  );
-  const uniqueCount = uniqueProductIds.size;
-  const BUNDLE_THRESHOLD = 2;
-  const isBundleUnlocked = uniqueCount >= BUNDLE_THRESHOLD;
-  const remainingForBundle = Math.max(0, BUNDLE_THRESHOLD - uniqueCount);
-  const bundleProgressPercent = Math.min(100, Math.round((uniqueCount / BUNDLE_THRESHOLD) * 100));
+  const {
+    itemCount: totalItemsCount,
+    nextTierPercent,
+    progressPercent: bundleProgressPercent,
+  } = getBundleSummary(items);
+  const totalSaved = Number((discount + couponDiscount).toFixed(2));
 
   // Preorder & mixed cart fulfillment detection
   const hasPreorderInCart = items.some(item => isPreorder(item, item.selectedVariant));
   const hasInStockInCart = items.some(item => !isPreorder(item, item.selectedVariant));
   const hasMixedOrder = hasPreorderInCart && hasInStockInCart;
 
-  // Filter recommendations: products NOT yet in cart
-  const inCartIds = new Set(items.map(item => item.id));
-  const availableUpsells = allProducts
-    .filter(product => !inCartIds.has(product.id))
-    .sort((a, b) => getProductPrice(a.price, currency) - getProductPrice(b.price, currency))
-    .slice(0, 8);
+  // Recommendations: prioritize products not yet in cart, then backfill with popular models
+  const inCartBaseIds = new Set(
+    items.map(item => String(item.id || '').replace(/^(.+)-bundle-\d+$/, '$1'))
+  );
+  const notInCart = allProducts
+    .filter(product => !inCartBaseIds.has(product.id))
+    .sort((a, b) => getProductPrice(a.price, currency) - getProductPrice(b.price, currency));
+  const inCartOthers = allProducts
+    .filter(product => inCartBaseIds.has(product.id))
+    .sort((a, b) => getProductPrice(a.price, currency) - getProductPrice(b.price, currency));
+  const availableUpsells = [...notInCart, ...(notInCart.length < 3 ? inCartOthers : [])].slice(0, 8);
 
   useEffect(() => {
     const el = carouselRef.current;
@@ -131,11 +131,14 @@ export function CartSheet() {
 
   return (
     <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
-      <SheetContent className="h-[100dvh] w-full max-w-[100vw] sm:max-w-[440px] bg-white text-black p-0 flex flex-col border-none shadow-2xl overflow-hidden overscroll-behavior-x-none font-sans">
+      <SheetContent
+        showCloseButton={false}
+        className="h-[100dvh] data-[side=right]:w-full data-[side=right]:max-w-none data-[side=right]:sm:w-full data-[side=right]:sm:max-w-[490px] bg-white text-black p-0 flex flex-col gap-0 border-none shadow-2xl overflow-hidden overscroll-behavior-x-none font-sans"
+      >
         
-        {/* ═══ CART HEADER (TrenZone Design) ═══ */}
-        <div className="flex-shrink-0 bg-white z-30 px-6 sm:px-7 pt-6 pb-3">
-          <div className="flex justify-between items-start mb-4">
+        {/* ═══ CART HEADER (100% Full-Screen on Mobile, 490px Drawer on Desktop) ═══ */}
+        <div className="flex-shrink-0 bg-white z-30 px-5 sm:px-7 pt-5 sm:pt-6 pb-3">
+          <div className="flex justify-between items-start mb-3.5">
             <div>
               <h2 className="text-xl sm:text-2xl font-black uppercase tracking-wide text-black leading-none flex items-center gap-1.5">
                 {isEn ? (
@@ -156,96 +159,120 @@ export function CartSheet() {
 
             <button 
               onClick={() => setCartOpen(false)}
-              className="text-zinc-400 hover:text-black transition-colors p-1.5 -mr-1.5 bg-zinc-100/80 hover:bg-zinc-200 rounded-full cursor-pointer"
+              className="text-zinc-500 hover:text-black transition-colors p-2 -mr-1.5 bg-zinc-100 hover:bg-zinc-200 rounded-full cursor-pointer"
               aria-label="Close cart"
             >
               <X className="w-5 h-5" strokeWidth={2.5} />
             </button>
           </div>
 
-          {/* ═══ TRENZONE BUNDLE PROGRESS CARD (Scalable for 10+ Products) ═══ */}
-          <div className="bg-gradient-to-b from-zinc-950 to-black border border-white/10 rounded-2xl p-4 text-white shadow-xl relative overflow-hidden">
-            {/* Ambient TrenZone Neon Magenta Blur */}
-            <div className="absolute -right-6 -top-6 w-36 h-36 bg-[#e32f8c]/20 rounded-full blur-2xl pointer-events-none" />
-            <div className="absolute -left-6 -bottom-6 w-32 h-32 bg-[#e32f8c]/10 rounded-full blur-2xl pointer-events-none" />
+          {/* ═══ TRENZONE TIERED BUNDLE REWARDS CARD (2 = -5% | 3+ = -10% + Codes Stack) ═══ */}
+          <div className="bg-gradient-to-br from-zinc-950 via-black to-zinc-950 border border-white/10 rounded-2xl p-3.5 sm:p-4 text-white shadow-xl relative overflow-hidden">
+            {/* Ambient Glow */}
+            <div className={cn(
+              "absolute -right-8 -top-8 w-36 h-36 rounded-full blur-2xl pointer-events-none transition-colors duration-500",
+              bundlePercent === 10 ? "bg-emerald-500/20" : "bg-[#e32f8c]/20"
+            )} />
+            <div className="absolute -left-6 -bottom-6 w-28 h-28 bg-[#e32f8c]/10 rounded-full blur-2xl pointer-events-none" />
 
-            {isBundleUnlocked ? (
-              /* Achieved State: Minimalist, clean, premium */
-              <div className="flex items-center justify-between relative z-10 py-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-6 h-6 rounded-full bg-[#e32f8c] text-white flex items-center justify-center shrink-0 shadow-sm shadow-[#e32f8c]/40">
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-[#e32f8c] block leading-none mb-1 whitespace-nowrap">
-                      TRENZONE BUNDLE
-                    </span>
-                    <h3 className="text-xs sm:text-sm font-black uppercase tracking-tight text-white whitespace-nowrap">
-                      {isEn ? 'BUNDLE DISCOUNT' : 'REDUCERE ACTIVATĂ'}
-                    </h3>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-lg bg-[#e32f8c]/20 border border-[#e32f8c]/40 text-[#e32f8c] text-xs font-black uppercase tracking-wider shrink-0 whitespace-nowrap">
-                  -10%
+            {/* Top Row: Label + Stackable Tag + Active Tier Pill */}
+            <div className="flex justify-between items-center gap-2 mb-2 relative z-10">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.18em] text-[#e32f8c] truncate">
+                  TRENZONE BUNDLE
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 border border-white/10 text-[8px] font-black uppercase tracking-wider text-zinc-200 shrink-0">
+                  <Ticket className="w-2.5 h-2.5 text-[#e32f8c]" />
+                  {isEn ? '+ CODES' : '+ CODURI'}
                 </span>
               </div>
-            ) : (
-              /* In-Progress State: Shows progress bar and milestone steps only when needed */
-              <>
-                {/* Top Row: Title & Counter */}
-                <div className="flex justify-between items-center mb-2 relative z-10">
-                  <span className="text-[11px] font-black uppercase tracking-[0.22em] text-[#e32f8c]">
-                    TRENZONE BUNDLE
+
+              {bundlePercent === 10 ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-black text-[10px] font-black uppercase tracking-wider shrink-0 shadow-[0_0_15px_rgba(52,211,153,0.45)]">
+                  -10% MAX
+                </span>
+              ) : bundlePercent === 5 ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-[#e32f8c] text-white text-[10px] font-black uppercase tracking-wider shrink-0 shadow-[0_0_15px_rgba(227,47,140,0.45)]">
+                  -5% {isEn ? 'ON' : 'ACTIV'}
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black tracking-wider bg-white/10 text-zinc-200 border border-white/10 shrink-0">
+                  {totalItemsCount}/3
+                </span>
+              )}
+            </div>
+
+            {/* Dynamic Reward Message */}
+            <p className="text-xs sm:text-[13px] font-extrabold text-white leading-snug mb-3 relative z-10">
+              {totalItemsCount === 0 && (
+                isEn
+                  ? <>Add <span className="text-[#e32f8c]">2 items for -5%</span> or <span className="text-emerald-400">3+ for -10% OFF</span></>
+                  : <>Adaugă <span className="text-[#e32f8c]">2 produse = -5%</span> sau <span className="text-emerald-400">3+ = -10%</span></>
+              )}
+              {totalItemsCount === 1 && (
+                isEn
+                  ? <>Add <span className="text-[#e32f8c]">1 more item</span> to unlock <span className="text-[#e32f8c]">-5% OFF</span>!</>
+                  : <>Mai adaugă <span className="text-[#e32f8c]">1 produs</span> și deblochezi <span className="text-[#e32f8c]">-5% REDUCERE</span>!</>
+              )}
+              {totalItemsCount === 2 && (
+                isEn
+                  ? <>Saved <span className="text-[#e32f8c]">{formatPrice(discount, currency)} (-5%)</span> · Add 1 more for <span className="text-emerald-400">-10%</span>!</>
+                  : <>Ai <span className="text-[#e32f8c]">-5% ({formatPrice(discount, currency)})</span> · Mai adaugă 1 pentru <span className="text-emerald-400">-10%</span>!</>
+              )}
+              {totalItemsCount >= 3 && (
+                isEn
+                  ? <><span className="text-emerald-400">Maximum -10% bundle</span> unlocked ({formatPrice(discount, currency)} saved)!</>
+                  : <><span className="text-emerald-400">Reducere maximă -10%</span> activată (−{formatPrice(discount, currency)})!</>
+              )}
+            </p>
+
+            {/* 2-Milestone Progress Track (50% = Tier 1 [-5%], 100% = Tier 2 [-10%]) */}
+            <div className="relative z-10 pt-0.5 pb-1">
+              <div className="w-full bg-zinc-800/95 h-2 rounded-full overflow-hidden p-[1px] relative">
+                <div 
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500 ease-out",
+                    bundlePercent === 10
+                      ? "bg-gradient-to-r from-[#e32f8c] via-[#ff47a3] to-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.75)]"
+                      : "bg-gradient-to-r from-[#e32f8c] to-[#ff47a3] shadow-[0_0_10px_rgba(227,47,140,0.8)]"
+                  )}
+                  style={{ width: `${bundleProgressPercent}%` }}
+                />
+              </div>
+
+              {/* Symmetrical Milestone Markers */}
+              <div className="grid grid-cols-3 items-center mt-2 text-[10px] font-black uppercase tracking-wider">
+                <div className={cn("flex items-center gap-1 justify-start", totalItemsCount >= 1 ? "text-zinc-200" : "text-zinc-500")}>
+                  <span className={cn(
+                    "w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0",
+                    totalItemsCount >= 1 ? "bg-white text-black" : "bg-zinc-800 text-zinc-500 border border-zinc-700"
+                  )}>
+                    {totalItemsCount >= 1 ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : "1"}
                   </span>
-                  <div className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-white/10 text-white border border-white/10">
-                    {`${uniqueCount}/${BUNDLE_THRESHOLD}`}
-                  </div>
+                  <span>{isEn ? "1 Item" : "1 Prod."}</span>
                 </div>
 
-                {/* Main Actionable Heading */}
-                <div className="mb-3.5 relative z-10">
-                  <h3 className="text-xs sm:text-[13px] font-extrabold uppercase tracking-[0.05em] text-white leading-relaxed">
-                    {uniqueCount === 0 && (
-                      isEn ? 'ADD ANY 2 PRODUCTS FOR 10% OFF' : 'ADAUGĂ 2 PRODUSE PENTRU 10% REDUCERE'
-                    )}
-                    {uniqueCount === 1 && (
-                      isEn ? 'ADD 1 MORE PRODUCT FOR 10% OFF' : 'MAI ADAUGĂ 1 PRODUS PENTRU 10% REDUCERE'
-                    )}
-                  </h3>
+                <div className={cn("flex items-center gap-1 justify-center", bundlePercent >= 5 ? "text-[#ff57ae]" : "text-zinc-500")}>
+                  <span className={cn(
+                    "w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0",
+                    bundlePercent >= 5 ? "bg-[#e32f8c] text-white shadow-[0_0_8px_rgba(227,47,140,0.6)]" : "bg-zinc-800 text-zinc-500 border border-zinc-700"
+                  )}>
+                    {bundlePercent >= 5 ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : "2"}
+                  </span>
+                  <span>{isEn ? "2 · -5%" : "2 Prod · -5%"}</span>
                 </div>
 
-                {/* Continuous Smooth Progress Track */}
-                <div className="w-full bg-zinc-800/90 h-1.5 rounded-full overflow-hidden p-[1px] relative z-10">
-                  <div 
-                    className="h-full bg-gradient-to-r from-[#e32f8c] to-[#ff47a3] rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(227,47,140,0.8)]"
-                    style={{
-                      width: `${bundleProgressPercent}%`
-                    }}
-                  />
+                <div className={cn("flex items-center gap-1 justify-end", bundlePercent >= 10 ? "text-emerald-400" : "text-zinc-500")}>
+                  <span className={cn(
+                    "w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0",
+                    bundlePercent >= 10 ? "bg-emerald-400 text-black shadow-[0_0_8px_rgba(52,211,153,0.6)]" : "bg-zinc-800 text-zinc-500 border border-zinc-700"
+                  )}>
+                    {bundlePercent >= 10 ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : "3"}
+                  </span>
+                  <span>{isEn ? "3+ · -10%" : "3+ · -10%"}</span>
                 </div>
-
-                {/* Symmetrical Milestone Markers Row */}
-                <div className="flex justify-between items-center mt-2 relative z-10 text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
-                  <div className={`flex items-center gap-1.5 transition-colors duration-300 ${
-                    uniqueCount >= 1 ? 'text-white' : 'text-zinc-500'
-                  }`}>
-                    <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 ${
-                      uniqueCount >= 1 ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
-                    }`}>
-                      {uniqueCount >= 1 ? '✓' : '1'}
-                    </span>
-                    <span>{isEn ? '1st Product' : '1 Produs'}</span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-zinc-500">
-                    <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 bg-zinc-800 text-zinc-500 border border-zinc-700">
-                      2
-                    </span>
-                    <span>{isEn ? '2+ Products' : '2+ Produse'}</span>
-                  </div>
-                </div>
-              </>
-            )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -446,32 +473,48 @@ export function CartSheet() {
               </div>
             ) : (
               /* EMPTY CART NOTICE */
-              <div className="px-6 sm:px-7 py-8 text-center bg-white flex flex-col items-center">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center mb-3 text-zinc-300">
-                  <ShoppingCart className="w-7 h-7" strokeWidth={1.5} />
+              <div className="px-5 sm:px-7 py-7 text-center bg-white flex flex-col items-center">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center mb-3 text-zinc-300">
+                  <ShoppingCart className="w-6 h-6" strokeWidth={1.5} />
                 </div>
                 <h3 className="text-sm font-black uppercase tracking-wider text-black">
                   {isEn ? 'YOUR CART IS EMPTY' : 'COȘUL TĂU ESTE GOL'}
                 </h3>
-                <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mt-1 max-w-[240px]">
+                <p className="text-[11px] font-bold text-zinc-500 mt-1.5 max-w-[280px] leading-relaxed">
                   {isEn 
-                    ? 'Add both models below to get 10% off your entire order!' 
-                    : 'Adaugă ambele modele mai jos pentru a activa reducerea de 10%!'}
+                    ? 'Add 2 items below for -5% or 3+ for -10% off — promo codes stack on top!' 
+                    : 'Adaugă 2 produse mai jos pentru -5% sau minim 3 pentru -10% — cumulabil cu codurile de reducere!'}
                 </p>
               </div>
             )}
 
-            {/* ═══ RECOMMENDATIONS SECTION (YoungLA "TRENDING" Dynamic Carousel) ═══ */}
+            {/* ═══ BUNDLE BUILDER / RECOMMENDATIONS CAROUSEL ═══ */}
             {!isLoadingProducts && availableUpsells.length > 0 && (
-              <div className="bg-[#fafafa] py-5 mt-2 border-t border-zinc-100 pb-6">
-                {/* Header with Title & Arrow Navigation (Active only when scrollable) */}
-                <div className="px-6 sm:px-7 mb-3.5 flex items-center justify-between">
-                  <h3 className="text-xs sm:text-[13px] font-black uppercase tracking-[0.22em] text-zinc-900">
-                    TRENDING
-                  </h3>
+              <div className="bg-[#fafafa] py-4.5 mt-2 border-t border-zinc-100 pb-5">
+                {/* Header with Dynamic Reward Pill & Arrow Navigation */}
+                <div className="px-5 sm:px-7 mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h3 className="text-[11px] sm:text-xs font-black uppercase tracking-[0.16em] text-zinc-900 truncate">
+                      {bundlePercent === 5
+                        ? (isEn ? 'UNLOCK -10% MAX' : 'URCĂ LA -10% MAXIM')
+                        : bundlePercent === 10
+                          ? (isEn ? 'COMPLETE YOUR GEAR' : 'COMPLETEAZĂ ECHIPAMENTUL')
+                          : (isEn ? 'BUILD YOUR BUNDLE' : 'ADAUGĂ ÎN PACHET')}
+                    </h3>
+                    {bundlePercent === 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#e32f8c]/10 border border-[#e32f8c]/25 text-[#e32f8c] text-[9px] font-black uppercase tracking-wider shrink-0">
+                        {totalItemsCount === 1 ? '+1 → -5%' : '-5% / -10%'}
+                      </span>
+                    )}
+                    {bundlePercent === 5 && (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 text-[9px] font-black uppercase tracking-wider shrink-0">
+                        +1 → -10%
+                      </span>
+                    )}
+                  </div>
 
                   {(canScrollLeft || canScrollRight) && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button 
                         type="button"
                         onClick={scrollLeft}
@@ -504,20 +547,22 @@ export function CartSheet() {
                   )}
                 </div>
                 
-                {/* Dynamic Carousel Container (Works seamlessly for 1 product or 10+ products) */}
+                {/* Dynamic Carousel Container */}
                 <div 
                   ref={carouselRef}
-                  className="flex gap-3 overflow-x-auto no-scrollbar px-6 sm:px-7 pb-2 snap-x scroll-smooth"
+                  className="flex gap-3 overflow-x-auto no-scrollbar px-5 sm:px-7 pb-1.5 snap-x scroll-smooth"
                 >
                   {availableUpsells.map((p) => {
                     const price = getProductPrice(p.price, currency);
+                    const nextPct = nextTierPercent || bundlePercent;
+                    const discountedHint = nextPct > 0 ? Number((price * (1 - nextPct / 100)).toFixed(2)) : null;
 
                     return (
                       <div 
                         key={p.id} 
-                        className="w-[136px] sm:w-[148px] shrink-0 snap-start flex flex-col group select-none"
+                        className="w-[148px] sm:w-[158px] shrink-0 snap-start flex flex-col group select-none"
                       >
-                        {/* Portrait Image Container with In-Photo Black Square [+] Button */}
+                        {/* Portrait Image Container with + Add Button */}
                         <div className="relative w-full aspect-[4/5] bg-gradient-to-b from-[#18181b] via-[#121214] to-[#0a0a0c] rounded-2xl overflow-hidden border border-zinc-800/80 shadow-md flex items-center justify-center">
                           <Link 
                             href={`/product/${p.slug}`}
@@ -528,12 +573,18 @@ export function CartSheet() {
                               src={p.image} 
                               alt={getLocalized(p.name, locale)} 
                               fill 
-                              sizes="150px" 
+                              sizes="160px" 
                               className="object-contain p-2 group-hover:scale-108 transition-transform duration-300 filter drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]" 
                             />
                           </Link>
 
-                          {/* Solid Black Square + Button Inside the Photo (YoungLA UX) */}
+                          {nextPct > 0 && (
+                            <span className="absolute top-2 left-2 z-10 px-1.5 py-0.5 rounded-md bg-black/75 border border-white/15 text-[9px] font-black text-emerald-400 tracking-wider backdrop-blur-sm">
+                              -{nextPct}%
+                            </span>
+                          )}
+
+                          {/* Quick Add Button */}
                           <button 
                             type="button"
                             onClick={(e) => {
@@ -549,24 +600,38 @@ export function CartSheet() {
                               }
                             }}
                             aria-label={`Add ${getLocalized(p.name, locale)} to cart`}
-                            className="absolute bottom-2.5 right-2.5 z-10 w-7.5 h-7.5 sm:w-8 sm:h-8 bg-black hover:bg-[#e32f8c] active:scale-90 text-white rounded-lg flex items-center justify-center shadow-lg transition-all cursor-pointer border border-white/15 hover:border-transparent"
+                            className="absolute bottom-2.5 right-2.5 z-10 h-8 px-2.5 bg-black/90 hover:bg-[#e32f8c] active:scale-90 text-white rounded-lg flex items-center justify-center gap-1 shadow-lg transition-all cursor-pointer border border-white/15 hover:border-transparent text-[10px] font-black uppercase tracking-wider"
                           >
-                            <Plus className="w-4 h-4 stroke-[2.5]" />
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>{isEn ? 'Add' : 'Adaugă'}</span>
                           </button>
                         </div>
 
-                        {/* Title & Price Below Image (Clean typography, never cluttered) */}
+                        {/* Title & Price Below Image (2-line clamp for readability) */}
                         <Link 
                           href={`/product/${p.slug}`}
                           onClick={() => setCartOpen(false)}
                           className="flex flex-col mt-2 min-w-0"
                         >
-                          <h4 className="text-[12px] sm:text-[13px] font-bold uppercase tracking-tight text-zinc-900 group-hover:text-[#e32f8c] transition-colors leading-snug line-clamp-1 mt-0.5">
+                          <h4 className="text-[12px] font-bold uppercase tracking-tight text-zinc-900 group-hover:text-[#e32f8c] transition-colors leading-snug line-clamp-2 min-h-[2.1rem]">
                             {getLocalized(p.name, locale)}
                           </h4>
-                          <p className="text-[12px] sm:text-[13px] font-semibold text-zinc-500 mt-0.5">
-                            {formatPrice(price, currency)}
-                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {discountedHint && discountedHint < price ? (
+                              <>
+                                <span className="text-[12px] font-black text-[#e32f8c]">
+                                  {formatPrice(discountedHint, currency)}
+                                </span>
+                                <span className="text-[10px] font-semibold text-zinc-400 line-through">
+                                  {formatPrice(price, currency)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[12px] font-semibold text-zinc-600">
+                                {formatPrice(price, currency)}
+                              </span>
+                            )}
+                          </div>
                         </Link>
                       </div>
                     );
@@ -575,7 +640,7 @@ export function CartSheet() {
 
                 {/* Horizontal Swipe Cue & Live Progress Track (Visible whenever scrollable) */}
                 {(canScrollLeft || canScrollRight) && (
-                  <div className="mx-6 sm:mx-7 mt-3 flex items-center justify-between gap-3 pt-0.5">
+                  <div className="mx-5 sm:mx-7 mt-3 flex items-center justify-between gap-3 pt-0.5">
                     <div className="flex-1 h-[2px] bg-zinc-200/90 rounded-full overflow-hidden relative">
                       <div 
                         className="h-full bg-black rounded-full transition-all duration-100 ease-out"
@@ -597,43 +662,94 @@ export function CartSheet() {
 
           {/* ═══ FOOTER CHECKOUT AREA (TrenZone Identity) ═══ */}
           {items.length > 0 && (
-            <div className="flex-shrink-0 p-5 sm:p-6 bg-white border-t border-zinc-100 z-20 shadow-[0_-10px_30px_rgba(0,0,0,0.03)]">
-              <div className="flex flex-col mb-4 gap-2">
+            <div className="flex-shrink-0 p-4 sm:p-6 bg-white border-t border-zinc-100 z-20 shadow-[0_-10px_30px_rgba(0,0,0,0.03)]">
+              {/* Direct Promo Code Input Inside Cart (Stacks cleanly on top of bundle!) */}
+              {!appliedCoupon && (
+                <div className="mb-3">
+                  {showCouponField ? (
+                    <div className="space-y-1.5">
+                      <CouponInput variant="cart" onApplied={() => setShowCouponField(false)} />
+                      {discount > 0 && (
+                        <p className="text-[10px] font-bold text-emerald-600 px-1">
+                          {isEn
+                            ? `Promo codes stack on top of your -${bundlePercent}% bundle!`
+                            : `Codul de reducere se aplică peste pachetul de -${bundlePercent}%!`}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowCouponField(true)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-dashed border-zinc-300 text-left transition-colors cursor-pointer group"
+                    >
+                      <span className="flex items-center gap-2 text-[11px] font-extrabold text-zinc-700 group-hover:text-black">
+                        <Ticket className="w-3.5 h-3.5 text-[#e32f8c]" />
+                        {discount > 0
+                          ? (isEn ? 'Have a promo code? Stack it on top!' : 'Ai cod de reducere? Aplică peste bundle!')
+                          : (isEn ? 'Have a promo or affiliate code?' : 'Ai un cod promo sau de partener?')}
+                      </span>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#e32f8c]">
+                        + {isEn ? 'Add' : 'Adaugă'}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-col mb-3.5 gap-2">
                 {/* Subtotal */}
                 <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-zinc-500">
                   <span>{isEn ? 'SUBTOTAL' : 'SUBTOTAL'}</span>
-                  <span className="font-black text-sm text-black">{formatPrice(subtotal, currency)}</span>
+                  <span className={cn("font-black text-sm", totalSaved > 0 ? "text-zinc-400 line-through" : "text-black")}>
+                    {formatPrice(subtotal, currency)}
+                  </span>
                 </div>
                 
-                {/* 10% Bundle Discount Banner with TrenZone Magenta */}
+                {/* Tiered Bundle Discount Banner (-5% at 2 items, -10% at 3+ items) */}
                 {discount > 0 && (
                   <div className="flex justify-between items-center text-xs font-bold text-[#e32f8c] bg-[#e32f8c]/10 px-3 py-2 rounded-xl border border-[#e32f8c]/25 shadow-sm">
-                    <span className="uppercase tracking-widest text-[10px] font-black flex items-center gap-1.5">
-                      {isEn ? 'TRENZONE BUNDLE (-10%)' : 'REDUCERE BUNDLE (-10%)'}
+                    <span className="uppercase tracking-wider text-[10px] font-black flex items-center gap-1.5">
+                      {isEn
+                        ? `BUNDLE (${totalItemsCount} ITEMS · -${bundlePercent}%)`
+                        : `PACHET (${totalItemsCount} PROD. · -${bundlePercent}%)`}
                     </span>
                     <span className="font-black text-sm">-{formatPrice(discount, currency)}</span>
                   </div>
                 )}
 
-                {/* Coupon Discount */}
-                {couponDiscount > 0 && (
-                  <div className="flex justify-between items-center text-xs font-bold bg-[#e32f8c]/5 border border-[#e32f8c]/20 px-3 py-1.5 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <span className="uppercase tracking-widest text-[#e32f8c] font-black">{appliedCoupon?.code}</span>
-                      <span className="text-[10px] text-slate-500 font-semibold">
-                        {appliedCoupon?.type === 'percentage' ? `(-${appliedCoupon?.value}%)` : `(-${formatPrice(couponDiscount, currency)})`}
+                {/* Applied Coupon (Stacks with Bundle — percentage, fixed, or free shipping) */}
+                {appliedCoupon && (couponDiscount > 0 || appliedCoupon.type === 'free_shipping') && (
+                  <div className="flex justify-between items-center text-xs font-bold bg-emerald-500/10 border border-emerald-500/25 px-3 py-2 rounded-xl">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                      <Ticket className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span className="uppercase tracking-widest text-emerald-700 font-black">{appliedCoupon.code}</span>
+                      <span className="text-[10px] text-emerald-700/80 font-bold">
+                        {appliedCoupon.type === 'percentage'
+                          ? `(-${appliedCoupon.value}%)`
+                          : appliedCoupon.type === 'free_shipping'
+                            ? (isEn ? 'Free Shipping' : 'Livrare Gratuită')
+                            : `(-${formatPrice(couponDiscount, currency)})`}
                       </span>
+                      {discount > 0 && (
+                        <span className="text-[8px] font-black uppercase tracking-wider bg-emerald-600 text-white px-1.5 py-0.5 rounded">
+                          {isEn ? 'STACKED' : 'CUMULAT'}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#e32f8c] font-black">-{formatPrice(couponDiscount, currency)}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {couponDiscount > 0 && (
+                        <span className="text-emerald-700 font-black">-{formatPrice(couponDiscount, currency)}</span>
+                      )}
                       <button 
+                        type="button"
                         onClick={() => {
                           setCoupon(null);
                           if (typeof window !== "undefined") {
                             localStorage.removeItem("tz_referral_code");
                           }
                         }}
-                        className="p-1 hover:bg-red-50 hover:text-red-500 text-slate-400 rounded-md transition-colors"
+                        className="p-1 hover:bg-red-100 hover:text-red-600 text-zinc-400 rounded-md transition-colors cursor-pointer"
                         title={isEn ? 'Remove code' : 'Elimină cod'}
                       >
                         <X className="w-3.5 h-3.5" />
@@ -642,11 +758,20 @@ export function CartSheet() {
                   </div>
                 )}
 
-                {/* Total */}
-                <div className="flex justify-between items-baseline pt-2 border-t border-zinc-100 mt-1">
-                  <span className="text-xs sm:text-sm font-black text-zinc-500 uppercase tracking-widest">
-                    {isEn ? 'TOTAL' : 'TOTAL'}
-                  </span>
+                {/* Total Row */}
+                <div className="flex justify-between items-end pt-2 border-t border-zinc-100 mt-0.5">
+                  <div>
+                    <span className="text-xs sm:text-sm font-black text-zinc-500 uppercase tracking-widest block">
+                      {isEn ? 'TOTAL' : 'TOTAL'}
+                    </span>
+                    {totalSaved > 0 && (
+                      <span className="text-[10px] font-extrabold text-emerald-600">
+                        {isEn
+                          ? `You save ${formatPrice(totalSaved, currency)} total!`
+                          : `Economisești ${formatPrice(totalSaved, currency)}!`}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-2xl sm:text-[26px] font-black text-black leading-none tracking-tight">
                     {formatPrice(total, currency)}
                   </span>

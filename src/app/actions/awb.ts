@@ -139,8 +139,11 @@ export async function generateManualAwbAction(orderIds: string[]) {
         const displayId = getCanonicalOrderNumber(order);
 
         // Build rawData from individual DB columns (no raw_order_data dependency)
+        const rawCountry = String(order.addr_country || 'RO').trim().toUpperCase();
+        const isRoCountry = rawCountry === 'RO' || rawCountry === 'ROMANIA' || rawCountry === 'ROMÂNIA';
         const rawData = {
           id: displayId,
+          locale: order.carrier_metadata?.locale || (order as any).locale || (isRoCountry ? 'ro' : 'en'),
           paymentMethod: order.payment_method,
           currency: order.currency,
           total: order.total_amount,

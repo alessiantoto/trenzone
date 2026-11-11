@@ -32,7 +32,7 @@ export const AwbEmailTemplate: React.FC<Readonly<AwbEmailTemplateProps>> = ({
 }) => {
   const isEn = locale === 'en';
   
-  const safeWelcome = (isEn ? "Hi, {{name}}!" : "Salut, {{name}}!").replace('{{name}}', customerName.split(' ')[0] || 'Zeule');
+  const safeWelcome = (isEn ? "Hi, {{name}}!" : "Salut, {{name}}!").replace('{{name}}', customerName.split(' ')[0] || (isEn ? 'Champion' : 'Campionule'));
   
   const headingText = isEn ? templateData?.heading_en : templateData?.heading_ro;
   const bodyText = isEn ? templateData?.body_en : templateData?.body_ro;
@@ -54,7 +54,7 @@ export const AwbEmailTemplate: React.FC<Readonly<AwbEmailTemplateProps>> = ({
 
   const trackingLink = courier === 'sameday' 
     ? `https://sameday.ro/awb-tracking/?awb=${trackingNumber}` 
-    : `https://tracking.packeta.com/ro_RO/?id=${trackingNumber}`;
+    : `https://tracking.packeta.com/${isEn ? 'en_US' : 'ro_RO'}/?id=${trackingNumber}`;
 
   const courierName = courier === 'sameday' ? 'Sameday' : 'Packeta';
 

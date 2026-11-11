@@ -16,12 +16,17 @@ export async function subscribeToNewsletter(
     const ip = getClientIpFromHeaders(headersList);
     const { allowed } = await checkRateLimit(rateLimiters.newsletter, ip, 'newsletter');
     if (!allowed) {
-      return { success: false, error: "Prea multe încercări. Te rugăm să aștepți câteva minute." };
+      return {
+        success: false,
+        error: locale === 'en'
+          ? "Too many attempts. Please wait a few minutes."
+          : "Prea multe încercări. Te rugăm să aștepți câteva minute."
+      };
     }
 
     const cleanEmail = (email || '').trim().toLowerCase().slice(0, 150);
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return { success: false, error: "Adresă de email invalidă." };
+      return { success: false, error: locale === 'en' ? "Invalid email address." : "Adresă de email invalidă." };
     }
 
     const displayName = (name?.trim() || (locale === 'ro' ? 'TrenZone' : 'Champion')).slice(0, 80);
@@ -75,18 +80,19 @@ export async function subscribeToNewsletter(
   }
 }
 
-export async function unsubscribeFromNewsletter(email: string) {
+export async function unsubscribeFromNewsletter(email: string, locale: "ro" | "en" = "ro") {
+  const isEn = locale === "en";
   try {
     const headersList = await headers();
     const ip = getClientIpFromHeaders(headersList);
     const { allowed } = await checkRateLimit(rateLimiters.newsletter, `unsub:${ip}`, 'newsletter');
     if (!allowed) {
-      return { success: false, error: "Prea multe încercări. Te rugăm să aștepți câteva minute." };
+      return { success: false, error: isEn ? "Too many attempts. Please wait a few minutes." : "Prea multe încercări. Te rugăm să aștepți câteva minute." };
     }
 
     const cleanEmail = (email || '').toLowerCase().trim().slice(0, 150);
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return { success: false, error: "Adresă de email invalidă." };
+      return { success: false, error: isEn ? "Invalid email address." : "Adresă de email invalidă." };
     }
 
     const { error: dbError } = await supabaseAdmin
@@ -105,7 +111,7 @@ export async function unsubscribeFromNewsletter(email: string) {
 
     if (blockError) {
       console.error("❌ [NEWSLETTER ACTION] Unsubscribe Error (blocklist):", blockError);
-      return { success: false, error: "Eroare la adăugarea în lista de excluderi." };
+      return { success: false, error: isEn ? "Error adding to exclusion list." : "Eroare la adăugarea în lista de excluderi." };
     }
     
     return { success: true };

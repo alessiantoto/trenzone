@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useLocale } from "next-intl";
+import { useRegionStore } from "@/store/useRegionStore";
+import { formatPrice } from "@/utils/currency";
+import { getProductPrice } from "@/utils/pricing";
 import { 
   Plus, 
   Minus, 
@@ -20,13 +23,13 @@ interface FaqItem {
   points?: Array<{
     title: { ro: string; en: string };
     desc: { ro: string; en: string };
-    badge?: string;
+    badge?: { ro: string; en: string };
   }>;
   highlightCards?: Array<{
     title: { ro: string; en: string };
     subtitle?: { ro: string; en: string };
     desc: { ro: string; en: string };
-    tag?: string;
+    tag?: { ro: string; en: string };
     isFeatured?: boolean;
   }>;
   badge?: { ro: string; en: string };
@@ -35,6 +38,9 @@ interface FaqItem {
 export function FaqSection() {
   const locale = useLocale();
   const isRo = locale === 'ro';
+  const { currency } = useRegionStore();
+  const x5PriceStr = formatPrice(getProductPrice(329.99, currency), currency);
+  const x10PriceStr = formatPrice(getProductPrice(529.99, currency), currency);
 
   const [activeCategory, setActiveCategory] = useState<"all" | "products" | "usage" | "shipping">("all");
   const [activeIndex, setActiveIndex] = useState<number | null>(0);
@@ -64,17 +70,17 @@ export function FaqSection() {
         {
           title: { ro: "1. Rezervare Automată", en: "1. Automatic Spot" },
           desc: { ro: "Loc garantat din stocul limitat de lansare fără riscul de a rămâne pe dinafară.", en: "Guaranteed allocation from the limited launch drop." },
-          badge: "PRIORITATE"
+          badge: { ro: "PRIORITATE", en: "PRIORITY" }
         },
         {
           title: { ro: "2. Notificare pe Email", en: "2. Email Tracking" },
           desc: { ro: "Primești confirmare instantă și notificări de status la fiecare etapă a comenzii.", en: "Instant confirmation and automated progress updates." },
-          badge: "TRANSPARENȚĂ"
+          badge: { ro: "TRANSPARENȚĂ", en: "TRANSPARENCY" }
         },
         {
           title: { ro: "3. Livrare Rapidă la Ușă", en: "3. Express Door Delivery" },
           desc: { ro: "Expediere prin curier rapid (1-2 zile lucrătoare în RO) cu AWB și tracking live.", en: "Dispatched via express tracked couriers straight to your door." },
-          badge: "RAPID"
+          badge: { ro: "RAPID", en: "EXPRESS" }
         }
       ]
     },
@@ -93,22 +99,22 @@ export function FaqSection() {
       },
       highlightCards: [
         {
-          title: { ro: "MODELUL X5 — 329.99 RON", en: "X5 EDITION — 329.99 RON" },
+          title: { ro: `MODELUL X5 — ${x5PriceStr}`, en: `X5 EDITION — ${x5PriceStr}` },
           subtitle: { ro: "Nivel Suport: 3.5 / 5 (Ferm & Flexibil)", en: "Support Level: 3.5 / 5 (Firm & Flexible)" },
           desc: { 
             ro: "Ideal pentru serii de volum, hipertrofie, culturism, împins cu gantere și mișcări unde ai nevoie de mobilitate naturală și protecție a tendoanelor.",
             en: "Engineered for high-volume hypertrophy, dumbbell pressing, and movements requiring natural elbow mobility with high tendon protection."
           },
-          tag: "MOBILITATE & VOLUM"
+          tag: { ro: "MOBILITATE & VOLUM", en: "MOBILITY & VOLUME" }
         },
         {
-          title: { ro: "MODELUL X10 — 529.99 RON", en: "X10 EDITION — 529.99 RON" },
+          title: { ro: `MODELUL X10 — ${x10PriceStr}`, en: `X10 EDITION — ${x10PriceStr}` },
           subtitle: { ro: "Nivel Suport: 5 / 5 (Rigiditate Extremă)", en: "Support Level: 5 / 5 (Extreme Stiffness)" },
           desc: { 
             ro: "Conceput pentru greutăți mari (100–200+ kg), PR-uri la Bench Press și sportivi experimentați. Oferă blocare totală pe cot și până la +20 kg asistență mecanică.",
             en: "Built for heavy PR sets (100–200+ kg), powerlifting, and experienced lifters. Provides total joint lockout and up to +20 kg mechanical rebound."
           },
-          tag: "PR CHASER · +20 KG",
+          tag: { ro: "PR CHASER · +20 KG", en: "PR CHASER · +20 KG" },
           isFeatured: true
         }
       ]
@@ -133,7 +139,7 @@ export function FaqSection() {
             ro: "Modelul X5 este alegerea perfectă: oferă suport articular esențial și previne durerile de coate sau inflamația tendoanelor înainte ca acestea să apară.",
             en: "The X5 is ideal: it delivers essential joint compression and keeps tendon inflammation away while you build foundational strength."
           },
-          tag: "PREVENȚIE & CONFORT"
+          tag: { ro: "PREVENȚIE & CONFORT", en: "PREVENTION & COMFORT" }
         },
         {
           title: { ro: "Avansați & Powerlifteri", en: "Advanced & Powerlifters" },
@@ -141,7 +147,7 @@ export function FaqSection() {
             ro: "Modelul X10 este recomandat sportivilor cu tehnică deja consolidată care încarcă greutăți substanțiale și vor stabilitate mecanică de neclintit.",
             en: "The X10 is recommended for experienced lifters with dialed-in technique who handle heavy iron and demand absolute structural stability."
           },
-          tag: "PERFORMANȚĂ MAXIMĂ",
+          tag: { ro: "PERFORMANȚĂ MAXIMĂ", en: "MAX PERFORMANCE" },
           isFeatured: true
         }
       ]
@@ -163,22 +169,22 @@ export function FaqSection() {
         {
           title: { ro: "Densitate Multi-Strat de 1.2 kg", en: "1.2 kg Multi-Layer Weave" },
           desc: { ro: "Elastic tehnic ranforsat cu rezistență mecanică uriașă la tracțiune și întindere repetată.", en: "Reinforced elastic weave with extreme tensile resistance under repetitive heavy loading." },
-          badge: "STRUCTURĂ"
+          badge: { ro: "STRUCTURĂ", en: "STRUCTURE" }
         },
         {
           title: { ro: "Textură Grip Anti-Alunecare", en: "Anti-Slip Friction Grip" },
           desc: { ro: "Se mulează și aderă ferm pe braț sau îmbrăcăminte fără să alunece milimetric în timpul repetării.", en: "Locks securely onto arms or apparel without slipping even a millimeter during reps." },
-          badge: "STABILITATE"
+          badge: { ro: "STABILITATE", en: "STABILITY" }
         },
         {
           title: { ro: "Cusături Duble de Competiție", en: "Competition Double Stitching" },
           desc: { ro: "Finisaje întărite la capete pentru a rezista anilor întregi de antrenamente brutale.", en: "Industrial reinforced stitching built to endure years of brutal workouts." },
-          badge: "DURABILITATE"
+          badge: { ro: "DURABILITATE", en: "DURABILITY" }
         },
         {
           title: { ro: "Testate la Sarcini Reale de 200+ kg", en: "Tested Under 200+ kg Real Loads" },
           desc: { ro: "Validate de atleți de forță și culturiști de top pe împinsuri grele, fără deformare.", en: "Validated by heavy strength athletes on max effort pressing with zero deformation." },
-          badge: "VALIDAT"
+          badge: { ro: "VALIDAT", en: "VERIFIED" }
         }
       ]
     },
@@ -186,7 +192,7 @@ export function FaqSection() {
       id: "exercises-and-benefits",
       category: "usage",
       categoryLabel: { ro: "EXERCIȚII & BIOMECANICĂ", en: "EXERCISES & BIOMECHANICS" },
-      badge: { ro: "RECOMMANDAT PENTRU FORȚĂ", en: "KEY BENEFITS" },
+      badge: { ro: "RECOMANDAT PENTRU FORȚĂ", en: "KEY BENEFITS" },
       question: {
         ro: "Sunt benzile doar pentru Bench Press sau și pentru alte exerciții? Care sunt beneficiile concrete?",
         en: "Are elbow wraps only for Bench Press or other exercises too? What are the concrete benefits?"
@@ -202,7 +208,7 @@ export function FaqSection() {
             ro: "Bench Press (bară/gantere, orizontal/înclinat), Împins Umeri (Overhead Press), Flotări la Paralele cu greutate (Weighted Dips) și extensii grele de triceps (Skull Crushers).",
             en: "Bench Press (barbell/dumbbells, flat/incline), Overhead Press, Weighted Dips, and heavy triceps skull crushers."
           },
-          badge: "POLIVALENȚĂ"
+          badge: { ro: "POLIVALENȚĂ", en: "VERSATILITY" }
         },
         {
           title: { ro: "2. Stabilitate Mecanică Totală", en: "2. Total Mechanical Lock" },
@@ -210,7 +216,7 @@ export function FaqSection() {
             ro: "Cotul este ghidat pe traiectorie optimă; se elimină complet tremuratul involuntar al articulației la adâncime maximă sub bară.",
             en: "Elbow is locked on an ideal groove; involuntary joint shaking at peak compression is completely eliminated."
           },
-          badge: "ZERO TREMURAT"
+          badge: { ro: "ZERO TREMURAT", en: "ZERO SHAKE" }
         },
         {
           title: { ro: "3. Protecția Tendoanelor & Tensiunii", en: "3. Tendon & Shearing Relief" },
@@ -218,7 +224,7 @@ export function FaqSection() {
             ro: "Materialul absoarbe și redistribuie forțele de forfecare de pe tendonul tricepsului, prevenind inflamațiile cronice și durerile articulare.",
             en: "Absorbs and redistributes brutal shearing forces away from the triceps tendon, preventing tendinitis."
           },
-          badge: "ANTIDURERE"
+          badge: { ro: "ANTIDURERE", en: "JOINT RELIEF" }
         },
         {
           title: { ro: "4. Recul Kinetic pe Ieșirea din Piept", en: "4. Kinetic Rebound Assist" },
@@ -226,7 +232,7 @@ export function FaqSection() {
             ro: "Tensiunea acumulată la coborâre te catapultează exploziv prin punctul mort al împinsului, ajutându-te să deblochezi noi recorduri personale.",
             en: "Stored elastic energy at the bottom catapults you through the sticking point, helping unlock new personal records."
           },
-          badge: "ASISTENȚĂ KINETICĂ"
+          badge: { ro: "ASISTENȚĂ KINETICĂ", en: "KINETIC ASSIST" }
         }
       ]
     },
@@ -247,17 +253,17 @@ export function FaqSection() {
         {
           title: { ro: "România: 1–2 Zile Lucrătoare", en: "Romania: 1–2 Business Days" },
           desc: { ro: "Livrare la ușă sau la locker prin curieri expres parteneri (Fan Courier / Sameday / Packeta).", en: "Door delivery or parcel locker via express couriers with live SMS & tracking." },
-          badge: "1-2 ZILE"
+          badge: { ro: "1-2 ZILE", en: "1-2 DAYS" }
         },
         {
           title: { ro: "Internațional (UE, UK, SUA)", en: "International (EU, UK, USA)" },
           desc: { ro: "Expediere internațională asigurată prin rețele aeriene de curierat rapid, cu AWB transparent.", en: "Fully insured international priority shipping with tracking code provided on dispatch." },
-          badge: "GLOBAL"
+          badge: { ro: "GLOBAL", en: "WORLDWIDE" }
         },
         {
           title: { ro: "14 Zile Drept de Retur Garantat", en: "14-Day Return Guarantee" },
           desc: { ro: "Dacă produsul nu ți se potrivește sau vrei altă mărime/model, beneficiezi de schimb simplu și rapid conform legii.", en: "Hassle-free 14-day exchange or return if the product is unused and in original packaging." },
-          badge: "100% SIGUR"
+          badge: { ro: "100% SIGUR", en: "100% SAFE" }
         }
       ]
     }
@@ -401,11 +407,13 @@ export function FaqSection() {
                               }`}
                             >
                               <div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-white">
-                                    {card.tag}
-                                  </span>
-                                </div>
+                                {card.tag && (
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-white">
+                                      {card.tag[locale as 'ro' | 'en'] || card.tag.ro}
+                                    </span>
+                                  </div>
+                                )}
                                 <h4 className="text-xs sm:text-sm font-black uppercase text-white tracking-wide mb-0.5">
                                   {card.title[locale as 'ro' | 'en'] || card.title.ro}
                                 </h4>
@@ -438,7 +446,7 @@ export function FaqSection() {
                                 </span>
                                 {pt.badge && (
                                   <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-white/5 text-zinc-400 shrink-0">
-                                    {pt.badge}
+                                    {pt.badge[locale as 'ro' | 'en'] || pt.badge.ro}
                                   </span>
                                 )}
                               </div>

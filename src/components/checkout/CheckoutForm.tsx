@@ -36,32 +36,32 @@ const COUNTIES_LIST = [
   "Suceava", "Teleorman", "Timiș", "Tulcea", "Vâlcea", "Vaslui", "Vrancea"
 ];
 
-const COUNTRY_DATA: Record<string, { name: string; flag: string; prefix: string; placeholder: string }> = {
-  RO: { name: "România", flag: "https://flagcdn.com/w40/ro.png", prefix: "+40", placeholder: "07XX XXX XXX" },
-  HU: { name: "Ungaria", flag: "https://flagcdn.com/w40/hu.png", prefix: "+36", placeholder: "20 XXX XXXX" },
-  BG: { name: "Bulgaria", flag: "https://flagcdn.com/w40/bg.png", prefix: "+359", placeholder: "8X XXX XXXX" },
-  CZ: { name: "Cehia", flag: "https://flagcdn.com/w40/cz.png", prefix: "+420", placeholder: "XXX XXX XXX" },
-  SK: { name: "Slovacia", flag: "https://flagcdn.com/w40/sk.png", prefix: "+421", placeholder: "9XX XXX XXX" },
-  PL: { name: "Polonia", flag: "https://flagcdn.com/w40/pl.png", prefix: "+48", placeholder: "XXX XXX XXX" },
-  DE: { name: "Germania", flag: "https://flagcdn.com/w40/de.png", prefix: "+49", placeholder: "1XX XXXXXXX" },
-  AT: { name: "Austria", flag: "https://flagcdn.com/w40/at.png", prefix: "+43", placeholder: "6XX XXXXXXX" },
-  IT: { name: "Italia", flag: "https://flagcdn.com/w40/it.png", prefix: "+39", placeholder: "3XX XXXXXXX" },
-  FR: { name: "Franța", flag: "https://flagcdn.com/w40/fr.png", prefix: "+33", placeholder: "06 12 34 56 78" },
-  GR: { name: "Grecia", flag: "https://flagcdn.com/w40/gr.png", prefix: "+30", placeholder: "69X XXX XXXX" },
-  BE: { name: "Belgia", flag: "https://flagcdn.com/w40/be.png", prefix: "+32", placeholder: "04XX XX XX XX" },
-  NL: { name: "Olanda", flag: "https://flagcdn.com/w40/nl.png", prefix: "+31", placeholder: "06 1234 5678" },
-  HR: { name: "Croația", flag: "https://flagcdn.com/w40/hr.png", prefix: "+385", placeholder: "09X XXX XXXX" },
-  SI: { name: "Slovenia", flag: "https://flagcdn.com/w40/si.png", prefix: "+386", placeholder: "0XX XXX XXX" },
-  ES: { name: "Spania", flag: "https://flagcdn.com/w40/es.png", prefix: "+34", placeholder: "6XX XXX XXX" },
-  PT: { name: "Portugalia", flag: "https://flagcdn.com/w40/pt.png", prefix: "+351", placeholder: "9XX XXX XXX" },
-  GB: { name: "UK", flag: "https://flagcdn.com/w40/gb.png", prefix: "+44", placeholder: "7XXX XXXXXX" },
-  SE: { name: "Suedia", flag: "https://flagcdn.com/w40/se.png", prefix: "+46", placeholder: "7X XXX XX XX" },
-  FI: { name: "Finlanda", flag: "https://flagcdn.com/w40/fi.png", prefix: "+358", placeholder: "4X XXX XX XX" },
-  EE: { name: "Estonia", flag: "https://flagcdn.com/w40/ee.png", prefix: "+372", placeholder: "5X XXX XXX" },
-  LV: { name: "Letonia", flag: "https://flagcdn.com/w40/lv.png", prefix: "+371", placeholder: "2X XXX XXX" },
-  LT: { name: "Lituania", flag: "https://flagcdn.com/w40/lt.png", prefix: "+370", placeholder: "6X XXX XXX" },
-  LU: { name: "Luxemburg", flag: "https://flagcdn.com/w40/lu.png", prefix: "+352", placeholder: "6XX XXX XXX" },
-  CY: { name: "Cipru", flag: "https://flagcdn.com/w40/cy.png", prefix: "+357", placeholder: "9X XXX XXX" }
+const COUNTRY_DATA: Record<string, { name: string; nameEn: string; flag: string; prefix: string; placeholder: string }> = {
+  RO: { name: "România", nameEn: "Romania", flag: "https://flagcdn.com/w40/ro.png", prefix: "+40", placeholder: "07XX XXX XXX" },
+  HU: { name: "Ungaria", nameEn: "Hungary", flag: "https://flagcdn.com/w40/hu.png", prefix: "+36", placeholder: "20 XXX XXXX" },
+  BG: { name: "Bulgaria", nameEn: "Bulgaria", flag: "https://flagcdn.com/w40/bg.png", prefix: "+359", placeholder: "8X XXX XXXX" },
+  CZ: { name: "Cehia", nameEn: "Czech Republic", flag: "https://flagcdn.com/w40/cz.png", prefix: "+420", placeholder: "XXX XXX XXX" },
+  SK: { name: "Slovacia", nameEn: "Slovakia", flag: "https://flagcdn.com/w40/sk.png", prefix: "+421", placeholder: "9XX XXX XXX" },
+  PL: { name: "Polonia", nameEn: "Poland", flag: "https://flagcdn.com/w40/pl.png", prefix: "+48", placeholder: "XXX XXX XXX" },
+  DE: { name: "Germania", nameEn: "Germany", flag: "https://flagcdn.com/w40/de.png", prefix: "+49", placeholder: "1XX XXXXXXX" },
+  AT: { name: "Austria", nameEn: "Austria", flag: "https://flagcdn.com/w40/at.png", prefix: "+43", placeholder: "6XX XXXXXXX" },
+  IT: { name: "Italia", nameEn: "Italy", flag: "https://flagcdn.com/w40/it.png", prefix: "+39", placeholder: "3XX XXXXXXX" },
+  FR: { name: "Franța", nameEn: "France", flag: "https://flagcdn.com/w40/fr.png", prefix: "+33", placeholder: "06 12 34 56 78" },
+  GR: { name: "Grecia", nameEn: "Greece", flag: "https://flagcdn.com/w40/gr.png", prefix: "+30", placeholder: "69X XXX XXXX" },
+  BE: { name: "Belgia", nameEn: "Belgium", flag: "https://flagcdn.com/w40/be.png", prefix: "+32", placeholder: "04XX XX XX XX" },
+  NL: { name: "Olanda", nameEn: "Netherlands", flag: "https://flagcdn.com/w40/nl.png", prefix: "+31", placeholder: "06 1234 5678" },
+  HR: { name: "Croația", nameEn: "Croatia", flag: "https://flagcdn.com/w40/hr.png", prefix: "+385", placeholder: "09X XXX XXXX" },
+  SI: { name: "Slovenia", nameEn: "Slovenia", flag: "https://flagcdn.com/w40/si.png", prefix: "+386", placeholder: "0XX XXX XXX" },
+  ES: { name: "Spania", nameEn: "Spain", flag: "https://flagcdn.com/w40/es.png", prefix: "+34", placeholder: "6XX XXX XXX" },
+  PT: { name: "Portugalia", nameEn: "Portugal", flag: "https://flagcdn.com/w40/pt.png", prefix: "+351", placeholder: "9XX XXX XXX" },
+  GB: { name: "UK", nameEn: "United Kingdom", flag: "https://flagcdn.com/w40/gb.png", prefix: "+44", placeholder: "7XXX XXXXXX" },
+  SE: { name: "Suedia", nameEn: "Sweden", flag: "https://flagcdn.com/w40/se.png", prefix: "+46", placeholder: "7X XXX XX XX" },
+  FI: { name: "Finlanda", nameEn: "Finland", flag: "https://flagcdn.com/w40/fi.png", prefix: "+358", placeholder: "4X XXX XX XX" },
+  EE: { name: "Estonia", nameEn: "Estonia", flag: "https://flagcdn.com/w40/ee.png", prefix: "+372", placeholder: "5X XXX XXX" },
+  LV: { name: "Letonia", nameEn: "Latvia", flag: "https://flagcdn.com/w40/lv.png", prefix: "+371", placeholder: "2X XXX XXX" },
+  LT: { name: "Lituania", nameEn: "Lithuania", flag: "https://flagcdn.com/w40/lt.png", prefix: "+370", placeholder: "6X XXX XXX" },
+  LU: { name: "Luxemburg", nameEn: "Luxembourg", flag: "https://flagcdn.com/w40/lu.png", prefix: "+352", placeholder: "6XX XXX XXX" },
+  CY: { name: "Cipru", nameEn: "Cyprus", flag: "https://flagcdn.com/w40/cy.png", prefix: "+357", placeholder: "9X XXX XXX" }
 };
 
 declare global {
@@ -146,7 +146,7 @@ const StripePaymentSection = ({
       }
     } catch (err: any) {
       console.error("❌ Payment System Error:", err);
-      setMessage(err.message || "System error.");
+      setMessage(err.message || t('system_error'));
     } finally {
       setLoading(false);
     }
@@ -297,6 +297,7 @@ interface CustomSelectProps {
 }
 
 const CustomSelect = ({ value, onChange, options, placeholder, error, label }: CustomSelectProps) => {
+  const locale = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -314,8 +315,8 @@ const CustomSelect = ({ value, onChange, options, placeholder, error, label }: C
   }, []);
 
   const sortedOptions = useMemo(() => {
-    return [...options].sort((a, b) => a.label.localeCompare(b.label, 'ro', { sensitivity: 'base' }));
-  }, [options]);
+    return [...options].sort((a, b) => a.label.localeCompare(b.label, locale === 'en' ? 'en' : 'ro', { sensitivity: 'base' }));
+  }, [options, locale]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) {
@@ -445,6 +446,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, error, label }: C
 };
 
 const CustomPrefixSelect = ({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: any[] }) => {
+  const locale = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -470,8 +472,8 @@ const CustomPrefixSelect = ({ value, onChange, options }: { value: string; onCha
   }, []);
 
   const sortedOptions = useMemo(() => {
-    return [...options].sort((a, b) => a.label.localeCompare(b.label, 'ro', { sensitivity: 'base' }));
-  }, [options]);
+    return [...options].sort((a, b) => a.label.localeCompare(b.label, locale === 'en' ? 'en' : 'ro', { sensitivity: 'base' }));
+  }, [options, locale]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) return;
@@ -644,7 +646,9 @@ const Step1ExpressCheckout = ({
 
       const shippingLabel = calc.shippingCost === 0 
         ? (locale === 'ro' ? 'Livrare gratuită' : 'Free shipping') 
-        : (country === 'RO' ? 'Sameday Standard (1-3 Zile)' : (locale === 'ro' ? 'Livrare Standard / Internațională' : 'Standard International Shipping'));
+        : (country === 'RO'
+            ? (locale === 'ro' ? 'Sameday Standard (1-3 Zile)' : 'Sameday Standard (1-3 Days)')
+            : (locale === 'ro' ? 'Livrare Standard / Internațională' : 'Standard International Shipping'));
 
       // Stripe ExpressCheckout requires `shippingRates` with `displayName` (not `shippingOptions` with `label`)
       const shippingRates = [
@@ -1231,6 +1235,7 @@ export default function CheckoutForm({
           priority_processing: priorityProcessing,
           gift_packaging: giftPackaging,
           gift_message: giftMessage,
+          locale: locale || 'ro',
           items: items.map(i => ({ id: i.id, name: i.name, quantity: i.quantity, price: i.price, image: i.image })),
           isFinalSync: false
         }),
@@ -1275,6 +1280,7 @@ export default function CheckoutForm({
           phone: (COUNTRY_DATA[phoneCountry]?.prefix || "") + phone.replace(/^0/, ""),
           line1, line2, city, state, postal_code: postalCode, country,
           currency,
+          locale: locale || 'ro',
           priority_processing: priorityProcessing,
           gift_packaging: giftPackaging,
           gift_message: giftMessage,
@@ -1285,7 +1291,11 @@ export default function CheckoutForm({
       if (!response.ok) {
         const txt = await response.text();
         console.error("❌ Final Sync Failed:", txt);
-        throw new Error(txt || "Sincronizarea datelor a eșuat. Verifică conexiunea.");
+        throw new Error(
+          txt || (locale === 'ro'
+            ? "Sincronizarea datelor a eșuat. Verifică conexiunea."
+            : "Data synchronization failed. Please check your connection.")
+        );
       } else {
         console.log("✅ Final Sync Successful.");
       }
@@ -1426,6 +1436,7 @@ export default function CheckoutForm({
                 phone: (COUNTRY_DATA[phoneCountry]?.prefix || "") + phone.replace(/^0/, ""),
                 line1, line2, city, state, postal_code: postalCode, country,
                 currency,
+                locale: locale || 'ro',
                 couponCode: appliedCoupon?.code?.trim()?.toUpperCase(),
                 priority_processing: priorityProcessing,
                 gift_packaging: giftPackaging,
@@ -1497,10 +1508,10 @@ export default function CheckoutForm({
           router.push(`/checkout/success?type=cod&order_id=${data.orderId}`);
         } else {
           const errData = await res.json().catch(() => ({}));
-          setMessage(`Eroare Backend: ${errData.error || t('error_processing')}`);
+          setMessage(`${locale === 'ro' ? 'Eroare Backend' : 'Backend Error'}: ${errData.error || t('error_processing')}`);
         }
       } catch (err) {
-        setMessage(`Eroare Sistem: ${err instanceof Error ? err.message : t('error_processing')}`);
+        setMessage(`${locale === 'ro' ? 'Eroare Sistem' : 'System Error'}: ${err instanceof Error ? err.message : t('error_processing')}`);
       }
       setLoading(false);
       return;
@@ -1642,7 +1653,7 @@ export default function CheckoutForm({
                 value={country}
                 onChange={setCountry}
                 options={Object.keys(COUNTRY_DATA).map(code => ({
-                  label: COUNTRY_DATA[code].name,
+                  label: locale === 'en' ? COUNTRY_DATA[code].nameEn : COUNTRY_DATA[code].name,
                   value: code,
                   icon: COUNTRY_DATA[code].flag
                 }))}
@@ -1724,7 +1735,7 @@ export default function CheckoutForm({
                   <Input 
                     value={city} 
                     onChange={(e) => setCity(e.target.value)} 
-                    placeholder="București" 
+                    placeholder={country === 'RO' ? (locale === 'ro' ? 'București' : 'Bucharest') : (locale === 'ro' ? 'Oraș' : 'City')} 
                     className={cn(
                       "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
                       errors.city && "!border-red-500 !ring-2 !ring-red-100"
@@ -1733,7 +1744,7 @@ export default function CheckoutForm({
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 ml-1">
-                    {t('postal_code_label')} <span className="text-zinc-400 font-normal text-[9px] lowercase">(opțional)</span>
+                    {t('postal_code_label')} <span className="text-zinc-400 font-normal text-[9px] lowercase">({locale === 'ro' ? 'opțional' : 'optional'})</span>
                   </Label>
                   <Input 
                     value={postalCode} 
@@ -1907,7 +1918,7 @@ export default function CheckoutForm({
                                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsSamedayLockerOpen(true); }}
                                         className="text-[9px] font-black text-red-600 hover:underline"
                                       >
-                                        Schimbă
+                                        {locale === 'en' ? 'Change' : 'Schimbă'}
                                       </button>
                                     </div>
                                   ) : (
@@ -1916,7 +1927,7 @@ export default function CheckoutForm({
                                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsSamedayLockerOpen(true); }}
                                       className="mt-2 w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors shadow-sm"
                                     >
-                                      Alege Easybox de pe Hartă
+                                      {locale === 'en' ? 'Select Easybox on Map' : 'Alege Easybox de pe Hartă'}
                                     </button>
                                   )}
                                 </div>
@@ -1942,7 +1953,7 @@ export default function CheckoutForm({
 
             <div className="flex gap-4">
               <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px]">{t('back')}</Button>
-              <Button type="submit" disabled={!selectedServiceId} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98]">Următorul Pas</Button>
+              <Button type="submit" disabled={!selectedServiceId} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98]">{locale === 'en' ? 'Next Step' : 'Următorul Pas'}</Button>
             </div>
           </motion.div>
         )}

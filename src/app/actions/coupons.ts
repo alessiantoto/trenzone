@@ -117,10 +117,11 @@ export async function updateCoupon(id: string, data: Omit<CouponData, 'id' | 'us
  * VALIDATE A COUPON FOR CHECKOUT
  * Used on the client side to apply discounts.
  */
-export async function validateCoupon(code: string, subtotal: number = 0, currency: string = 'RON') {
+export async function validateCoupon(code: string, subtotal: number = 0, currency: string = 'RON', locale: string = 'ro') {
+  const isEn = locale === 'en';
   try {
     if (!code || typeof code !== "string") {
-      return { isValid: false, message: 'Codul de reducere nu este valid.' };
+      return { isValid: false, message: isEn ? 'The discount code is not valid.' : 'Codul de reducere nu este valid.' };
     }
 
     try {
@@ -128,7 +129,7 @@ export async function validateCoupon(code: string, subtotal: number = 0, currenc
       const ip = getClientIpFromHeaders(headersList);
       const { allowed } = await checkRateLimit(rateLimiters.checkoutUpdate, ip, 'validate-coupon');
       if (!allowed) {
-        return { isValid: false, message: 'Prea multe încercări. Așteaptă puțin înainte de a reîncerca.' };
+        return { isValid: false, message: isEn ? 'Too many attempts. Please wait a moment before trying again.' : 'Prea multe încercări. Așteaptă puțin înainte de a reîncerca.' };
       }
     } catch {
       // Ignore outside request context
@@ -142,31 +143,31 @@ export async function validateCoupon(code: string, subtotal: number = 0, currenc
       .single();
 
     if (error || !coupon) {
-      return { isValid: false, message: 'Codul de reducere nu este valid.' };
+      return { isValid: false, message: isEn ? 'The discount code is not valid.' : 'Codul de reducere nu este valid.' };
     }
 
     if (!coupon.is_active) {
-      return { isValid: false, message: 'Codul de reducere nu este activ.' };
+      return { isValid: false, message: isEn ? 'The discount code is not active.' : 'Codul de reducere nu este activ.' };
     }
 
     if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
-      return { isValid: false, message: 'Codul de reducere și-a atins limita de utilizări.' };
+      return { isValid: false, message: isEn ? 'The discount code has reached its usage limit.' : 'Codul de reducere și-a atins limita de utilizări.' };
     }
 
     if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
-      return { isValid: false, message: 'Codul de reducere a expirat.' };
+      return { isValid: false, message: isEn ? 'The discount code has expired.' : 'Codul de reducere a expirat.' };
     }
 
     const liveRates = await getServerExchangeRates();
     const subtotalInRon = convertToRon(subtotal, currency, liveRates);
     if (coupon.min_purchase && subtotalInRon < coupon.min_purchase) {
-      return { isValid: false, message: `Valoarea minimă a comenzii pentru acest cod este de ${coupon.min_purchase} RON.` };
+      return { isValid: false, message: isEn ? `Minimum order value for this code is ${coupon.min_purchase} RON.` : `Valoarea minimă a comenzii pentru acest cod este de ${coupon.min_purchase} RON.` };
     }
 
     return { isValid: true, coupon };
   } catch (error) {
     console.error("❌ Error validating coupon:", error);
-    return { isValid: false, message: 'Eroare la validarea codului.' };
+    return { isValid: false, message: isEn ? 'Error validating the code.' : 'Eroare la validarea codului.' };
   }
 }
 

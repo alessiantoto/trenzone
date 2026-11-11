@@ -290,8 +290,8 @@ export async function sendOrderConfirmationEmail(
           userEmail={to}
           items={(orderData.items || []).map((i: any) => {
             let name = typeof i.name === 'object'
-              ? (i.name[locale] || i.name['ro'] || i.name['en'] || 'Produs')
-              : (i.name || 'Produs');
+              ? (i.name[locale] || i.name['ro'] || i.name['en'] || (locale === 'en' ? 'Product' : 'Produs'))
+              : (i.name || (locale === 'en' ? 'Product' : 'Produs'));
 
             const variantRaw = i.selectedVariant?.name || i.variant || null;
             const variantStr = typeof variantRaw === 'object' && variantRaw !== null
@@ -347,7 +347,7 @@ export async function sendOrderConfirmationEmail(
       
       payload.attachments = [
         {
-          filename: `Factura-${safeOrderId}-${safeCustomerName}.pdf`,
+          filename: `${locale === 'en' ? 'Invoice' : 'Factura'}-${safeOrderId}-${safeCustomerName}.pdf`,
           content: invoiceBuffer,
         },
       ];
@@ -404,8 +404,8 @@ export async function sendReviewEmail(
     const { data: template } = await supabaseAdmin.from('email_templates').select('*').eq('id', 'review-request').single();
     
     const defaultSubject = orderData.locale === 'en' 
-      ? `How was your experience, God of Aesthetics?`
-      : `Cum a fost experiența ta, Zeule?`;
+      ? `How was your experience, Champion?`
+      : `Cum a fost experiența ta, Campionule?`;
       
     const subject = template ? (orderData.locale === 'en' ? template.subject_en : template.subject_ro) || defaultSubject : defaultSubject;
 

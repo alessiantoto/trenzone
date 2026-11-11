@@ -104,8 +104,8 @@ export async function GET(request: Request) {
       }
 
       // Send the email
-      const customerName = session.first_name || 'Prieten';
-      const locale = session.country === 'RO' ? 'ro' : 'en';
+      const locale = (!session.country || session.country === 'RO') ? 'ro' : 'en';
+      const customerName = session.first_name || (locale === 'en' ? 'Friend' : 'Prieten');
       const baseSubject = locale === 'en' ? templateToUse.subject_en : templateToUse.subject_ro;
       const finalSubject = (emailType === '72h'
         ? (locale === 'en' ? `Here is your ${couponValue72h}% discount for your cart!` : `Ai ${couponValue72h}% reducere pentru produsele din coș!`)

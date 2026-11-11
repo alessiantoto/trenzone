@@ -32,120 +32,137 @@ const oswald = Oswald({
 
 const BASE_URL = "https://www.trenzone.fit";
 
-export const metadata: Metadata = {
-  metadataBase: new URL(BASE_URL),
-  title: {
-    default: "TrenZone® | Heavy-Duty X10 & X5 Elbow Wraps",
-    template: "%s | TrenZone®"
-  },
-  description: "Built for Strength. Designed for Performance. Benzi de cot profesionale pentru împins la piept și powerlifting extrem. Până la +20 kg transfer de forță.",
-  keywords: [
-    "benzi de cot", "elbow wraps", "trenzone", "x10 elbow wraps", "x5 elbow wraps",
-    "powerlifting gear", "bench press wraps", "suport coate sala", "protectie articulatii",
-    "heavy duty wraps", "lifting wraps", "benzi compresie cot"
-  ],
-  authors: [{ name: "TrenZone LLC", url: BASE_URL }],
-  creator: "TrenZone LLC",
-  publisher: "TrenZone LLC",
-  category: "Strength Equipment & Powerlifting",
-  classification: "Health & Fitness / Strength Equipment",
-  formatDetection: {
-    email: false,
-    address: false,
-    telephone: false,
-  },
-  alternates: {
-    canonical: BASE_URL,
-    languages: {
-      "ro": `${BASE_URL}/ro`,
-      "ro-RO": `${BASE_URL}/ro`,
-      "en": `${BASE_URL}/en`,
-      "en-US": `${BASE_URL}/en`,
-      "en-GB": `${BASE_URL}/en`,
-      "en-DE": `${BASE_URL}/en`,
-      "en-FR": `${BASE_URL}/en`,
-      "en-IT": `${BASE_URL}/en`,
-      "en-ES": `${BASE_URL}/en`,
-      "en-PL": `${BASE_URL}/en`,
-      "en-NL": `${BASE_URL}/en`,
-      "en-BE": `${BASE_URL}/en`,
-      "en-AT": `${BASE_URL}/en`,
-      "en-HU": `${BASE_URL}/en`,
-      "en-BG": `${BASE_URL}/en`,
-      "en-CZ": `${BASE_URL}/en`,
-      "en-SK": `${BASE_URL}/en`,
-      "en-HR": `${BASE_URL}/en`,
-      "en-SI": `${BASE_URL}/en`,
-      "en-GR": `${BASE_URL}/en`,
-      "en-PT": `${BASE_URL}/en`,
-      "en-SE": `${BASE_URL}/en`,
-      "en-FI": `${BASE_URL}/en`,
-      "en-EE": `${BASE_URL}/en`,
-      "en-LV": `${BASE_URL}/en`,
-      "en-LT": `${BASE_URL}/en`,
-      "en-LU": `${BASE_URL}/en`,
-      "en-CY": `${BASE_URL}/en`,
-      "x-default": `${BASE_URL}/en`,
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale: rawLocale } = await params;
+  const isEn = rawLocale === "en";
+
+  return {
+    metadataBase: new URL(BASE_URL),
+    title: {
+      default: isEn
+        ? "TrenZone® | Heavy-Duty X10 & X5 Elbow Wraps"
+        : "TrenZone® | Benzi de Cot Heavy-Duty X10 & X5",
+      template: "%s | TrenZone®"
     },
-  },
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/favicon.png", type: "image/png" },
-      { url: "/icon", type: "image/png" },
+    description: isEn
+      ? "Built for Strength. Designed for Performance. Professional heavy-duty elbow wraps for bench press and extreme powerlifting. Up to +20 kg force transfer."
+      : "Built for Strength. Designed for Performance. Benzi de cot profesionale pentru împins la piept și powerlifting extrem. Până la +20 kg transfer de forță.",
+    keywords: [
+      "benzi de cot", "elbow wraps", "trenzone", "x10 elbow wraps", "x5 elbow wraps",
+      "powerlifting gear", "bench press wraps", "suport coate sala", "protectie articulatii",
+      "heavy duty wraps", "lifting wraps", "benzi compresie cot"
     ],
-    apple: [{ url: "/apple-touch-icon.png" }],
-    shortcut: ["/favicon.ico"],
-  },
-  openGraph: {
-    type: "website",
-    locale: "ro_RO",
-    alternateLocale: ["en_US", "hu_HU", "de_DE", "fr_FR", "it_IT", "es_ES", "pl_PL", "nl_NL", "bg_BG", "cs_CZ", "el_GR", "pt_PT", "sv_SE"],
-    url: BASE_URL,
-    siteName: "TrenZone®",
-    title: "TREN WRAPS by Vlad Tren | Benzi de Cot Heavy-Duty TrenZone®",
-    description: "Built for Strength. Designed for Performance. Benzi de cot profesionale pentru powerlifting și greutăți mari. Compresie rigidă, stabilitate totală sub bară și până la +20 kg pe bench press.",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "TREN WRAPS by Vlad Tren | Heavy-Duty Elbow Wraps TrenZone®",
-        type: "image/png",
+    authors: [{ name: "TrenZone LLC", url: BASE_URL }],
+    creator: "TrenZone LLC",
+    publisher: "TrenZone LLC",
+    category: "Strength Equipment & Powerlifting",
+    classification: "Health & Fitness / Strength Equipment",
+    formatDetection: {
+      email: false,
+      address: false,
+      telephone: false,
+    },
+    alternates: {
+      canonical: BASE_URL,
+      languages: {
+        "ro": `${BASE_URL}/ro`,
+        "ro-RO": `${BASE_URL}/ro`,
+        "en": `${BASE_URL}/en`,
+        "en-US": `${BASE_URL}/en`,
+        "en-GB": `${BASE_URL}/en`,
+        "en-DE": `${BASE_URL}/en`,
+        "en-FR": `${BASE_URL}/en`,
+        "en-IT": `${BASE_URL}/en`,
+        "en-ES": `${BASE_URL}/en`,
+        "en-PL": `${BASE_URL}/en`,
+        "en-NL": `${BASE_URL}/en`,
+        "en-BE": `${BASE_URL}/en`,
+        "en-AT": `${BASE_URL}/en`,
+        "en-HU": `${BASE_URL}/en`,
+        "en-BG": `${BASE_URL}/en`,
+        "en-CZ": `${BASE_URL}/en`,
+        "en-SK": `${BASE_URL}/en`,
+        "en-HR": `${BASE_URL}/en`,
+        "en-SI": `${BASE_URL}/en`,
+        "en-GR": `${BASE_URL}/en`,
+        "en-PT": `${BASE_URL}/en`,
+        "en-SE": `${BASE_URL}/en`,
+        "en-FI": `${BASE_URL}/en`,
+        "en-EE": `${BASE_URL}/en`,
+        "en-LV": `${BASE_URL}/en`,
+        "en-LT": `${BASE_URL}/en`,
+        "en-LU": `${BASE_URL}/en`,
+        "en-CY": `${BASE_URL}/en`,
+        "x-default": `${BASE_URL}/en`,
       },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "TREN WRAPS by Vlad Tren | Benzi de Cot Heavy-Duty TrenZone®",
-    description: "Benzi de cot profesionale pentru powerlifting și greutăți mari. Compresie rigidă, stabilitate mecanică și până la +20 kg asistență pe bench press.",
-    images: ["/og-image.png"],
-    creator: "@trenzone",
-    site: "@trenzone",
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
+    },
+    icons: {
+      icon: [
+        { url: "/favicon.ico", sizes: "any" },
+        { url: "/favicon.png", type: "image/png" },
+        { url: "/icon", type: "image/png" },
+      ],
+      apple: [{ url: "/apple-touch-icon.png" }],
+      shortcut: ["/favicon.ico"],
+    },
+    openGraph: {
+      type: "website",
+      locale: isEn ? "en_US" : "ro_RO",
+      alternateLocale: ["en_US", "ro_RO", "hu_HU", "de_DE", "fr_FR", "it_IT", "es_ES", "pl_PL", "nl_NL", "bg_BG", "cs_CZ", "el_GR", "pt_PT", "sv_SE"],
+      url: BASE_URL,
+      siteName: "TrenZone®",
+      title: isEn
+        ? "TREN WRAPS by Vlad Tren | Heavy-Duty Elbow Wraps TrenZone®"
+        : "TREN WRAPS by Vlad Tren | Benzi de Cot Heavy-Duty TrenZone®",
+      description: isEn
+        ? "Built for Strength. Designed for Performance. Professional elbow wraps for powerlifting and heavy lifting. Rigid compression, total stability, and up to +20 kg on bench press."
+        : "Built for Strength. Designed for Performance. Benzi de cot profesionale pentru powerlifting și greutăți mari. Compresie rigidă, stabilitate totală sub bară și până la +20 kg pe bench press.",
+      images: [
+        {
+          url: "/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: "TREN WRAPS by Vlad Tren | Heavy-Duty Elbow Wraps TrenZone®",
+          type: "image/png",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: isEn
+        ? "TREN WRAPS by Vlad Tren | Heavy-Duty Elbow Wraps TrenZone®"
+        : "TREN WRAPS by Vlad Tren | Benzi de Cot Heavy-Duty TrenZone®",
+      description: isEn
+        ? "Professional elbow wraps for powerlifting and heavy lifting. Rigid compression, mechanical stability, and up to +20 kg bench press assist."
+        : "Benzi de cot profesionale pentru powerlifting și greutăți mari. Compresie rigidă, stabilitate mecanică și până la +20 kg asistență pe bench press.",
+      images: ["/og-image.png"],
+      creator: "@trenzone",
+      site: "@trenzone",
+    },
+    robots: {
       index: true,
       follow: true,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-video-preview": -1,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+      },
     },
-  },
-  verification: {
-    // Add Google Search Console verification if you have it
-    // google: "your-google-verification-code",
-  },
-  other: {
-    "og:price:amount": "129.90",
-    "og:price:currency": "RON",
-    "product:condition": "new",
-    "product:availability": "in stock",
-    "product:brand": "TrenZone",
-  }
-};
+    verification: {
+      // Add Google Search Console verification if you have it
+      // google: "your-google-verification-code",
+    },
+    other: {
+      "og:price:amount": "329.99",
+      "og:price:currency": "RON",
+      "product:condition": "new",
+      "product:availability": "in stock",
+      "product:brand": "TrenZone",
+    }
+  };
+}
 
 // ✅ ENABLE STATIC GENERATION: Cache layout for 30 days (purged on-demand via Admin "Șterge Cache" button)
 export const revalidate = 2592000;

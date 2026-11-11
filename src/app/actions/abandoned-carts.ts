@@ -430,8 +430,8 @@ export async function sendManualRecoveryEmail(
     couponValue = couponData?.value || 10;
   }
 
-  const customerName = session.first_name || 'Prieten';
   const locale = (session.country === 'RO' || !session.country) ? 'ro' : 'en';
+  const customerName = session.first_name || (locale === 'en' ? 'Friend' : 'Prieten');
   
   const defaultSubject = locale === 'en'
     ? (couponCode ? `Here is your ${couponValue}% discount for your cart!` : "Did you forget something in your cart?")
@@ -600,8 +600,8 @@ export async function runAbandonedCartsAutomation() {
 
     if (!templateToUse || !emailType) continue;
 
-    const customerName = session.first_name || 'Prieten';
     const locale = (session.country === 'RO' || !session.country) ? 'ro' : 'en';
+    const customerName = session.first_name || (locale === 'en' ? 'Friend' : 'Prieten');
     const baseSubject = locale === 'en' ? templateToUse.subject_en : templateToUse.subject_ro;
     const finalSubject = (emailType === '72h'
       ? (locale === 'en' ? `Here is your ${couponValue72h}% discount for your cart!` : `Ai ${couponValue72h}% reducere pentru produsele din coș!`)
@@ -1008,7 +1008,7 @@ export async function sendAbandonedCartTranche(trancheNumber: 1 | 2) {
     }
     if (!Array.isArray(parsedItems)) parsedItems = [];
 
-    const customerFirstName = person.name.split(' ')[0] || 'Prieten';
+    const customerFirstName = person.name.split(' ')[0] || (locale === 'en' ? 'Friend' : 'Prieten');
     const defaultSubject = locale === 'en'
       ? `Here is your ${couponValue}% discount for your cart!`
       : `Ai ${couponValue}% reducere pentru produsele din coș!`;

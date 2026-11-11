@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Copy, Check, ArrowRight, Loader2, ImageIcon } from "lucide-react";
 import Image from "next/image";
+import { Link } from "@/i18n/routing";
 import { useLocale } from "next-intl";
 import { useCartStore } from "@/store/useCartStore";
 import { subscribeToNewsletter } from "@/app/actions/newsletter";
@@ -83,7 +84,7 @@ export function ScratchPromoPopup() {
   const handleApplyCoupon = async () => {
     const { setCoupon } = useCartStore.getState();
     try {
-      const res = await validateCoupon(couponCode, 999999, "RON");
+      const res = await validateCoupon(couponCode, 999999, "RON", locale);
       if (res.isValid && res.coupon) {
         setCoupon(res.coupon);
         return;
@@ -158,7 +159,7 @@ export function ScratchPromoPopup() {
             <button
               onClick={handleClose}
               className="absolute top-3 right-3 z-30 w-9 h-9 rounded-full bg-black/60 hover:bg-white/20 text-white flex items-center justify-center transition-all backdrop-blur-md border border-white/10 active:scale-95 cursor-pointer"
-              aria-label="Închide"
+              aria-label={isRo ? "Închide" : "Close"}
             >
               <X className="w-4 h-4" />
             </button>
@@ -181,7 +182,7 @@ export function ScratchPromoPopup() {
                     <ImageIcon className="w-6 h-6 text-[#e32f8c]" />
                   </div>
                   <span className="text-xs font-bold text-zinc-300 uppercase tracking-widest font-[family-name:var(--font-oswald)]">
-                    Loc pentru Poză
+                    {isRo ? "Loc pentru Poză" : "Photo Slot"}
                   </span>
                   <span className="text-[10px] text-zinc-500 mt-1">
                     /images/lifestyle/promo-hero.png
@@ -274,14 +275,14 @@ export function ScratchPromoPopup() {
                     </button>
                   </div>
 
-                  <a
+                  <Link
                     href="/shop"
                     onClick={handleClose}
                     className="w-full py-3.5 px-5 rounded-xl bg-white hover:bg-[#e32f8c] text-black hover:text-white font-black uppercase text-xs tracking-wider transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 shadow-md text-center"
                   >
                     <span>{isRo ? "MERGI LA PRODUSE" : "SHOP WRAPS"}</span>
                     <ArrowRight className="w-4 h-4" />
-                  </a>
+                  </Link>
                 </div>
               )}
             </div>

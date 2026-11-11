@@ -11,6 +11,7 @@ export default function AffiliatePage() {
   const t = useTranslations("Affiliate");
   const tShop = useTranslations("Shop");
   const locale = useLocale();
+  const isRo = locale === 'ro';
 
   // Form State
   const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
@@ -60,12 +61,12 @@ export default function AffiliatePage() {
         setPreferredCode("");
         setMessage("");
       } else {
-        setErrorMessage(res.error || "A apărut o eroare. Încearcă din nou.");
+        setErrorMessage(res.error || (isRo ? "A apărut o eroare. Încearcă din nou." : "An error occurred. Please try again."));
         setStatus("error");
       }
     } catch (err: any) {
       console.error("Affiliate submission error:", err);
-      setErrorMessage(err.message || "A apărut o eroare. Încearcă din nou.");
+      setErrorMessage(err.message || (isRo ? "A apărut o eroare. Încearcă din nou." : "An error occurred. Please try again."));
       setStatus("error");
     }
   };
@@ -513,7 +514,7 @@ function EarningsCalculator() {
             </div>
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-zinc-400">
               <TrendingUp className="w-3.5 h-3.5 text-[#e32f8c]" />
-              <span>{isRo ? "Valoare medie: 320 LEI / comandă" : "Avg order: 320 LEI"}</span>
+              <span>{isRo ? "Valoare medie: 320 RON / comandă" : "Avg order: 320 RON"}</span>
             </div>
           </div>
 
@@ -606,9 +607,9 @@ function EarningsCalculator() {
               />
             </div>
             <div className="flex justify-between mt-2 text-[9px] font-bold text-zinc-600">
-              <span>5 comenzi</span>
+              <span>{isRo ? '5 comenzi' : '5 orders'}</span>
               <span>75</span>
-              <span>150+ comenzi</span>
+              <span>{isRo ? '150+ comenzi' : '150+ orders'}</span>
             </div>
           </div>
 
@@ -619,7 +620,7 @@ function EarningsCalculator() {
             </span>
             <div className="flex items-baseline justify-center gap-2 mb-2.5">
               <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
-                {estimatedEarnings.toLocaleString('ro-RO')}
+                {estimatedEarnings.toLocaleString(isRo ? 'ro-RO' : 'en-US')}
               </span>
               <span className="text-lg font-black text-[#e32f8c]">
                 RON

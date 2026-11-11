@@ -14,8 +14,6 @@ const currencies: { code: Currency; symbol: string; name: string }[] = [
   { code: "EUR", symbol: "€", name: "Euro" },
   { code: "USD", symbol: "$", name: "US Dollar" },
   { code: "GBP", symbol: "£", name: "Pound Sterling" },
-  { code: "PLN", symbol: "zł", name: "Złoty polonez" },
-  { code: "CHF", symbol: "CHF", name: "Franc Elvețian" },
 ];
 
 const languages: { code: Locale; label: string; flag: string }[] = [
@@ -141,7 +139,7 @@ export function RegionSwitcher({ variant = 'dark', scrollContainerRef }: { varia
                 {/* ── Language Section ── */}
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#e32f8c] mb-3 px-1">
-                    {locale === 'ro' ? '🌐  Limbă' : '🌐  Language'}
+                    {locale === 'ro' ? 'Limbă' : 'Language'}
                   </p>
                   <div className="grid grid-cols-1 gap-2">
                     {languages.map((lang) => {
@@ -180,16 +178,16 @@ export function RegionSwitcher({ variant = 'dark', scrollContainerRef }: { varia
                 {/* ── Currency Section ── */}
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#e32f8c] mb-3 px-1">
-                    {locale === 'ro' ? '💱  Monedă' : '💱  Currency'}
+                    {locale === 'ro' ? 'Monedă' : 'Currency'}
                   </p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2.5">
                     {currencies.map((curr) => {
                       const isSelected = currency === curr.code;
                       return (
                         <button
                           key={curr.code}
                           onClick={() => handleCurrencyChange(curr.code)}
-                          className={`flex flex-col items-center justify-center gap-1 py-3.5 px-2 rounded-2xl transition-all border ${
+                          className={`relative min-h-[74px] flex flex-col items-center justify-center gap-1 py-3.5 px-2 rounded-2xl transition-all border ${
                             isSelected
                               ? isDark
                                 ? "bg-[#e32f8c]/10 text-[#e32f8c] border-[#e32f8c]/50 shadow-md shadow-[#e32f8c]/10"
@@ -201,7 +199,7 @@ export function RegionSwitcher({ variant = 'dark', scrollContainerRef }: { varia
                         >
                           <span className={`text-base font-black leading-none ${isSelected ? 'text-[#e32f8c]' : ''}`}>{curr.symbol}</span>
                           <span className="text-[10px] font-black uppercase tracking-widest">{curr.code}</span>
-                          {isSelected && <div className="w-1 h-1 rounded-full bg-[#e32f8c] mt-0.5" />}
+                          {isSelected && <div className="w-1 h-1 rounded-full bg-[#e32f8c] absolute bottom-2 left-1/2 -translate-x-1/2" />}
                         </button>
                       );
                     })}

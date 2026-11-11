@@ -73,13 +73,13 @@ export default function TermsPage() {
           If the package has already been shipped, cancellation is no longer possible, but you can refuse the package upon delivery.
         </p>
 
-        <h2>6. Payment Methods</h2>
+        <h2>7. Payment Methods</h2>
         <ul>
           <li>Cash on Delivery (Available in Romania)</li>
           <li>Secure Online Payment (Credit/Debit Card via Stripe)</li>
         </ul>
 
-        <h2>7. Delivery</h2>
+        <h2>8. Delivery</h2>
         <p>
           Shipping is carried out through elite logistics partners. The estimated delivery time is:
         </p>
@@ -91,13 +91,13 @@ export default function TermsPage() {
           <strong>Note for non-EU deliveries:</strong> For orders delivered to countries outside the European Union (e.g., UK), the customer is solely responsible for paying any customs duties or import taxes applicable under local law in the destination country.
         </p>
 
-        <h2>8. Return Policy</h2>
+        <h2>9. Return Policy</h2>
         <p>
           Individual consumers (B2C) have the <strong>right to return</strong> products within 30 calendar days, according to OUG 34/2014. 
           For details on the technical inspection procedure for returns, consult the Return Policy.
         </p>
 
-        <h2>9. Warranty and Product Conformity</h2>
+        <h2>10. Warranty and Product Conformity</h2>
         <p>
           Our products are engineered to the highest performance standards. We offer a 30-day commercial warranty against manufacturing defects (e.g. stitching, material flaws) for our elbow wraps, powerlifting accessories, and apparel. This commercial warranty does not affect your statutory consumer rights regarding conformity under applicable law (OUG 140/2021). The warranty does not cover normal wear and tear from heavy training, misuse, or failure to follow care instructions.
         </p>
@@ -105,12 +105,12 @@ export default function TermsPage() {
           For assistance or warranty claims, contact us directly at <strong>trenzone483@gmail.com</strong> with your order proof.
         </p>
 
-        <h2>10. Limitation of Liability</h2>
+        <h2>11. Limitation of Liability</h2>
         <p>
           TrenZone® is not liable for any direct, indirect, or accidental damages resulting from the use or inability to use our products or website.
         </p>
 
-        <h2>11. Disputes and Alternative Dispute Resolution (ANPC / SAL / ODR)</h2>
+        <h2>12. Disputes and Alternative Dispute Resolution (ANPC / SAL / ODR)</h2>
         <p>
           Any dispute will be resolved amicably. Otherwise, jurisdiction belongs to the competent courts.
         </p>
@@ -123,18 +123,18 @@ export default function TermsPage() {
           <li><strong>ODR Platform</strong> (European Commission Online Dispute Resolution) – <a href="https://consumer-redress.ec.europa.eu/index_en" target="_blank" rel="noopener noreferrer" className="text-[#e32f8c] underline font-bold">consumer-redress.ec.europa.eu</a></li>
         </ul>
 
-        <h2>12. Data Protection</h2>
+        <h2>13. Data Protection</h2>
         <p>
           Processing of personal data is carried out according to Regulation (EU) 2016/679 (GDPR). 
           For details on how we protect your data, consult the <strong>Privacy Policy</strong>.
         </p>
 
-        <h2>13. Governing Law & Jurisdiction</h2>
+        <h2>14. Governing Law & Jurisdiction</h2>
         <p>
           This contract is governed by Romanian law. Any disputes arising from or in connection with the use of the site or the conclusion of the contract shall be settled by the competent courts in Romania.
         </p>
 
-        <h2>14. Contact</h2>
+        <h2>15. Contact</h2>
         <p>
           The TrenZone® team is here to support your performance. For questions, complaints, or return assistance:
           <br /><br />
@@ -209,13 +209,13 @@ export default function TermsPage() {
         Dacă pachetul a fost trimis, anularea nu mai este posibilă, dar poți refuza coletul la livrare.
       </p>
 
-      <h2>6. Modalități de plată</h2>
+      <h2>7. Modalități de plată</h2>
       <ul>
         <li>Plata Ramburs (Numerar la Livrare către curier - disponibil doar în RO)</li>
         <li>Plata Online Securizată (Card Bancar prin Stripe)</li>
       </ul>
 
-      <h2>7. Livrarea Produselor</h2>
+      <h2>8. Livrarea Produselor</h2>
       <p>
         Expediția se realizează prin parteneri logisticieni de elită. Termenul estimat de livrare este de:
       </p>
@@ -230,13 +230,13 @@ export default function TermsPage() {
         Toate detaliile logistice specifice sunt afișate transparent în Sumar-ul de Comandă înainte de plată.
       </p>
 
-      <h2>8. Politica de Retur</h2>
+      <h2>9. Politica de Retur</h2>
       <p>
         Consumatorul persoană fizică are <strong>dreptul de retur</strong> în 30 de zile calendaristice, conform OUG 34/2014. 
         Pentru detalii despre procedura de inspecție tehnică a returului, consultați Politica de Retur.
       </p>
 
-      <h2>9. Garanția și Conformitatea Produselor</h2>
+      <h2>10. Garanția și Conformitatea Produselor</h2>
       <p>
         Produsele noastre sunt proiectate conform celor mai înalte standarde de anduranță. Oferim o garanție comercială de 30 de zile pentru defecte de fabricație (cusături, vicii de material) pentru benzile de cot, accesoriile de powerlifting și îmbrăcăminte. Această garanție comercială nu afectează drepturile legale conferite consumatorilor prin garanția legală de conformitate reglementată de OUG nr. 140/2021. Garanția nu acoperă uzura normală rezultată din antrenamentele grele, utilizarea necorespunzătoare sau nerespectarea instrucțiunilor de întreținere.
       </p>
@@ -244,12 +244,12 @@ export default function TermsPage() {
         Pentru asistență și cereri de garanție, folosiți canalul oficial de email <strong>trenzone483@gmail.com</strong>, prezentând dovada achiziției.
       </p>
 
-      <h2>10. Limitarea răspunderii</h2>
+      <h2>11. Limitarea răspunderii</h2>
       <p>
         În măsura maximă permisă de lege, TrenZone® nu va fi răspunzător pentru niciun fel de daune directe, indirecte, accidentale sau de orice altă natură care rezultă din utilizarea sau incapacitatea de a utiliza site-ul sau produsele noastre.
       </p>
 
-      <h2>11. Litigii și Soluționare Alternativă (ANPC / SAL / SOL)</h2>
+      <h2>12. Litigii și Soluționare Alternativă (ANPC / SAL / SOL)</h2>
       <p>
         Orice conflict va fi soluționat pe cale amiabilă. În caz contrar, competența revine instanțelor judecătorești competente.
       </p>
@@ -262,18 +262,18 @@ export default function TermsPage() {
         <li><strong>Platforma SOL</strong> (Soluționarea Online a Litigiilor a Comisiei Europene) – <a href="https://consumer-redress.ec.europa.eu/index_ro" target="_blank" rel="noopener noreferrer" className="text-[#e32f8c] underline font-bold">consumer-redress.ec.europa.eu</a></li>
       </ul>
 
-      <h2>12. Protecția Datelor</h2>
+      <h2>13. Protecția Datelor</h2>
       <p>
         Prelucrarea datelor cu caracter personal se realizează conform Regulamentului (UE) 2016/679 (GDPR). 
         Pentru detalii despre modul în care protejăm datele dumneavoastră, consultați <strong>Politica de Confidențialitate</strong>.
       </p>
 
-      <h2>13. Legea Aplicabilă și Jurisdicția</h2>
+      <h2>14. Legea Aplicabilă și Jurisdicția</h2>
       <p>
         Prezentul contract este guvernat de legea română. Orice litigiu rezultat din sau în legătură cu utilizarea site-ului sau încheierea contractului va fi soluționat de instanțele judecătorești competente din România.
       </p>
 
-      <h2>14. Contact</h2>
+      <h2>15. Contact</h2>
       <p>
         Echipa TrenZone® este aici pentru tine. Pentru întrebări, reclamații sau asistență:
         <br /><br />

@@ -119,6 +119,7 @@ async function saveOrderToDb(order: OrderData, trackingNumber?: string) {
       carrier_metadata: {
         shipping_cost: order.shipping,
         card_discount: order.cardDiscount || 0,
+        locale: order.locale || 'ro',
         ...(order.couponCode ? { coupon_code: order.couponCode } : {})
       },
       updated_at: new Date().toISOString()

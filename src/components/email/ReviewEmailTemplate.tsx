@@ -129,8 +129,8 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
           const itemSlug = resolveSlug(item);
           const itemImage = resolveImage(item);
           const itemName = typeof item.name === 'object' && item.name !== null
-            ? (item.name[locale] || item.name['ro'] || item.name['en'] || 'Produs')
-            : (item.name || 'Produs');
+            ? (item.name[locale] || item.name['ro'] || item.name['en'] || (isEn ? 'Product' : 'Produs'))
+            : (item.name || (isEn ? 'Product' : 'Produs'));
 
           return (
             <div 
@@ -190,7 +190,7 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
                     letterSpacing: '1px',
                     zIndex: 10
                   }}>
-                    EXEMPLU
+                    {isEn ? 'SAMPLE' : 'EXEMPLU'}
                   </div>
                 )}
               </div>
@@ -206,7 +206,7 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
                   <a 
                     key={star} 
                     href={`${baseUrl}/${locale}/product/${itemSlug}?review=open&rating=${star}`}
-                    title={`${star} ${star === 1 ? 'stea' : 'stele'}`}
+                    title={`${star} ${isEn ? (star === 1 ? 'star' : 'stars') : (star === 1 ? 'stea' : 'stele')}`}
                     style={{ 
                       textDecoration: 'none', 
                       display: 'inline-block', 

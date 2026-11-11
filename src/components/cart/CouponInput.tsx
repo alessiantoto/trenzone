@@ -30,7 +30,7 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
     setError(null);
 
     try {
-      const result = await validateCoupon(code, subtotal, "RON");
+      const result = await validateCoupon(code, subtotal, "RON", locale);
       if (result.isValid && result.coupon) {
         setCoupon(result.coupon);
         setCode("");

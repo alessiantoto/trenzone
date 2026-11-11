@@ -217,7 +217,7 @@ export function generateWebSiteSchema() {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     'name': 'TrenZone',
-    'alternateName': 'TrenZone® | Benzi de Cot Heavy-Duty',
+    'alternateName': 'TrenZone® | Heavy-Duty Elbow Wraps & Strength Equipment',
     'url': BASE_URL,
     'potentialAction': {
       '@type': 'SearchAction',

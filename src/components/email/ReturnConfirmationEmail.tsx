@@ -28,16 +28,16 @@ export const ReturnConfirmationEmail: React.FC<Readonly<ReturnConfirmationEmailP
 }) => {
   const isEn = locale === 'en';
   
-  const safeWelcome = (isEn ? "Hi, {{name}}!" : "Salut, {{name}}!").replace('{{name}}', customerName.split(' ')[0] || 'Zeule');
+  const safeWelcome = (isEn ? "Hi, {{name}}!" : "Salut, {{name}}!").replace('{{name}}', customerName.split(' ')[0] || (isEn ? 'Champion' : 'Campionule'));
   
   const headingText = isEn ? templateData?.heading_en : templateData?.heading_ro;
   const bodyText = isEn ? templateData?.body_en : templateData?.body_ro;
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
 
   const safeHeading = headingText || (isEn ? "Return Request Submitted" : "Cerere de Retur Înregistrată");
-  const safeBody = bodyText || (isEn 
+  const safeBody = (bodyText || (isEn 
     ? "Hello! We have received your return request for order {{id}}. Our team is currently reviewing your request and we will contact you shortly via email regarding its status and next steps." 
-    : "Salutare! Am înregistrat cererea ta de retur pentru comanda {{id}}. Echipa noastră analizează solicitarea și te vom contacta pe email în cel mai scurt timp cu privire la statusul acesteia și pașii următori.");
+    : "Salutare! Am înregistrat cererea ta de retur pentru comanda {{id}}. Echipa noastră analizează solicitarea și te vom contacta pe email în cel mai scurt timp cu privire la statusul acesteia și pașii următori.")).replace('{{id}}', orderId);
   const safeCta = ctaText || (isEn ? "View Return Policy" : "Vezi Politica de Retur");
 
   const policyLink = isEn ? `${baseUrl}/en/politica-de-retur` : `${baseUrl}/ro/politica-de-retur`;

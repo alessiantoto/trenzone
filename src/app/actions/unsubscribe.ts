@@ -4,18 +4,24 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { headers } from 'next/headers';
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/ratelimit';
 
-export async function unsubscribeEmail(email: string): Promise<{ success: boolean; error?: string }> {
+export async function unsubscribeEmail(email: string, locale: string = 'ro'): Promise<{ success: boolean; error?: string }> {
+  const isEn = locale === 'en';
   try {
     const headersList = await headers();
     const ip = getClientIpFromHeaders(headersList);
     const { allowed } = await checkRateLimit(rateLimiters.newsletter, `unsub:${ip}`, 'newsletter');
     if (!allowed) {
-      return { success: false, error: 'Prea multe încercări. Te rugăm să aștepți câteva minute.' };
+      return {
+        success: false,
+        error: isEn
+          ? 'Too many attempts. Please wait a few minutes.'
+          : 'Prea multe încercări. Te rugăm să aștepți câteva minute.'
+      };
     }
 
     const cleanEmail = (email || '').toLowerCase().trim().slice(0, 150);
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return { success: false, error: 'Adresă de email invalidă.' };
+      return { success: false, error: isEn ? 'Invalid email address.' : 'Adresă de email invalidă.' };
     }
 
     const { error } = await supabaseAdmin

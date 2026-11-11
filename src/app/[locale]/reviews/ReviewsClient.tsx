@@ -153,7 +153,7 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
                   <div className="flex flex-col mb-1 md:mb-2 text-primary">
                     <StarRating rating={stats.avg} size="sm" starClassName="!text-primary !fill-primary" />
                     <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-1">
-                      SINCER ȘI VERIFICAT
+                      {locale === 'ro' ? 'SINCER ȘI VERIFICAT' : 'HONEST & VERIFIED'}
                     </span>
                   </div>
                 </div>
@@ -285,7 +285,7 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
                         <div className="px-3 py-1 rounded-full bg-white/5 flex items-center gap-2">
                           <CheckCircle2 className="w-3 h-3 text-primary" />
                           <span className="text-[8px] font-black uppercase text-zinc-500 tracking-widest">
-                            Verificat
+                            {locale === 'ro' ? 'Verificat' : 'Verified'}
                           </span>
                         </div>
                       </div>
@@ -339,7 +339,7 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[7px] font-black text-zinc-500 uppercase tracking-widest group-hover:text-black/60">
-                              Achiziționat
+                              {locale === 'ro' ? 'Achiziționat' : 'Purchased'}
                             </p>
                             <p className="text-xs font-black text-white uppercase tracking-tighter truncate group-hover:text-black">
                               {typeof rev.product.name === "object"
@@ -400,8 +400,11 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
 
             <div className="relative z-10 max-w-2xl mx-auto">
               <h2 className="text-4xl md:text-7xl font-heading font-black uppercase tracking-tighter text-white mb-8 leading-none italic">
-                Vrei să intri în <br />{" "}
-                <span className="text-primary italic underline underline-offset-8">COMUNITATE?</span>
+                {locale === 'ro' ? (
+                  <>Vrei să intri în <br />{" "}<span className="text-primary italic underline underline-offset-8">COMUNITATE?</span></>
+                ) : (
+                  <>Want to join the <br />{" "}<span className="text-primary italic underline underline-offset-8">COMMUNITY?</span></>
+                )}
               </h2>
               <Link
                 href="/shop"

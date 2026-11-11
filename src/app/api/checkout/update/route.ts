@@ -163,7 +163,7 @@ export async function POST(req: Request) {
     let couponData = null;
     if (couponCode) {
       try {
-        couponResult = await validateCoupon(couponCode, subtotalMajor, safeCurrency);
+        couponResult = await validateCoupon(couponCode, subtotalMajor, safeCurrency, locale === 'en' ? 'en' : 'ro');
         if (couponResult?.isValid && couponResult?.coupon) {
           couponData = couponResult.coupon;
         }
@@ -175,12 +175,17 @@ export async function POST(req: Request) {
     const options = { priority_processing, gift_packaging, payment_method };
     const result = calculateOrderTotal(calculationItems, safeCurrency, country, shipping_type, couponData, carrier_id, options);
 
+    const safeLocale = locale === 'en' ? 'en' : 'ro';
     const compactOrderItems = processedItems.map(i => {
       let vName = i.selectedVariant?.name;
-      if (typeof vName === 'object') vName = vName.ro || Object.values(vName)[0];
+      if (typeof vName === 'object') {
+        vName = safeLocale === 'en'
+          ? (vName.en || vName.ro || Object.values(vName)[0])
+          : (vName.ro || vName.en || Object.values(vName)[0]);
+      }
       const calcItem = calculationItems.find(c => c.id === i.id);
       const price = calcItem ? calcItem.price : (i.price || 0);
-      const name = (i.name || 'Produs').toString().replace(/\|/g, '-').replace(/\^\^/g, '--').substring(0, 150);
+      const name = (i.name || (safeLocale === 'en' ? 'Product' : 'Produs')).toString().replace(/\|/g, '-').replace(/\^\^/g, '--').substring(0, 150);
       const variant = (vName || '').toString().replace(/\|/g, '-').replace(/\^\^/g, '--').substring(0, 150);
       return `${i.id || i.slug}|${i.quantity}|${price}|${variant}|${name}`;
     }).join('^^');

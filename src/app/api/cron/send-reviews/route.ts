@@ -55,9 +55,13 @@ export async function GET(request: Request) {
       if (!order.customer_email) continue;
 
       try {
+        const orderLocale =
+          order.carrier_metadata?.locale ||
+          (order as any).locale ||
+          (order.addr_country && String(order.addr_country).toUpperCase() !== 'RO' ? 'en' : 'ro');
         const orderData = {
           id: order.id,
-          locale: order.locale || 'ro',
+          locale: orderLocale,
           customer: { name: order.customer_name || order.customer_firstname || 'TrenZone' },
           items: typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || [])
         };

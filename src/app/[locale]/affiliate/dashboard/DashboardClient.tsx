@@ -375,14 +375,14 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                {data.pendingPayout.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {data.pendingPayout.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span className="text-sm font-black text-[#008ba3]">RON</span>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
               <span className="text-slate-500">{isRo ? 'Încasat deja:' : 'Already paid:'}</span>
               <span className="font-bold text-slate-700">
-                {data.paidPayout.toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON
+                {data.paidPayout.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} RON
               </span>
             </div>
           </motion.div>
@@ -404,14 +404,14 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                {(period === 'all' ? data.totalSales : activeStats.totalSales).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {(period === 'all' ? data.totalSales : activeStats.totalSales).toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span className="text-sm font-black text-slate-400">RON</span>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
               <span className="text-slate-500">{isRo ? 'Comision total generat:' : 'Total commission:'}</span>
               <span className="font-bold text-emerald-600">
-                {(period === 'all' ? data.totalCommissions : activeStats.totalCommissions).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON
+                {(period === 'all' ? data.totalCommissions : activeStats.totalCommissions).toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} RON
               </span>
             </div>
           </motion.div>
@@ -440,7 +440,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
               <span className="text-slate-500">{isRo ? 'Valoare medie coș:' : 'Average order:'}</span>
               <span className="font-bold text-slate-700">
-                {activeStats.aov.toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON
+                {activeStats.aov.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} RON
               </span>
             </div>
           </motion.div>
@@ -680,12 +680,12 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
               {/* ORDERS ITERATION */}
               {paginatedOrders.map(order => {
                 const isExpanded = expandedOrderId === order.id;
-                const formattedDate = new Date(order.createdAt).toLocaleDateString('ro-RO', {
+                const formattedDate = new Date(order.createdAt).toLocaleDateString(isRo ? 'ro-RO' : 'en-US', {
                   day: '2-digit',
                   month: 'short',
                   year: 'numeric'
                 });
-                const formattedTime = new Date(order.createdAt).toLocaleTimeString('ro-RO', {
+                const formattedTime = new Date(order.createdAt).toLocaleTimeString(isRo ? 'ro-RO' : 'en-US', {
                   hour: '2-digit',
                   minute: '2-digit'
                 });
@@ -718,7 +718,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                           <p className="text-sm font-black text-slate-900 leading-snug">{formattedDate}</p>
                           <p className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5 mt-0.5">
                             <Clock size={11} className="text-slate-400" />
-                            <span>ora {formattedTime}</span>
+                            <span>{isRo ? `ora ${formattedTime}` : `at ${formattedTime}`}</span>
                           </p>
                           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
@@ -776,7 +776,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                                       </span>
                                     )}
                                     <span className="text-[10px] font-extrabold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                                      x{item.quantity} buc
+                                      x{item.quantity} {isRo ? 'buc' : 'pcs'}
                                     </span>
                                   </div>
                                 </div>
@@ -797,7 +797,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                       {/* TOTAL COMANDĂ */}
                       <div className="col-span-2 text-right">
                         <p className={`text-sm font-black ${isNonCountable ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                          {order.totalAmount.toLocaleString('ro-RO', { minimumFractionDigits: 2 })} {order.currency}
+                          {order.totalAmount.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} {order.currency}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           subtotal: {order.subtotal.toFixed(2)} {order.currency}
@@ -818,7 +818,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                         ) : (
                           <>
                             <p className="text-sm font-black text-emerald-600">
-                              +{order.commissionAmount.toLocaleString('ro-RO', { minimumFractionDigits: 2 })} {order.currency}
+                              +{order.commissionAmount.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} {order.currency}
                             </p>
                             <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                               {data.commissionPercent}% {isRo ? 'comision' : 'earned'}
@@ -839,7 +839,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                           <div className="flex items-center gap-1.5">
                             <Calendar size={13} className="text-blue-600 shrink-0" />
                             <p className="text-xs font-black text-slate-900">{formattedDate}</p>
-                            <span className="text-[10px] text-slate-400">• ora {formattedTime}</span>
+                            <span className="text-[10px] text-slate-400">• {isRo ? `ora ${formattedTime}` : `at ${formattedTime}`}</span>
                           </div>
                           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
@@ -924,7 +924,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                                   </span>
                                 )}
                                 <span className="text-[10px] font-bold text-slate-600">
-                                  x{item.quantity} buc
+                                  x{item.quantity} {isRo ? 'buc' : 'pcs'}
                                 </span>
                               </div>
                             </div>

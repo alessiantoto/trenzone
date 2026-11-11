@@ -5,6 +5,7 @@ import { Link } from "@/i18n/routing";
 import { ArrowRight } from "lucide-react";
 import { Product } from "@/lib/api";
 import { ProductCard } from "@/components/product/ProductCard";
+import { FormattedPrice } from "@/components/common/FormattedPrice";
 import { getProductsServer } from "@/app/actions/products";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -63,7 +64,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
       },
       price: 529.99,
       originalPrice: 599.99,
-      badge: "SUPORT MAXIM · PR-URI",
+      badge: isRo ? "SUPORT MAXIM · PR-URI" : "MAX SUPPORT · PRs",
       image: "/images/products/x10_elbow_wraps_purple_1.webp",
       images: [
         "/images/products/x10_elbow_wraps_purple_1.webp",
@@ -99,7 +100,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
       label: isRo ? "Calibrate pe Sarcini Grele" : "Gym-Tested Under Heavy Loads"
     },
     {
-      value: "2 MODELE",
+      value: isRo ? "2 MODELE" : "2 MODELS",
       label: isRo ? "X5 (Volum) & X10 (Forță)" : "X5 (Volume) & X10 (Max PR)"
     },
     {
@@ -337,9 +338,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
                   <span className="self-start px-2 py-0.5 text-[8px] sm:text-[11px] font-black uppercase tracking-wider rounded-md bg-white/5 text-zinc-300 border border-white/10">
                     {isRo ? "HIPERTROFIE & VOLUM" : "HYPERTROPHY & VOLUME"}
                   </span>
-                  <span className="text-xs sm:text-lg font-black text-white font-heading">
-                    269,99 LEI
-                  </span>
+                  <FormattedPrice ronPrice={flagshipProducts[0]?.price || 329.99} className="text-xs sm:text-lg font-black text-white font-heading" />
                 </div>
 
                 {/* Square Product Image */}
@@ -383,9 +382,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
                   <span className="self-start px-2 py-0.5 text-[8px] sm:text-[11px] font-black uppercase tracking-wider rounded-md bg-[#e32f8c]/15 text-[#e32f8c] border border-[#e32f8c]/30">
                     {isRo ? "SUPORT MAXIM & PR" : "MAX SUPPORT & PR"}
                   </span>
-                  <span className="text-xs sm:text-lg font-black text-white font-heading">
-                    359,99 LEI
-                  </span>
+                  <FormattedPrice ronPrice={flagshipProducts[1]?.price || 529.99} className="text-xs sm:text-lg font-black text-white font-heading" />
                 </div>
 
                 {/* Square Product Image */}

@@ -5,6 +5,9 @@ import Image from "next/image";
 import { Link } from "@/i18n/routing";
 import { ArrowRight } from "lucide-react";
 import { useLocale } from "next-intl";
+import { useRegionStore } from "@/store/useRegionStore";
+import { formatPrice } from "@/utils/currency";
+import { getProductPrice } from "@/utils/pricing";
 
 interface ModelGuideProps {
   onSelectModel?: (model: "x5" | "x10") => void;
@@ -13,6 +16,7 @@ interface ModelGuideProps {
 export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
   const locale = useLocale();
   const isRo = locale === "ro";
+  const { currency } = useRegionStore();
 
   // Mode: "under140" (X5) or "over140" (X10)
   const [selectedLoad, setSelectedLoad] = useState<"under140" | "over140">("under140");
@@ -43,7 +47,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
             {isRo ? "SERII DE VOLUM" : "VOLUME SETS"}
           </span>
           <span className="text-xl sm:text-2xl font-black text-white shrink-0 font-[family-name:var(--font-oswald)]">
-            269,99 LEI
+            {formatPrice(getProductPrice(329.99, currency), currency)}
           </span>
         </div>
 
@@ -51,7 +55,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
         <div className="relative w-full aspect-[16/9] my-1.5 rounded-xl overflow-hidden bg-zinc-950 border border-white/10">
           <Image
             src="/images/products/x5_elbow_wraps_purple_square.webp"
-            alt="Benzi de cot TrenZone X5"
+            alt={isRo ? "Benzi de cot TrenZone X5" : "TrenZone X5 Elbow Wraps"}
             fill
             sizes="(max-width: 768px) 100vw, 450px"
             className="object-cover group-hover:scale-105 transition-transform duration-500"
@@ -157,7 +161,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
             {isRo ? "SERII GRELE & PR-URI" : "HEAVY SETS & PRS"}
           </span>
           <span className="text-xl sm:text-2xl font-black text-white shrink-0 font-[family-name:var(--font-oswald)]">
-            359,99 LEI
+            {formatPrice(getProductPrice(529.99, currency), currency)}
           </span>
         </div>
 
@@ -165,7 +169,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
         <div className="relative w-full aspect-[16/9] my-1.5 rounded-xl overflow-hidden bg-zinc-950 border border-white/10">
           <Image
             src="/images/products/x10_elbow_wraps_purple_square.webp"
-            alt="Benzi de cot TrenZone X10"
+            alt={isRo ? "Benzi de cot TrenZone X10" : "TrenZone X10 Elbow Wraps"}
             fill
             sizes="(max-width: 768px) 100vw, 450px"
             className="object-cover group-hover:scale-105 transition-transform duration-500"

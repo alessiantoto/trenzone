@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { X, ArrowLeft, Star, Image as ImageIcon, Video, CheckCircle2, ChevronDown, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { localizeBadge } from '@/lib/utils';
 
 const DEFAULT_PRODUCTS = [
   {
@@ -316,10 +317,10 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
                               <p className="text-xs font-black text-white truncate leading-tight group-hover:text-[#e32f8c] transition-colors">
                                 {typeof selectedProduct?.name === 'object' 
                                   ? (selectedProduct.name[locale] || selectedProduct.name.ro) 
-                                  : (selectedProduct?.name || 'Alege produs')}
+                                  : (selectedProduct?.name || (locale === 'ro' ? 'Alege produs' : 'Choose product'))}
                               </p>
                               <span className="text-[10px] text-[#e32f8c] font-black uppercase tracking-wider block mt-0.5 truncate">
-                                {selectedProduct?.badge || (locale === 'ro' ? 'Apasă pentru a schimba' : 'Tap to change')}
+                                {selectedProduct?.badge ? localizeBadge(selectedProduct.badge, locale) : (locale === 'ro' ? 'Apasă pentru a schimba' : 'Tap to change')}
                               </span>
                             </div>
                           </div>
@@ -367,7 +368,7 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
                                         </p>
                                         {p.badge && (
                                           <span className="text-[9px] text-[#e32f8c] font-black uppercase tracking-wider block">
-                                            {p.badge}
+                                            {localizeBadge(p.badge, locale)}
                                           </span>
                                         )}
                                       </div>
@@ -465,7 +466,9 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
                             animate={{ opacity: 1, height: 'auto' }} 
                             className="w-full flex flex-col gap-4 overflow-hidden"
                           >
-                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider text-center">Trage de poze pentru a le reordona</p>
+                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider text-center">
+                              {locale === 'ro' ? 'Trage de poze pentru a le reordona' : 'Drag photos to reorder'}
+                            </p>
                             <Reorder.Group 
                               axis="x" 
                               values={photos} 

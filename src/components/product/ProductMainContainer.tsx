@@ -11,7 +11,7 @@ import { useLocale } from "next-intl";
 import { useCartStore } from "@/store/useCartStore";
 import { getProductPrice } from "@/utils/pricing";
 import { useRegionStore } from "@/store/useRegionStore";
-import { cn } from "@/lib/utils";
+import { cn, localizeBadge } from "@/lib/utils";
 import { isWideProductImage } from "@/lib/product-images";
 import { StarRating } from "@/components/ui/StarRating";
 import { ProductExpressCheckout } from "@/components/checkout/ProductExpressCheckout";
@@ -509,7 +509,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                                               "text-[10px] font-black uppercase tracking-widest mt-0.5",
                                               isSoldOut ? "text-red-400" : (isPreorder ? "text-cyan-400" : "text-[#e32f8c]")
                                             )}>
-                                              {isSoldOut ? "SOLD OUT" : (isPreorder ? "PRECOMANDĂ" : opt.badge)}
+                                              {isSoldOut ? (locale === "en" ? "SOLD OUT" : "STOC EPUIZAT") : (isPreorder ? (locale === "en" ? "PRE-ORDER" : "PRECOMANDĂ") : localizeBadge(opt.badge, locale))}
                                             </span>
                                           )}
                                         </div>
@@ -715,7 +715,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
         <AnimatePresence>
           {showStickyBar && !isCartOpen && !isFooterVisible && (
             <motion.aside
-              aria-label="Bara rapidă de comandă"
+              aria-label={locale === 'ro' ? "Bara rapidă de comandă" : "Quick order bar"}
               initial={{ y: 120, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 120, opacity: 0 }}

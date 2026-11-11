@@ -78,14 +78,9 @@ export const useRegionStore = create<RegionState>()(
           let detectedCurrency: Currency = "RON";
 
           if (!isRO) {
-            const validCurrencies: Currency[] = ["EUR", "USD", "GBP", "PLN", "CHF"];
+            const validCurrencies: Currency[] = ["EUR", "USD", "GBP"];
 
-            // Explicit Mappings for Elite Performance
-            if (countryCode === "PL") {
-              detectedCurrency = "PLN";
-            } else if (countryCode === "CH") {
-              detectedCurrency = "CHF";
-            } else if (["HU", "CZ", "BG", "HR", "SK", "SI"].includes(countryCode)) {
+            if (["PL", "CH", "HU", "CZ", "BG", "HR", "SK", "SI"].includes(countryCode)) {
               detectedCurrency = "EUR";
             } else {
               // Map BGN directly to EUR fallback if present in data
@@ -121,6 +116,11 @@ export const useRegionStore = create<RegionState>()(
         hasDetectedIP: state.hasDetectedIP,
         exchangeRates: state.exchangeRates,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state && !["RON", "EUR", "USD", "GBP"].includes(state.currency)) {
+          state.setCurrency("EUR");
+        }
+      },
     }
   )
 );

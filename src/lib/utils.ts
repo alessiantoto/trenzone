@@ -18,6 +18,32 @@ export function getLocalized(field: any, locale: string): string {
   return String(field);
 }
 
+const BADGE_EN_MAP: Record<string, string> = {
+  "PRECOMANDĂ": "PRE-ORDER",
+  "PRECOMANDA": "PRE-ORDER",
+  "PRECOMANDĂ OFICIALĂ": "OFFICIAL PRE-ORDER",
+  "HIPERTROFIE & VOLUM": "HYPERTROPHY & VOLUME",
+  "CONFORT & VOLUM": "COMFORT & VOLUME",
+  "SUPORT MAXIM · PR-URI": "MAX SUPPORT · PRs",
+  "STOC EPUIZAT": "SOLD OUT",
+};
+
+const BADGE_RO_MAP: Record<string, string> = {
+  "SOLD OUT": "STOC EPUIZAT",
+  "PRE-ORDER": "PRECOMANDĂ",
+  "PREORDER": "PRECOMANDĂ",
+};
+
+export function localizeBadge(badge: any, locale: string): string {
+  const raw = getLocalized(badge, locale).trim();
+  if (!raw) return "";
+  const upper = raw.toUpperCase();
+  if (locale === 'en') {
+    return BADGE_EN_MAP[upper] || raw;
+  }
+  return BADGE_RO_MAP[upper] || raw;
+}
+
 const COLOR_MAP: Record<string, string> = {
   "PEPENE ROȘU": "bg-rose-500",
   "PEPENE ROSU": "bg-rose-500",

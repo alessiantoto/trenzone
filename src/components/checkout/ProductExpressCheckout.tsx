@@ -100,7 +100,9 @@ const ExpressCheckoutInner = ({
 
       const shippingLabel = calc.shippingCost === 0
         ? (locale === 'ro' ? 'Livrare gratuită' : 'Free shipping')
-        : (country === 'RO' ? 'Sameday Standard (1-3 Zile)' : (locale === 'ro' ? 'Livrare Standard / Internațională' : 'Standard International Shipping'));
+        : (country === 'RO'
+            ? (locale === 'ro' ? 'Sameday Standard (1-3 Zile)' : 'Sameday Standard (1-3 Days)')
+            : (locale === 'ro' ? 'Livrare Standard / Internațională' : 'Standard International Shipping'));
 
       // Stripe ExpressCheckout requires `shippingRates` with `displayName` (not `shippingOptions` with `label`)
       const shippingRates = [
@@ -246,7 +248,8 @@ const ExpressCheckoutInner = ({
           couponCode: appliedCoupon?.code?.trim()?.toUpperCase() || null,
           payment_method: 'online',
           priority_processing: false,
-          gift_packaging: false
+          gift_packaging: false,
+          locale: locale === 'en' ? 'en' : 'ro'
         })
       });
 
@@ -259,7 +262,7 @@ const ExpressCheckoutInner = ({
 
       const { clientSecret } = await checkoutRes.json();
       if (!clientSecret) {
-        event.paymentFailed({ message: "Nu s-a primit identificator de plată." });
+        event.paymentFailed({ message: locale === 'en' ? "No payment identifier received." : "Nu s-a primit identificator de plată." });
         return;
       }
 

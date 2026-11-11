@@ -32,13 +32,16 @@ export async function submitAffiliateApplication(data: {
     }
 
     // 🛡️ 3. Anti-Bot: Rate Limiting per IP
+    const isEn = data.preferredLocale === 'en';
     const headersList = await headers();
     const ip = getClientIpFromHeaders(headersList);
     const { allowed } = await checkRateLimit(rateLimiters.affiliate, ip, 'affiliate');
     if (!allowed) {
       return { 
         success: false, 
-        error: 'Ai trimis prea multe solicitări într-un timp scurt. Te rugăm să aștepți câteva minute.' 
+        error: isEn
+          ? 'You have sent too many requests in a short time. Please wait a few minutes.'
+          : 'Ai trimis prea multe solicitări într-un timp scurt. Te rugăm să aștepți câteva minute.' 
       };
     }
 
@@ -49,11 +52,11 @@ export async function submitAffiliateApplication(data: {
     const cleanPreferredCode = (data.preferredCode || '').trim().toUpperCase().slice(0, 50);
 
     if (!cleanName || !cleanEmail) {
-      return { success: false, error: 'Numele și adresa de email sunt obligatorii.' };
+      return { success: false, error: isEn ? 'Name and email address are required.' : 'Numele și adresa de email sunt obligatorii.' };
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return { success: false, error: 'Adresa de email introdusă nu este validă.' };
+      return { success: false, error: isEn ? 'The email address entered is not valid.' : 'Adresa de email introdusă nu este validă.' };
     }
 
     // Trim, filter empty, limit to max 5 socials, each max 200 chars
@@ -63,7 +66,7 @@ export async function submitAffiliateApplication(data: {
       .slice(0, 5);
 
     if (socialLinks.length === 0) {
-      return { success: false, error: 'Te rugăm să introduci cel puțin un cont de social media.' };
+      return { success: false, error: isEn ? 'Please enter at least one social media account.' : 'Te rugăm să introduci cel puțin un cont de social media.' };
     }
     
     // Check if affiliate already applied
@@ -74,7 +77,7 @@ export async function submitAffiliateApplication(data: {
       .maybeSingle();
 
     if (existing) {
-      return { success: false, error: 'Există deja o aplicație sau un cont de afiliat cu acest email.' };
+      return { success: false, error: isEn ? 'An affiliate application or account with this email already exists.' : 'Există deja o aplicație sau un cont de afiliat cu acest email.' };
     }
 
     // Prepare JSON for social links and message
@@ -117,6 +120,11 @@ export async function submitAffiliateApplication(data: {
     return { success: true };
   } catch (err: any) {
     console.error('Affiliate submission failed:', err);
-    return { success: false, error: 'A apărut o eroare la trimiterea cererii.' };
+    return {
+      success: false,
+      error: data.preferredLocale === 'en'
+        ? 'An error occurred while submitting your application.'
+        : 'A apărut o eroare la trimiterea cererii.'
+    };
   }
 }

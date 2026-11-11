@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: "Coșul este gol." }, { status: 400 });
+      return NextResponse.json({ error: locale === 'en' ? "Cart is empty." : "Coșul este gol." }, { status: 400 });
     }
 
     // Strict business rule: No mixed orders (preorder + in-stock) & Preorders require online payment
@@ -98,14 +98,22 @@ export async function POST(req: Request) {
 
     if (hasPreorder && hasInStock) {
       return NextResponse.json(
-        { error: "Comenzile mixte (precomandă + stoc) nu sunt permise. Te rugăm să plasezi precomanda separat." },
+        {
+          error: locale === 'en'
+            ? "Mixed orders (pre-order + in-stock) are not allowed. Please place pre-orders separately."
+            : "Comenzile mixte (precomandă + stoc) nu sunt permise. Te rugăm să plasezi precomanda separat."
+        },
         { status: 400 }
       );
     }
 
     if (hasPreorder) {
       return NextResponse.json(
-        { error: "Precomenzile necesită plată online cu cardul." },
+        {
+          error: locale === 'en'
+            ? "Pre-orders require online card payment."
+            : "Precomenzile necesită plată online cu cardul."
+        },
         { status: 400 }
       );
     }
@@ -166,7 +174,7 @@ export async function POST(req: Request) {
     if (couponCode) {
       const preResult = calculateOrderTotal(calculationItems, 'RON');
       try {
-        const couponResult = await validateCoupon(couponCode, preResult.subtotal / 100);
+        const couponResult = await validateCoupon(couponCode, preResult.subtotal / 100, 'RON', locale);
         if (couponResult?.isValid && couponResult?.coupon) {
           couponData = couponResult.coupon;
         }
@@ -210,7 +218,9 @@ export async function POST(req: Request) {
       items: processedItems.map((clientItem: any) => {
         const secureCalcItem = calculationItems.find(c => c.id === clientItem.id);
         const variantName = typeof clientItem.selectedVariant?.name === 'object'
-          ? clientItem.selectedVariant.name.ro || Object.values(clientItem.selectedVariant.name)[0]
+          ? (locale === 'en'
+              ? (clientItem.selectedVariant.name.en || clientItem.selectedVariant.name.ro || Object.values(clientItem.selectedVariant.name)[0])
+              : (clientItem.selectedVariant.name.ro || clientItem.selectedVariant.name.en || Object.values(clientItem.selectedVariant.name)[0]))
           : clientItem.selectedVariant?.name;
         const isBundle = String(clientItem.id).includes('-bundle-') || (clientItem.name && String(clientItem.name).toLowerCase().includes('pachet'));
         const effectiveImage = isBundle 
@@ -230,6 +240,7 @@ export async function POST(req: Request) {
       receipt_url: `/api/admin/orders/${uniqueOrderId}/invoice`,
       carrier_metadata: {
         shipping_cost: result.shippingCost / 100,
+        locale: locale === 'en' ? 'en' : 'ro',
         ...(shipping_type === 'pudo' && branch_id ? { locker_id: String(branch_id) } : {}),
         ...(couponData?.code ? { coupon_code: couponData.code } : {})
       }
@@ -237,7 +248,7 @@ export async function POST(req: Request) {
 
     // 9. Salvare în Supabase
     const { error: insertError } = await supabaseAdmin.from('orders').insert(orderPayload);
-    if (insertError) throw new Error(`Salvarea în baza de date a eșuat: ${insertError.message}`);
+    if (insertError) throw new Error(locale === 'en' ? `Database save failed: ${insertError.message}` : `Salvarea în baza de date a eșuat: ${insertError.message}`);
 
     // Mark checkout session as completed
     try {
@@ -250,7 +261,7 @@ export async function POST(req: Request) {
     try {
       const orderDataForProcessing: OrderData = {
         id: uniqueOrderId,
-        date: new Date().toLocaleDateString('ro-RO'),
+        date: new Date().toLocaleDateString(locale === 'en' ? 'en-US' : 'ro-RO'),
         currency: 'RON',
         locale: locale as 'ro' | 'en',
         total: result.total / 100,

@@ -39,7 +39,8 @@ function verifyAffiliateToken(token: string): string | null {
   }
 }
 
-export async function affiliateLoginAction(email: string, code: string) {
+export async function affiliateLoginAction(email: string, code: string, locale: string = 'ro') {
+  const isEn = locale === 'en';
   try {
     // 🛡️ 1. Anti-Bot: Rate Limiting (Max 5 attempts per minute per IP)
     const headersList = await headers();
@@ -48,18 +49,20 @@ export async function affiliateLoginAction(email: string, code: string) {
     if (!allowed) {
       return { 
         success: false, 
-        error: 'Ai încercat de prea multe ori. Din motive de securitate, te rugăm să aștepți 1 minut înainte de a reîncerca.' 
+        error: isEn
+          ? 'Too many attempts. For security reasons, please wait 1 minute before trying again.'
+          : 'Ai încercat de prea multe ori. Din motive de securitate, te rugăm să aștepți 1 minut înainte de a reîncerca.' 
       };
     }
 
     // 🛡️ 2. Input Sanitization & Anti-Injection Defense
     if (typeof email !== 'string' || typeof code !== 'string') {
-      return { success: false, error: 'Date de autentificare invalide.' };
+      return { success: false, error: isEn ? 'Invalid login credentials.' : 'Date de autentificare invalide.' };
     }
 
     // Block injection patterns (HTML tags, script tags, SQL/PostgREST wildcards, suspicious characters)
     if (/[<>{}%_*(),]/i.test(email) || /[<>{}%_*(),]/i.test(code)) {
-      return { success: false, error: 'Caractere nepermise detectate.' };
+      return { success: false, error: isEn ? 'Disallowed characters detected.' : 'Caractere nepermise detectate.' };
     }
 
     const cleanedEmail = email.trim().toLowerCase().slice(0, 150);
@@ -67,12 +70,12 @@ export async function affiliateLoginAction(email: string, code: string) {
 
     // Validate email structure (strictly no PostgREST wildcards)
     if (!cleanedEmail || !/^[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(cleanedEmail)) {
-      return { success: false, error: 'Adresă de email invalidă.' };
+      return { success: false, error: isEn ? 'Invalid email address.' : 'Adresă de email invalidă.' };
     }
 
     // Validate affiliate code format (alphanumeric with hyphens/underscores, 2 to 30 chars)
     if (!cleanedCode || !/^[A-Z0-9_-]{2,30}$/.test(cleanedCode)) {
-      return { success: false, error: 'Formatul codului de afiliat este invalid.' };
+      return { success: false, error: isEn ? 'Invalid affiliate code format.' : 'Formatul codului de afiliat este invalid.' };
     }
 
     // 🛡️ 3. Safe Database Lookup (wildcards stripped above)
@@ -84,20 +87,24 @@ export async function affiliateLoginAction(email: string, code: string) {
       .maybeSingle();
 
     if (error || !affiliate) {
-      return { success: false, error: 'Email sau cod incorect.' };
+      return { success: false, error: isEn ? 'Incorrect email or code.' : 'Email sau cod incorect.' };
     }
 
     if (affiliate.status === 'pending') {
       return { 
         success: false, 
-        error: 'Cererea ta de afiliere este în curs de revizuire. Vei fi notificat pe email odată ce contul este aprobat de un administrator.' 
+        error: isEn
+          ? 'Your affiliate application is under review. You will be notified by email once approved by an administrator.'
+          : 'Cererea ta de afiliere este în curs de revizuire. Vei fi notificat pe email odată ce contul este aprobat de un administrator.' 
       };
     }
 
     if (affiliate.status !== 'active') {
       return { 
         success: false, 
-        error: 'Contul tău de afiliat nu este activ. Te rugăm să ne contactezi pentru detalii.' 
+        error: isEn
+          ? 'Your affiliate account is not active. Please contact us for details.'
+          : 'Contul tău de afiliat nu este activ. Te rugăm să ne contactezi pentru detalii.' 
       };
     }
 
@@ -124,7 +131,7 @@ export async function affiliateLoginAction(email: string, code: string) {
     return { success: true, locale: affiliate.social_links?.locale || 'ro' };
   } catch (err: any) {
     console.error('Affiliate login error:', err);
-    return { success: false, error: 'A apărut o eroare la conectare.' };
+    return { success: false, error: isEn ? 'An error occurred while signing in.' : 'A apărut o eroare la conectare.' };
   }
 }
 

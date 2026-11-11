@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "@/i18n/routing";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { ShieldCheck, Settings, MoveRight, Check, Info, ArrowUpRight, X } from "lucide-react";
 import { useConsent, ConsentSettings } from "@/hooks/useConsent";
 
 export function ConsentBanner() {
   const t = useTranslations("Consent");
+  const locale = useLocale();
   const { consent, isLoaded, updateConsent, acceptAll, declineAll } = useConsent();
   const [showDetails, setShowDetails] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -76,7 +77,7 @@ export function ConsentBanner() {
               <div className="p-7 md:p-8">
                 <button
                   onClick={handleDeclineAll}
-                  aria-label="Close consent banner"
+                  aria-label={locale === 'en' ? "Close consent banner" : "Închide bannerul de consimțământ"}
                     className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-white transition-colors"
                 >
                   <X className="w-5 h-5" />

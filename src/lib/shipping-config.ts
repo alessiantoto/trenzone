@@ -478,7 +478,11 @@ export function getLocalizedServiceName(service: ShippingService, locale: string
   const isLocker = service.name.includes('Locker') || service.name.includes('Box') || service.name.includes('Easybox') || service.name.includes('Paczkomaty');
   const isSelfDescriptive = service.name.includes('Sameday') || service.name.includes('FAN Courier');
   
-  if (isSelfDescriptive) return service.name;
+  if (isSelfDescriptive) {
+    return locale === 'en'
+      ? service.name.replace(/(\d+(?:-\d+)?)\s*Zile/gi, '$1 Days')
+      : service.name;
+  }
 
   let suffix = '';
   

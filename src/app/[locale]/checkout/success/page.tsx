@@ -1,15 +1,17 @@
 "use client";
 
-import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
+import { useTranslations, useLocale } from "next-intl";
+import { Link, useRouter } from "@/i18n/routing";
 import { motion } from "framer-motion";
 import { CheckCircle2, ShoppingBag, ArrowRight, Home, AlertCircle } from "lucide-react";
 import { useEffect, useState, Suspense } from "react";
 import { useCartStore } from "@/store/useCartStore";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 function OrderSuccessContent() {
   const t = useTranslations("Checkout");
+  const locale = useLocale();
+  const isEn = locale === 'en';
   const clearCart = useCartStore((state) => state.clearCart);
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -118,7 +120,7 @@ function OrderSuccessContent() {
         if (!clientSecret) {
           // No payment params at all — redirect back to checkout silently
           console.warn('No payment params found on success page, redirecting to checkout');
-          router.replace(`/${searchParams.get('locale') || 'ro'}/checkout`);
+          router.replace('/checkout');
           return;
         }
 
@@ -332,7 +334,7 @@ function OrderSuccessContent() {
               transition={{ delay: 0.3 }}
               className="text-3xl md:text-4xl font-black uppercase tracking-tighter text-black mb-6"
             >
-              Plăți Neconfirmată
+              {isEn ? 'Payment Unconfirmed' : 'Plată Neconfirmată'}
             </motion.h1>
 
             <motion.p
@@ -341,7 +343,9 @@ function OrderSuccessContent() {
               transition={{ delay: 0.4 }}
               className="text-zinc-500 font-bold text-sm md:text-base leading-relaxed mb-8"
             >
-              Plata nu a fost completată. Dacă ai închis dialogul de plată, nicio comandă nu a fost creată.
+              {isEn
+                ? 'Payment was not completed. If you closed the payment dialog, no order was created.'
+                : 'Plata nu a fost completată. Dacă ai închis dialogul de plată, nicio comandă nu a fost creată.'}
             </motion.p>
 
             <motion.div

@@ -12,13 +12,20 @@ export async function sendContactMessage(formData: {
   email: string;
   subject: string;
   message: string;
+  locale?: 'ro' | 'en';
 }) {
+  const isEn = formData.locale === 'en';
   try {
     const headersList = await headers();
     const ip = getClientIpFromHeaders(headersList);
     const { allowed } = await checkRateLimit(rateLimiters.contact, ip, 'contact');
     if (!allowed) {
-      return { success: false, error: "Prea multe mesaje trimise. Vă rugăm să încercați mai târziu." };
+      return {
+        success: false,
+        error: isEn
+          ? "Too many messages sent. Please try again later."
+          : "Prea multe mesaje trimise. Vă rugăm să încercați mai târziu."
+      };
     }
 
     const escapeHtml = (unsafe: string) => {
@@ -32,7 +39,7 @@ export async function sendContactMessage(formData: {
 
     const cleanEmail = (formData.email || '').trim().toLowerCase().slice(0, 150);
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return { success: false, error: "Adresă de email invalidă." };
+      return { success: false, error: isEn ? "Invalid email address." : "Adresă de email invalidă." };
     }
 
     const name = escapeHtml(formData.name || '').slice(0, 100);

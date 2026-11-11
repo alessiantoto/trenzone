@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, ChevronRight, MessageSquare
 } from "lucide-react";
-import { usePathname } from "@/i18n/routing";
+import { usePathname, Link } from "@/i18n/routing";
 import { useLocale } from "next-intl";
 
 interface FaqPoint {
@@ -352,17 +352,17 @@ export function TrenZoneAssistant() {
                             <button 
                               onClick={handleBack} 
                               className="col-span-1 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-center transition-all border border-white/5 cursor-pointer py-3.5"
-                              aria-label="Înapoi"
+                              aria-label={isRo ? "Înapoi" : "Back"}
                             >
                               <ChevronRight className="w-4 h-4 text-zinc-400 rotate-180" />
                             </button>
-                            <a 
+                            <Link 
                               href="/shop" 
                               onClick={() => setIsOpen(false)} 
                               className="col-span-4 bg-[#e32f8c] text-black py-3.5 rounded-2xl font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 hover:bg-[#c41a72] transition-all shadow-[0_0_20px_rgba(227,47,140,0.3)]"
                             >
                               {isRo ? "VEZI MAGAZINUL →" : "VISIT SHOP →"}
-                            </a>
+                            </Link>
                           </div>
                         </motion.div>
                       )}

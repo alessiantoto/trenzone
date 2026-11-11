@@ -134,7 +134,11 @@ export function Navbar() {
                 <button
                   className="lg:hidden flex items-center justify-center w-11 h-11 md:w-12 md:h-12 text-white hover:text-[#e32f8c] active:scale-90 transition-all drop-shadow-md"
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  aria-label={mobileMenuOpen ? "Închide meniul" : "Deschide meniul"}
+                  aria-label={
+                    mobileMenuOpen
+                      ? (locale === 'ro' ? "Închide meniul" : "Close menu")
+                      : (locale === 'ro' ? "Deschide meniul" : "Open menu")
+                  }
                 >
                   {mobileMenuOpen ? <X className="w-6 h-6 md:w-7 md:h-7" /> : <Menu className="w-6 h-6 md:w-7 md:h-7" />}
                 </button>
@@ -211,7 +215,7 @@ export function Navbar() {
                 <button
                   onClick={() => setCartOpen(true)}
                   className="group flex items-center justify-center w-11 h-11 md:w-14 md:h-14 text-white hover:text-[#e32f8c] active:scale-95 transition-all relative"
-                  aria-label="Deschide coșul de cumpărături"
+                  aria-label={locale === "ro" ? "Deschide coșul de cumpărături" : "Open shopping cart"}
                 >
                   <ShoppingCart className="w-6 h-6 md:w-7 md:h-7 drop-shadow-xl" />
                   {mounted && totalItems > 0 && (

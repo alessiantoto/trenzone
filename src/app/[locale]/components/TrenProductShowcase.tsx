@@ -61,7 +61,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
             image: "/images/products/x10_elbow_wraps_white_3.webp",
             imageIndex: 2,
             stock_status: "preorder",
-            badge: "PRECOMANDĂ"
+            badge: locale === "ro" ? "PRECOMANDĂ" : "PRE-ORDER"
           }
         ]
       },
@@ -303,8 +303,9 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
   const { currency } = useRegionStore();
   const priceX5 = getProductPrice(x5Prod?.price || 329.99, currency);
   const priceX10 = getProductPrice(x10Prod?.price || 529.99, currency);
-  const originalTotal = priceX5 + priceX10;
-  const discountedTotal = originalTotal * 0.90; // 10% discount
+  const subtotalSubunits = Math.round(priceX5 * 100) + Math.round(priceX10 * 100);
+  const originalTotal = subtotalSubunits / 100;
+  const discountedTotal = (subtotalSubunits - Math.round(subtotalSubunits * 0.05)) / 100; // 5% tiered bundle discount (2 items)
   const isMixedDuo = (selectedX5Opt?.stock_status === 'preorder') !== (selectedX10Opt?.stock_status === 'preorder');
 
   const handleConfirmDuo = () => {
@@ -385,7 +386,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
           {/* Top category label */}
           <div className="flex items-center justify-between mb-4">
             <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#e32f8c]/15 border border-[#e32f8c]/30 text-[#e32f8c] text-[10px] sm:text-xs font-black uppercase tracking-wider">
-              {isRo ? "PACHET DUO · 10% REDUCERE AUTOMATĂ" : "DUO PACK · 10% AUTOMATIC DISCOUNT"}
+              {isRo ? "PACHET DUO · 5% REDUCERE AUTOMATĂ" : "DUO PACK · 5% AUTOMATIC DISCOUNT"}
             </span>
           </div>
 
@@ -453,7 +454,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                     {formatPrice(originalTotal, currency)}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#e32f8c]/20 border border-[#e32f8c]/40 text-[#e32f8c] text-[10px] sm:text-[11px] font-black uppercase whitespace-nowrap">
-                    -10% {isRo ? "REDUCERE" : "OFF"}
+                    -5% {isRo ? "REDUCERE" : "OFF"}
                   </span>
                 </div>
 
@@ -524,7 +525,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
               <div className="relative mb-3.5">
                 <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1.5">
                   <span>TRENZONE X5</span>
-                  <span className="text-[10px] font-bold text-zinc-400">1x PERECHE</span>
+                  <span className="text-[10px] font-bold text-zinc-400">{isRo ? "1x PERECHE" : "1x PAIR"}</span>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -612,7 +613,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
               <div className="relative mb-4">
                 <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1.5">
                   <span>TRENZONE X10</span>
-                  <span className="text-[10px] font-bold text-zinc-400">1x PERECHE</span>
+                  <span className="text-[10px] font-bold text-zinc-400">{isRo ? "1x PERECHE" : "1x PAIR"}</span>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -688,7 +689,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                                   </span>
                                   {isPreorderOpt && (
                                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 font-black uppercase border border-amber-500/20">
-                                      PRECOMANDĂ
+                                      {isRo ? "PRECOMANDĂ" : "PRE-ORDER"}
                                     </span>
                                   )}
                                 </div>
@@ -733,7 +734,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                       {formatPrice(originalTotal, currency)}
                     </span>
                     <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase border border-emerald-200 whitespace-nowrap">
-                      -10%
+                      -5%
                     </span>
                   </div>
                 </div>

@@ -47,6 +47,15 @@ interface CartState {
     hasBundle: boolean; 
   };
 }
+const getStoreLocale = (): "ro" | "en" => {
+  if (typeof window !== "undefined") {
+    if (document.documentElement.lang?.toLowerCase().startsWith("en") || window.location.pathname.startsWith("/en")) {
+      return "en";
+    }
+  }
+  return "ro";
+};
+
 const areVariantNamesEqual = (name1: any, name2: any) => {
   if (name1 === name2) return true;
   if (!name1 || !name2) return false;
@@ -143,10 +152,11 @@ export const useCartStore = create<CartState>()(
           isCartOpen: true
         });
 
+        const isRo = getStoreLocale() === 'ro';
         toast.success(
           incomingIsPreorder 
-            ? "Coșul a fost actualizat exclusiv pentru precomandă!" 
-            : "Coșul a fost actualizat cu produsele în stoc!",
+            ? (isRo ? "Coșul a fost actualizat exclusiv pentru precomandă!" : "Your cart has been updated for pre-order items!")
+            : (isRo ? "Coșul a fost actualizat cu produsele în stoc!" : "Your cart has been updated with in-stock items!"),
           { icon: '📦' }
         );
       },
@@ -155,10 +165,16 @@ export const useCartStore = create<CartState>()(
         
         // Prevent mixing preorder and normal inside the same bundle item
         if (isMixedBundle(product, variant)) {
-          toast.error("Nu poți amesteca variante aflate pe precomandă cu variante normale în același pachet.", {
-            duration: 5000,
-            style: { border: '1px solid #ef4444', padding: '16px', color: '#7f1d1d', fontWeight: 'bold' }
-          });
+          const isRo = getStoreLocale() === 'ro';
+          toast.error(
+            isRo
+              ? "Nu poți amesteca variante aflate pe precomandă cu variante normale în același pachet."
+              : "You cannot mix pre-order variants with in-stock variants in the same bundle.",
+            {
+              duration: 5000,
+              style: { border: '1px solid #ef4444', padding: '16px', color: '#7f1d1d', fontWeight: 'bold' }
+            }
+          );
           return false;
         }
 

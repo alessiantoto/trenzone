@@ -12,7 +12,7 @@ import { formatPrice } from "@/utils/currency";
 import { getProductPrice } from "@/utils/pricing";
 import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { cn, getVariantColorClass } from "@/lib/utils";
+import { cn, getVariantColorClass, localizeBadge } from "@/lib/utils";
 import { isWideProductImage } from "@/lib/product-images";
 
 interface ProductCardProps {
@@ -390,7 +390,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                                   "text-[10px] font-black uppercase tracking-widest mt-0.5",
                                   isSoldOut ? "text-red-500" : "text-[#e32f8c]"
                                 )}>
-                                  {isSoldOut ? "SOLD OUT" : opt.badge}
+                                  {isSoldOut ? (locale === "en" ? "SOLD OUT" : "STOC EPUIZAT") : localizeBadge(opt.badge, locale)}
                                 </span>
                               )}
                             </div>

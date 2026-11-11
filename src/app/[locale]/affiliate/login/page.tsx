@@ -25,7 +25,7 @@ export default function AffiliateLogin() {
     setErrorMessage('');
 
     try {
-      const res = await affiliateLoginAction(email, code);
+      const res = await affiliateLoginAction(email, code, currentLocale);
       
       if (res.success) {
         setStatus('success');
@@ -103,7 +103,7 @@ export default function AffiliateLogin() {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="nume@exemplu.ro"
+                placeholder={isRo ? "nume@exemplu.ro" : "name@example.com"}
                 className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#e32f8c] focus:bg-white focus:ring-2 focus:ring-[#e32f8c]/20 transition-all"
               />
               <Mail className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -125,7 +125,7 @@ export default function AffiliateLogin() {
                 required
                 value={code}
                 onChange={e => setCode(e.target.value.toUpperCase())}
-                placeholder="ex: ALE"
+                placeholder={isRo ? "ex: ALE" : "e.g. ALE"}
                 className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-black font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#e32f8c] focus:bg-white focus:ring-2 focus:ring-[#e32f8c]/20 transition-all uppercase"
               />
               <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />

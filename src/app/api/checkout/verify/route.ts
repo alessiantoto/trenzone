@@ -103,7 +103,7 @@ async function buildOrderData(paymentIntent: Stripe.PaymentIntent, orderNumber: 
 
   return {
     id: orderNumber,
-    date: new Date().toLocaleDateString('ro-RO'),
+    date: new Date().toLocaleDateString(locale === 'en' ? 'en-US' : 'ro-RO'),
     currency,
     locale,
     branchId: metadata.branch_id || '',
@@ -118,11 +118,11 @@ async function buildOrderData(paymentIntent: Stripe.PaymentIntent, orderNumber: 
     paymentMethod: 'online',
     paymentIntentId: paymentIntent.id,
     customer: {
-      firstName: firstName || "[NUME LIPSĂ]",
-      lastName: lastName || "[PRENUME LIPSĂ]",
-      email: customerEmail || "[EMAIL LIPSĂ]",
+      firstName: firstName || (locale === 'en' ? "[MISSING FIRST NAME]" : "[NUME LIPSĂ]"),
+      lastName: lastName || (locale === 'en' ? "[MISSING LAST NAME]" : "[PRENUME LIPSĂ]"),
+      email: customerEmail || (locale === 'en' ? "[MISSING EMAIL]" : "[EMAIL LIPSĂ]"),
       phone: (metadata.phone && metadata.phone !== 'none' && metadata.phone.trim() !== '') ? metadata.phone : (paymentIntent.shipping?.phone || ''),
-      addr_line1: metadata.addr_line1 || metadata.line1 || paymentIntent.shipping?.address?.line1 || '[ADRESĂ LIPSĂ]',
+      addr_line1: metadata.addr_line1 || metadata.line1 || paymentIntent.shipping?.address?.line1 || (locale === 'en' ? '[MISSING ADDRESS]' : '[ADRESĂ LIPSĂ]'),
       addr_line2: metadata.addr_line2 || metadata.line2 || paymentIntent.shipping?.address?.line2 || '',
       addr_city: metadata.addr_city || metadata.city || paymentIntent.shipping?.address?.city || '',
       addr_zip: metadata.addr_postal_code || metadata.postal_code || paymentIntent.shipping?.address?.postal_code || '',
@@ -139,9 +139,9 @@ async function buildOrderData(paymentIntent: Stripe.PaymentIntent, orderNumber: 
       // Resolve name: prefer metadata name, fallback to DB name
       const dbName = dbProduct?.name;
       const resolvedDbName = typeof dbName === 'object' && dbName !== null
-        ? (dbName['ro'] || dbName['en'] || 'Produs TrenZone')
-        : (dbName || 'Produs TrenZone');
-      const itemName = (i.n && i.n !== 'Produs') ? i.n : resolvedDbName;
+        ? (locale === 'en' ? (dbName['en'] || dbName['ro']) : (dbName['ro'] || dbName['en'])) || 'TrenZone Product'
+        : (dbName || (locale === 'en' ? 'TrenZone Product' : 'Produs TrenZone'));
+      const itemName = (i.n && i.n !== 'Produs' && i.n !== 'Product') ? i.n : resolvedDbName;
 
       // Resolve image: use resolveItemImage helper
       const itemImage = resolveItemImage({

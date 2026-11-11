@@ -261,7 +261,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                   {isShippingPending ? (
                     <div className="flex items-center gap-1.5 text-zinc-400 opacity-70">
                       <Loader2 className="w-3 h-3 animate-spin" />
-                      <span className="text-[11px] italic">Calculare...</span>
+                      <span className="text-[11px] italic">{locale === 'en' ? 'Calculating...' : 'Calculare...'}</span>
                     </div>
                   ) : (isFreeShipping || shippingCost === 0) ? (
                     <div className="flex flex-col items-end">
@@ -280,7 +280,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 {/* 5. Procesare Prioritară */}
                 {priorityProcessing && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-zinc-600">Procesare Prioritară</span>
+                    <span className="text-zinc-600">{locale === 'en' ? 'Priority Processing' : 'Procesare Prioritară'}</span>
                     <span className="font-semibold text-black">+{formatPrice(priorityCost, displayCurrency)}</span>
                   </div>
                 )}
@@ -288,7 +288,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 {/* 6. Împachetare Cadou */}
                 {giftPackaging && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-zinc-600">Împachetare Cadou</span>
+                    <span className="text-zinc-600">{locale === 'en' ? 'Gift Packaging' : 'Împachetare Cadou'}</span>
                     <span className="font-semibold text-black">+{formatPrice(giftCost, displayCurrency)}</span>
                   </div>
                 )}
@@ -297,7 +297,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 {cardDiscount > 0 && (
                   <div className="flex justify-between items-center text-sm bg-green-50/50 p-2 rounded-xl border border-green-100">
                     <span className="font-bold uppercase tracking-widest text-[10px] text-green-600 flex items-center gap-1.5">
-                      💳 Reducere Card
+                      💳 {locale === 'en' ? 'Card Discount' : 'Reducere Card'}
                     </span>
                     <span className="font-black text-[#00e676] drop-shadow-[0_0_8px_rgba(0,230,118,0.4)]">-{formatPrice(cardDiscount, displayCurrency)}</span>
                   </div>

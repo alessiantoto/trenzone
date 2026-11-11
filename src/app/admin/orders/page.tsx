@@ -230,13 +230,13 @@ export function getItemDisplayDetails(item: any) {
     variantStr = item.flavors.join(', ');
   }
 
-  // Fallback: extract from parentheses in name, e.g. "Pachet 2 Cutii – Jeleuri cu Creatina (Pepene Rosu, Pepene Rosu)"
+  // Fallback: extract from parentheses in name, e.g. "Pachet Duo – TrenZone X5 + X10 (Purple, Crimson)"
   const parenMatch = typeof rawName === 'string' ? rawName.match(/\(([^)]+)\)/) : null;
   if (!variantStr && parenMatch && parenMatch[1]) {
     variantStr = parenMatch[1].trim();
   }
 
-  // Parse individual items/flavors in bundle and auto-expand any truncated flavor prefixes (e.g. "Pe" -> "Pepene Roșu")
+  // Parse individual items/variants in bundle and auto-expand any truncated variant prefixes
   let bundleFlavors: string[] = [];
   if (variantStr) {
     bundleFlavors = variantStr

@@ -70,11 +70,11 @@ export default function ReturnPolicyPage() {
         </p>
         <p>
           <strong>Payment Method for Refunds:</strong>
-          <ul>
-            <li><strong>Card Payments (Stripe):</strong> The refund is credited automatically back to the original card used during checkout.</li>
-            <li><strong>Cash on Delivery (COD):</strong> For orders paid cash to the courier, the money refund will be made via <strong>Bank Transfer (IBAN)</strong>, to the account indicated by the customer in the return form, after the product successfully passes the technical inspection.</li>
-          </ul>
         </p>
+        <ul>
+          <li><strong>Card Payments (Stripe):</strong> The refund is credited automatically back to the original card used during checkout.</li>
+          <li><strong>Cash on Delivery (COD):</strong> For orders paid cash to the courier, the money refund will be made via <strong>Bank Transfer (IBAN)</strong>, to the account indicated by the customer in the return form, after the product successfully passes the technical inspection.</li>
+        </ul>
 
         <h2>6. Exchanging Products (Size/Model)</h2>
         <p>
@@ -153,11 +153,11 @@ export default function ReturnPolicyPage() {
       </p>
       <p>
         <strong>Modalitatea de restituire a banilor:</strong>
-        <ul>
-          <li><strong>Plăți Online cu Cardul (Stripe):</strong> Banii sunt restituiți automat direct pe cardul bancar utilizat la efectuarea comenzii.</li>
-          <li><strong>Plăți Ramburs (Numerar la Curier):</strong> În cazul comenzilor achitate numerar la curier, returnarea banilor se face prin <strong>Transfer Bancar (IBAN)</strong>, în contul indicat de client în formularul de retur, numai după ce produsul trece cu succes de inspecția tehnică.</li>
-        </ul>
       </p>
+      <ul>
+        <li><strong>Plăți Online cu Cardul (Stripe):</strong> Banii sunt restituiți automat direct pe cardul bancar utilizat la efectuarea comenzii.</li>
+        <li><strong>Plăți Ramburs (Numerar la Curier):</strong> În cazul comenzilor achitate numerar la curier, returnarea banilor se face prin <strong>Transfer Bancar (IBAN)</strong>, în contul indicat de client în formularul de retur, numai după ce produsul trece cu succes de inspecția tehnică.</li>
+      </ul>
 
       <h2>6. Schimbarea produselor (Mărime/Model)</h2>
       <p>

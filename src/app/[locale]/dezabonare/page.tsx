@@ -111,7 +111,7 @@ function UnsubscribeContent() {
 
 export default function UnsubscribePage() {
   return (
-    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center p-4 font-bold">Se încarcă...</div>}>
+    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center p-4 font-bold">Loading...</div>}>
       <UnsubscribeContent />
     </Suspense>
   );

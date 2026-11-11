@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useLocale } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, X, MapPin, Check } from 'lucide-react';
 
@@ -25,6 +26,7 @@ const SAMEDAY_CLIENT_ID = process.env.NEXT_PUBLIC_SAMEDAY_CLIENT_ID || "01fd0347
 const SAMEDAY_API_ENV = 'production';
 
 export function SamedayLockerSelector({ isOpen, onClose, onSelect, selectedLockerId }: SamedayLockerSelectorProps) {
+  const locale = useLocale();
   const pluginRef = useRef<any>(null);
 
   const onSelectRef = useRef(onSelect);
@@ -49,7 +51,7 @@ export function SamedayLockerSelector({ isOpen, onClose, onSelect, selectedLocke
           pluginRef.current.init({
             clientId: SAMEDAY_CLIENT_ID,
             countryCode: 'RO',
-            langCode: 'ro',
+            langCode: locale === 'en' ? 'en' : 'ro',
             apiEnvironment: SAMEDAY_API_ENV,
           });
         }

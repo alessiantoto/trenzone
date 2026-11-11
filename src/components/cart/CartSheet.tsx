@@ -28,15 +28,15 @@ import { getProductPrice } from "@/utils/pricing";
 import { getBundleSummary } from "@/lib/cart-calculations";
 import { CouponInput } from "@/components/cart/CouponInput";
 import { Link, useRouter } from "@/i18n/routing";
-import { cn, getLocalized, getVariantColorClass } from "@/lib/utils";
+import { cn, getLocalized, getVariantColorClass, localizeBadge } from "@/lib/utils";
 import { isWideProductImage } from "@/lib/product-images";
 import { Product } from "@/lib/api";
 
 type VariantOption = NonNullable<Product["variants"]>["options"][number];
 
-function PaymentTrustMarks() {
+function PaymentTrustMarks({ isEn }: { isEn: boolean }) {
   return (
-    <div className="flex items-center justify-center gap-1.5 mt-2.5 select-none" aria-label="Accepted payment methods">
+    <div className="flex items-center justify-center gap-1.5 mt-2.5 select-none" aria-label={isEn ? "Accepted payment methods" : "Metode de plată acceptate"}>
       {/* VISA */}
       <span className="inline-flex items-center justify-center h-[22px] w-[36px] rounded-[4px] border border-zinc-200 bg-white">
         <svg viewBox="0 0 38 12" className="w-6 h-2.5" aria-hidden="true">
@@ -242,7 +242,7 @@ export function CartSheet() {
               type="button"
               onClick={() => setCartOpen(false)}
               className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 hover:text-[#111111] flex items-center justify-center transition-colors cursor-pointer"
-              aria-label="Close cart"
+              aria-label={isEn ? "Close cart" : "Închide coșul"}
             >
               <X className="w-4 h-4" strokeWidth={2.25} />
             </button>
@@ -432,7 +432,7 @@ export function CartSheet() {
                     type="button"
                     onClick={closePreorderConflict}
                     className="text-zinc-400 hover:text-[#111111] p-1 cursor-pointer transition-colors"
-                    aria-label="Dismiss"
+                    aria-label={isEn ? "Dismiss" : "Închide"}
                   >
                     <X size={14} />
                   </button>
@@ -609,7 +609,7 @@ export function CartSheet() {
                                     : removeItem(item.id, item.selectedVariant?.name)
                                 }
                                 className="w-8 h-full flex items-center justify-center text-zinc-600 hover:text-[#111111] transition-colors cursor-pointer"
-                                aria-label="Decrease quantity"
+                                aria-label={isEn ? "Decrease quantity" : "Scade cantitatea"}
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
@@ -626,7 +626,7 @@ export function CartSheet() {
                                   )
                                 }
                                 className="w-8 h-full flex items-center justify-center text-zinc-600 hover:text-[#111111] transition-colors cursor-pointer"
-                                aria-label="Increase quantity"
+                                aria-label={isEn ? "Increase quantity" : "Crește cantitatea"}
                               >
                                 <Plus className="w-3.5 h-3.5" />
                               </button>
@@ -688,7 +688,7 @@ export function CartSheet() {
                         type="button"
                         onClick={scrollLeft}
                         disabled={!canScrollLeft}
-                        aria-label="Previous items"
+                        aria-label={isEn ? "Previous items" : "Produse anterioare"}
                         className={cn(
                           "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
                           canScrollLeft
@@ -702,7 +702,7 @@ export function CartSheet() {
                         type="button"
                         onClick={scrollRight}
                         disabled={!canScrollRight}
-                        aria-label="Next items"
+                        aria-label={isEn ? "Next items" : "Produse următoare"}
                         className={cn(
                           "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
                           canScrollRight
@@ -776,7 +776,7 @@ export function CartSheet() {
                                 addItem(p);
                               }
                             }}
-                            aria-label={`Add ${getLocalized(p.name, locale)} to cart`}
+                            aria-label={`${isEn ? "Add" : "Adaugă"} ${getLocalized(p.name, locale)} ${isEn ? "to cart" : "în coș"}`}
                             className="mt-2.5 h-8 w-full rounded-lg bg-[#f4f4f6] hover:bg-[#111111] text-[#111111] hover:text-white border border-zinc-200/90 hover:border-[#111111] active:scale-[0.98] text-[10.5px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
                           >
                             <Plus className="w-3 h-3 stroke-[2.5] shrink-0" />
@@ -961,7 +961,7 @@ export function CartSheet() {
                 )}
               </button>
 
-              <PaymentTrustMarks />
+              <PaymentTrustMarks isEn={isEn} />
             </div>
           )}
 
@@ -1122,7 +1122,7 @@ export function CartSheet() {
                                           isSoldOut ? "text-red-500" : "text-[#e32f8c]"
                                         )}
                                       >
-                                        {isSoldOut ? "SOLD OUT" : opt.badge}
+                                        {isSoldOut ? (isEn ? "SOLD OUT" : "STOC EPUIZAT") : localizeBadge(opt.badge, locale)}
                                       </span>
                                     )}
                                   </div>

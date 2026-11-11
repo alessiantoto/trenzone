@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { Mail, MapPin, Send, CheckCircle2, MessageSquare, ChevronRight } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { useState } from 'react';
@@ -10,6 +10,8 @@ import { sendContactMessage } from '@/app/actions/contact';
 export default function ContactPage() {
   const t = useTranslations('ContactPage');
   const tNav = useTranslations('Navigation');
+  const locale = useLocale();
+  const isRo = locale === 'ro';
   
   const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [name, setName] = useState('');
@@ -24,7 +26,7 @@ export default function ContactPage() {
     { value: 'support', label: t('form_subject_support') },
     { value: 'shipping', label: t('form_subject_shipping') },
     { value: 'b2b', label: t('form_subject_b2b'), isBold: true },
-    { value: 'other', label: 'Altele' }
+    { value: 'other', label: isRo ? 'Altele' : 'Other' }
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,23 +35,30 @@ export default function ContactPage() {
     
     setStatus('sending');
     try {
-      const subjectMap: Record<string, string> = {
+      const subjectMap: Record<string, string> = isRo ? {
         general: 'Cerere Generală',
         support: 'Suport Tehnic',
         shipping: 'Comenzi & Livrare',
         b2b: 'Parteneriate B2B / Săli de sport',
         other: 'Altele'
+      } : {
+        general: 'General Inquiry',
+        support: 'Technical Support',
+        shipping: 'Orders & Shipping',
+        b2b: 'B2B Partnerships / Gyms',
+        other: 'Other'
       };
       
       const friendlySubject = subject === 'other' && customSubject.trim() 
-        ? `Altele: ${customSubject}`
+        ? `${isRo ? 'Altele' : 'Other'}: ${customSubject}`
         : (subjectMap[subject] || subject);
       
       const res = await sendContactMessage({
         name,
         email,
         subject: friendlySubject,
-        message
+        message,
+        locale: isRo ? 'ro' : 'en'
       });
       
       if (res.success) {
@@ -199,12 +208,12 @@ export default function ContactPage() {
                           exit={{ opacity: 0, height: 0, marginTop: 0 }}
                           className="space-y-2 overflow-hidden"
                         >
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Subiect personalizat</label>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">{isRo ? 'Subiect personalizat' : 'Custom subject'}</label>
                           <input 
                             required
                             value={customSubject}
                             onChange={(e) => setCustomSubject(e.target.value)}
-                            placeholder="Scrie aici subiectul mesajului tău..."
+                            placeholder={isRo ? 'Scrie aici subiectul mesajului tău...' : 'Write your message subject here...'}
                             className="w-full bg-white border border-zinc-200 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-black transition-all font-medium placeholder:text-zinc-300 text-black" 
                           />
                         </motion.div>
@@ -239,7 +248,9 @@ export default function ContactPage() {
 
                     {status === 'error' && (
                       <p className="text-red-500 text-[10px] text-center font-bold uppercase tracking-widest animate-pulse mt-4">
-                        A apărut o eroare. Încearcă din nou sau scrie-ne la trenzone483@gmail.com.
+                        {isRo
+                          ? 'A apărut o eroare. Încearcă din nou sau scrie-ne la trenzone483@gmail.com.'
+                          : 'An error occurred. Please try again or email us at trenzone483@gmail.com.'}
                       </p>
                     )}
                   </motion.form>

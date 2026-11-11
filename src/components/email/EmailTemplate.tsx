@@ -66,7 +66,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
 
   const defaultWelcome = isPreorder
     ? (isEn ? "Pre-order Confirmed!" : "Precomandă Confirmată!")
-    : (isEn ? "Hi, God of Aesthetics!" : "Salut, Zeule!");
+    : (isEn ? "Hi, {{name}}!" : "Salut, {{name}}!");
 
   const defaultBody = isPreorder
     ? (isEn
@@ -217,12 +217,12 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
               }}>
                 <img 
                   src={item.image?.startsWith('http') ? item.image : `${baseUrl}${item.image?.startsWith('/') ? '' : '/'}${item.image || ''}`} 
-                  alt={typeof item.name === 'string' ? item.name : 'Produs'} 
+                  alt={typeof item.name === 'string' ? item.name : (isEn ? 'Product' : 'Produs')} 
                   style={{ width: '90px', height: '90px', objectFit: 'contain', borderRadius: '8px', display: 'block' }} 
                 />
                 {baseUrl === "" && (
                   <div style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '8px', padding: '2px 4px', borderRadius: '2px', fontWeight: 'bold' }}>
-                    EXEMPLU
+                    {isEn ? 'SAMPLE' : 'EXEMPLU'}
                   </div>
                 )}
               </div>
@@ -230,7 +230,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
             <div style={{ display: 'table-cell', paddingLeft: '20px', verticalAlign: 'middle' }}>
               <p style={{ fontWeight: '900', margin: '0', fontSize: '16px' }}>
                 {typeof item.name === 'object' && item.name !== null 
-                  ? (item.name[locale] || item.name['ro'] || item.name['en'] || 'Produs') 
+                  ? (item.name[locale] || item.name['ro'] || item.name['en'] || (isEn ? 'Product' : 'Produs')) 
                   : item.name}
               </p>
               <p style={{ color: '#666', fontSize: '13px', margin: '4px 0' }}>x{item.quantity}</p>
@@ -299,7 +299,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
             {giftMessage && (
               <tr>
                 <td colSpan={2} style={{ paddingBottom: '16px' }}>
-                  <span style={{ fontWeight: '700', fontSize: '14px', color: '#666' }}>Mesaj Cadou:</span><br/>
+                  <span style={{ fontWeight: '700', fontSize: '14px', color: '#666' }}>{isEn ? 'Gift Message:' : 'Mesaj Cadou:'}</span><br/>
                   <span style={{ fontSize: '14px', fontStyle: 'italic', color: '#888' }}>"{giftMessage}"</span>
                 </td>
               </tr>

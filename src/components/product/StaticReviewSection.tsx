@@ -279,8 +279,9 @@ export function StaticReviewSection({
   showFaq?: boolean;
   initialReviews?: any[];
 }) {
+  const locale = useLocale();
   return (
-    <Suspense fallback={<div className="py-20 text-center text-zinc-500">Se incarca...</div>}>
+    <Suspense fallback={<div className="py-20 text-center text-zinc-500">{locale === 'en' ? 'Loading reviews...' : 'Se încarcă recenziile...'}</div>}>
       <ReviewSectionInner product={product} faqItems={faqItems} showFaq={showFaq} initialReviews={initialReviews} />
     </Suspense>
   );
@@ -488,7 +489,7 @@ function ReviewModal({
         {/* Pinned Close Button: ALWAYS visible, NEVER scrolls out of view */}
         <button 
           onClick={onClose}
-          aria-label="Închide recenzia"
+          aria-label={locale === 'ro' ? 'Închide recenzia' : 'Close review'}
           className="absolute top-3.5 right-3.5 z-50 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/90 hover:bg-[#e32f8c] border border-white/20 hover:border-white/40 text-zinc-200 hover:text-white flex items-center justify-center transition-all duration-200 shadow-2xl backdrop-blur-md cursor-pointer active:scale-95"
         >
           <X className="w-5 h-5" />
@@ -567,7 +568,7 @@ function ReviewModal({
                     <ProductThumbnail product={review.product} size="large" />
                     <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-sm font-black uppercase text-white group-hover/modalprod:text-[#e32f8c] transition-colors truncate">
-                        {typeof review.product.name === 'string' ? review.product.name : review.product.name?.[locale] || 'Produs'}
+                        {typeof review.product.name === 'string' ? review.product.name : review.product.name?.[locale] || (locale === 'ro' ? 'Produs' : 'Product')}
                       </span>
                       <span className="text-[11px] font-bold text-zinc-400 flex items-center gap-1 mt-0.5 group-hover/modalprod:text-zinc-300">
                         <span>{locale === 'ro' ? 'Vezi produsul' : 'View product'}</span>

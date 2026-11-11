@@ -54,7 +54,8 @@ export async function POST(req: Request) {
     } catch {
       return NextResponse.json({ error: "Invalid JSON format." }, { status: 400 });
     }
-    const { items, currency = "EUR", couponCode, country, shippingType, priority_processing, gift_packaging, payment_method } = body;
+    const { items, currency = "EUR", couponCode, country, shippingType, priority_processing, gift_packaging, payment_method, locale = 'ro' } = body;
+    const safeLocale = locale === 'en' ? 'en' : 'ro';
 
     const SUPPORTED_CURRENCIES = ["RON", "EUR", "USD", "GBP", "PLN", "CHF"];
     const safeCurrency = typeof currency === 'string' ? currency.toUpperCase() : 'EUR';
@@ -97,7 +98,12 @@ export async function POST(req: Request) {
 
     if (hasServerPreorder && hasServerInStock) {
       return NextResponse.json(
-        { error: "Comenzile mixte (produse din stoc + precomandă) nu sunt permise. Te rugăm să plasezi comenzi separate." },
+        {
+          error:
+            safeLocale === 'en'
+              ? "Mixed orders (in-stock + pre-order) are not allowed. Please place separate orders."
+              : "Comenzile mixte (produse din stoc + precomandă) nu sunt permise. Te rugăm să plasezi comenzi separate."
+        },
         { status: 400 }
       );
     }
@@ -189,7 +195,7 @@ export async function POST(req: Request) {
     let couponData = null;
     if (couponCode) {
       try {
-        const couponResult = await validateCoupon(couponCode, subtotalMajor, safeCurrency);
+        const couponResult = await validateCoupon(couponCode, subtotalMajor, safeCurrency, safeLocale);
         if (couponResult?.isValid && couponResult?.coupon) {
           couponData = couponResult.coupon;
         }
@@ -213,10 +219,14 @@ export async function POST(req: Request) {
 
     const serializedOrderItems = JSON.stringify(processedItems.map((i: any, idx: number) => {
       let vName = i.selectedVariant?.name;
-      if (typeof vName === 'object') vName = vName.ro || Object.values(vName)[0];
+      if (typeof vName === 'object') {
+        vName = safeLocale === 'en'
+          ? (vName.en || vName.ro || Object.values(vName)[0])
+          : (vName.ro || vName.en || Object.values(vName)[0]);
+      }
       const calcItem = calculationItems[idx] || calculationItems.find(c => c.id === (i.id || i._realId));
       const securePrice = calcItem ? calcItem.price : i.price;
-      return { i: i.id || i.slug, q: i.quantity, v: vName || "", p: securePrice, n: i.name || "Produs" };
+      return { i: i.id || i.slug, q: i.quantity, v: vName || "", p: securePrice, n: i.name || (safeLocale === 'en' ? "Product" : "Produs") };
     }));
 
     // 6. Create PaymentIntent
@@ -225,6 +235,7 @@ export async function POST(req: Request) {
       currency: safeCurrency.toLowerCase(),
       automatic_payment_methods: { enabled: true },
       metadata: {
+        locale: safeLocale,
         coupon_id: couponData?.id || '',
         coupon: String(couponCode || "none").substring(0, 500),
         subtotal: (result.subtotal / multiplier).toFixed(2),

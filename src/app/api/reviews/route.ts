@@ -46,10 +46,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
+    const reqLocale = body?.locale === 'en' ? 'en' : 'ro';
     
     // 2. Validate required fields
     if (!body.name || !body.text || typeof body.rating !== 'number') {
-      return NextResponse.json({ error: 'Câmpurile obligatorii lipsesc.' }, { status: 400 });
+      return NextResponse.json(
+        { error: reqLocale === 'en' ? 'Required fields are missing.' : 'Câmpurile obligatorii lipsesc.' },
+        { status: 400 }
+      );
     }
 
     const rating = Math.min(5, Math.max(1, Math.round(body.rating)));
@@ -60,7 +64,10 @@ export async function POST(request: Request) {
 
     // Validate email format if provided
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ error: 'Adresă de email invalidă.' }, { status: 400 });
+      return NextResponse.json(
+        { error: reqLocale === 'en' ? 'Invalid email address.' : 'Adresă de email invalidă.' },
+        { status: 400 }
+      );
     }
 
     // Resolve valid UUID for product_id to prevent PostgreSQL syntax errors
@@ -115,7 +122,8 @@ export async function POST(request: Request) {
       });
 
       try {
-        await sendReviewDiscountEmail(email, name || 'Campionule', (locale || 'ro') as 'ro' | 'en', uniqueCode, couponValue);
+        const reqLocale = (locale === 'en' ? 'en' : 'ro') as 'ro' | 'en';
+        await sendReviewDiscountEmail(email, name || (reqLocale === 'en' ? 'Champion' : 'Campionule'), reqLocale, uniqueCode, couponValue);
         console.log(`✅ [REVIEWS API] Discount email sent to customer: ${email}`);
       } catch (err) {
         console.error("⚠️ [REVIEWS API] Error sending review discount email to customer:", err);

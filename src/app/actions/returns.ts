@@ -222,7 +222,8 @@ export async function submitReturnRequest(formData: FormData) {
     return { success: true };
   } catch (error: any) {
     console.error('submitReturnRequest error:', error);
-    return { success: false, error: error.message || 'Eroare neașteptată.' };
+    const errLocale = (formData.get('locale') as string) === 'en' ? 'en' : 'ro';
+    return { success: false, error: error.message || (errLocale === 'en' ? 'An unexpected error occurred.' : 'Eroare neașteptată.') };
   }
 }
 

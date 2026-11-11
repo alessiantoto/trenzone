@@ -57,6 +57,8 @@ const appearance = {
 };
 
 export default function CheckoutPage() {
+  const params = useParams();
+  const locale = (params?.locale as string) || 'ro';
   const { items, getTotals, appliedCoupon } = useCartStore();
   const { currency } = useRegionStore();
   const { country: storedCountry, shippingType: storedShippingType } = useCheckoutStore();
@@ -116,7 +118,8 @@ export default function CheckoutPage() {
             couponCode: appliedCoupon?.code?.trim()?.toUpperCase() || null,
             country: storedCountry || 'RO',
             shippingType: storedShippingType || 'hd',
-            payment_method: 'online'
+            payment_method: 'online',
+            locale: locale === 'en' ? 'en' : 'ro'
           }),
         });
 
@@ -141,10 +144,7 @@ export default function CheckoutPage() {
     };
 
     initCheckout();
-  }, [items, total, currency, csrfToken, appliedCoupon?.code, storedCountry, storedShippingType]);
-
-  const params = useParams();
-  const locale = params?.locale as string || 'ro';
+  }, [items, total, currency, csrfToken, appliedCoupon?.code, storedCountry, storedShippingType, locale]);
 
   const options: any = useMemo(() => {
     const baseOptions = {

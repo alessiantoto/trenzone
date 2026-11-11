@@ -35,8 +35,10 @@ export const WelcomeDiscountEmail: React.FC<Readonly<WelcomeDiscountEmailProps>>
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
   
   // Fallbacks in case templateData is missing
-  const safeWelcome = welcomeText || (isEn ? "Hi, God of Aesthetics!" : "Salut, Zeule!");
-  const safeBody = bodyText || (isEn ? "We are thrilled to have you in our community. At TrenZone, we do not just sell supplements; we support a lifestyle dedicated to excellence." : "Ne bucurăm că te-ai alăturat comunității noastre. La TrenZone, nu vindem doar suplimente, ci susținem un stil de viață dedicat excelenței.");
+  const safeWelcome = welcomeText || (isEn ? "Welcome to TrenZone!" : "Bun venit la TrenZone!");
+  const safeBody = bodyText || (isEn
+    ? "We are thrilled to have you in our community. At TrenZone, we don't just engineer heavy-duty strength gear; we back every lift, PR, and training session built without compromises."
+    : "Ne bucurăm că te-ai alăturat comunității noastre. La TrenZone, nu creăm doar echipamente de forță construite pentru sarcini extreme, ci susținem fiecare PR și fiecare antrenament dus la limită.");
   const safeCta = ctaText || (isEn ? "VIEW THE STORE" : "VEZI MAGAZINUL");
   const discountTitle = isEn ? "YOUR DISCOUNT CODE" : "CODUL TĂU DE REDUCERE";
   const discountDesc = isEn ? `Use the code below on your first order to get ${couponValue}% off any item in our store.` : `Folosește codul de mai jos la prima ta comandă pentru o reducere de ${couponValue}% la orice articol.`;

@@ -54,7 +54,7 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
            <button
              onClick={() => onOpenChange(false)}
              className="w-10 h-10 flex items-center justify-center text-black hover:bg-zinc-100 rounded-full transition-colors outline-none"
-             aria-label="Close menu"
+             aria-label={locale === 'ro' ? "Închide meniul" : "Close menu"}
            >
              <X className="w-6 h-6" strokeWidth={2} />
            </button>

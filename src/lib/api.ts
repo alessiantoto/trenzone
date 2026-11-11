@@ -81,16 +81,7 @@ export interface InfluencerVideo {
   created_at?: string;
 }
 
-const MOCK_VARIANTS: Record<string, any> = {
-  "creta-lichida": {
-    label: { ro: "Parfum", en: "Scent" },
-    options: [
-      { name: { ro: "Lămâie", en: "Lemon" }, imageIndex: 2 },
-      { name: { ro: "Portocală", en: "Orange" }, imageIndex: 1 },
-      { name: { ro: "Mentă", en: "Mint" }, imageIndex: 3 }
-    ]
-  }
-};
+const MOCK_VARIANTS: Record<string, any> = {};
 
 // Helper to parse JSONB if it comes as a string (happens in some environments)
 const parseJSONB = (val: any) => {

@@ -51,7 +51,7 @@ export function ReferralHandler() {
 
         // Validate coupon with database
         const { subtotal } = getTotals();
-        const res = await validateCoupon(targetCode, subtotal);
+        const res = await validateCoupon(targetCode, subtotal, "RON", isRo ? "ro" : "en");
 
         if (res.isValid && res.coupon) {
           setCoupon(res.coupon);

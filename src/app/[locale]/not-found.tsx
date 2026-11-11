@@ -1,10 +1,14 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from '@/i18n/routing';
+import { useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Home, Zap } from 'lucide-react';
 
 export default function NotFound() {
+  const locale = useLocale();
+  const isRo = locale === 'ro';
+
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center select-none overflow-hidden relative selection:bg-[#e32f8c] selection:text-black">
       
@@ -43,20 +47,33 @@ export default function NotFound() {
           className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[#e32f8c] text-xs font-black tracking-[0.2em] uppercase mb-8 shadow-[0_0_20px_rgba(227, 47, 140,0.1)] backdrop-blur-md"
         >
           <Zap className="w-3 h-3 text-[#e32f8c] fill-[#e32f8c]" />
-          Eroare de Sistem
+          {isRo ? "Eroare de Sistem" : "System Error"}
         </motion.div>
         
         {/* Massive 404 Title */}
         <h1 className="text-6xl md:text-8xl lg:text-[120px] font-black uppercase text-white tracking-tighter leading-[0.85] mb-6 drop-shadow-2xl">
-          Pagină <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e32f8c] to-blue-600">
-            Pierdută.
-          </span>
+          {isRo ? (
+            <>
+              Pagină <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e32f8c] to-blue-600">
+                Pierdută.
+              </span>
+            </>
+          ) : (
+            <>
+              Page <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e32f8c] to-blue-600">
+                Not Found.
+              </span>
+            </>
+          )}
         </h1>
         
         {/* Subtitle / Description */}
         <p className="text-zinc-400 text-lg md:text-xl mb-12 font-medium tracking-wide max-w-lg mx-auto leading-relaxed">
-          Se pare că ai ajuns la capătul lumii. Această pagină nu există sau a fost mutată. Întoarce-te la bază.
+          {isRo
+            ? "Se pare că ai ajuns la capătul lumii. Această pagină nu există sau a fost mutată. Întoarce-te la bază."
+            : "Looks like you reached the end of the line. This page doesn't exist or was moved. Head back to base."}
         </p>
 
         {/* Action Buttons */}

@@ -138,7 +138,7 @@ export function Footer() {
                             type="submit"
                             disabled={status === "submitting"}
                             className="w-full sm:w-auto bg-white text-black hover:bg-[#e32f8c] hover:text-white px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider text-xs transition-all active:scale-95 disabled:opacity-50 shadow-2xl cursor-pointer font-[family-name:var(--font-oswald)] shrink-0"
-                            aria-label="Abonează-te la newsletter"
+                            aria-label={locale === 'ro' ? "Abonează-te la newsletter" : "Subscribe to newsletter"}
                           >
                             {status === "submitting" ? "..." : t('newsletter_button')}
                           </button>
@@ -231,7 +231,7 @@ export function Footer() {
                       <ul className="pb-6 space-y-4 text-sm font-medium text-zinc-400">
                         <li><Link href="/termeni-si-conditii" className="hover:text-primary transition-colors">{t('terms')}</Link></li>
                         <li><Link href="/politica-de-retur" className="hover:text-primary transition-colors">{t('return')}</Link></li>
-                        <li><Link href="/retur" className="hover:text-primary transition-colors">Formular Retragere (Retur)</Link></li>
+                        <li><Link href="/retur" className="hover:text-primary transition-colors">{locale === 'ro' ? 'Formular Retragere (Retur)' : 'Withdrawal Form (Return)'}</Link></li>
                         <li><Link href="/politica-cookie" className="hover:text-primary transition-colors">{t('cookie')}</Link></li>
                         <li><Link href="/politica-de-confidentialitate" className="hover:text-primary transition-colors">{t('privacy')}</Link></li>
                       </ul>
@@ -243,7 +243,7 @@ export function Footer() {
                 <ul className="hidden lg:block space-y-4 text-sm font-medium text-zinc-400">
                   <li><Link href="/termeni-si-conditii" className="hover:text-primary transition-colors">{t('terms')}</Link></li>
                   <li><Link href="/politica-de-retur" className="hover:text-primary transition-colors">{t('return')}</Link></li>
-                  <li><Link href="/retur" className="hover:text-primary transition-colors">Formular Retragere (Retur)</Link></li>
+                  <li><Link href="/retur" className="hover:text-primary transition-colors">{locale === 'ro' ? 'Formular Retragere (Retur)' : 'Withdrawal Form (Return)'}</Link></li>
                   <li><Link href="/politica-cookie" className="hover:text-primary transition-colors">{t('cookie')}</Link></li>
                   <li><Link href="/politica-de-confidentialitate" className="hover:text-primary transition-colors">{t('privacy')}</Link></li>
                 </ul>
@@ -254,7 +254,7 @@ export function Footer() {
                 <h4 className="font-black text-white text-[11px] lg:text-[10px] tracking-[0.3em] uppercase py-5 lg:p-0 border-b lg:border-none border-white/5 mb-6 lg:mb-8">{t('contact')}</h4>
                 <ul className="space-y-4 text-sm font-medium text-zinc-400">
                   <li className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Email Suport</span>
+                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">{locale === 'ro' ? 'Email Suport' : 'Support Email'}</span>
                     <a href="mailto:trenzone483@gmail.com" className="hover:text-primary transition-colors">trenzone483@gmail.com</a>
                   </li>
                   <li className="flex flex-col gap-1">
@@ -309,11 +309,11 @@ export function Footer() {
                     rel="noopener noreferrer"
                     className="hover:opacity-85 transition-opacity outline-none"
                     style={{ WebkitTapHighlightColor: 'transparent' } as any}
-                    title="Soluționarea Alternativă a Litigiilor - ANPC"
+                    title={locale === 'ro' ? "Soluționarea Alternativă a Litigiilor - ANPC" : "Alternative Dispute Resolution - ANPC"}
                   >
                     <Image 
                       src="/images/compliance/anpc-sal.png" 
-                      alt="SAL - Soluționarea Alternativă a Litigiilor" 
+                      alt={locale === 'ro' ? "SAL - Soluționarea Alternativă a Litigiilor" : "ADR - Alternative Dispute Resolution"} 
                       width={180} 
                       height={48} 
                       className="h-10 md:h-12 w-auto object-contain rounded-lg shadow-sm"
@@ -325,11 +325,11 @@ export function Footer() {
                     rel="noopener noreferrer"
                     className="hover:opacity-85 transition-opacity outline-none"
                     style={{ WebkitTapHighlightColor: 'transparent' } as any}
-                    title="Soluționarea Online a Litigiilor - Comisia Europeană"
+                    title={locale === 'ro' ? "Soluționarea Online a Litigiilor - Comisia Europeană" : "Online Dispute Resolution - European Commission"}
                   >
                     <Image 
                       src="/images/compliance/anpc-sol.png" 
-                      alt="SOL - Soluționarea Online a Litigiilor" 
+                      alt={locale === 'ro' ? "SOL - Soluționarea Online a Litigiilor" : "ODR - Online Dispute Resolution"} 
                       width={180} 
                       height={48} 
                       className="h-10 md:h-12 w-auto object-contain rounded-lg shadow-sm"

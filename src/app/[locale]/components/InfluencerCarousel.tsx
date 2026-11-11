@@ -228,6 +228,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
                       key={inf.id || `clip-${globalIndex}`} 
                       inf={inf} 
                       title={title}
+                      locale={locale}
                       onClick={() => setSelectedVideo({ url: inf.video_url, title })} 
                       isDraggingRef={isDraggingRef}
                     />
@@ -246,6 +247,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
                   key={inf.id || `clip-${idx}`} 
                   inf={inf} 
                   title={title}
+                  locale={locale}
                   onClick={() => setSelectedVideo({ url: inf.video_url, title })} 
                   isDraggingRef={isDraggingRef}
                 />
@@ -258,7 +260,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
             <div className="flex items-center justify-center gap-3 sm:gap-5 mt-8 md:hidden">
               <button
                 onClick={() => scrollToSlide(activeSlide - 1)}
-                aria-label="Slide anterior"
+                aria-label={locale === 'ro' ? 'Slide anterior' : 'Previous slide'}
                 className="group w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-900/95 border-2 border-white/20 hover:border-[#e32f8c] active:border-[#e32f8c] hover:bg-zinc-800 flex items-center justify-center text-white transition-all duration-300 shadow-[0_8px_30px_rgba(0,0,0,0.8)] hover:shadow-[0_0_24px_rgba(227,47,140,0.45)] active:scale-90 cursor-pointer"
               >
                 <ChevronLeft className="w-6 h-6 sm:w-7 sm:h-7 text-white group-hover:text-[#e32f8c] group-hover:-translate-x-0.5 stroke-[2.8] transition-all" />
@@ -266,7 +268,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
 
               <div 
                 className="bg-zinc-900/90 border border-white/15 backdrop-blur-md px-4 sm:px-5 py-2.5 rounded-full flex items-center gap-2 sm:gap-3 shadow-[0_8px_30px_rgba(0,0,0,0.7)]" 
-                aria-label="Paginare clipuri"
+                aria-label={locale === 'ro' ? 'Paginare clipuri' : 'Video pagination'}
               >
                 {Array.from({ length: slideCount }, (_, index) => (
                   <button
@@ -292,7 +294,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
 
               <button
                 onClick={() => scrollToSlide(activeSlide + 1)}
-                aria-label="Slide următor"
+                aria-label={locale === 'ro' ? 'Slide următor' : 'Next slide'}
                 className="group w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-900/95 border-2 border-white/20 hover:border-[#e32f8c] active:border-[#e32f8c] hover:bg-zinc-800 flex items-center justify-center text-white transition-all duration-300 shadow-[0_8px_30px_rgba(0,0,0,0.8)] hover:shadow-[0_0_24px_rgba(227,47,140,0.45)] active:scale-90 cursor-pointer"
               >
                 <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 text-white group-hover:text-[#e32f8c] group-hover:translate-x-0.5 stroke-[2.8] transition-all" />
@@ -369,11 +371,13 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
 function InfluencerCard({ 
   inf, 
   title, 
+  locale,
   onClick, 
   isDraggingRef 
 }: { 
   inf: InfluencerVideo; 
   title: string; 
+  locale: string;
   onClick: () => void; 
   isDraggingRef?: React.RefObject<boolean>; 
 }) {
@@ -498,7 +502,7 @@ function InfluencerCard({
       {videoError && (
         <div className="absolute inset-0 flex items-center justify-center bg-black px-2 text-center pointer-events-none">
           <span className="text-[10px] font-bold uppercase tracking-wide text-white/70">
-            {"Clip indisponibil"}
+            {locale === 'ro' ? "Clip indisponibil" : "Video unavailable"}
           </span>
         </div>
       )}

@@ -145,11 +145,7 @@ export function CartSheet() {
     };
   }, [isCartOpen, allProducts.length]);
 
-  const {
-    itemCount: totalItemsCount,
-    nextTierPercent,
-    progressPercent: bundleProgressPercent,
-  } = getBundleSummary(items);
+  const { itemCount: totalItemsCount, nextTierPercent } = getBundleSummary(items);
 
   const totalSaved = Number((discount + couponDiscount).toFixed(2));
   const effectiveSubtotal = Math.max(0, Number((subtotal - totalSaved).toFixed(2)));
@@ -162,6 +158,20 @@ export function CartSheet() {
   const isFreeShippingUnlocked =
     items.length > 0 &&
     (appliedCoupon?.type === "free_shipping" || effectiveSubtotal >= freeShippingThreshold);
+  const amountToFreeShipping = Math.max(
+    0,
+    Number((freeShippingThreshold - effectiveSubtotal).toFixed(2))
+  );
+  const stepTrackPercent =
+    bundlePercent >= 10
+      ? 100
+      : bundlePercent >= 5
+        ? 50
+        : isFreeShippingUnlocked
+          ? 25
+          : items.length > 0
+            ? 12
+            : 0;
 
   // Preorder & mixed cart fulfillment detection
   const hasPreorderInCart = items.some((item) => isPreorder(item, item.selectedVariant));
@@ -224,109 +234,153 @@ export function CartSheet() {
             </button>
           </div>
 
-          {/* Crisp Matte-Carbon Bundle & Free Shipping Card */}
-          <div className="rounded-xl bg-[#121216] text-white p-3.5">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-[12px] font-semibold text-zinc-200 leading-snug">
-                {totalItemsCount === 0 &&
-                  (isEn
-                    ? "Add 2 items for 5% off or 3+ for 10% off"
-                    : "Adaugă 2 produse pentru -5% sau 3+ pentru -10%")}
-                {totalItemsCount === 1 &&
-                  (isEn ? (
-                    <>
-                      Add <strong className="text-white">1 more item</strong> for{" "}
-                      <strong className="text-[#ff4da6]">5% off</strong>
-                    </>
-                  ) : (
-                    <>
-                      Mai adaugă <strong className="text-white">1 produs</strong> pentru{" "}
-                      <strong className="text-[#ff4da6]">-5% reducere</strong>
-                    </>
-                  ))}
-                {totalItemsCount === 2 &&
-                  (isEn ? (
-                    <>
-                      <strong className="text-white">5% off applied</strong> — add{" "}
-                      <strong className="text-[#ff4da6]">1 more for 10% off</strong>
-                    </>
-                  ) : (
-                    <>
-                      Ai <strong className="text-white">-5% reducere</strong> — adaugă{" "}
-                      <strong className="text-[#ff4da6]">încă 1 pentru -10%</strong>
-                    </>
-                  ))}
-                {totalItemsCount >= 3 &&
-                  (isEn ? (
-                    <>
-                      <strong className="text-emerald-400">10% bundle discount</strong> applied (−
-                      {formatPrice(discount, currency)})
-                    </>
-                  ) : (
-                    <>
-                      Ai activat <strong className="text-emerald-400">reducerea de 10%</strong> (−
-                      {formatPrice(discount, currency)})
-                    </>
-                  ))}
-              </p>
+          {/* 3-Step Visual Progress Tracker */}
+          <div className="rounded-xl bg-[#121216] text-white px-3.5 pt-3 pb-3">
+            {/* Concise Single-Line Headline */}
+            <p className="text-[12px] font-semibold text-zinc-200 leading-snug text-center mb-3">
+              {totalItemsCount === 0 &&
+                (isEn
+                  ? "Unlock free shipping and up to 10% off"
+                  : "Deblochează livrare gratuită și până la -10%")}
+              {totalItemsCount === 1 && !isFreeShippingUnlocked &&
+                (isEn ? (
+                  <>
+                    Add <strong className="text-white">{formatPrice(amountToFreeShipping, currency)}</strong> for{" "}
+                    <strong className="text-emerald-400">free shipping</strong>
+                  </>
+                ) : (
+                  <>
+                    Mai adaugă{" "}
+                    <strong className="text-white">{formatPrice(amountToFreeShipping, currency)}</strong>{" "}
+                    pentru <strong className="text-emerald-400">livrare gratuită</strong>
+                  </>
+                ))}
+              {totalItemsCount === 1 && isFreeShippingUnlocked &&
+                (isEn ? (
+                  <>
+                    Free shipping unlocked, add{" "}
+                    <strong className="text-[#ff4da6]">1 more item for 5% off</strong>
+                  </>
+                ) : (
+                  <>
+                    Ai livrare gratuită — mai adaugă{" "}
+                    <strong className="text-[#ff4da6]">1 produs pentru -5%</strong>
+                  </>
+                ))}
+              {totalItemsCount === 2 &&
+                (isEn ? (
+                  <>
+                    Add <strong className="text-[#ff4da6]">1 more item</strong> for{" "}
+                    <strong className="text-emerald-400">10% off</strong>
+                  </>
+                ) : (
+                  <>
+                    Mai adaugă <strong className="text-[#ff4da6]">1 produs</strong> pentru{" "}
+                    <strong className="text-emerald-400">-10% reducere</strong>
+                  </>
+                ))}
+              {totalItemsCount >= 3 &&
+                (isEn ? (
+                  <>
+                    <strong className="text-emerald-400">All 3 rewards unlocked</strong> (−
+                    {formatPrice(discount, currency)})
+                  </>
+                ) : (
+                  <>
+                    <strong className="text-emerald-400">Toate beneficiile activate</strong> (−
+                    {formatPrice(discount, currency)})
+                  </>
+                ))}
+            </p>
 
-              {bundlePercent === 10 ? (
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-[#09090b] text-[10px] font-extrabold uppercase tracking-wider shrink-0">
-                  -10%
-                </span>
-              ) : bundlePercent === 5 ? (
-                <span className="px-2.5 py-0.5 rounded-full bg-[#e32f8c] text-white text-[10px] font-extrabold uppercase tracking-wider shrink-0">
-                  -5%
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full bg-white/10 text-zinc-300 text-[10px] font-bold shrink-0 tabular-nums">
-                  {totalItemsCount}/3
-                </span>
-              )}
-            </div>
+            {/* 3-Step Connected Milestone Track */}
+            <div className="grid grid-cols-3 relative">
+              {/* Background Line & Animated Fill connecting Node 1 → Node 2 → Node 3 */}
+              <div className="absolute top-[13px] left-[16.66%] right-[16.66%] h-[3px] bg-white/15 rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500 ease-out",
+                    bundlePercent >= 10
+                      ? "bg-emerald-400"
+                      : bundlePercent >= 5
+                        ? "bg-[#e32f8c]"
+                        : isFreeShippingUnlocked
+                          ? "bg-emerald-400"
+                          : "bg-white/70"
+                  )}
+                  style={{ width: `${stepTrackPercent}%` }}
+                />
+              </div>
 
-            {/* Progress Track */}
-            <div className="w-full h-1.5 bg-white/15 rounded-full overflow-hidden">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all duration-500 ease-out",
-                  bundlePercent === 10
-                    ? "bg-emerald-400"
-                    : bundlePercent === 5
-                      ? "bg-[#e32f8c]"
-                      : "bg-white"
-                )}
-                style={{ width: `${bundleProgressPercent}%` }}
-              />
-            </div>
-
-            {/* Clean Step Legend + Free Shipping Status */}
-            <div className="flex items-center justify-between gap-2 mt-2 text-[10.5px] font-medium text-zinc-400">
-              <div className="flex items-center gap-3">
-                <span className={cn(bundlePercent >= 5 ? "text-white font-bold" : "text-zinc-400")}>
-                  {isEn ? "2 items: 5% off" : "2 produse: -5%"}
-                </span>
-                <span className="text-zinc-600">|</span>
-                <span className={cn(bundlePercent >= 10 ? "text-emerald-400 font-bold" : "text-zinc-400")}>
-                  {isEn ? "3+ items: 10% off" : "3+ produse: -10%"}
+              {/* Step 1: Free Shipping */}
+              <div className="flex flex-col items-center text-center relative z-10">
+                <div
+                  className={cn(
+                    "w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300",
+                    isFreeShippingUnlocked
+                      ? "bg-emerald-400 text-[#09090b] ring-4 ring-emerald-400/20"
+                      : "bg-[#1d1d24] border border-white/20 text-zinc-400"
+                  )}
+                >
+                  {isFreeShippingUnlocked ? (
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  ) : (
+                    <Truck className="w-3.5 h-3.5" />
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    "mt-1.5 text-[10px] leading-tight",
+                    isFreeShippingUnlocked ? "font-bold text-emerald-400" : "font-medium text-zinc-300"
+                  )}
+                >
+                  {isEn ? "Free shipping" : "Livrare gratuită"}
                 </span>
               </div>
 
-              {items.length > 0 && (
-                isFreeShippingUnlocked ? (
-                  <span className="inline-flex items-center gap-1 text-emerald-400 font-bold shrink-0">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                    {isEn ? "Free shipping" : "Livrare gratuită"}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-zinc-300 font-semibold shrink-0 tabular-nums">
-                    <Truck className="w-3 h-3 text-zinc-400" />
-                    {isEn
-                      ? `Free over ${formatPrice(freeShippingThreshold, currency)}`
-                      : `Gratuită peste ${formatPrice(freeShippingThreshold, currency)}`}
-                  </span>
-                )
-              )}
+              {/* Step 2: 2 Items (-5%) */}
+              <div className="flex flex-col items-center text-center relative z-10">
+                <div
+                  className={cn(
+                    "w-7 h-7 rounded-full flex items-center justify-center text-[9.5px] font-black transition-all duration-300",
+                    bundlePercent >= 5
+                      ? "bg-[#e32f8c] text-white ring-4 ring-[#e32f8c]/25"
+                      : "bg-[#1d1d24] border border-white/20 text-zinc-400"
+                  )}
+                >
+                  -5%
+                </div>
+                <span
+                  className={cn(
+                    "mt-1.5 text-[10px] leading-tight",
+                    bundlePercent >= 5 ? "font-bold text-white" : "font-medium text-zinc-400"
+                  )}
+                >
+                  {isEn ? "2 items" : "2 produse"}
+                </span>
+              </div>
+
+              {/* Step 3: 3+ Items (-10%) */}
+              <div className="flex flex-col items-center text-center relative z-10">
+                <div
+                  className={cn(
+                    "w-7 h-7 rounded-full flex items-center justify-center text-[9.5px] font-black transition-all duration-300",
+                    bundlePercent >= 10
+                      ? "bg-emerald-400 text-[#09090b] ring-4 ring-emerald-400/25"
+                      : "bg-[#1d1d24] border border-white/20 text-zinc-400"
+                  )}
+                >
+                  -10%
+                </div>
+                <span
+                  className={cn(
+                    "mt-1.5 text-[10px] leading-tight",
+                    bundlePercent >= 10 ? "font-bold text-emerald-400" : "font-medium text-zinc-400"
+                  )}
+                >
+                  {isEn ? "3+ items" : "3+ produse"}
+                </span>
+              </div>
             </div>
           </div>
         </div>

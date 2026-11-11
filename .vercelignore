@@ -1,0 +1,6 @@
+# Heavy videos are hosted on Cloudflare R2 ($0 egress) — exclude local copies from Vercel deployments
+public/videos/
+tmp/
+logs/
+*.log
+

@@ -182,8 +182,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       id: "dd477884-5fd8-4d8f-ab75-1cade13c1cc8",
       slug: "centura-powerlifting",
       name: {
-        ro: "Centură Powerlifting 13mm",
-        en: "13mm Powerlifting Belt"
+        ro: "Centură Lever Powerlifting",
+        en: "Powerlifting Lever Belt"
       },
       price: 749.99,
       originalPrice: 849.99,
@@ -217,8 +217,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       id: "35ad173c-9305-42d8-b0c1-0e9bdabdb31c",
       slug: "tricou-trenzone",
       name: {
-        ro: "Tricou Oversized",
-        en: "Oversized T-Shirt"
+        ro: "Tricou Power Oversized",
+        en: "Power Oversized Tee"
       },
       price: 239.99,
       originalPrice: 279.99,

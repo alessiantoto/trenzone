@@ -188,7 +188,7 @@ export default function AdminEmailsPage() {
         image: '/images/products/trenzone_wristwraps_default.webp'
       },
       {
-        name: { ro: 'Tricou Oversized', en: 'Oversized T-Shirt' },
+        name: { ro: 'Tricou Power Oversized', en: 'Power Oversized Tee' },
         price: 239.99,
         slug: 'tricou-trenzone',
         image: '/images/products/trenzone_tshirt_default.webp'

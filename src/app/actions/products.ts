@@ -295,8 +295,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     id: "dd477884-5fd8-4d8f-ab75-1cade13c1cc8",
     slug: "centura-powerlifting",
     name: {
-      ro: "Centură Powerlifting 13mm",
-      en: "13mm Powerlifting Belt"
+      ro: "Centură Lever Powerlifting",
+      en: "Powerlifting Lever Belt"
     },
     price: 749.99,
     originalPrice: 849.99,
@@ -356,8 +356,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     id: "35ad173c-9305-42d8-b0c1-0e9bdabdb31c",
     slug: "tricou-trenzone",
     name: {
-      ro: "Tricou Oversized",
-      en: "Oversized T-Shirt"
+      ro: "Tricou Power Oversized",
+      en: "Power Oversized Tee"
     },
     price: 239.99,
     originalPrice: 279.99,
@@ -467,7 +467,7 @@ const getCachedProducts = unstable_cache(
       return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
     }
   },
-  ['public-products-list-v6'],
+  ['public-products-list-v7'],
   {
     revalidate: 2592000, // 30 days cache — purged on admin edit or manual cache clear
     tags: ['products']
@@ -521,7 +521,7 @@ const getCachedProductBySlug = unstable_cache(
       return fallback ? sortProductsCanonical([fallback])[0] : null;
     }
   },
-  ['product-by-slug-v6'],
+  ['product-by-slug-v7'],
   {
     revalidate: 2592000, // 30 days cache — purged on admin edit or manual cache clear
     tags: ['products']

@@ -19,7 +19,7 @@ export default function MarketingPage() {
     message: 'Salutare!\n\nAvem noutăți importante pentru tine...',
     ctaText: 'Vezi Oferta',
     ctaLink: 'https://www.trenzone.fit',
-    imageUrl: 'https://buwvlmuvutfuvtxngqoi.supabase.co/storage/v1/object/public/media/images/bundle/bundle_hero_transparent.png',
+    imageUrl: 'https://www.trenzone.fit/images/products/x10_elbow_wraps_purple_1.webp',
     segment: 'subscribers' as 'subscribers' | 'customers' | 'test'
   });
 

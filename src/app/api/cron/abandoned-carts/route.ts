@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     const template24h = await getEmailTemplate('abandoned_24h');
     const template72h = await getEmailTemplate('abandoned_72h');
 
-    // Load 72h coupon (default ODIN10 with 10% discount)
+    // Load 72h coupon (default TREN10 with 10% discount)
     const { data: setting72h } = await supabaseAdmin.from('store_settings').select('value').eq('key', 'abandoned_72h_coupon').single();
     const couponCode72h = setting72h?.value || 'TREN10';
     const { data: couponData72h } = await supabaseAdmin.from('coupons').select('value').eq('code', couponCode72h).single();

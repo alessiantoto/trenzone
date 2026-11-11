@@ -1,7 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import * as React from 'react';
 import { BaseEmailLayout } from './BaseEmailLayout';
-import { getMediaCdnBase } from '@/lib/utils/cdn';
 import { resolveItemImage } from '@/lib/product-images';
 
 interface ReviewEmailTemplateProps {
@@ -49,8 +48,6 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
   const loveText = ctaText?.includes('|') ? ctaText.split('|')[1]?.trim() : (isEn ? "Love it!" : "Îl ador!");
   const actionButtonText = ctaText && !ctaText.includes('|') ? ctaText : (isEn ? "LEAVE A REVIEW" : "LASĂ O RECENZIE");
 
-  const supabaseBase = getMediaCdnBase();
-
   const safeItems = Array.isArray(items) && items.length > 0 
     ? items 
     : [{ name: 'X10 Elbow Wraps — Purple', slug: 'x10-elbow-wraps', image: '/images/products/x10_elbow_wraps_purple_1.webp' }];
@@ -61,9 +58,11 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
   const resolveSlug = (item: any) => {
     if (item.slug && typeof item.slug === 'string' && item.slug.trim()) return item.slug;
     const nameLower = String(item.name || '').toLowerCase();
+    if (nameLower.includes('wrist') || nameLower.includes('încheietur') || nameLower.includes('incheietur')) return 'x10-wrist-wraps';
+    if (nameLower.includes('centur') || nameLower.includes('belt')) return 'centura-powerlifting';
+    if (nameLower.includes('tricou') || nameLower.includes('t-shirt') || nameLower.includes('tshirt')) return 'tricou-trenzone';
     if (nameLower.includes('x10')) return 'x10-elbow-wraps';
     if (nameLower.includes('x5')) return 'x5-elbow-wraps';
-    if (nameLower.includes('creatin') || nameLower.includes('gumm')) return 'jeleuri-cu-creatina';
     return 'x10-elbow-wraps';
   };
 

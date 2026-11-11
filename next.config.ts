@@ -28,14 +28,6 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'cdn.trenzone.fit',
       },
-      {
-        protocol: 'https',
-        hostname: 'buwvlmuvutfuvtxngqoi.supabase.co',
-      },
-      {
-        protocol: 'https',
-        hostname: 'ueezzhgifizilvtmiseg.supabase.co',
-      },
       // CDN or R2 domain (e.g. cdn.trenzone.fit or pub-xxx.r2.dev) — if configured
       ...((process.env.NEXT_PUBLIC_CDN_URL || process.env.NEXT_PUBLIC_R2_URL || process.env.R2_PUBLIC_URL) ? (() => {
         try {
@@ -118,10 +110,10 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.stripe.com https://maps.googleapis.com https://www.googletagmanager.com https://widget.packeta.com https://cdn.sameday.ro https://static.cloudflareinsights.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.sameday.ro",
-              "img-src 'self' blob: data: https://*.supabase.co https://walfsewxhsjnfjfvxymi.supabase.co https://*.r2.dev https://*.r2.cloudflarestorage.com https://images.unsplash.com https://buwvlmuvutfuvtxngqoi.supabase.co https://ueezzhgifizilvtmiseg.supabase.co https://cdn.trenzone.fit https://maps.gstatic.com https://maps.googleapis.com https://*.stripe.com https://flagcdn.com https://cdn.sameday.ro https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
-              "media-src 'self' blob: https://*.supabase.co https://walfsewxhsjnfjfvxymi.supabase.co https://*.r2.dev https://*.r2.cloudflarestorage.com https://buwvlmuvutfuvtxngqoi.supabase.co https://ueezzhgifizilvtmiseg.supabase.co https://cdn.trenzone.fit",
+              "img-src 'self' blob: data: https://*.supabase.co https://walfsewxhsjnfjfvxymi.supabase.co https://*.r2.dev https://*.r2.cloudflarestorage.com https://images.unsplash.com https://cdn.trenzone.fit https://maps.gstatic.com https://maps.googleapis.com https://*.stripe.com https://flagcdn.com https://cdn.sameday.ro https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
+              "media-src 'self' blob: https://*.supabase.co https://walfsewxhsjnfjfvxymi.supabase.co https://*.r2.dev https://*.r2.cloudflarestorage.com https://cdn.trenzone.fit",
               "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https://*.supabase.co https://walfsewxhsjnfjfvxymi.supabase.co https://*.r2.dev https://*.r2.cloudflarestorage.com https://buwvlmuvutfuvtxngqoi.supabase.co https://ueezzhgifizilvtmiseg.supabase.co https://cdn.trenzone.fit https://api.stripe.com https://maps.googleapis.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://ipapi.co https://www.zasilkovna.cz https://cdn.sameday.ro https://lockerplugin.sameday.ro https://cloudflareinsights.com",
+              "connect-src 'self' https://*.supabase.co https://walfsewxhsjnfjfvxymi.supabase.co https://*.r2.dev https://*.r2.cloudflarestorage.com https://cdn.trenzone.fit https://api.stripe.com https://maps.googleapis.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://ipapi.co https://www.zasilkovna.cz https://cdn.sameday.ro https://lockerplugin.sameday.ro https://cloudflareinsights.com",
               "frame-src 'self' https://js.stripe.com https://lockerplugin.sameday.ro",
               "object-src 'none'",
               "base-uri 'self'",

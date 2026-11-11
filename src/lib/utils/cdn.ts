@@ -9,9 +9,7 @@
  */
 
 const SUPABASE_STORAGE_BASES = [
-  'https://buwvlmuvutfuvtxngqoi.supabase.co/storage/v1/object/public/',
   'https://walfsewxhsjnfjfvxymi.supabase.co/storage/v1/object/public/',
-  'https://ueezzhgifizilvtmiseg.supabase.co/storage/v1/object/public/',
 ] as const;
 
 const CDN_BASE = (
@@ -42,8 +40,6 @@ const R2_IMAGE_PREFIXES = [
   '/images/ui/',
   '/images/logos/',
   '/images/vladtren-logo.png',
-  '/images/lifestyle/apolo_cutii_jeleuri.webp',
-  '/images/lifestyle/jeleuri_fata.webp',
 ];
 
 export function getCdnUrl(url: string | null | undefined): string {

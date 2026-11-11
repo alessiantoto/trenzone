@@ -182,16 +182,16 @@ export default function AdminEmailsPage() {
     
     const mockUpsell = [
       {
-        name: { ro: 'Feșe Încheieturi (Wrist Wraps)', en: 'Wrist Wraps' },
-        price: 89.00,
-        slug: 'fese-incheieturi',
-        image: '/images/products/wraps.png'
+        name: { ro: 'X10 Wrist Wraps Heavy-Duty', en: 'X10 Heavy-Duty Wrist Wraps' },
+        price: 299.99,
+        slug: 'x10-wrist-wraps',
+        image: '/images/products/trenzone_wristwraps_default.webp'
       },
       {
-        name: { ro: 'Maieu Antrenament Odin', en: 'Odin Workout Tank' },
-        price: 80.00,
-        slug: 'maieu-antrenament-odin',
-        image: '/images/products/maieu_odin.webp'
+        name: { ro: 'Tricou Heavy Duty TrenZone', en: 'TrenZone Heavy Duty T-Shirt' },
+        price: 239.99,
+        slug: 'tricou-trenzone',
+        image: '/images/products/trenzone_tshirt_default.webp'
       }
     ];
 

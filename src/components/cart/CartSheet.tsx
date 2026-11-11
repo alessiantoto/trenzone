@@ -234,10 +234,10 @@ export function CartSheet() {
             </button>
           </div>
 
-          {/* 3-Step Visual Progress Tracker */}
-          <div className="rounded-xl bg-[#121216] text-white px-3.5 pt-3 pb-3">
+          {/* Light 3-Step Visual Progress Tracker */}
+          <div className="rounded-xl bg-[#f4f4f6] border border-zinc-200/90 text-[#111111] px-3.5 pt-3 pb-3">
             {/* Concise Single-Line Headline */}
-            <p className="text-[12px] font-semibold text-zinc-200 leading-snug text-center mb-3">
+            <p className="text-[12px] font-semibold text-zinc-600 leading-snug text-center mb-3">
               {totalItemsCount === 0 &&
                 (isEn
                   ? "Unlock free shipping and up to 10% off"
@@ -245,49 +245,49 @@ export function CartSheet() {
               {totalItemsCount === 1 && !isFreeShippingUnlocked &&
                 (isEn ? (
                   <>
-                    Add <strong className="text-white">{formatPrice(amountToFreeShipping, currency)}</strong> for{" "}
-                    <strong className="text-emerald-400">free shipping</strong>
+                    Add <strong className="font-bold text-[#111111]">{formatPrice(amountToFreeShipping, currency)}</strong> for{" "}
+                    <strong className="font-bold text-emerald-700">free shipping</strong>
                   </>
                 ) : (
                   <>
                     Mai adaugă{" "}
-                    <strong className="text-white">{formatPrice(amountToFreeShipping, currency)}</strong>{" "}
-                    pentru <strong className="text-emerald-400">livrare gratuită</strong>
+                    <strong className="font-bold text-[#111111]">{formatPrice(amountToFreeShipping, currency)}</strong>{" "}
+                    pentru <strong className="font-bold text-emerald-700">livrare gratuită</strong>
                   </>
                 ))}
               {totalItemsCount === 1 && isFreeShippingUnlocked &&
                 (isEn ? (
                   <>
                     Free shipping unlocked, add{" "}
-                    <strong className="text-[#ff4da6]">1 more item for 5% off</strong>
+                    <strong className="font-bold text-[#e32f8c]">1 more item for 5% off</strong>
                   </>
                 ) : (
                   <>
                     Ai livrare gratuită — mai adaugă{" "}
-                    <strong className="text-[#ff4da6]">1 produs pentru -5%</strong>
+                    <strong className="font-bold text-[#e32f8c]">1 produs pentru -5%</strong>
                   </>
                 ))}
               {totalItemsCount === 2 &&
                 (isEn ? (
                   <>
-                    Add <strong className="text-[#ff4da6]">1 more item</strong> for{" "}
-                    <strong className="text-emerald-400">10% off</strong>
+                    Add <strong className="font-bold text-[#111111]">1 more item</strong> for{" "}
+                    <strong className="font-bold text-[#e32f8c]">10% off</strong>
                   </>
                 ) : (
                   <>
-                    Mai adaugă <strong className="text-[#ff4da6]">1 produs</strong> pentru{" "}
-                    <strong className="text-emerald-400">-10% reducere</strong>
+                    Mai adaugă <strong className="font-bold text-[#111111]">1 produs</strong> pentru{" "}
+                    <strong className="font-bold text-[#e32f8c]">-10% reducere</strong>
                   </>
                 ))}
               {totalItemsCount >= 3 &&
                 (isEn ? (
                   <>
-                    <strong className="text-emerald-400">All 3 rewards unlocked</strong> (−
+                    <strong className="font-bold text-emerald-700">All 3 rewards unlocked</strong> (−
                     {formatPrice(discount, currency)})
                   </>
                 ) : (
                   <>
-                    <strong className="text-emerald-400">Toate beneficiile activate</strong> (−
+                    <strong className="font-bold text-emerald-700">Toate beneficiile activate</strong> (−
                     {formatPrice(discount, currency)})
                   </>
                 ))}
@@ -295,18 +295,18 @@ export function CartSheet() {
 
             {/* 3-Step Connected Milestone Track */}
             <div className="grid grid-cols-3 relative">
-              {/* Background Line & Animated Fill connecting Node 1 → Node 2 → Node 3 */}
-              <div className="absolute top-[13px] left-[16.66%] right-[16.66%] h-[3px] bg-white/15 rounded-full overflow-hidden">
+              {/* Background Line & Fill connecting Node 1 → Node 2 → Node 3 */}
+              <div className="absolute top-[13px] left-[16.66%] right-[16.66%] h-[3px] bg-zinc-200 rounded-full overflow-hidden">
                 <div
                   className={cn(
                     "h-full rounded-full transition-all duration-500 ease-out",
                     bundlePercent >= 10
-                      ? "bg-emerald-400"
+                      ? "bg-emerald-500"
                       : bundlePercent >= 5
                         ? "bg-[#e32f8c]"
                         : isFreeShippingUnlocked
-                          ? "bg-emerald-400"
-                          : "bg-white/70"
+                          ? "bg-emerald-500"
+                          : "bg-[#111111]"
                   )}
                   style={{ width: `${stepTrackPercent}%` }}
                 />
@@ -316,10 +316,10 @@ export function CartSheet() {
               <div className="flex flex-col items-center text-center relative z-10">
                 <div
                   className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300",
+                    "w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-300",
                     isFreeShippingUnlocked
-                      ? "bg-emerald-400 text-[#09090b] ring-4 ring-emerald-400/20"
-                      : "bg-[#1d1d24] border border-white/20 text-zinc-400"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-white border border-zinc-300 text-zinc-400"
                   )}
                 >
                   {isFreeShippingUnlocked ? (
@@ -331,7 +331,7 @@ export function CartSheet() {
                 <span
                   className={cn(
                     "mt-1.5 text-[10px] leading-tight",
-                    isFreeShippingUnlocked ? "font-bold text-emerald-400" : "font-medium text-zinc-300"
+                    isFreeShippingUnlocked ? "font-bold text-emerald-700" : "font-medium text-zinc-600"
                   )}
                 >
                   {isEn ? "Free shipping" : "Livrare gratuită"}
@@ -342,10 +342,10 @@ export function CartSheet() {
               <div className="flex flex-col items-center text-center relative z-10">
                 <div
                   className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center text-[9.5px] font-black transition-all duration-300",
+                    "w-7 h-7 rounded-full flex items-center justify-center text-[9.5px] font-black transition-colors duration-300",
                     bundlePercent >= 5
-                      ? "bg-[#e32f8c] text-white ring-4 ring-[#e32f8c]/25"
-                      : "bg-[#1d1d24] border border-white/20 text-zinc-400"
+                      ? "bg-[#e32f8c] text-white"
+                      : "bg-white border border-zinc-300 text-zinc-500"
                   )}
                 >
                   -5%
@@ -353,7 +353,7 @@ export function CartSheet() {
                 <span
                   className={cn(
                     "mt-1.5 text-[10px] leading-tight",
-                    bundlePercent >= 5 ? "font-bold text-white" : "font-medium text-zinc-400"
+                    bundlePercent >= 5 ? "font-bold text-[#111111]" : "font-medium text-zinc-500"
                   )}
                 >
                   {isEn ? "2 items" : "2 produse"}
@@ -364,10 +364,10 @@ export function CartSheet() {
               <div className="flex flex-col items-center text-center relative z-10">
                 <div
                   className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center text-[9.5px] font-black transition-all duration-300",
+                    "w-7 h-7 rounded-full flex items-center justify-center text-[9.5px] font-black transition-colors duration-300",
                     bundlePercent >= 10
-                      ? "bg-emerald-400 text-[#09090b] ring-4 ring-emerald-400/25"
-                      : "bg-[#1d1d24] border border-white/20 text-zinc-400"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-white border border-zinc-300 text-zinc-500"
                   )}
                 >
                   -10%
@@ -375,7 +375,7 @@ export function CartSheet() {
                 <span
                   className={cn(
                     "mt-1.5 text-[10px] leading-tight",
-                    bundlePercent >= 10 ? "font-bold text-emerald-400" : "font-medium text-zinc-400"
+                    bundlePercent >= 10 ? "font-bold text-emerald-700" : "font-medium text-zinc-500"
                   )}
                 >
                   {isEn ? "3+ items" : "3+ produse"}

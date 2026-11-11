@@ -87,53 +87,53 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
   const faqItems = locale === 'ro' ? [
     { 
-      question: "Ce model să aleg: TrenZone X5 sau TrenZone X10?", 
-      answer: "Ambele au compresie reglabilă pe orice braț. Dacă vrei confort, mobilitate și protecție articulară pe serii de volum și hipertrofie, alege X5 (rigiditate 3.5/5). Dacă vrei rigiditate maximă de competiție pentru greutăți mari (100-200+ kg) și asistență de până la +20 kg la ieșirea din piept, alege X10 (5/5)." 
+      question: "Ce să aleg, X5 sau X10?", 
+      answer: "Dacă faci mai mult volum, gantere sau antrenamente de hipertrofie, mergi pe X5. Dacă pui greutăți mari (peste 100 kg la piept) și vrei susținere maximă cu plus real pe împins, alege X10." 
     },
     { 
-      question: "Cât suport real oferă în plus și merg doar la împins la piept?", 
-      answer: "Nu sunt doar pentru Bench Press! Stabilizează cotul pe orice mișcare grea de împins: Bench Press (bară/gantere), Overhead Press, Weighted Dips și extensii grele de triceps. Oferă până la +20 kg recul kinetic, zero tremurat și protecție reală pe tendoane." 
+      question: "Cu ce ajută concret și merg doar la bench press?", 
+      answer: "Merg la orice exercițiu greu de împins: bench press cu bara sau ganterele, împins de umeri, flotări la paralele cu greutate și extensii de triceps. Stabilizează cotul sub greutate, protejează tendonul și oferă până la +20 kg recul pe X10." 
     },
     { 
-      question: "Au mărime universală? Se potrivesc și pe brațe mai mari sau mai subțiri?", 
-      answer: "Da. Lungimea completă de 100 cm cu sistem Velcro industrial se reglează milimetric pe orice circumferință a brațului, de la sportivi începători până la heavyweights." 
+      question: "Ce mărime sunt? Mi se potrivesc dacă am brațul mare sau subțire?", 
+      answer: "Sunt mărime universală (100 cm lungime) cu scai ajustabil, potrivite atât pe brațe mai subțiri, cât și pe brațe de peste 45 cm." 
     },
     { 
-      question: "De ce să aleg TrenZone® și nu benzi obișnuite mai ieftine?", 
-      answer: "Elasticul multi-strat de densitate industrială (1.2 kg perechea pe X10), cusăturile duble ranforsate și textura anti-alunecare păstrează compresia intactă fără să se lase după câteva săptămâni." 
+      question: "Prin ce sunt diferite față de benzile mai ieftine?", 
+      answer: "Folosesc un elastic industrial dens în mai multe straturi, cusături duble și textură care nu alunecă pe piele sau hanorac, testate pe greutăți reale de peste 200 kg." 
     },
     { 
       question: "În cât timp ajunge comanda și cum funcționează precomanda?", 
-      answer: "Produsele din stoc se expediază zilnic cu livrare în 1-2 zile lucrătoare în România și prin curier rapid în UE, UK și SUA. Precomenzile îți rezervă perechea din primul lot oficial cu expediere prioritară și notificări pe email." 
+      answer: "Produsele din stoc ajung în 1-2 zile lucrătoare în România și prin curier rapid cu tracking în UE, UK și SUA. Precomanda îți rezervă perechea din următorul lot cu expediere prioritară." 
     },
     { 
-      question: "Pot schimba între X5 și X10 sau returna comanda dacă nu mi se potrivește?", 
-      answer: "Da, ai garanție 14 zile de retur și schimb rapid pentru orice produs neutilizat, în ambalajul original." 
+      question: "Pot schimba între X5 și X10 sau să fac retur dacă mă răzgândesc?", 
+      answer: "Da. Ai 14 zile la dispoziție pentru retur sau schimb simplu între X5 și X10, cât timp produsul este nefolosit și în ambalajul original." 
     }
   ] : [
     { 
-      question: "Which model should I choose: TrenZone X5 or X10?", 
-      answer: "Both fit any arm size with adjustable tension. Go with X5 (3.5/5 stiffness) for hypertrophy, dumbbell work, and pain-free volume sets, or X10 (5/5 extreme stiffness, 1.2 kg weave) for 100-200+ kg lifts and up to +20 kg rebound assist." 
+      question: "Should I buy the X5 or the X10?", 
+      answer: "If your workouts center around volume, hypertrophy, and dumbbell pressing, go with the X5. If you press heavy (100+ kg) and want maximum stiffness with extra bounce out of the bottom, pick the X10." 
     },
     { 
-      question: "How much support do they add, and are they only for Bench Press?", 
-      answer: "Not just for Bench Press—they stabilize your elbow across Bench Press, Overhead Press, Weighted Dips, and heavy skull crushers, providing up to +20 kg mechanical assist, zero wobble, and triceps tendon relief." 
+      question: "How much do they help, and are they only for bench press?", 
+      answer: "They work on any heavy pressing exercise: flat or incline bench, overhead press, weighted dips, and heavy triceps extensions, steadying your elbow groove and taking pressure off your triceps tendon (up to +20 kg rebound on X10)." 
     },
     { 
-      question: "Are they one-size-fits-all? Will they fit larger or leaner arms?", 
-      answer: "Yes. Each 100 cm pair features heavy-duty adjustable Velcro to fit leaner arms up to 48 cm+ athletes and lets you dial tension tighter on PR sets." 
+      question: "What size are they? Will they fit larger or leaner arms?", 
+      answer: "They are one-size-fits-all (100 cm length) with adjustable heavy Velcro, fitting leaner arms as well as 45+ cm lifters." 
     },
     { 
-      question: "Why choose TrenZone® instead of cheaper generic elbow wraps?", 
-      answer: "Our industrial multi-layer elastic weave, reinforced double stitching, and anti-slip grip stay locked under 200+ kg without stretching out after a few weeks." 
+      question: "How are they different from cheaper gym wraps?", 
+      answer: "TrenZone wraps use dense multi-layer elastic with reinforced double stitching and an inner grip texture tested under 200+ kg lifts without stretching out." 
     },
     { 
-      question: "How fast is delivery, and how do pre-orders work?", 
-      answer: "In-stock items ship fast in 1-2 business days across Romania and tracked courier across the EU, UK, and USA. Pre-orders reserve your pair from the official production batch with first-out dispatch priority." 
+      question: "How fast is shipping, and how do pre-orders work?", 
+      answer: "In-stock orders arrive in 1-2 business days in Romania and ship via tracked express courier across the EU, UK, and USA. Pre-orders reserve a pair from the next batch and ship first." 
     },
     { 
-      question: "Can I swap X5 ↔ X10 or return my order if needed?", 
-      answer: "Yes, every order includes a 14-day hassle-free exchange or refund guarantee for unused items in original packaging." 
+      question: "Can I swap between X5 and X10 or return my order?", 
+      answer: "Yes. You have 14 days to exchange between X5 and X10 or request a refund, as long as the wraps are unused and in their original packaging." 
     }
   ];
 

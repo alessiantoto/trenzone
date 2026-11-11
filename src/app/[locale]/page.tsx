@@ -82,55 +82,58 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   ]);
   const initialReviews = formatPublicReviews(rawReviews, 40);
 
+  const x5Product = allProducts.find((p: any) => p.slug?.startsWith("x5")) || allProducts.find((p: any) => p.slug?.includes("x5"));
+  const x10Product = allProducts.find((p: any) => p.slug?.startsWith("x10")) || allProducts.find((p: any) => p.slug?.includes("x10"));
+
   const faqItems = locale === 'ro' ? [
     { 
-      question: "Cum funcționează precomanda și când ajunge produsul?", 
-      answer: "Precomanda îți rezervă perechea direct din ediția oficială de lansare, asigurându-te că o primești imediat ce sosește în stoc. După plasarea comenzii, primești confirmarea și actualizări pe email, iar coletul este expediat cu prioritate." 
+      question: "Ce model să aleg: TrenZone X5 sau TrenZone X10?", 
+      answer: "Ambele au compresie reglabilă pe orice braț. Dacă vrei confort, mobilitate și protecție articulară pe serii de volum și hipertrofie, alege X5 (rigiditate 3.5/5). Dacă vrei rigiditate maximă de competiție pentru greutăți mari (100-200+ kg) și asistență de până la +20 kg la ieșirea din piept, alege X10 (5/5)." 
     },
     { 
-      question: "Ce să aleg: TrenZone X5 sau X10?", 
-      answer: "Alegerea depinde de stilul tău: dacă vrei mobilitate, confort și protecție articulară pe serii de volum și culturism, alege X5 (suport 3.5/5 ferm și flexibil). Dacă vrei rigiditate extremă, blocare completă a cotului și asistență de până la +20 kg la ieșirea din piept pe seriile grele și PR-uri, alege X10." 
+      question: "Cât suport real oferă în plus și merg doar la împins la piept?", 
+      answer: "Nu sunt doar pentru Bench Press! Stabilizează cotul pe orice mișcare grea de împins: Bench Press (bară/gantere), Overhead Press, Weighted Dips și extensii grele de triceps. Oferă până la +20 kg recul kinetic, zero tremurat și protecție reală pe tendoane." 
     },
     { 
-      question: "Sunt potrivite și pentru începători sau doar pentru avansați?", 
-      answer: "Modelul X5 este excelent pentru oricine vrea să-și protejeze coatele și tendoanele de suprasolicitare. Modelul X10 este recomandat celor care au deja tehnică formată pe greutăți mari." 
+      question: "Au mărime universală? Se potrivesc și pe brațe mai mari sau mai subțiri?", 
+      answer: "Da. Lungimea completă de 100 cm cu sistem Velcro industrial se reglează milimetric pe orice circumferință a brațului, de la sportivi începători până la heavyweights." 
     },
     { 
-      question: "Ce face ca benzile TrenZone să fie superioare față de ce e pe piață?", 
-      answer: "Materialul ultra-dens multi-strat de 1.2 kg, densitatea structurală militară și aderența anti-alunecare pe piele. Își păstrează rigiditatea neschimbată după sute de serii grele." 
+      question: "De ce să aleg TrenZone® și nu benzi obișnuite mai ieftine?", 
+      answer: "Elasticul multi-strat de densitate industrială (1.2 kg perechea pe X10), cusăturile duble ranforsate și textura anti-alunecare păstrează compresia intactă fără să se lase după câteva săptămâni." 
     },
     { 
-      question: "Sunt benzile doar pentru Bench Press sau și pentru alte exerciții?", 
-      answer: "Nu sunt doar pentru Bench Press! Sunt concepute pentru orice mișcare grea de împins: Bench Press (bară/gantere, orizontal/înclinat), Împins umeri (Overhead Press), Dips cu greutate și extensii grele de triceps. Oferă stabilitate mecanică fără tremurat, protecție totală la tendoane și recul kinetic prin punctul mort." 
+      question: "În cât timp ajunge comanda și cum funcționează precomanda?", 
+      answer: "Produsele din stoc se expediază zilnic cu livrare în 1-2 zile lucrătoare în România și prin curier rapid în UE, UK și SUA. Precomenzile îți rezervă perechea din primul lot oficial cu expediere prioritară și notificări pe email." 
     },
     { 
-      question: "Livrați și în afara României?", 
-      answer: "Da, livrăm rapid prin curieri expres direct la ușă, atât în România (1-2 zile lucrătoare), cât și internațional în toată Uniunea Europeană, Marea Britanie și SUA." 
+      question: "Pot schimba între X5 și X10 sau returna comanda dacă nu mi se potrivește?", 
+      answer: "Da, ai garanție 14 zile de retur și schimb rapid pentru orice produs neutilizat, în ambalajul original." 
     }
   ] : [
     { 
-      question: "How does pre-ordering work and when will my wraps arrive?", 
-      answer: "Pre-ordering guarantees your pair directly from the upcoming production batch. You receive an immediate confirmation and tracking updates via email, and your order ships with top priority as soon as stock lands." 
+      question: "Which model should I choose: TrenZone X5 or X10?", 
+      answer: "Both fit any arm size with adjustable tension. Go with X5 (3.5/5 stiffness) for hypertrophy, dumbbell work, and pain-free volume sets, or X10 (5/5 extreme stiffness, 1.2 kg weave) for 100-200+ kg lifts and up to +20 kg rebound assist." 
     },
     { 
-      question: "Which model should I pick: TrenZone X5 or X10?", 
-      answer: "Choose based on your training style: need versatile wraps for volume, shoulder pressing, and hypertrophy? Go with X5. Hunting heavy PRs with maximum lockout rebound and extreme stiffness? Get the X10." 
+      question: "How much support do they add, and are they only for Bench Press?", 
+      answer: "Not just for Bench Press—they stabilize your elbow across Bench Press, Overhead Press, Weighted Dips, and heavy skull crushers, providing up to +20 kg mechanical assist, zero wobble, and triceps tendon relief." 
     },
     { 
-      question: "Are they suitable for beginners or only advanced lifters?", 
-      answer: "The X5 model is great for beginners and intermediates to protect joints and prevent flare-ups. The X10 is tailored for seasoned lifters handling heavy iron." 
+      question: "Are they one-size-fits-all? Will they fit larger or leaner arms?", 
+      answer: "Yes. Each 100 cm pair features heavy-duty adjustable Velcro to fit leaner arms up to 48 cm+ athletes and lets you dial tension tighter on PR sets." 
     },
     { 
-      question: "What makes TrenZone wraps superior to generic market wraps?", 
-      answer: "Our multi-layered heavy-duty elastic weave, reinforced cross-stitching, and anti-slip finish that will never stretch out or become loose like cheap cotton wraps." 
+      question: "Why choose TrenZone® instead of cheaper generic elbow wraps?", 
+      answer: "Our industrial multi-layer elastic weave, reinforced double stitching, and anti-slip grip stay locked under 200+ kg without stretching out after a few weeks." 
     },
     { 
-      question: "Are elbow wraps only for Bench Press or other lifts too?", 
-      answer: "They are NOT just for Bench Press! They are engineered for all heavy pressing movements: Bench Press (barbell/dumbbells), Overhead Shoulder Press, Weighted Dips, and heavy triceps work. You get locked-in joint stability, zero tendon strain, and explosive rebound through sticking points." 
+      question: "How fast is delivery, and how do pre-orders work?", 
+      answer: "In-stock items ship fast in 1-2 business days across Romania and tracked courier across the EU, UK, and USA. Pre-orders reserve your pair from the official production batch with first-out dispatch priority." 
     },
     { 
-      question: "Do you ship internationally?", 
-      answer: "Yes, we ship across Romania (1-2 business days) and internationally across Europe and the US with express tracked couriers." 
+      question: "Can I swap X5 ↔ X10 or return my order if needed?", 
+      answer: "Yes, every order includes a 14-day hassle-free exchange or refund guarantee for unused items in original packaging." 
     }
   ];
 
@@ -213,7 +216,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
       {/* 7. FAQ (Direct objection handling) */}
       <div className="relative z-10">
-        <FaqSection />
+        <FaqSection x5Price={x5Product?.price} x10Price={x10Product?.price} />
       </div>
 
       <div className="trenzone-luminous-divider" />

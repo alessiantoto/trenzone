@@ -1,493 +1,789 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import { useRegionStore } from "@/store/useRegionStore";
 import { formatPrice } from "@/utils/currency";
 import { getProductPrice } from "@/utils/pricing";
-import { 
-  Plus, 
-  Minus, 
-  CheckCircle2, 
-  ArrowRight, 
-  HelpCircle
-} from "lucide-react";
 import { Link } from "@/i18n/routing";
+import {
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Truck,
+  X,
+} from "lucide-react";
 
-interface FaqItem {
-  id: string;
-  category: "all" | "products" | "usage" | "shipping";
-  categoryLabel: { ro: string; en: string };
-  question: { ro: string; en: string };
-  summary: { ro: string; en: string };
-  points?: Array<{
-    title: { ro: string; en: string };
-    desc: { ro: string; en: string };
-    badge?: { ro: string; en: string };
-  }>;
-  highlightCards?: Array<{
-    title: { ro: string; en: string };
-    subtitle?: { ro: string; en: string };
-    desc: { ro: string; en: string };
-    tag?: { ro: string; en: string };
-    isFeatured?: boolean;
-  }>;
-  badge?: { ro: string; en: string };
+type FaqCategory = "all" | "models" | "benefits" | "shipping";
+
+interface LocalizedText {
+  ro: string;
+  en: string;
 }
 
-export function FaqSection() {
-  const locale = useLocale();
-  const isRo = locale === 'ro';
-  const { currency } = useRegionStore();
-  const x5PriceStr = formatPrice(getProductPrice(329.99, currency), currency);
-  const x10PriceStr = formatPrice(getProductPrice(529.99, currency), currency);
+interface FaqPoint {
+  title: LocalizedText;
+  desc: LocalizedText;
+}
 
-  const [activeCategory, setActiveCategory] = useState<"all" | "products" | "usage" | "shipping">("all");
-  const [activeIndex, setActiveIndex] = useState<number | null>(0);
+interface FaqComparisonCard {
+  slug: string;
+  badge: LocalizedText;
+  title: string;
+  price: string;
+  stiffness: LocalizedText;
+  desc: LocalizedText;
+  cta: LocalizedText;
+  featured?: boolean;
+}
 
-  const categories = [
-    { id: "all", label: isRo ? "Toate Întrebările" : "All Questions" },
-    { id: "products", label: isRo ? "Modele & Comparație" : "Models & Compare" },
-    { id: "usage", label: isRo ? "Exerciții & Beneficii" : "Exercises & Benefits" },
-    { id: "shipping", label: isRo ? "Livrare & Precomandă" : "Shipping & Orders" },
-  ] as const;
+interface FaqVsColumn {
+  title: LocalizedText;
+  items: LocalizedText[];
+  isPositive: boolean;
+}
 
-  const faqs: FaqItem[] = [
-    {
-      id: "preorder-delivery",
-      category: "shipping",
-      categoryLabel: { ro: "LIVRARE & PRODUCȚIE", en: "SHIPPING & BATCH" },
-      badge: { ro: "STOC GARANTAT", en: "GUARANTEED SPOT" },
-      question: {
-        ro: "Cum funcționează precomanda și când ajunge produsul?",
-        en: "How does pre-ordering work and when will my wraps arrive?"
-      },
-      summary: {
-        ro: "Precomanda îți rezervă perechea direct din primul lot oficial de producție, asigurându-te că o primești imediat ce sosește în depozit, cu prioritate absolută la expediere.",
-        en: "Pre-ordering reserves your pair directly from the official upcoming production batch, ensuring you receive it with top shipping priority as soon as stock arrives."
-      },
-      points: [
-        {
-          title: { ro: "1. Rezervare Automată", en: "1. Automatic Spot" },
-          desc: { ro: "Loc garantat din stocul limitat de lansare fără riscul de a rămâne pe dinafară.", en: "Guaranteed allocation from the limited launch drop." },
-          badge: { ro: "PRIORITATE", en: "PRIORITY" }
-        },
-        {
-          title: { ro: "2. Notificare pe Email", en: "2. Email Tracking" },
-          desc: { ro: "Primești confirmare instantă și notificări de status la fiecare etapă a comenzii.", en: "Instant confirmation and automated progress updates." },
-          badge: { ro: "TRANSPARENȚĂ", en: "TRANSPARENCY" }
-        },
-        {
-          title: { ro: "3. Livrare Rapidă la Ușă", en: "3. Express Door Delivery" },
-          desc: { ro: "Expediere prin curier rapid (1-2 zile lucrătoare în RO) cu AWB și tracking live.", en: "Dispatched via express tracked couriers straight to your door." },
-          badge: { ro: "RAPID", en: "EXPRESS" }
-        }
-      ]
-    },
-    {
-      id: "model-comparison",
-      category: "products",
-      categoryLabel: { ro: "GHID DE ALEGERE", en: "CHOOSING GUIDE" },
-      badge: { ro: "X5 vs X10", en: "X5 vs X10" },
-      question: {
-        ro: "Ce să aleg: TrenZone X5 sau X10?",
-        en: "Which model should I choose: TrenZone X5 or X10?"
-      },
-      summary: {
-        ro: "Alegerea depinde de stilul tău de antrenament: dacă vrei confort, mobilitate și protecție articulară pe serii de volum (X5) sau rigiditate extremă de competiție pentru greutăți mari (X10).",
-        en: "Choose based on your training goal: natural joint mobility & volume sets (X5) or extreme competition stiffness for max weight presses (X10)."
-      },
-      highlightCards: [
-        {
-          title: { ro: `MODELUL X5 — ${x5PriceStr}`, en: `X5 EDITION — ${x5PriceStr}` },
-          subtitle: { ro: "Nivel Suport: 3.5 / 5 (Ferm & Flexibil)", en: "Support Level: 3.5 / 5 (Firm & Flexible)" },
-          desc: { 
-            ro: "Ideal pentru serii de volum, hipertrofie, culturism, împins cu gantere și mișcări unde ai nevoie de mobilitate naturală și protecție a tendoanelor.",
-            en: "Engineered for high-volume hypertrophy, dumbbell pressing, and movements requiring natural elbow mobility with high tendon protection."
-          },
-          tag: { ro: "MOBILITATE & VOLUM", en: "MOBILITY & VOLUME" }
-        },
-        {
-          title: { ro: `MODELUL X10 — ${x10PriceStr}`, en: `X10 EDITION — ${x10PriceStr}` },
-          subtitle: { ro: "Nivel Suport: 5 / 5 (Rigiditate Extremă)", en: "Support Level: 5 / 5 (Extreme Stiffness)" },
-          desc: { 
-            ro: "Conceput pentru greutăți mari (100–200+ kg), PR-uri la Bench Press și sportivi experimentați. Oferă blocare totală pe cot și până la +20 kg asistență mecanică.",
-            en: "Built for heavy PR sets (100–200+ kg), powerlifting, and experienced lifters. Provides total joint lockout and up to +20 kg mechanical rebound."
-          },
-          tag: { ro: "PR CHASER · +20 KG", en: "PR CHASER · +20 KG" },
-          isFeatured: true
-        }
-      ]
-    },
-    {
-      id: "experience-level",
-      category: "products",
-      categoryLabel: { ro: "NIVEL DE EXPERIENȚĂ", en: "EXPERIENCE LEVEL" },
-      badge: { ro: "PENTRU TOȚI ATLEȚII", en: "ALL LIFTERS" },
-      question: {
-        ro: "Sunt potrivite și pentru începători sau doar pentru avansați?",
-        en: "Are they suitable for beginners or only advanced lifters?"
-      },
-      summary: {
-        ro: "Echipamentul TrenZone® este proiectat pentru oricine se antrenează dedicat și vrea să-și protejeze articulațiile, indiferent de greutatea de pe bară.",
-        en: "TrenZone® wraps are designed for anyone training with dedication who wants ironclad joint protection, regardless of their current strength level."
-      },
-      highlightCards: [
-        {
-          title: { ro: "Începători & Intermediari", en: "Beginners & Intermediates" },
-          desc: { 
-            ro: "Modelul X5 este alegerea perfectă: oferă suport articular esențial și previne durerile de coate sau inflamația tendoanelor înainte ca acestea să apară.",
-            en: "The X5 is ideal: it delivers essential joint compression and keeps tendon inflammation away while you build foundational strength."
-          },
-          tag: { ro: "PREVENȚIE & CONFORT", en: "PREVENTION & COMFORT" }
-        },
-        {
-          title: { ro: "Avansați & Powerlifteri", en: "Advanced & Powerlifters" },
-          desc: { 
-            ro: "Modelul X10 este recomandat sportivilor cu tehnică deja consolidată care încarcă greutăți substanțiale și vor stabilitate mecanică de neclintit.",
-            en: "The X10 is recommended for experienced lifters with dialed-in technique who handle heavy iron and demand absolute structural stability."
-          },
-          tag: { ro: "PERFORMANȚĂ MAXIMĂ", en: "MAX PERFORMANCE" },
-          isFeatured: true
-        }
-      ]
-    },
-    {
-      id: "quality-fabric",
-      category: "products",
-      categoryLabel: { ro: "MATERIAL & INGINERIE", en: "FABRIC & BUILD" },
-      badge: { ro: "CALITATE MILITARĂ", en: "MILITARY SPEC" },
-      question: {
-        ro: "Ce face ca benzile TrenZone să fie superioare față de ce e pe piață?",
-        en: "What makes TrenZone wraps superior to generic market wraps?"
-      },
-      summary: {
-        ro: "Spre deosebire de benzile ieftine din bumbac sintetic care se lărgesc și devin moi după doar 3 săptămâni de utilizare, benzile TrenZone® sunt proiectate după standarde industriale grele.",
-        en: "Unlike cheap cotton-blend wraps that stretch out and lose tension within 3 weeks, TrenZone® wraps are engineered to heavy industrial durability standards."
-      },
-      points: [
-        {
-          title: { ro: "Densitate Multi-Strat de 1.2 kg", en: "1.2 kg Multi-Layer Weave" },
-          desc: { ro: "Elastic tehnic ranforsat cu rezistență mecanică uriașă la tracțiune și întindere repetată.", en: "Reinforced elastic weave with extreme tensile resistance under repetitive heavy loading." },
-          badge: { ro: "STRUCTURĂ", en: "STRUCTURE" }
-        },
-        {
-          title: { ro: "Textură Grip Anti-Alunecare", en: "Anti-Slip Friction Grip" },
-          desc: { ro: "Se mulează și aderă ferm pe braț sau îmbrăcăminte fără să alunece milimetric în timpul repetării.", en: "Locks securely onto arms or apparel without slipping even a millimeter during reps." },
-          badge: { ro: "STABILITATE", en: "STABILITY" }
-        },
-        {
-          title: { ro: "Cusături Duble de Competiție", en: "Competition Double Stitching" },
-          desc: { ro: "Finisaje întărite la capete pentru a rezista anilor întregi de antrenamente brutale.", en: "Industrial reinforced stitching built to endure years of brutal workouts." },
-          badge: { ro: "DURABILITATE", en: "DURABILITY" }
-        },
-        {
-          title: { ro: "Testate la Sarcini Reale de 200+ kg", en: "Tested Under 200+ kg Real Loads" },
-          desc: { ro: "Validate de atleți de forță și culturiști de top pe împinsuri grele, fără deformare.", en: "Validated by heavy strength athletes on max effort pressing with zero deformation." },
-          badge: { ro: "VALIDAT", en: "VERIFIED" }
-        }
-      ]
-    },
-    {
-      id: "exercises-and-benefits",
-      category: "usage",
-      categoryLabel: { ro: "EXERCIȚII & BIOMECANICĂ", en: "EXERCISES & BIOMECHANICS" },
-      badge: { ro: "RECOMANDAT PENTRU FORȚĂ", en: "KEY BENEFITS" },
-      question: {
-        ro: "Sunt benzile doar pentru Bench Press sau și pentru alte exerciții? Care sunt beneficiile concrete?",
-        en: "Are elbow wraps only for Bench Press or other exercises too? What are the concrete benefits?"
-      },
-      summary: {
-        ro: "Nu sunt doar pentru Bench Press! Benzile TrenZone® sunt concepute pentru orice mișcare grea de împins și stabilitate a brațelor.",
-        en: "They are NOT just for Bench Press! TrenZone® wraps are engineered for every heavy pressing and arm movement."
-      },
-      points: [
-        {
-          title: { ro: "1. Mișcări Cheie Compatibile", en: "1. Key Exercises" },
-          desc: { 
-            ro: "Bench Press (bară/gantere, orizontal/înclinat), Împins Umeri (Overhead Press), Flotări la Paralele cu greutate (Weighted Dips) și extensii grele de triceps (Skull Crushers).",
-            en: "Bench Press (barbell/dumbbells, flat/incline), Overhead Press, Weighted Dips, and heavy triceps skull crushers."
-          },
-          badge: { ro: "POLIVALENȚĂ", en: "VERSATILITY" }
-        },
-        {
-          title: { ro: "2. Stabilitate Mecanică Totală", en: "2. Total Mechanical Lock" },
-          desc: { 
-            ro: "Cotul este ghidat pe traiectorie optimă; se elimină complet tremuratul involuntar al articulației la adâncime maximă sub bară.",
-            en: "Elbow is locked on an ideal groove; involuntary joint shaking at peak compression is completely eliminated."
-          },
-          badge: { ro: "ZERO TREMURAT", en: "ZERO SHAKE" }
-        },
-        {
-          title: { ro: "3. Protecția Tendoanelor & Tensiunii", en: "3. Tendon & Shearing Relief" },
-          desc: { 
-            ro: "Materialul absoarbe și redistribuie forțele de forfecare de pe tendonul tricepsului, prevenind inflamațiile cronice și durerile articulare.",
-            en: "Absorbs and redistributes brutal shearing forces away from the triceps tendon, preventing tendinitis."
-          },
-          badge: { ro: "ANTIDURERE", en: "JOINT RELIEF" }
-        },
-        {
-          title: { ro: "4. Recul Kinetic pe Ieșirea din Piept", en: "4. Kinetic Rebound Assist" },
-          desc: { 
-            ro: "Tensiunea acumulată la coborâre te catapultează exploziv prin punctul mort al împinsului, ajutându-te să deblochezi noi recorduri personale.",
-            en: "Stored elastic energy at the bottom catapults you through the sticking point, helping unlock new personal records."
-          },
-          badge: { ro: "ASISTENȚĂ KINETICĂ", en: "KINETIC ASSIST" }
-        }
-      ]
-    },
-    {
-      id: "shipping-guarantee",
-      category: "shipping",
-      categoryLabel: { ro: "EXPEDIERE & POLITICĂ RETUR", en: "SHIPPING & RETURNS" },
-      badge: { ro: "LIVRARE RAPIDĂ", en: "FAST DISPATCH" },
-      question: {
-        ro: "Livrați și în afara României? Ce garanții am?",
-        en: "Do you ship internationally? What guarantees do I have?"
-      },
-      summary: {
-        ro: "Livrăm rapid atât pe teritoriul României, cât și internațional în toată Europa, UK și SUA, cu număr de urmărire permanent.",
-        en: "We ship quickly across Romania and internationally throughout Europe, the UK, and the USA with real-time package tracking."
-      },
-      points: [
-        {
-          title: { ro: "România: 1–2 Zile Lucrătoare", en: "Romania: 1–2 Business Days" },
-          desc: { ro: "Livrare la ușă sau la locker prin curieri expres parteneri (Fan Courier / Sameday / Packeta).", en: "Door delivery or parcel locker via express couriers with live SMS & tracking." },
-          badge: { ro: "1-2 ZILE", en: "1-2 DAYS" }
-        },
-        {
-          title: { ro: "Internațional (UE, UK, SUA)", en: "International (EU, UK, USA)" },
-          desc: { ro: "Expediere internațională asigurată prin rețele aeriene de curierat rapid, cu AWB transparent.", en: "Fully insured international priority shipping with tracking code provided on dispatch." },
-          badge: { ro: "GLOBAL", en: "WORLDWIDE" }
-        },
-        {
-          title: { ro: "14 Zile Drept de Retur Garantat", en: "14-Day Return Guarantee" },
-          desc: { ro: "Dacă produsul nu ți se potrivește sau vrei altă mărime/model, beneficiezi de schimb simplu și rapid conform legii.", en: "Hassle-free 14-day exchange or return if the product is unused and in original packaging." },
-          badge: { ro: "100% SIGUR", en: "100% SAFE" }
-        }
-      ]
+interface FaqEntry {
+  id: string;
+  category: Exclude<FaqCategory, "all">;
+  kicker: LocalizedText;
+  question: LocalizedText;
+  lead: LocalizedText;
+  cards?: FaqComparisonCard[];
+  duoNote?: {
+    text: LocalizedText;
+    badge: LocalizedText;
+  };
+  points?: FaqPoint[];
+  vsColumns?: FaqVsColumn[];
+  actionLink?: {
+    href: string;
+    label: LocalizedText;
+  };
+}
+
+interface FaqSectionProps {
+  x5Price?: number | Record<string, number>;
+  x10Price?: number | Record<string, number>;
+}
+
+interface FaqAccordionItemProps {
+  faq: FaqEntry;
+  isRo: boolean;
+  isOpen: boolean;
+  onToggle: (id: string) => void;
+}
+
+const FaqAccordionItem = memo(function FaqAccordionItem({
+  faq,
+  isRo,
+  isOpen,
+  onToggle,
+}: FaqAccordionItemProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const animRef = useRef<Animation | null>(null);
+  const isFirstRender = useRef(true);
+
+  const t = (text: LocalizedText) => (isRo ? text.ro : text.en);
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      panel.hidden = !isOpen;
+      return;
     }
-  ];
 
-  const filteredFaqs = activeCategory === "all" 
-    ? faqs 
-    : faqs.filter(f => f.category === activeCategory);
+    // Snapshot geometry BEFORE cancelling active animation to keep rapid taps glitch-free
+    const startHeight = panel.hidden ? 0 : panel.getBoundingClientRect().height;
+    const startOpacity = panel.hidden
+      ? 0
+      : Number(getComputedStyle(panel).opacity) || 0;
+
+    if (animRef.current) {
+      animRef.current.cancel();
+      animRef.current = null;
+    }
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion || typeof panel.animate !== "function") {
+      panel.hidden = !isOpen;
+      panel.style.height = "";
+      panel.style.overflow = "";
+      panel.style.opacity = "";
+      return;
+    }
+
+    if (isOpen) {
+      panel.hidden = false;
+      panel.style.overflow = "hidden";
+      panel.style.height = "auto";
+      const endHeight = panel.scrollHeight;
+      panel.style.height = `${startHeight}px`;
+
+      const anim = panel.animate(
+        [
+          { height: `${startHeight}px`, opacity: startOpacity },
+          { height: `${endHeight}px`, opacity: 1 },
+        ],
+        {
+          duration: 240,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        }
+      );
+
+      animRef.current = anim;
+      anim.onfinish = () => {
+        if (animRef.current !== anim) return;
+        panel.style.height = "";
+        panel.style.overflow = "";
+        panel.style.opacity = "";
+        animRef.current = null;
+      };
+    } else {
+      if (startHeight <= 0 || panel.hidden) {
+        panel.hidden = true;
+        panel.style.height = "";
+        panel.style.overflow = "";
+        panel.style.opacity = "";
+        return;
+      }
+
+      panel.style.overflow = "hidden";
+      panel.style.height = `${startHeight}px`;
+
+      const anim = panel.animate(
+        [
+          { height: `${startHeight}px`, opacity: startOpacity },
+          { height: "0px", opacity: 0 },
+        ],
+        {
+          duration: 190,
+          easing: "cubic-bezier(0.32, 0, 0.67, 0)",
+        }
+      );
+
+      animRef.current = anim;
+      anim.onfinish = () => {
+        if (animRef.current !== anim) return;
+        panel.hidden = true;
+        panel.style.height = "";
+        panel.style.overflow = "";
+        panel.style.opacity = "";
+        animRef.current = null;
+      };
+    }
+  }, [isOpen]);
 
   return (
-    <section className="py-16 md:py-24 bg-[#090a0f] text-white relative overflow-hidden" id="faq">
-      <div className="container mx-auto px-4 sm:px-6 max-w-5xl relative z-10">
-        
-        {/* Section Header */}
-        <div className="flex flex-col items-center text-center max-w-3xl mx-auto mb-10 md:mb-14">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[#e32f8c] font-black tracking-widest uppercase text-[10px] sm:text-xs mb-3">
-            <HelpCircle className="w-3.5 h-3.5" />
-            <span>{isRo ? "FAQ · RĂSPUNSURI DIRECTE" : "FAQ · DIRECT ANSWERS"}</span>
+    <div
+      className={`[contain:layout_style] transition-colors duration-150 ${
+        isOpen ? "bg-[#151722]" : "bg-[#101119] hover:bg-[#13141e]"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onToggle(faq.id)}
+        aria-expanded={isOpen}
+        aria-controls={`faq-panel-${faq.id}`}
+        style={{ WebkitTapHighlightColor: "transparent" }}
+        className="w-full px-4 py-4 sm:px-7 sm:py-5 flex items-center justify-between gap-4 text-left cursor-pointer touch-manipulation select-none group"
+      >
+        <div className="flex flex-col gap-1 min-w-0 flex-1">
+          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#e32f8c]">
+            {t(faq.kicker)}
+          </span>
+          <h3 className="text-[15px] sm:text-[17px] font-bold tracking-tight text-white leading-snug group-hover:text-zinc-100">
+            {t(faq.question)}
+          </h3>
+        </div>
+
+        <span
+          aria-hidden="true"
+          className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border transition-colors duration-150 ${
+            isOpen
+              ? "bg-[#e32f8c] border-[#e32f8c] text-white"
+              : "bg-white/[0.04] border-white/10 text-zinc-400 group-hover:text-white group-hover:border-white/25"
+          }`}
+        >
+          <Plus
+            className={`w-4 h-4 transition-transform duration-200 ease-out ${
+              isOpen ? "rotate-45" : "rotate-0"
+            }`}
+            strokeWidth={2.5}
+          />
+        </span>
+      </button>
+
+      <div ref={panelRef} id={`faq-panel-${faq.id}`} hidden={!isOpen}>
+        <div className="px-4 pb-5 sm:px-7 sm:pb-6 pt-0">
+          <div className="pt-3.5 border-t border-white/[0.07] space-y-4">
+            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed font-normal">
+              {t(faq.lead)}
+            </p>
+
+            {/* Side-by-side X5 vs X10 conversion comparison cards */}
+            {faq.cards && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {faq.cards.map((card) => (
+                  <div
+                    key={card.slug}
+                    className={`rounded-xl p-4 sm:p-5 border flex flex-col justify-between gap-4 ${
+                      card.featured
+                        ? "bg-[#e32f8c]/[0.07] border-[#e32f8c]/45"
+                        : "bg-[#0a0b10] border-white/10"
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                            card.featured
+                              ? "bg-[#e32f8c]/20 text-[#e32f8c]"
+                              : "bg-white/10 text-zinc-300"
+                          }`}
+                        >
+                          {t(card.badge)}
+                        </span>
+                        <span className="text-base sm:text-lg font-black text-white tabular-nums font-[family-name:var(--font-oswald)]">
+                          {card.price}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h4 className="text-base sm:text-lg font-black uppercase tracking-tight text-white font-[family-name:var(--font-oswald)]">
+                          {card.title}
+                        </h4>
+                        <p className="text-[11px] font-semibold text-[#e32f8c] mt-0.5">
+                          {t(card.stiffness)}
+                        </p>
+                      </div>
+
+                      <p className="text-xs text-zinc-300 leading-relaxed">
+                        {t(card.desc)}
+                      </p>
+                    </div>
+
+                    <Link
+                      href={`/product/${card.slug}`}
+                      className={`inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-colors duration-150 ${
+                        card.featured
+                          ? "bg-[#e32f8c] text-white hover:bg-white hover:text-black"
+                          : "bg-white text-black hover:bg-[#e32f8c] hover:text-white"
+                      }`}
+                    >
+                      <span>{t(card.cta)}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Duo stack savings note */}
+            {faq.duoNote && (
+              <div className="rounded-xl bg-[#0a0b10] border border-white/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="text-xs font-medium text-zinc-300 flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-[#e32f8c] shrink-0" />
+                  <span>{t(faq.duoNote.text)}</span>
+                </span>
+                <Link
+                  href="/#shop-products"
+                  className="self-start sm:self-auto text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-[#e32f8c]/15 text-[#e32f8c] border border-[#e32f8c]/30 hover:bg-[#e32f8c] hover:text-white transition-colors shrink-0"
+                >
+                  {t(faq.duoNote.badge)}
+                </Link>
+              </div>
+            )}
+
+            {/* Clean 2-col benefit / logistics points */}
+            {faq.points && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {faq.points.map((pt, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl bg-[#0a0b10] border border-white/[0.08] p-3.5 flex items-start gap-2.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-[#e32f8c] shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <h4 className="text-xs sm:text-[13px] font-bold text-white leading-snug">
+                        {t(pt.title)}
+                      </h4>
+                      <p className="text-xs text-zinc-400 leading-relaxed mt-0.5">
+                        {t(pt.desc)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Direct quality comparison columns */}
+            {faq.vsColumns && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {faq.vsColumns.map((col, idx) => (
+                  <div
+                    key={idx}
+                    className={`rounded-xl p-4 border space-y-2.5 ${
+                      col.isPositive
+                        ? "bg-[#e32f8c]/[0.06] border-[#e32f8c]/35"
+                        : "bg-[#0a0b10] border-white/[0.08]"
+                    }`}
+                  >
+                    <h4
+                      className={`text-xs font-black uppercase tracking-wider ${
+                        col.isPositive ? "text-[#e32f8c]" : "text-zinc-400"
+                      }`}
+                    >
+                      {t(col.title)}
+                    </h4>
+                    <ul className="space-y-2">
+                      {col.items.map((item, iIdx) => (
+                        <li
+                          key={iIdx}
+                          className="flex items-start gap-2 text-xs leading-relaxed text-zinc-300"
+                        >
+                          {col.isPositive ? (
+                            <Check className="w-3.5 h-3.5 text-[#e32f8c] shrink-0 mt-0.5" />
+                          ) : (
+                            <X className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+                          )}
+                          <span>{t(item)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Optional policy/product link */}
+            {faq.actionLink && (
+              <div>
+                <Link
+                  href={faq.actionLink.href}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#e32f8c] hover:text-white transition-colors"
+                >
+                  <span>{t(faq.actionLink.label)}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export function FaqSection({ x5Price = 329.99, x10Price = 529.99 }: FaqSectionProps) {
+  const locale = useLocale();
+  const isRo = locale === "ro";
+  const { currency } = useRegionStore();
+
+  const [activeCategory, setActiveCategory] = useState<FaqCategory>("all");
+  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set(["x5-vs-x10"]));
+
+  const x5PriceStr = formatPrice(getProductPrice(x5Price, currency), currency);
+  const x10PriceStr = formatPrice(getProductPrice(x10Price, currency), currency);
+
+  const categories = useMemo(
+    () => [
+      { id: "all" as const, label: isRo ? "Toate (6)" : "All (6)" },
+      { id: "models" as const, label: isRo ? "Modele & Mărime" : "Models & Sizing" },
+      { id: "benefits" as const, label: isRo ? "Forță & Calitate" : "Strength & Build" },
+      { id: "shipping" as const, label: isRo ? "Livrare & Garanție" : "Shipping & Guarantee" },
+    ],
+    [isRo]
+  );
+
+  const faqs: FaqEntry[] = useMemo(
+    () => [
+      {
+        id: "x5-vs-x10",
+        category: "models",
+        kicker: { ro: "ALEGERE MODEL", en: "MODEL GUIDE" },
+        question: {
+          ro: "Ce model să aleg: TrenZone X5 sau TrenZone X10?",
+          en: "Which model should I choose: TrenZone X5 or X10?",
+        },
+        lead: {
+          ro: "Ambele au compresie reglabilă pe orice grosime a brațului. Diferența este nivelul de rigiditate și greutatea cu care te antrenezi:",
+          en: "Both fit any arm size with adjustable tension. Your choice depends on wrap stiffness and your working weight:",
+        },
+        cards: [
+          {
+            slug: "x5-elbow-wraps",
+            badge: { ro: "VOLUM & CONFORT", en: "VOLUME & COMFORT" },
+            title: "TRENZONE X5",
+            price: x5PriceStr,
+            stiffness: {
+              ro: "Rigiditate 3.5 / 5 · Ferm & Flexibil",
+              en: "3.5 / 5 Stiffness · Firm & Flexible",
+            },
+            desc: {
+              ro: "Ideal pentru hipertrofie, serii de volum, împins cu gantere și protecția tendoanelor fără să îți blocheze mișcarea naturală.",
+              en: "Built for hypertrophy, volume sets, dumbbell presses, and tendon relief with natural elbow mobility.",
+            },
+            cta: { ro: "Vezi TrenZone X5", en: "Shop TrenZone X5" },
+          },
+          {
+            slug: "x10-elbow-wraps",
+            badge: { ro: "CEL MAI ALES · MAX PR", en: "BEST SELLER · MAX PR" },
+            title: "TRENZONE X10",
+            price: x10PriceStr,
+            stiffness: {
+              ro: "Rigiditate 5.0 / 5 · Nivel Competiție",
+              en: "5.0 / 5 Stiffness · Competition Grade",
+            },
+            desc: {
+              ro: "Țesătură multi-strat extrem de densă (1.2 kg) pentru greutăți mari (100–200+ kg) și până la +20 kg asistență mecanică la ieșirea din piept.",
+              en: "Ultra-dense 1.2 kg multi-layer weave engineered for 100–200+ kg lifts and up to +20 kg rebound assist out of the bottom.",
+            },
+            cta: { ro: "Vezi TrenZone X10", en: "Shop TrenZone X10" },
+            featured: true,
+          },
+        ],
+        duoNote: {
+          text: {
+            ro: "Folosești X5 la volum și X10 la zilele grele? Pachetul Duo (X5 + X10) aplică automat reducere.",
+            en: "Want X5 for volume days and X10 for max bench days? The Duo Stack (X5 + X10) includes an automatic discount.",
+          },
+          badge: { ro: "DUO PACK · -5%", en: "DUO STACK · -5%" },
+        },
+      },
+      {
+        id: "weight-and-benefits",
+        category: "benefits",
+        kicker: { ro: "REZULTATE & BIOMECANICĂ", en: "RESULTS & BIOMECHANICS" },
+        question: {
+          ro: "Cât suport real oferă în plus și merg doar la împins la piept?",
+          en: "How much support do they add, and are they only for Bench Press?",
+        },
+        lead: {
+          ro: "Nu sunt doar pentru Bench Press. Stabilizează articulația cotului în orice exercițiu greu de împins și elimină pierderile de forță din punctul mort:",
+          en: "They are built for far more than Bench Press—stabilizing your elbow on every heavy pressing exercise while adding measurable rebound:",
+        },
+        points: [
+          {
+            title: { ro: "Până la +20 kg Recul Kinetic", en: "Up to +20 kg Mechanical Assist" },
+            desc: {
+              ro: "Compresia elastică acumulează energie la coborâre și te împinge exploziv din punctul inferior.",
+              en: "Stored elastic tension at peak flexion catapults the bar cleanly out of the chest sticking point.",
+            },
+          },
+          {
+            title: { ro: "Zero Tremurat sub Greutăți Mari", en: "Locked Groove · Zero Shake" },
+            desc: {
+              ro: "Elimină oscilația involuntară a cotului la sarcină maximă și menține traiectoria curată.",
+              en: "Eliminates joint wobble under near-max loads so force transfers straight into the bar.",
+            },
+          },
+          {
+            title: { ro: "Protecție Tendoane & Articulații", en: "Tendon & Elbow Relief" },
+            desc: {
+              ro: "Preia forța de forfecare de pe tendonul tricepsului, prevenind inflamațiile cronice.",
+              en: "Redistributes heavy shearing stress away from triceps tendons to help prevent elbow flare-ups.",
+            },
+          },
+          {
+            title: { ro: "Bench, Umeri, Dips & Triceps", en: "Bench, OHP, Dips & Triceps" },
+            desc: {
+              ro: "Compatibile cu împins piept (bară/gantere), Overhead Press, Weighted Dips și extensii grele.",
+              en: "Ideal for flat/incline bench, dumbbell presses, shoulder press, weighted dips, and skull crushers.",
+            },
+          },
+        ],
+      },
+      {
+        id: "sizing-and-fit",
+        category: "models",
+        kicker: { ro: "MĂRIME UNIVERSALĂ", en: "ONE SIZE FITS ALL" },
+        question: {
+          ro: "Au mărime universală? Se potrivesc și pe brațe mai mari sau mai subțiri?",
+          en: "Are they one-size-fits-all? Will they fit larger or leaner arms?",
+        },
+        lead: {
+          ro: "Da. Lungimea completă de 100 cm și sistemul cu scai industrial se reglează milimetric pe orice circumferință a brațului, de la începători până la sportivi heavyweight:",
+          en: "Yes. Every pair uses a full 100 cm wrap length with heavy-duty hook-and-loop closure, adapting seamlessly from leaner arms to 48 cm+ heavyweight lifters:",
+        },
+        points: [
+          {
+            title: { ro: "Reglaj pe Nivelul Tău de Tensiune", en: "Dial In Exact Stiffness" },
+            desc: {
+              ro: "Înfășoară mai strâns pentru setul de PR și lasă mai lejer pe seriile de încălzire.",
+              en: "Pull tight right before a top PR set, or wrap lighter for volume work and warm-ups.",
+            },
+          },
+          {
+            title: { ro: "Nu Alunecă în Timpul Seriei", en: "Zero Slip Mid-Set" },
+            desc: {
+              ro: "Textura interioară aderă ferm direct pe piele sau peste mânecă, fără să se ruleze.",
+              en: "High-friction inner weave locks onto bare skin or compression sleeves without rolling.",
+            },
+          },
+        ],
+      },
+      {
+        id: "quality-vs-generic",
+        category: "benefits",
+        kicker: { ro: "CALITATE & DURABILITATE", en: "QUALITY COMPARISON" },
+        question: {
+          ro: "De ce să aleg TrenZone® și nu benzi obișnuite mai ieftine?",
+          en: "Why choose TrenZone® instead of cheaper generic elbow wraps?",
+        },
+        lead: {
+          ro: "Benzile ieftine din bumbac subțire își pierd elasticitatea în câteva săptămâni. TrenZone® este proiectat special pentru încărcături grele reale:",
+          en: "Standard cotton-elastic wraps stretch out and lose tension within weeks. TrenZone® is engineered for sustained heavy training:",
+        },
+        vsColumns: [
+          {
+            title: { ro: "ECHIPAMENT TRENZONE®", en: "TRENZONE® HEAVY-DUTY" },
+            isPositive: true,
+            items: [
+              {
+                ro: "Elastic industrial multi-strat de 1.2 kg (X10) care nu se lasă după 3 săptămâni.",
+                en: "1.2 kg industrial multi-layer elastic weave (X10) that retains full tension session after session.",
+              },
+              {
+                ro: "Cusături duble ranforsate și Velcro lat, testate sub încărcături reale de 200+ kg.",
+                en: "Double-reinforced stitching and wide Velcro tested under real 200+ kg bench loads.",
+              },
+              {
+                ro: "Aderență fermă anti-alunecare și stabilitate predictibilă la fiecare repetare.",
+                en: "Anti-slip inner texture stays locked from rep one to lockout.",
+              },
+            ],
+          },
+          {
+            title: { ro: "BENZI OBIȘNUITE DE SALĂ", en: "CHEAP GENERIC WRAPS" },
+            isPositive: false,
+            items: [
+              {
+                ro: "Bumbac subțire care devine moale și nu mai oferă rebound după câteva antrenamente.",
+                en: "Thin cotton-blend elastic stretches out fast and stops supporting heavy sets.",
+              },
+              {
+                ro: "Alunecă pe antebraț sau se desfac sub presiune mare la ieșirea din piept.",
+                en: "Rolls down mid-rep or pops open under high tension at the bottom.",
+              },
+              {
+                ro: "Lipsă de suport real în punctul critic de pe tendon și articulație.",
+                en: "Minimal tendon load transfer—just basic warmth instead of structural stability.",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "shipping-and-preorder",
+        category: "shipping",
+        kicker: { ro: "EXPEDIERE & PRECOMENZI", en: "SHIPPING & PRE-ORDERS" },
+        question: {
+          ro: "În cât timp ajunge comanda și cum funcționează precomanda?",
+          en: "How fast is delivery, and how do pre-orders work?",
+        },
+        lead: {
+          ro: "Expediem zilnic produsele din stoc cu tracking complet. Pentru edițiile aflate în precomandă, lotul tău este rezervat și trimis cu prioritate:",
+          en: "In-stock orders ship immediately with full live tracking. Pre-orders lock your spot from the upcoming batch with first-out dispatch priority:",
+        },
+        points: [
+          {
+            title: { ro: "România: 1–2 Zile Lucrătoare", en: "Romania: 1–2 Business Days" },
+            desc: {
+              ro: "Livrare la ușă sau la Easybox / locker prin curier rapid cu AWB și notificare SMS.",
+              en: "Door delivery or parcel locker dispatch via express courier with live SMS tracking.",
+            },
+          },
+          {
+            title: { ro: "UE, Marea Britanie & SUA", en: "EU, UK & USA Delivery" },
+            desc: {
+              ro: "Expediere internațională asigurată prin curieri expres, cu tracking primit automat pe email.",
+              en: "Insured international priority shipping with tracking code emailed upon dispatch.",
+            },
+          },
+          {
+            title: { ro: "Precomandă = Loc Garantat", en: "Pre-Order = Priority Spot" },
+            desc: {
+              ro: "Primești confirmarea instant și coletul pleacă primul imediat ce lotul intră în depozit.",
+              en: "Guaranteed allocation from the launch batch—dispatched first before general restock opens.",
+            },
+          },
+          {
+            title: { ro: "Notificări Automate la Fiecare Pas", en: "Live Status Updates" },
+            desc: {
+              ro: "Primești factura și link-ul de urmărire AWB direct pe email imediat ce coletul pleacă.",
+              en: "Automatic confirmation, invoice, and AWB tracking updates delivered directly to your inbox.",
+            },
+          },
+        ],
+      },
+      {
+        id: "guarantee-and-returns",
+        category: "shipping",
+        kicker: { ro: "GARANȚIE 14 ZILE", en: "14-DAY GUARANTEE" },
+        question: {
+          ro: "Pot schimba între X5 și X10 sau returna comanda dacă nu mi se potrivește?",
+          en: "Can I swap X5 ↔ X10 or return my order if needed?",
+        },
+        lead: {
+          ro: "Da, cumperi fără niciun risc. Dacă vrei alt nivel de rigiditate sau te răzgândești, ai drept legal de retur și schimb rapid timp de 14 zile calendaristice (produs neutilizat, în ambalajul original).",
+          en: "Yes—your order is backed by our 14-day hassle-free exchange and return guarantee. Unused items in original packaging can be swapped between X5 and X10 or refunded quickly.",
+        },
+        actionLink: {
+          href: "/retur",
+          label: {
+            ro: "Accesează formularul rapid de retur / schimb",
+            en: "Open quick return / exchange request form",
+          },
+        },
+      },
+    ],
+    [x5PriceStr, x10PriceStr]
+  );
+
+  const filteredFaqs = useMemo(
+    () =>
+      activeCategory === "all"
+        ? faqs
+        : faqs.filter((f) => f.category === activeCategory),
+    [activeCategory, faqs]
+  );
+
+  const handleToggle = useCallback((id: string) => {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCategoryChange = useCallback(
+    (category: FaqCategory) => {
+      setActiveCategory(category);
+      const firstInCategory =
+        category === "all"
+          ? faqs[0]
+          : faqs.find((item) => item.category === category);
+      if (firstInCategory) {
+        setOpenIds(new Set([firstInCategory.id]));
+      }
+    },
+    [faqs]
+  );
+
+  return (
+    <section
+      className="py-14 sm:py-20 md:py-24 bg-[#090a0f] text-white relative"
+      id="faq"
+    >
+      <div className="container mx-auto px-4 sm:px-6 max-w-4xl relative z-10">
+        {/* Clean Editorial Header */}
+        <div className="flex flex-col items-center text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#e32f8c]/10 border border-[#e32f8c]/25 text-[#e32f8c] font-black tracking-[0.16em] uppercase text-[10px] sm:text-xs mb-3">
+            <span>{isRo ? "GHID DE ALEGERE · FAQ" : "BUYER'S GUIDE · FAQ"}</span>
           </div>
 
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white font-[family-name:var(--font-oswald)] leading-tight">
-            ÎNTREBĂRI FRECVENTE. <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e32f8c] via-[#a855f7] to-white">
-              {isRo ? "CLARITATE FĂRĂ OCOLIȘURI." : "NO EXCUSES, JUST FACTS."}
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white font-[family-name:var(--font-oswald)] leading-[1.08]">
+            {isRo ? "ÎNTREBĂRI FRECVENTE." : "FREQUENTLY ASKED."}
+            <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e32f8c] via-[#d946ef] to-white">
+              {isRo ? "FĂRĂ DUBII SUB BARĂ." : "BUILT FOR ZERO DOUBT."}
             </span>
           </h2>
 
-          <p className="mt-3 text-xs sm:text-sm md:text-base text-zinc-400 font-medium max-w-lg leading-relaxed">
+          <p className="mt-3 text-xs sm:text-sm md:text-base text-zinc-400 font-normal max-w-xl leading-relaxed">
             {isRo
-              ? "Tot ce trebuie să știi despre cotierele TrenZone®, diferența între X5 și X10, biomecanică și livrare."
-              : "Everything you need to know about TrenZone® wraps, choosing between X5 and X10, and delivery."}
+              ? "Compară X5 vs X10, află cum îți protejează coatele la greutăți mari și vezi detaliile de livrare."
+              : "Compare X5 vs X10 stiffness, joint protection under heavy pressing, sizing fit, and express shipping."}
           </p>
 
-          {/* Category Filter Pills (Zero backdrop-blur for 120fps speed) */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-6 p-1.5 rounded-xl bg-[#12131b] border border-white/10">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => {
-                  setActiveCategory(cat.id);
-                  setActiveIndex(null);
-                }}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors duration-150 cursor-pointer ${
-                  activeCategory === cat.id
-                    ? "bg-[#e32f8c] text-white"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
+          {/* Single-row horizontally scrollable filter pills (zero awkward wrapping) */}
+          <div className="w-full flex justify-center mt-6">
+            <div className="inline-flex max-w-full overflow-x-auto scrollbar-hide items-center gap-1 p-1 rounded-xl bg-[#101119] border border-white/10">
+              {categories.map((cat) => {
+                const isActive = activeCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => handleCategoryChange(cat.id)}
+                    style={{ WebkitTapHighlightColor: "transparent" }}
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-wider whitespace-nowrap shrink-0 cursor-pointer touch-manipulation transition-colors duration-150 ${
+                      isActive
+                        ? "bg-[#e32f8c] text-white"
+                        : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* 120FPS Hardware-Accelerated Accordion Cards */}
-        <div className="flex flex-col gap-3">
-          {filteredFaqs.map((faq, index) => {
-            const isOpen = activeIndex === index;
-            const itemNumber = (index + 1).toString().padStart(2, '0');
-
-            return (
-              <div
-                key={faq.id}
-                className={`rounded-xl border transition-colors duration-200 overflow-hidden ${
-                  isOpen
-                    ? "bg-[#161722] border-[#e32f8c]/60"
-                    : "bg-[#111219] border-white/10 hover:border-white/20"
-                }`}
-                style={{ willChange: "transform" }}
-              >
-                {/* Trigger Button */}
-                <button
-                  type="button"
-                  onClick={() => setActiveIndex(isOpen ? null : index)}
-                  aria-expanded={isOpen}
-                  className="w-full p-4 sm:p-5 flex items-center justify-between text-left focus:outline-none gap-3 group cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 sm:gap-3.5 flex-1 min-w-0">
-                    {/* Index Number Badge */}
-                    <span className={`text-[11px] font-mono font-black px-2 py-0.5 rounded border transition-colors duration-150 shrink-0 ${
-                      isOpen 
-                        ? "bg-[#e32f8c]/20 text-[#e32f8c] border-[#e32f8c]/40" 
-                        : "bg-white/5 text-zinc-500 border-white/10 group-hover:text-zinc-300"
-                    }`}>
-                      {itemNumber}
-                    </span>
-
-                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-zinc-500">
-                        {faq.categoryLabel[locale as 'ro' | 'en'] || faq.categoryLabel.ro}
-                      </span>
-                      <h3 className={`text-xs sm:text-sm md:text-base font-black uppercase tracking-tight transition-colors duration-150 leading-snug truncate sm:whitespace-normal ${
-                        isOpen ? "text-[#e32f8c]" : "text-white group-hover:text-zinc-200"
-                      }`}>
-                        {faq.question[locale as 'ro' | 'en'] || faq.question.ro}
-                      </h3>
-                    </div>
-                  </div>
-
-                  {/* Toggle Indicator Button */}
-                  <div className={`shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border transition-colors duration-150 ${
-                    isOpen 
-                      ? "bg-[#e32f8c] text-white border-[#e32f8c]" 
-                      : "bg-white/5 text-zinc-400 border-white/10 group-hover:text-white"
-                  }`}>
-                    {isOpen ? (
-                      <Minus className="w-3.5 h-3.5" strokeWidth={3} />
-                    ) : (
-                      <Plus className="w-3.5 h-3.5" strokeWidth={3} />
-                    )}
-                  </div>
-                </button>
-
-                {/* 120FPS Pure CSS Grid Animation Container (No JS reflow loops!) */}
-                <div 
-                  className={`grid transition-[grid-template-rows] duration-250 ease-out ${
-                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                  }`}
-                >
-                  <div className="overflow-hidden">
-                    <div className={`px-4 pb-4 sm:px-5 sm:pb-5 pt-1 text-zinc-300 border-t border-white/5 transition-opacity duration-200 ${
-                      isOpen ? "opacity-100" : "opacity-0"
-                    }`}>
-                      
-                      {/* Summary Lead Paragraph */}
-                      <p className="text-xs sm:text-sm font-medium leading-relaxed text-zinc-300 mb-3 sm:mb-4">
-                        {faq.summary[locale as 'ro' | 'en'] || faq.summary.ro}
-                      </p>
-
-                      {/* Structured Dual Cards (for X5 vs X10 or Experience Level) */}
-                      {faq.highlightCards && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 mb-2">
-                          {faq.highlightCards.map((card, cIdx) => (
-                            <div
-                              key={cIdx}
-                              className={`p-3.5 rounded-lg border flex flex-col justify-between ${
-                                card.isFeatured
-                                  ? "bg-[#e32f8c]/10 border-[#e32f8c]/40"
-                                  : "bg-[#0d0e14] border-white/10"
-                              }`}
-                            >
-                              <div>
-                                {card.tag && (
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-white">
-                                      {card.tag[locale as 'ro' | 'en'] || card.tag.ro}
-                                    </span>
-                                  </div>
-                                )}
-                                <h4 className="text-xs sm:text-sm font-black uppercase text-white tracking-wide mb-0.5">
-                                  {card.title[locale as 'ro' | 'en'] || card.title.ro}
-                                </h4>
-                                {card.subtitle && (
-                                  <p className="text-[10px] sm:text-[11px] font-bold text-[#e32f8c] mb-1.5">
-                                    {card.subtitle[locale as 'ro' | 'en'] || card.subtitle.ro}
-                                  </p>
-                                )}
-                                <p className="text-[11px] sm:text-xs text-zinc-300 leading-relaxed font-normal">
-                                  {card.desc[locale as 'ro' | 'en'] || card.desc.ro}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Structured Feature/Step Grid (for Exercises & Fabric & Preorder) */}
-                      {faq.points && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
-                          {faq.points.map((pt, pIdx) => (
-                            <div 
-                              key={pIdx}
-                              className="p-3 rounded-lg bg-[#0d0e14] border border-white/5 flex flex-col gap-1"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] sm:text-xs font-black uppercase text-white tracking-tight flex items-center gap-1.5 min-w-0">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-[#e32f8c] shrink-0" />
-                                  <span className="truncate">{pt.title[locale as 'ro' | 'en'] || pt.title.ro}</span>
-                                </span>
-                                {pt.badge && (
-                                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-white/5 text-zinc-400 shrink-0">
-                                    {pt.badge[locale as 'ro' | 'en'] || pt.badge.ro}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-zinc-400 font-medium leading-relaxed pl-5">
-                                {pt.desc[locale as 'ro' | 'en'] || pt.desc.ro}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        {/* Unified Shopify-Grade Hairline Accordion Stack */}
+        <div className="rounded-2xl border border-white/10 bg-[#101119] divide-y divide-white/[0.08] overflow-hidden shadow-2xl shadow-black/40">
+          {filteredFaqs.map((faq) => (
+            <FaqAccordionItem
+              key={faq.id}
+              faq={faq}
+              isRo={isRo}
+              isOpen={openIds.has(faq.id)}
+              onToggle={handleToggle}
+            />
+          ))}
         </div>
 
-        {/* Bottom Help / Contact Box (Solid background for maximum speed) */}
-        <div className="mt-10 sm:mt-14 max-w-3xl mx-auto rounded-xl bg-[#12131b] border border-white/10 p-5 sm:p-6 text-center flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-left">
-            <h4 className="text-sm sm:text-base font-black uppercase tracking-tight text-white mb-0.5">
-              {isRo ? "Ai o întrebare specifică?" : "Have a specific question?"}
+        {/* High-Converting Closer Bar */}
+        <div className="mt-8 sm:mt-10 rounded-2xl bg-[#101119] border border-white/10 p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h4 className="text-sm sm:text-base font-black uppercase tracking-tight text-white">
+              {isRo
+                ? "Gata să îți duci împinsul la următorul nivel?"
+                : "Ready to lock in your next PR?"}
             </h4>
-            <p className="text-xs text-zinc-400 font-medium">
-              {isRo 
-                ? "Scrie-ne pe WhatsApp sau Email. Îți răspundem prompt." 
-                : "Reach out via WhatsApp or Email anytime."}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
+              <span className="inline-flex items-center gap-1.5">
+                <Truck className="w-3.5 h-3.5 text-[#e32f8c]" />
+                {isRo ? "Livrare 1–2 zile în RO" : "Express tracked shipping"}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#e32f8c]" />
+                {isRo ? "Retur & schimb 14 zile" : "14-day exchange & return"}
+              </span>
+            </div>
           </div>
 
-          <Link
-            href="/contact"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 py-2.5 px-5 rounded-lg bg-white text-black hover:bg-[#e32f8c] hover:text-white font-black uppercase text-xs tracking-wider transition-colors duration-150 shrink-0"
-          >
-            <span>{isRo ? "CONTACTEAZĂ-NE" : "CONTACT SUPPORT"}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+            <Link
+              href="/shop"
+              className="inline-flex items-center justify-center gap-2 py-2.5 px-5 rounded-xl bg-[#e32f8c] hover:bg-white text-white hover:text-black font-black uppercase text-xs tracking-wider transition-colors duration-150"
+            >
+              <span>{isRo ? "VEZI ECHIPAMENTUL" : "SHOP ALL GEAR"}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <Link
+              href="/contact"
+              className="inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.12] border border-white/15 text-white font-bold uppercase text-xs tracking-wider transition-colors duration-150"
+            >
+              <span>{isRo ? "CONTACTEAZĂ-NE" : "ASK SUPPORT"}</span>
+            </Link>
+          </div>
         </div>
-
       </div>
     </section>
   );

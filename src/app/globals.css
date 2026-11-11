@@ -456,40 +456,34 @@
   overflow-x: hidden;
 }
 
-/* Atmospheric ambient radial aurora layers positioned along the page height */
+/* Atmospheric ambient radial aurora layers positioned cleanly without triggering full-page gradient repaints on accordion resize */
 .trenzone-ambient-canvas {
   position: absolute;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
   z-index: 0;
-  transform: translateZ(0);
-  will-change: transform;
-  background: 
-    /* Top Hero Transition Glow */
-    radial-gradient(circle 900px at 50% 6%, rgba(227, 47, 140, 0.08), transparent 70%),
-    /* Model Guide / Load Selector Aurora */
-    radial-gradient(circle 800px at 15% 24%, rgba(227, 47, 140, 0.07), transparent 70%),
-    /* Shop Products Spotlight */
-    radial-gradient(circle 1000px at 85% 44%, rgba(227, 47, 140, 0.09), transparent 75%),
-    /* Comparison Table Deep Support Atmosphere */
-    radial-gradient(circle 900px at 50% 62%, rgba(11, 59, 79, 0.14), transparent 70%),
-    /* Reviews & Community Glow */
-    radial-gradient(circle 900px at 20% 78%, rgba(227, 47, 140, 0.07), transparent 70%),
-    /* FAQ & Ambassador Atmospheric Base */
-    radial-gradient(circle 850px at 75% 92%, rgba(227, 47, 140, 0.08), transparent 75%);
+  contain: layout style paint;
+  background-color: #030305;
+  background-image: 
+    radial-gradient(900px 900px at 50% 420px, rgba(227, 47, 140, 0.08), transparent 70%),
+    radial-gradient(800px 800px at 15% 1550px, rgba(227, 47, 140, 0.07), transparent 70%),
+    radial-gradient(1000px 1000px at 85% 2900px, rgba(227, 47, 140, 0.09), transparent 75%),
+    radial-gradient(900px 900px at 50% 4200px, rgba(11, 59, 79, 0.14), transparent 70%),
+    radial-gradient(900px 900px at 20% 5400px, rgba(227, 47, 140, 0.07), transparent 70%),
+    radial-gradient(850px 850px at 75% 6600px, rgba(227, 47, 140, 0.08), transparent 75%);
+  background-repeat: no-repeat;
 }
 
-/* Precision micro-grid texture for elite strength gear aesthetic */
+/* Precision micro-grid texture with fixed tile size & zero dynamic alpha mask-image repaint */
 .trenzone-ambient-texture {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 1;
+  contain: layout style paint;
   background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   background-size: 32px 32px;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%);
   opacity: 0.65;
 }
 

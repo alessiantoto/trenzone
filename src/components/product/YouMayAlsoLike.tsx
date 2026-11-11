@@ -12,12 +12,12 @@ interface YouMayAlsoLikeProps {
 
 export function YouMayAlsoLike({ products, locale }: YouMayAlsoLikeProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mobileScrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [activeMobileIdx, setActiveMobileIdx] = useState(0);
 
   useEffect(() => {
-    setIsMobile(window.innerWidth < 768);
     checkScroll();
   }, []);
 
@@ -26,6 +26,15 @@ export function YouMayAlsoLike({ products, locale }: YouMayAlsoLikeProps) {
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
     setCanScrollLeft(scrollLeft > 10);
     setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+  };
+
+  const handleMobileScroll = () => {
+    const el = mobileScrollRef.current;
+    if (!el || products.length <= 1) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 0) return;
+    const ratio = el.scrollLeft / maxScroll;
+    setActiveMobileIdx(Math.min(products.length - 1, Math.round(ratio * (products.length - 1))));
   };
 
   const scroll = (dir: 'left' | 'right') => {
@@ -86,8 +95,8 @@ export function YouMayAlsoLike({ products, locale }: YouMayAlsoLikeProps) {
             <div
               ref={scrollRef}
               onScroll={checkScroll}
-              className="flex overflow-x-auto gap-6 pb-4"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollSnapType: 'x mandatory' }}
+              className="flex overflow-x-auto overflow-y-hidden overscroll-y-none scrollbar-hide gap-6 pt-2 pb-4"
+              style={{ scrollSnapType: 'x mandatory' }}
             >
               {products.map((product, idx) => (
                 <div key={product.id} className="flex-none w-[240px] lg:w-[260px]" style={{ scrollSnapAlign: 'start' }}>
@@ -102,41 +111,50 @@ export function YouMayAlsoLike({ products, locale }: YouMayAlsoLikeProps) {
       {/* Mobile: Always swipeable horizontal scroll, centered when few products */}
       <div className="block md:hidden">
         <div
-          ref={scrollRef}
-          onScroll={checkScroll}
-          className={`flex overflow-x-auto gap-4 pb-4 ${products.length <= 2 ? 'justify-center' : ''}`}
+          ref={mobileScrollRef}
+          onScroll={handleMobileScroll}
+          className={`flex overflow-x-auto overflow-y-hidden overscroll-y-none scrollbar-hide gap-4 pt-2 pb-6 px-4 scroll-pl-4 ${products.length <= 2 ? 'justify-center' : ''}`}
           style={{
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
             scrollSnapType: 'x mandatory',
-            paddingLeft: '1rem',
-            paddingRight: '1rem',
+            touchAction: 'pan-x pan-y',
           }}
         >
           {products.map((product, idx) => (
             <div
               key={product.id}
-              className="flex-none w-[200px]"
-              style={{ scrollSnapAlign: 'center' }}
+              className="flex-none w-[190px] sm:w-[205px]"
+              style={{ scrollSnapAlign: products.length <= 2 ? 'center' : 'start' }}
             >
               <ProductCard product={product} priority={idx === 0} dark={true} />
             </div>
           ))}
         </div>
 
-        {/* Swipe hint dots */}
+        {/* Swipe indicator dots */}
         {products.length > 2 && (
-          <div className="flex justify-center gap-1.5 mt-4">
+          <div className="flex justify-center gap-1.5 mt-2">
             {products.map((_, i) => (
-              <div key={i} className="w-1.5 h-1.5 rounded-full bg-black/20" />
+              <button
+                key={i}
+                type="button"
+                aria-label={`Slide ${i + 1}`}
+                onClick={() => {
+                  const el = mobileScrollRef.current;
+                  if (!el) return;
+                  const maxScroll = el.scrollWidth - el.clientWidth;
+                  el.scrollTo({
+                    left: (maxScroll * i) / (products.length - 1),
+                    behavior: 'smooth',
+                  });
+                }}
+                className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                  i === activeMobileIdx ? 'w-5 bg-[#e32f8c]' : 'w-1.5 bg-white/25 hover:bg-white/45'
+                }`}
+              />
             ))}
           </div>
         )}
       </div>
-
-      <style dangerouslySetInnerHTML={{__html: `
-        div::-webkit-scrollbar { display: none; }
-      `}} />
     </div>
   );
 }

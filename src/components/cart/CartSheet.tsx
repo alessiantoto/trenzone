@@ -718,7 +718,7 @@ export function CartSheet() {
 
                 <div
                   ref={carouselRef}
-                  className="flex gap-2.5 overflow-x-auto scrollbar-hide px-4 sm:px-5 scroll-pl-4 sm:scroll-pl-5 pb-1 snap-x snap-mandatory scroll-smooth"
+                  className="flex gap-2.5 overflow-x-auto overflow-y-hidden overscroll-y-none scrollbar-hide px-4 sm:px-5 scroll-pl-4 sm:scroll-pl-5 pb-1 snap-x snap-mandatory scroll-smooth"
                 >
                   {availableUpsells.map((p) => {
                     const price = getProductPrice(p.price, currency);

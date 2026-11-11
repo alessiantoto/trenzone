@@ -112,7 +112,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
         const isWideCard = isWideProductImage(displayCardImage);
         return (
       <div className={cn(
-        "relative aspect-square sm:aspect-[4/4.5] w-full mb-3 md:mb-4 group overflow-hidden rounded-2xl md:rounded-3xl shadow-sm hover:shadow-md transition-all duration-500",
+        "relative aspect-[4/4.5] w-full mb-3 md:mb-4 group overflow-hidden rounded-2xl md:rounded-3xl shadow-sm hover:shadow-md transition-all duration-500",
         isWideCard ? "bg-black border border-white/10 hover:border-white/25" : (dark ? "bg-zinc-900/90 border border-white/10 hover:border-white/20" : "bg-[#f8f8f8]")
       )}>
         {/* Style 2026 Badges — Elite 'Emerald Power' Conversion Logic (Top Left) */}
@@ -201,35 +201,27 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
           </h3>
         </Link>
         
-        {/* Variant Dots or Design Mini-Thumbnails */}
-        {product.variants?.options && (
-          <div className="flex items-center justify-center gap-1.5 mt-1.5 mb-1 flex-wrap">
+        {/* Variant Dots or Model Count Pill */}
+        {product.variants?.options && product.variants.type !== 'size' && (
+          <div className="flex items-center justify-center gap-1.5 mt-1.5 mb-1 min-h-[20px]">
             {product.variants.type === 'design' ? (
-              product.variants.options.slice(0, 5).map((opt: any, idx: number) => {
-                const optName = (typeof opt.name === 'object' ? (opt.name as any)[locale] || (opt.name as any)['ro'] : opt.name) as string;
-                const isSelectedThumb = (currentImage || product.image) === opt.image;
-                return opt.image ? (
-                  <button
-                    key={idx}
-                    type="button"
-                    title={optName}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setCurrentImage(opt.image);
-                    }}
-                    onMouseEnter={() => setCurrentImage(opt.image)}
-                    className={cn(
-                      "relative w-7 h-5 rounded-md bg-black border overflow-hidden transition-all cursor-pointer",
-                      isSelectedThumb
-                        ? "border-[#e32f8c] ring-1 ring-[#e32f8c]/50 scale-110"
-                        : "border-white/20 opacity-75 hover:opacity-100 hover:border-white/50"
-                    )}
-                  >
-                    <Image src={opt.image} alt={optName} fill sizes="28px" className="object-contain p-0.5" />
-                  </button>
-                ) : null;
-              })
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const matchedIdx = product.variants!.options.findIndex((o) => o.image && o.image === (currentImage || product.image));
+                  setSelectedModalOptIdx(matchedIdx >= 0 ? matchedIdx : 0);
+                  setSelectingVariant(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.07] hover:bg-white/[0.14] border border-white/15 hover:border-[#e32f8c]/50 text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:text-white transition-all cursor-pointer"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#e32f8c]" />
+                <span>
+                  {product.variants.options.length}{" "}
+                  {locale === 'ro' ? 'modele' : 'designs'}
+                </span>
+              </button>
             ) : (
               product.variants.options.slice(0, 5).map((opt: any, idx: number) => {
                 const optName = (typeof opt.name === 'object' ? (opt.name as any)[locale] || (opt.name as any)['ro'] : opt.name) as string;
@@ -377,8 +369,8 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {isDesign && opt.image ? (
-                              <div className="relative w-10 h-7 rounded-md bg-black border border-black/15 overflow-hidden shrink-0">
-                                <Image src={opt.image} alt={localizedName} fill sizes="40px" className="object-contain p-0.5" />
+                              <div className="relative w-12 h-8 rounded-md bg-black border border-black/15 overflow-hidden shrink-0">
+                                <Image src={opt.image} alt={localizedName} fill sizes="48px" className="object-contain p-0.5" />
                               </div>
                             ) : !isSize && (
                               <div

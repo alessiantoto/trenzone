@@ -213,7 +213,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
             onTouchEnd={handleTouchEnd}
             onMouseEnter={() => setIsPaused(true)}
             onMouseLeave={() => setIsPaused(false)}
-            className="md:hidden w-full flex overflow-x-auto snap-x snap-mandatory scrollbar-hide overscroll-x-contain py-1 cursor-grab active:cursor-grabbing select-none touch-pan-y"
+            className="md:hidden w-full flex overflow-x-auto overflow-y-hidden overscroll-y-none snap-x snap-mandatory scrollbar-hide overscroll-x-contain py-1 cursor-grab active:cursor-grabbing select-none touch-pan-y"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {slides.map((slide, sIdx) => (

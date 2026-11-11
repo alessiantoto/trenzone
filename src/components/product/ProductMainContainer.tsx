@@ -273,8 +273,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                         key={idx}
                         onClick={() => handleVariantSelect(optName as string, opt.image, opt.imageIndex)}
                         className={cn(
-                          "relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer",
-                          isWide ? "bg-black" : "bg-zinc-950/80",
+                          "relative rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer",
+                          isWide ? "w-20 h-14 sm:w-24 sm:h-16 bg-black" : "w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-zinc-950/80",
                           isSelected ? "border-[#e32f8c] ring-2 ring-[#e32f8c]/40 scale-105 z-10 shadow-[0_0_20px_rgba(227,47,140,0.35)]" : "border-white/10 opacity-70 hover:opacity-100 hover:scale-102 hover:border-white/30",
                           opt.stock_status === 'sold_out' ? "opacity-30 grayscale cursor-not-allowed" : ""
                         )}
@@ -416,12 +416,15 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {isDesignMode && selectedThumb ? (
-                              <div className="relative w-8 h-8 rounded-lg bg-black border border-white/15 overflow-hidden shrink-0">
+                              <div className={cn(
+                                "relative rounded-lg bg-black border border-white/15 overflow-hidden shrink-0",
+                                isWideProductImage(selectedThumb) ? "w-12 h-8" : "w-8 h-8"
+                              )}>
                                 <Image
                                   src={selectedThumb}
                                   alt={selectedVariant || ""}
                                   fill
-                                  sizes="32px"
+                                  sizes="48px"
                                   className={isWideProductImage(selectedThumb) ? "object-contain p-0.5" : "object-cover"}
                                 />
                               </div>
@@ -479,12 +482,15 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                                     >
                                       <div className="flex items-center gap-3">
                                         {showOptThumb && optThumb ? (
-                                          <div className="relative w-9 h-9 rounded-lg bg-black border border-white/15 overflow-hidden shrink-0">
+                                          <div className={cn(
+                                            "relative rounded-lg bg-black border border-white/15 overflow-hidden shrink-0",
+                                            isWideProductImage(optThumb) ? "w-12 h-8" : "w-9 h-9"
+                                          )}>
                                             <Image
                                               src={optThumb}
                                               alt={localizedName}
                                               fill
-                                              sizes="36px"
+                                              sizes="48px"
                                               className={isWideProductImage(optThumb) ? "object-contain p-0.5" : "object-cover"}
                                             />
                                           </div>

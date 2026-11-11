@@ -60,8 +60,8 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
 
     return (
       <div className="space-y-1.5">
-        <div className="flex items-center gap-1.5 p-1 bg-zinc-50 rounded-xl border border-zinc-200/90 focus-within:border-[#e32f8c] focus-within:bg-white transition-all">
-          <Ticket className="w-3.5 h-3.5 text-zinc-400 ml-2 shrink-0" />
+        <div className="flex items-center gap-1.5 p-1 bg-white/[0.05] rounded-xl border border-white/15 focus-within:border-[#e32f8c] focus-within:bg-white/[0.08] transition-all">
+          <Ticket className="w-3.5 h-3.5 text-[#e32f8c] ml-2 shrink-0" />
           <input
             type="text"
             value={code}
@@ -71,14 +71,14 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
             }}
             onKeyDown={(e) => e.key === "Enter" && handleApply()}
             placeholder={isEn ? "Promo / affiliate code..." : "Cod promo / partener..."}
-            className="flex-1 min-w-0 bg-transparent border-none h-8 px-1.5 text-[11px] font-black uppercase tracking-wider text-black placeholder:text-zinc-400 placeholder:normal-case placeholder:font-semibold focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent border-none h-8 px-1.5 text-[11px] font-black uppercase tracking-wider text-white placeholder:text-zinc-500 placeholder:normal-case placeholder:font-semibold focus:outline-none"
             disabled={loading}
           />
           <button
             type="button"
             onClick={handleApply}
             disabled={loading || !code.trim()}
-            className="h-8 px-3.5 rounded-lg bg-zinc-950 hover:bg-[#e32f8c] text-white text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer shrink-0 flex items-center justify-center"
+            className="h-8 px-3.5 rounded-lg bg-[#e32f8c] hover:bg-[#ff4ca6] text-white text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-35 cursor-pointer shrink-0 flex items-center justify-center shadow-[0_4px_14px_rgba(227,47,140,0.35)]"
           >
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (isEn ? "Apply" : "Aplică")}
           </button>
@@ -90,7 +90,7 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="text-[10px] font-bold text-red-500 px-1"
+              className="text-[10px] font-bold text-rose-400 px-1"
             >
               {error}
             </motion.p>

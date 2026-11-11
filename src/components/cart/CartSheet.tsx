@@ -35,47 +35,51 @@ type VariantOption = NonNullable<Product["variants"]>["options"][number];
 
 function PaymentTrustMarks() {
   return (
-    <div
-      className="flex items-center justify-center gap-2 mt-2.5 select-none"
-      aria-label="Accepted payment methods"
-    >
-      {/* VISA - Crisp Solid Visa Blue Badge */}
-      <span className="inline-flex items-center justify-center h-[24px] w-[42px] rounded-[4px] bg-[#1434CB] shadow-2xs">
-        <svg viewBox="-2 0 46 16" className="w-7 h-3 fill-white" aria-hidden="true">
-          <path d="M19.5 1.2L16.3 14.8h3.7L23.2 1.2h-3.7zm14.2 8.7l1.9-5.3 1.1 5.3h-3zm4.1 4.9h3.4L38.3 1.2h-3.1c-.7 0-1.3.4-1.6 1l-5.7 12.6h3.9l.8-2.1h4.7l.5 2.1zm-9.6-4.4c0-3.5-4.9-3.7-4.8-5.3 0-.5.5-1 1.5-1.1.5-.1 2-.1 3.6.6l.6-3c-.9-.3-2-.6-3.4-.6-3.6 0-6.1 1.9-6.1 4.6 0 2 1.8 3.1 3.2 3.8 1.4.7 1.9 1.1 1.9 1.7 0 .9-1.1 1.3-2.2 1.4-1.8 0-2.9-.5-3.7-.9l-.7 3.1c.8.4 2.4.7 4 .7 3.8.1 6.1-1.8 6.1-4.9zM14.3 1.2L8.4 14.8H4.5L1.6 3.7c-.2-.7-.3-1-.9-1.3C0 2-.9 1.7-1.6 1.5l.1-.3h6.1c.8 0 1.5.5 1.7 1.4l1.5 7.9 3.7-9.3h2.8z" />
+    <div className="flex items-center justify-center gap-1.5 mt-2.5 select-none" aria-label="Accepted payment methods">
+      {/* VISA */}
+      <span className="inline-flex items-center justify-center h-[22px] w-[36px] rounded-[4px] border border-zinc-200 bg-white">
+        <svg viewBox="0 0 38 12" className="w-6 h-2.5" aria-hidden="true">
+          <text
+            x="19"
+            y="10"
+            textAnchor="middle"
+            fill="#1434CB"
+            fontFamily="system-ui, -apple-system, sans-serif"
+            fontSize="11"
+            fontWeight="900"
+            fontStyle="italic"
+            letterSpacing="-0.5"
+          >
+            VISA
+          </text>
         </svg>
       </span>
 
       {/* Mastercard */}
-      <span className="inline-flex items-center justify-center h-[24px] w-[42px] rounded-[4px] border border-zinc-200 bg-white shadow-2xs">
-        <svg viewBox="0 0 32 20" className="w-6 h-4" aria-hidden="true">
-          <circle cx="11.5" cy="10" r="6.5" fill="#EB001B" />
-          <circle cx="20.5" cy="10" r="6.5" fill="#F79E1B" fillOpacity="0.9" />
+      <span className="inline-flex items-center justify-center h-[22px] w-[36px] rounded-[4px] border border-zinc-200 bg-white">
+        <svg viewBox="0 0 28 18" className="w-6 h-3.5" aria-hidden="true">
+          <circle cx="10.5" cy="9" r="6.5" fill="#EB001B" />
+          <circle cx="17.5" cy="9" r="6.5" fill="#F79E1B" fillOpacity="0.9" />
         </svg>
       </span>
 
-      {/* Official Apple Pay Logo from public/images/pay */}
-      <span className="inline-flex items-center justify-center h-[24px] px-2 rounded-[4px] border border-zinc-200 bg-white shadow-2xs">
-        <Image
-          src="/images/pay/Apple_Pay-Logo.wine.svg"
-          alt="Apple Pay"
-          width={38}
-          height={20}
-          unoptimized
-          className="h-[18px] w-auto object-contain"
-        />
+      {/* Apple Pay */}
+      <span className="inline-flex items-center justify-center h-[22px] px-2 rounded-[4px] bg-[#111111] text-white text-[9px] font-bold tracking-tight leading-none gap-0.5">
+        <svg viewBox="0 0 14 17" className="w-2.5 h-2.5 fill-current -mt-0.5" aria-hidden="true">
+          <path d="M11.6 9c0-1.9 1.5-2.8 1.6-2.9-.9-1.3-2.2-1.5-2.7-1.5-1.1-.1-2.2.7-2.8.7s-1.5-.7-2.4-.6C4.1 4.7 3 5.4 2.4 6.5c-1.2 2.1-.3 5.3.9 7 .6.8 1.3 1.8 2.2 1.7.9 0 1.2-.6 2.3-.6s1.4.6 2.3.6c1 0 1.6-.8 2.2-1.7.7-1 1-2 1-2-.1 0-1.7-.7-1.7-2.5zM9.8 3.3c.5-.6.8-1.4.7-2.3-.7 0-1.6.5-2.1 1.1-.4.5-.8 1.4-.7 2.2.8.1 1.6-.4 2.1-1z" />
+        </svg>
+        <span>Pay</span>
       </span>
 
-      {/* Official Google Pay Logo from public/images/pay */}
-      <span className="inline-flex items-center justify-center h-[24px] px-2 rounded-[4px] border border-zinc-200 bg-white shadow-2xs">
-        <Image
-          src="/images/pay/Google_Pay-Logo.wine.svg"
-          alt="Google Pay"
-          width={40}
-          height={20}
-          unoptimized
-          className="h-[18px] w-auto object-contain"
-        />
+      {/* Google Pay */}
+      <span className="inline-flex items-center justify-center h-[22px] px-2 rounded-[4px] border border-zinc-200 bg-white text-[#111111] text-[9px] font-bold tracking-tight leading-none gap-0.5">
+        <svg viewBox="0 0 16 16" className="w-2.5 h-2.5" aria-hidden="true">
+          <path fill="#4285F4" d="M15.6 8.2c0-.6 0-1.1-.1-1.6H8v3h4.3c-.2 1-.7 1.8-1.6 2.4v2h2.6c1.5-1.4 2.3-3.4 2.3-5.8z" />
+          <path fill="#34A853" d="M8 16c2.1 0 3.9-.7 5.2-1.9l-2.6-2c-.7.5-1.6.8-2.6.8-2 0-3.7-1.4-4.3-3.2H1v2.1C2.3 14.3 5 16 8 16z" />
+          <path fill="#FBBC05" d="M3.7 9.7c-.2-.5-.2-1.1-.2-1.7s.1-1.2.2-1.7V4.2H1C.4 5.3 0 6.6 0 8s.4 2.7 1 3.8l2.7-2.1z" />
+          <path fill="#EA4335" d="M8 3.1c1.2 0 2.2.4 3 1.2l2.3-2.3C11.9.7 10.1 0 8 0 5 0 2.3 1.7 1 4.2l2.7 2.1C4.3 4.5 6 3.1 8 3.1z" />
+        </svg>
+        <span>Pay</span>
       </span>
     </div>
   );
@@ -295,17 +299,17 @@ export function CartSheet() {
 
             {/* 3-Step Connected Milestone Track */}
             <div className="grid grid-cols-3 relative">
-              {/* Background Line & Fill connecting Node 1 → Node 2 → Node 3 */}
-              <div className="absolute top-[13px] left-[16.66%] right-[16.66%] h-[3px] bg-zinc-200 rounded-full overflow-hidden">
+              {/* Background Line & Unified Fill connecting Node 1 → Node 2 → Node 3 */}
+              <div className="absolute top-[16.5px] left-[16.66%] right-[16.66%] h-[3px] bg-zinc-200 rounded-full overflow-hidden">
                 <div
                   className={cn(
                     "h-full rounded-full transition-all duration-500 ease-out",
                     bundlePercent >= 10
-                      ? "bg-emerald-500"
+                      ? "bg-emerald-600"
                       : bundlePercent >= 5
                         ? "bg-[#e32f8c]"
                         : isFreeShippingUnlocked
-                          ? "bg-emerald-500"
+                          ? "bg-emerald-600"
                           : "bg-[#111111]"
                   )}
                   style={{ width: `${stepTrackPercent}%` }}
@@ -316,44 +320,62 @@ export function CartSheet() {
               <div className="flex flex-col items-center text-center relative z-10">
                 <div
                   className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-300",
+                    "w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-300",
                     isFreeShippingUnlocked
-                      ? "bg-emerald-500 text-white"
+                      ? bundlePercent >= 10
+                        ? "bg-emerald-600 text-white"
+                        : bundlePercent >= 5
+                          ? "bg-[#e32f8c] text-white"
+                          : "bg-emerald-600 text-white"
                       : "bg-white border border-zinc-300 text-zinc-400"
                   )}
                 >
                   {isFreeShippingUnlocked ? (
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <Check className="w-4 h-4 stroke-[2.75]" />
                   ) : (
-                    <Truck className="w-3.5 h-3.5" />
+                    <Truck className="w-4 h-4" />
                   )}
                 </div>
                 <span
                   className={cn(
-                    "mt-1.5 text-[10px] leading-tight",
-                    isFreeShippingUnlocked ? "font-bold text-emerald-700" : "font-medium text-zinc-600"
+                    "mt-1.5 text-[10.5px] leading-tight",
+                    isFreeShippingUnlocked
+                      ? bundlePercent >= 5 && bundlePercent < 10
+                        ? "font-bold text-[#111111]"
+                        : "font-bold text-emerald-700"
+                      : "font-medium text-zinc-600"
                   )}
                 >
                   {isEn ? "Free shipping" : "Livrare gratuită"}
                 </span>
               </div>
 
-              {/* Step 2: 2 Items (-5%) */}
+              {/* Step 2: 2 Items (-5% -> Check once -10% is reached) */}
               <div className="flex flex-col items-center text-center relative z-10">
                 <div
                   className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center text-[9.5px] font-black transition-colors duration-300",
-                    bundlePercent >= 5
-                      ? "bg-[#e32f8c] text-white"
-                      : "bg-white border border-zinc-300 text-zinc-500"
+                    "w-9 h-9 rounded-full flex items-center justify-center text-[10.5px] font-black tracking-tight tabular-nums transition-colors duration-300",
+                    bundlePercent >= 10
+                      ? "bg-emerald-600 text-white"
+                      : bundlePercent >= 5
+                        ? "bg-[#e32f8c] text-white"
+                        : "bg-white border border-zinc-200 text-zinc-400"
                   )}
                 >
-                  -5%
+                  {bundlePercent >= 10 ? (
+                    <Check className="w-4 h-4 stroke-[2.75]" />
+                  ) : (
+                    "-5%"
+                  )}
                 </div>
                 <span
                   className={cn(
-                    "mt-1.5 text-[10px] leading-tight",
-                    bundlePercent >= 5 ? "font-bold text-[#111111]" : "font-medium text-zinc-500"
+                    "mt-1.5 text-[10.5px] leading-tight",
+                    bundlePercent >= 10
+                      ? "font-bold text-emerald-700"
+                      : bundlePercent >= 5
+                        ? "font-bold text-[#111111]"
+                        : "font-medium text-zinc-500"
                   )}
                 >
                   {isEn ? "2 items" : "2 produse"}
@@ -364,18 +386,18 @@ export function CartSheet() {
               <div className="flex flex-col items-center text-center relative z-10">
                 <div
                   className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center text-[9.5px] font-black transition-colors duration-300",
+                    "w-9 h-9 rounded-full flex items-center justify-center text-[10.5px] font-black tracking-tight tabular-nums transition-colors duration-300",
                     bundlePercent >= 10
-                      ? "bg-emerald-500 text-white"
-                      : "bg-white border border-zinc-300 text-zinc-500"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-white border border-zinc-200 text-zinc-400"
                   )}
                 >
                   -10%
                 </div>
                 <span
                   className={cn(
-                    "mt-1.5 text-[10px] leading-tight",
-                    bundlePercent >= 10 ? "font-bold text-emerald-700" : "font-medium text-zinc-500"
+                    "mt-1.5 text-[10.5px] leading-tight",
+                    bundlePercent >= 10 ? "font-bold text-emerald-700" : "font-medium text-zinc-400"
                   )}
                 >
                   {isEn ? "3+ items" : "3+ produse"}
@@ -387,7 +409,7 @@ export function CartSheet() {
 
         {/* ═══ SCROLLABLE BODY ═══ */}
         <div className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-hidden bg-[#f6f6f8]">
-          <ScrollArea className="flex-1 min-h-0 overflow-x-hidden overscroll-behavior-y-contain [&_[data-slot=scroll-area-scrollbar]]:w-1 [&_[data-slot=scroll-area-scrollbar]]:bg-transparent [&_[data-slot=scroll-area-thumb]]:bg-zinc-300 hover:[&_[data-slot=scroll-area-thumb]]:bg-zinc-400">
+          <ScrollArea className="cart-purple-scrollarea flex-1 min-h-0 overflow-x-hidden overscroll-y-contain">
             {/* INLINE PREORDER SEPARATION PROMPT */}
             {preorderConflict && (
               <div className="mx-4 sm:mx-5 mt-3 p-4 rounded-xl bg-white border border-[#e32f8c]/40 shadow-xs">
@@ -683,7 +705,7 @@ export function CartSheet() {
 
                 <div
                   ref={carouselRef}
-                  className="flex gap-2.5 overflow-x-auto no-scrollbar px-4 sm:px-5 pb-1 snap-x scroll-smooth"
+                  className="flex gap-2.5 overflow-x-auto scrollbar-hide px-4 sm:px-5 pb-1 snap-x scroll-smooth"
                 >
                   {availableUpsells.map((p) => {
                     const price = getProductPrice(p.price, currency);
@@ -1013,7 +1035,7 @@ export function CartSheet() {
                           </div>
                         </div>
 
-                        <div className="w-full bg-white border border-zinc-200 rounded-xl overflow-hidden flex flex-col text-left max-h-[min(460px,62vh)] overflow-y-auto custom-scrollbar divide-y divide-zinc-200">
+                        <div className="w-full bg-white border border-zinc-200 rounded-xl overflow-hidden flex flex-col text-left max-h-[min(460px,62vh)] overflow-y-auto cart-purple-scroll divide-y divide-zinc-200">
                           {options.map((opt: VariantOption, idx: number) => {
                             const localizedName = getLocalized(opt.name, locale);
                             const isSoldOut = opt.stock_status === "sold_out";

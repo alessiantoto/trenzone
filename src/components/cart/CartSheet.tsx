@@ -29,6 +29,7 @@ import { getBundleSummary } from "@/lib/cart-calculations";
 import { CouponInput } from "@/components/cart/CouponInput";
 import { Link, useRouter } from "@/i18n/routing";
 import { cn, getLocalized, getVariantColorClass } from "@/lib/utils";
+import { isWideProductImage } from "@/lib/product-images";
 import { Product } from "@/lib/api";
 
 type VariantOption = NonNullable<Product["variants"]>["options"][number];
@@ -104,7 +105,16 @@ export function CartSheet() {
   const { subtotal, discount, bundlePercent, couponDiscount, total } = getTotals(currency);
 
   const [selectingProduct, setSelectingProduct] = useState<Product | null>(null);
+  const [modalModelIdx, setModalModelIdx] = useState(0);
+  const [modalSize, setModalSize] = useState("L");
   const [allProducts, setAllProducts] = useState<Product[]>([]);
+
+  const openSelectingModal = (product: Product) => {
+    setModalModelIdx(0);
+    const sizeOpts = product.bundleVariants?.size?.options || [];
+    setModalSize(sizeOpts.includes("L") ? "L" : (sizeOpts[0] || ""));
+    setSelectingProduct(product);
+  };
 
   const locale = useLocale();
   const isEn = locale === "en";
@@ -534,14 +544,17 @@ export function CartSheet() {
                         <Link
                           href={`/product/${item.slug}`}
                           onClick={() => setCartOpen(false)}
-                          className="w-[72px] h-[88px] sm:w-[76px] sm:h-[94px] bg-zinc-950 rounded-lg overflow-hidden shrink-0 relative"
+                          className={cn(
+                            "w-[72px] h-[88px] sm:w-[76px] sm:h-[94px] rounded-lg overflow-hidden shrink-0 relative",
+                            isWideProductImage(displayImage) ? "bg-black" : "bg-zinc-950"
+                          )}
                         >
                           <Image
                             src={displayImage}
                             alt={getLocalized(item.name, locale)}
                             fill
                             priority
-                            className="object-cover object-center"
+                            className={isWideProductImage(displayImage) ? "object-contain p-1" : "object-cover object-center"}
                             sizes="80px"
                           />
                         </Link>
@@ -718,14 +731,20 @@ export function CartSheet() {
                         <Link
                           href={`/product/${p.slug}`}
                           onClick={() => setCartOpen(false)}
-                          className="relative w-full aspect-[4/5] bg-zinc-950 rounded-lg overflow-hidden block"
+                          className={cn(
+                            "relative w-full aspect-[4/5] rounded-lg overflow-hidden block",
+                            isWideProductImage(p.image) ? "bg-black" : "bg-zinc-950"
+                          )}
                         >
                           <Image
                             src={p.image}
                             alt={getLocalized(p.name, locale)}
                             fill
                             sizes="160px"
-                            className="object-cover object-center group-hover:scale-[1.03] transition-transform duration-500"
+                            className={cn(
+                              "group-hover:scale-[1.03] transition-transform duration-500",
+                              isWideProductImage(p.image) ? "object-contain p-1.5" : "object-cover object-center"
+                            )}
                           />
                         </Link>
 
@@ -749,7 +768,7 @@ export function CartSheet() {
                               e.preventDefault();
                               e.stopPropagation();
                               if (p.variants?.options && p.variants.options.length > 0) {
-                                setSelectingProduct(p);
+                                openSelectingModal(p);
                               } else if (p.bundleVariants) {
                                 setCartOpen(false);
                                 router.push(`/product/${p.slug}`);
@@ -970,6 +989,9 @@ export function CartSheet() {
                         (a.stock_status === "sold_out" ? 1 : 0) -
                         (b.stock_status === "sold_out" ? 1 : 0)
                     );
+                    const modalSizeOptions = selectingProduct.bundleVariants?.size?.options || [];
+                    const hasModalSizes = modalSizeOptions.length > 0;
+                    const isDesign = selectingProduct.variants?.type === "design";
                     const isSize = options.some((opt: VariantOption) => {
                       const n = (
                         typeof opt.name === "object"
@@ -983,18 +1005,24 @@ export function CartSheet() {
                       );
                     });
                     const prodName = getLocalized(selectingProduct.name, locale);
+                    const activeOpt = options[modalModelIdx] || options[0];
+                    const modalPreviewImg = activeOpt?.image || selectingProduct.image;
+                    const isWidePreview = isWideProductImage(modalPreviewImg);
 
                     return (
                       <>
                         <div className="flex gap-3.5 mb-4 items-center">
-                          <div className="w-[54px] h-[68px] bg-zinc-950 relative overflow-hidden shrink-0 rounded-lg">
+                          <div className={cn(
+                            "relative overflow-hidden shrink-0 rounded-lg",
+                            isWidePreview ? "w-[82px] h-[58px] bg-black" : "w-[54px] h-[68px] bg-zinc-950"
+                          )}>
                             <Image
-                              src={selectingProduct.image}
+                              src={modalPreviewImg}
                               alt={prodName}
                               fill
                               priority
-                              className="object-cover object-center"
-                              sizes="60px"
+                              className={isWidePreview ? "object-contain p-1" : "object-cover object-center"}
+                              sizes="88px"
                             />
                           </div>
                           <div className="flex flex-col justify-center min-w-0 flex-1">
@@ -1002,21 +1030,30 @@ export function CartSheet() {
                               {prodName}
                             </h2>
                             <h3 className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">
-                              {isSize
+                              {hasModalSizes
                                 ? isEn
-                                  ? "Select size"
-                                  : "Alege mărimea"
-                                : isEn
-                                  ? "Select color"
-                                  : "Alege culoarea"}
+                                  ? "Select design & size"
+                                  : "Alege modelul și mărimea"
+                                : isSize
+                                  ? isEn
+                                    ? "Select size"
+                                    : "Alege mărimea"
+                                  : isDesign
+                                    ? isEn
+                                      ? "Select design"
+                                      : "Alege modelul"
+                                    : isEn
+                                      ? "Select color"
+                                      : "Alege culoarea"}
                             </h3>
                           </div>
                         </div>
 
-                        <div className="w-full bg-white border border-zinc-200 rounded-xl overflow-hidden flex flex-col text-left max-h-[min(460px,62vh)] overflow-y-auto cart-purple-scroll divide-y divide-zinc-200">
+                        <div className="w-full bg-white border border-zinc-200 rounded-xl overflow-hidden flex flex-col text-left max-h-[min(320px,48vh)] overflow-y-auto cart-purple-scroll divide-y divide-zinc-200">
                           {options.map((opt: VariantOption, idx: number) => {
                             const localizedName = getLocalized(opt.name, locale);
                             const isSoldOut = opt.stock_status === "sold_out";
+                            const isOptSelected = hasModalSizes && idx === modalModelIdx;
                             const optColorClass = opt.color
                               ? undefined
                               : getVariantColorClass(localizedName);
@@ -1027,7 +1064,10 @@ export function CartSheet() {
                                 type="button"
                                 disabled={isSoldOut}
                                 onClick={() => {
-                                  if (!isSoldOut) {
+                                  if (isSoldOut) return;
+                                  if (hasModalSizes) {
+                                    setModalModelIdx(idx);
+                                  } else {
                                     addItem(selectingProduct, {
                                       name: localizedName,
                                       image: opt.image,
@@ -1045,11 +1085,17 @@ export function CartSheet() {
                                   "w-full flex items-center justify-between py-2.5 px-3.5 transition-colors group",
                                   isSoldOut
                                     ? "opacity-40 cursor-not-allowed bg-zinc-50"
-                                    : "hover:bg-zinc-50 cursor-pointer"
+                                    : isOptSelected
+                                      ? "bg-zinc-100 cursor-pointer"
+                                      : "hover:bg-zinc-50 cursor-pointer"
                                 )}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
-                                  {!isSize && (
+                                  {isDesign && opt.image ? (
+                                    <div className="relative w-10 h-7 rounded-md bg-black border border-zinc-200 overflow-hidden shrink-0">
+                                      <Image src={opt.image} alt={localizedName} fill sizes="40px" className="object-contain p-0.5" />
+                                    </div>
+                                  ) : !isSize && (
                                     <div
                                       className={cn(
                                         "w-4.5 h-4.5 rounded-full shrink-0 border border-black/15",
@@ -1082,17 +1128,74 @@ export function CartSheet() {
                                   </div>
                                 </div>
                                 {!isSoldOut && (
-                                  <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-[#111111] transition-colors shrink-0" />
+                                  isOptSelected ? (
+                                    <Check className="w-4 h-4 text-[#e32f8c] shrink-0 stroke-[3]" />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-[#111111] transition-colors shrink-0" />
+                                  )
                                 )}
                               </button>
                             );
                           })}
                         </div>
 
+                        {hasModalSizes && (
+                          <div className="w-full mt-3.5">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[10.5px] font-black uppercase tracking-wider text-zinc-500">
+                                {isEn ? "Size" : "Mărime"}
+                              </span>
+                              <span className="text-[10px] font-semibold uppercase text-zinc-400">
+                                Oversized Fit
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-5 gap-1.5">
+                              {modalSizeOptions.map((sz) => (
+                                <button
+                                  key={sz}
+                                  type="button"
+                                  onClick={() => setModalSize(sz)}
+                                  className={cn(
+                                    "h-9 rounded-lg text-xs font-black uppercase border transition-all cursor-pointer",
+                                    modalSize === sz
+                                      ? "bg-[#e32f8c] text-white border-[#e32f8c]"
+                                      : "bg-white text-[#111111] border-zinc-200 hover:border-[#111111]"
+                                  )}
+                                >
+                                  {sz}
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              disabled={!activeOpt || activeOpt.stock_status === "sold_out"}
+                              onClick={() => {
+                                if (!activeOpt || activeOpt.stock_status === "sold_out") return;
+                                const modelName = getLocalized(activeOpt.name, locale);
+                                addItem(selectingProduct, {
+                                  name: `${modelName} · ${modalSize}`,
+                                  image: activeOpt.image,
+                                  imageIndex:
+                                    activeOpt.imageIndex !== undefined
+                                      ? activeOpt.imageIndex
+                                      : selectingProduct.images?.findIndex(
+                                          (img: string) => img === activeOpt.image
+                                        ) ?? 0,
+                                });
+                                setSelectingProduct(null);
+                              }}
+                              className="mt-3.5 w-full h-11 rounded-xl bg-[#111111] hover:bg-[#e32f8c] text-white font-black uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>{isEn ? "Add to Cart" : "Adaugă în coș"}</span>
+                            </button>
+                          </div>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => setSelectingProduct(null)}
-                          className="mt-4 py-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400 hover:text-[#111111] transition-colors self-center cursor-pointer"
+                          className="mt-3.5 py-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400 hover:text-[#111111] transition-colors self-center cursor-pointer"
                         >
                           {isEn ? "Cancel" : "Anulează"}
                         </button>

@@ -10,6 +10,7 @@ import { ShieldCheck, Zap, ChevronDown, ShoppingBag, Loader2, RotateCcw, Ticket 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { getLocalized, cn } from "@/lib/utils";
+import { isWideProductImage } from "@/lib/product-images";
 import { getShippingCost } from "@/lib/shipping-config";
 import { getProductPrice } from "@/utils/pricing";
 import { Link } from "@/i18n/routing";
@@ -169,19 +170,25 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
           <div className="px-8 pb-8 pt-2">
               {/* Product List */}
               <div className="space-y-6 mb-8 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide border-t border-zinc-50 pt-6">
-                {items.map((item) => (
+                {items.map((item) => {
+                  const thumbSrc = (item.selectedVariant && item.selectedVariant.image) || (item.selectedVariant && item.selectedVariant.imageIndex !== undefined && item.images && item.images[item.selectedVariant.imageIndex]) || item.image;
+                  const isWideThumb = isWideProductImage(thumbSrc);
+                  return (
                   <Link 
                     key={`${item.id}-${item.selectedVariant ? (typeof (item.selectedVariant.name as any) === 'object' ? (item.selectedVariant.name as any).ro : item.selectedVariant.name) : 'default'}`}
                     href={`/product/${item.slug}`}
                     className="flex gap-4 group hover:opacity-70 transition-opacity"
                   >
-                    <div className="relative w-16 h-16 rounded-2xl overflow-hidden border border-zinc-100 shrink-0 bg-zinc-50 transition-transform duration-500 group-hover:scale-105">
+                    <div className={cn(
+                      "relative w-16 h-16 rounded-2xl overflow-hidden border border-zinc-100 shrink-0 transition-transform duration-500 group-hover:scale-105",
+                      isWideThumb ? "bg-black" : "bg-zinc-50"
+                    )}>
                       <Image
-                        src={(item.selectedVariant && item.selectedVariant.image) || (item.selectedVariant && item.selectedVariant.imageIndex !== undefined && item.images && item.images[item.selectedVariant.imageIndex]) || item.image}
+                        src={thumbSrc}
                         alt={getLocalized(item.name, locale)}
                         fill
                         sizes="64px"
-                        className="object-cover"
+                        className={isWideThumb ? "object-contain p-1" : "object-cover"}
                       />
                       <div className="absolute top-0 right-0 bg-black text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-bl-xl">
                         {item.quantity}
@@ -208,7 +215,8 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                       </span>
                     </div>
                   </Link>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Discount Code */}

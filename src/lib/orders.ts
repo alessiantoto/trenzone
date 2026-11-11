@@ -272,7 +272,11 @@ export async function processOrder(orderData: OrderData) {
           if (variantsData?.options) {
             const opt = variantsData.options.find((o: any) => {
               const oName = typeof o.name === 'object' ? (o.name.ro || Object.values(o.name)[0]) : o.name;
-              return oName === variantNameStr || (item.name && String(item.name).includes(oName));
+              return (
+                oName === variantNameStr ||
+                (oName && variantNameStr && String(variantNameStr).includes(oName)) ||
+                (item.name && String(item.name).includes(oName))
+              );
             });
             if (opt) {
               if (opt.image) variantImage = opt.image;

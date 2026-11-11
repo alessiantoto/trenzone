@@ -191,7 +191,7 @@ export default function AdminEmailsPage() {
         name: { ro: 'TREN Oversized Tee', en: 'TREN Oversized Tee' },
         price: 239.99,
         slug: 'tricou-trenzone',
-        image: '/images/products/trenzone_tshirt_default.webp'
+        image: '/images/products/shirt_stay_hard.webp'
       }
     ];
 

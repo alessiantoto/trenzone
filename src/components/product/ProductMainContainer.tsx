@@ -12,6 +12,7 @@ import { useCartStore } from "@/store/useCartStore";
 import { getProductPrice } from "@/utils/pricing";
 import { useRegionStore } from "@/store/useRegionStore";
 import { cn } from "@/lib/utils";
+import { isWideProductImage } from "@/lib/product-images";
 import { StarRating } from "@/components/ui/StarRating";
 import { ProductExpressCheckout } from "@/components/checkout/ProductExpressCheckout";
 
@@ -37,8 +38,14 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
     initialStats && initialStats.count > 0 ? initialStats : { count: 48, average: 5.0 }
   );
 
+  const sizeOptions = product.bundleVariants?.size?.options || [];
+  const hasSizes = sizeOptions.length > 0;
   const [standardQuantity, setStandardQuantity] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string | null>(() => {
+    if (!sizeOptions.length) return null;
+    return sizeOptions.includes("L") ? "L" : sizeOptions[0];
+  });
   const [openDropdownIndex, setOpenDropdownIndex] = useState<number | null>(null);
 
   const [isAdding, setIsAdding] = useState(false);
@@ -146,7 +153,10 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
     }
   };
 
-  const isSelectionIncomplete = product.variants ? !selectedVariant : false;
+  const isSelectionIncomplete = (product.variants ? !selectedVariant : false) || (hasSizes && !selectedSize);
+  const combinedVariantName = selectedVariant
+    ? (hasSizes && selectedSize ? `${selectedVariant} · ${selectedSize}` : selectedVariant)
+    : null;
 
   const currentVariantStatus = selectedVariant
     ? product.variants?.options.find(o => {
@@ -161,7 +171,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
 
   const stickyPrice = numericPrice * standardQuantity;
   const stickyOriginalPrice = numericOriginalPrice * standardQuantity;
-  const stickyVariantLabel = selectedVariant || (locale === 'ro' ? 'Alege varianta' : 'Choose variant');
+  const stickyVariantLabel = combinedVariantName || (locale === 'ro' ? 'Alege varianta' : 'Choose variant');
 
   const handleAddToCart = () => {
     if (isAdding || isCurrentVariantSoldOut) return;
@@ -180,8 +190,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
     });
 
     for (let i = 0; i < standardQuantity; i++) {
-      addItem(product, selectedVariant ? {
-        name: selectedVariant,
+      addItem(product, combinedVariantName ? {
+        name: combinedVariantName,
         image: currentOpt?.image,
         imageIndex: finalImageIndex !== -1 ? finalImageIndex : (currentOpt?.imageIndex || 0)
       } : undefined);
@@ -256,34 +266,41 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                   .map((opt, idx) => {
                     const optName = typeof opt.name === 'object' ? opt.name[locale as 'ro' | 'en'] || opt.name['ro'] : opt.name;
                     const isSelected = selectedVariant === optName;
+                    const thumbSrc = opt.image || product.images[opt.imageIndex || 0] || product.image;
+                    const isWide = isWideProductImage(thumbSrc);
                     return (
                       <button
                         key={idx}
                         onClick={() => handleVariantSelect(optName as string, opt.image, opt.imageIndex)}
                         className={cn(
-                          "relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden transition-all duration-300 bg-zinc-950/80 shadow-md border cursor-pointer",
+                          "relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer",
+                          isWide ? "bg-black" : "bg-zinc-950/80",
                           isSelected ? "border-[#e32f8c] ring-2 ring-[#e32f8c]/40 scale-105 z-10 shadow-[0_0_20px_rgba(227,47,140,0.35)]" : "border-white/10 opacity-70 hover:opacity-100 hover:scale-102 hover:border-white/30",
                           opt.stock_status === 'sold_out' ? "opacity-30 grayscale cursor-not-allowed" : ""
                         )}
                         title={optName as string}
                       >
-                        <Image src={opt.image || product.images[opt.imageIndex || 0] || product.image} alt={optName as string} fill priority className="object-cover" sizes="(max-width: 768px) 64px, 112px" />
+                        <Image src={thumbSrc} alt={optName as string} fill priority className={isWide ? "object-contain p-1" : "object-cover"} sizes="(max-width: 768px) 64px, 112px" />
                       </button>
                     );
                   })
               ) : (
-                product.images.map((img, idx) => (
+                product.images.map((img, idx) => {
+                  const isWide = isWideProductImage(img);
+                  return (
                   <button
                     key={idx}
                     onClick={() => setActiveImage(img)}
                     className={cn(
-                      "relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden transition-all duration-300 bg-zinc-950/80 shadow-md border cursor-pointer",
+                      "relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer",
+                      isWide ? "bg-black" : "bg-zinc-950/80",
                       activeImage === img ? "border-[#e32f8c] ring-2 ring-[#e32f8c]/40 scale-105 z-10 shadow-[0_0_20px_rgba(227,47,140,0.35)]" : "border-white/10 opacity-70 hover:opacity-100 hover:scale-102 hover:border-white/30"
                     )}
                   >
-                    <Image src={img} alt={`Thumbnail ${idx + 1}`} fill priority className="object-cover" sizes="(max-width: 768px) 64px, 112px" />
+                    <Image src={img} alt={`Thumbnail ${idx + 1}`} fill priority className={isWide ? "object-contain p-1" : "object-cover"} sizes="(max-width: 768px) 64px, 112px" />
                   </button>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -335,7 +352,17 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
               <div className="mb-6" id="flavor-selector-container">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-[12px] font-black uppercase tracking-wider text-zinc-300">
-                    {locale === 'ro' ? "ALEGE VARIANTA" : "SELECT VARIANT"} ({product.variants.options.length})
+                    {(() => {
+                      const rawLabel = typeof product.variants.label === 'object'
+                        ? (product.variants.label[locale as 'ro' | 'en'] || product.variants.label['ro'])
+                        : product.variants.label;
+                      if (rawLabel) {
+                        return locale === 'ro'
+                          ? `ALEGE ${String(rawLabel).toUpperCase()}`
+                          : `SELECT ${String(rawLabel).toUpperCase()}`;
+                      }
+                      return locale === 'ro' ? 'ALEGE VARIANTA' : 'SELECT VARIANT';
+                    })()} ({product.variants.options.length})
                   </h3>
                 </div>
 
@@ -366,6 +393,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       }
                     );
                     const isOpen = openDropdownIndex === 0;
+                    const isDesignMode = product.variants?.type === 'design' || (selectedVarOpt?.image && !selectedVarOpt?.color);
+                    const selectedThumb = selectedVarOpt?.image || (selectedVarOpt?.imageIndex !== undefined ? product.images[selectedVarOpt.imageIndex] : undefined);
 
                     return (
                       <div className="relative">
@@ -385,19 +414,31 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                             !selectedVariant && !isOpen && !aromaError && "border-white/20"
                           )}
                         >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-5 h-5 rounded-full shadow-inner border border-white/20 shrink-0"
-                              style={{ backgroundColor: selectedVarOpt?.color || (selectedVariant ? '#a855f7' : '#27272a') }}
-                            />
-                            <span className={cn("text-sm font-black uppercase tracking-wider", selectedVariant ? "text-white" : "text-zinc-400")}>
+                          <div className="flex items-center gap-3 min-w-0">
+                            {isDesignMode && selectedThumb ? (
+                              <div className="relative w-8 h-8 rounded-lg bg-black border border-white/15 overflow-hidden shrink-0">
+                                <Image
+                                  src={selectedThumb}
+                                  alt={selectedVariant || ""}
+                                  fill
+                                  sizes="32px"
+                                  className={isWideProductImage(selectedThumb) ? "object-contain p-0.5" : "object-cover"}
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                className="w-5 h-5 rounded-full shadow-inner border border-white/20 shrink-0"
+                                style={{ backgroundColor: selectedVarOpt?.color || (selectedVariant ? '#a855f7' : '#27272a') }}
+                              />
+                            )}
+                            <span className={cn("text-sm font-black uppercase tracking-wider truncate", selectedVariant ? "text-white" : "text-zinc-400")}>
                               {selectedVariant || (locale === 'ro' ? 'Alege varianta...' : 'Select variant...')}
                             </span>
                           </div>
                           {isOpen ? (
-                            <Check className="w-4 h-4 text-white" />
+                            <Check className="w-4 h-4 text-white shrink-0" />
                           ) : (
-                            <ChevronDown className="w-4 h-4 text-white" />
+                            <ChevronDown className="w-4 h-4 text-white shrink-0" />
                           )}
                         </motion.button>
 
@@ -418,6 +459,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                                   const isSoldOut = opt.stock_status === 'sold_out';
                                   const isPreorder = opt.stock_status === 'preorder';
                                   const optColor = opt.color || '#a855f7';
+                                  const optThumb = opt.image || (opt.imageIndex !== undefined ? product.images[opt.imageIndex] : undefined);
+                                  const showOptThumb = (product.variants?.type === 'design' || (!opt.color && Boolean(optThumb))) && Boolean(optThumb);
 
                                   return (
                                     <button
@@ -435,10 +478,22 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                                       )}
                                     >
                                       <div className="flex items-center gap-3">
-                                        <div
-                                          className="w-5 h-5 rounded-full shadow-inner shrink-0 border border-white/20"
-                                          style={{ backgroundColor: optColor }}
-                                        />
+                                        {showOptThumb && optThumb ? (
+                                          <div className="relative w-9 h-9 rounded-lg bg-black border border-white/15 overflow-hidden shrink-0">
+                                            <Image
+                                              src={optThumb}
+                                              alt={localizedName}
+                                              fill
+                                              sizes="36px"
+                                              className={isWideProductImage(optThumb) ? "object-contain p-0.5" : "object-cover"}
+                                            />
+                                          </div>
+                                        ) : (
+                                          <div
+                                            className="w-5 h-5 rounded-full shadow-inner shrink-0 border border-white/20"
+                                            style={{ backgroundColor: optColor }}
+                                          />
+                                        )}
                                         <div className="flex flex-col items-start text-left">
                                           <span className={cn("text-sm uppercase tracking-wider", isSelected ? "font-black text-white" : "font-bold text-zinc-300")}>
                                             {localizedName}
@@ -463,6 +518,48 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       </div>
                     );
                   })()}
+                </div>
+              </div>
+            )}
+
+            {/* Size Selector (for multi-attribute apparel like TREN Oversized Tee) */}
+            {hasSizes && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-[12px] font-black uppercase tracking-wider text-zinc-300">
+                    {(() => {
+                      const rawSizeLabel = product.bundleVariants?.size?.label;
+                      const sizeLabelText = typeof rawSizeLabel === 'object'
+                        ? (rawSizeLabel[locale as 'ro' | 'en'] || rawSizeLabel['ro'])
+                        : rawSizeLabel;
+                      return locale === 'ro'
+                        ? `ALEGE ${(sizeLabelText || 'MĂRIMEA').toUpperCase()}`
+                        : `SELECT ${(sizeLabelText || 'SIZE').toUpperCase()}`;
+                    })()}
+                  </h3>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                    Oversized Fit · 260 GSM
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {sizeOptions.map((sz) => {
+                    const isSizeSelected = selectedSize === sz;
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => setSelectedSize(sz)}
+                        className={cn(
+                          "h-11 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider border transition-all cursor-pointer",
+                          isSizeSelected
+                            ? "bg-[#e32f8c] text-white border-[#e32f8c] shadow-[0_0_20px_rgba(227,47,140,0.35)]"
+                            : "bg-zinc-900 text-zinc-300 border-white/15 hover:border-white/40 hover:text-white"
+                        )}
+                      >
+                        {sz}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -543,6 +640,10 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                   const numericPrice = Number(product.price) || 149.99;
                   
                   const singleWeight = Number(product.weight) || 0.2;
+                  const currentOpt = product.variants?.options.find(o => {
+                    const optName = typeof o.name === 'object' ? o.name[locale] || o.name['ro'] : o.name;
+                    return optName === selectedVariant;
+                  });
                   // Send as multiple separate items so cart calculations apply
                   for (let i = 0; i < standardQuantity; i++) {
                     items.push({
@@ -551,7 +652,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       price: numericPrice,
                       weight: singleWeight,
                       name: product.name,
-                      selectedVariant: selectedVariant ? { name: selectedVariant } : undefined
+                      selectedVariant: combinedVariantName ? { name: combinedVariantName, image: currentOpt?.image } : undefined
                     });
                     basePrice += numericPrice;
                   }
@@ -617,13 +718,16 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
             >
               <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-black/60 border border-white/10 shrink-0">
+                  <div className={cn(
+                    "relative w-12 h-12 rounded-xl overflow-hidden border border-white/10 shrink-0",
+                    isWideProductImage(activeImage || product.image || product.images[0]) ? "bg-black" : "bg-black/60"
+                  )}>
                     <Image
                       src={activeImage || product.image || product.images[0]}
                       alt={typeof name === 'string' ? name : 'TrenZone'}
                       fill
                       sizes="48px"
-                      className="object-cover"
+                      className={isWideProductImage(activeImage || product.image || product.images[0]) ? "object-contain p-0.5" : "object-cover"}
                     />
                   </div>
                   <div className="min-w-0 flex-1 flex flex-col justify-center">
@@ -640,7 +744,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                         </span>
                       )}
                       {stickyVariantLabel && (
-                        <span className="text-[9px] font-bold text-zinc-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded uppercase truncate max-w-[90px]">
+                        <span className="text-[9px] font-bold text-zinc-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded uppercase truncate max-w-[130px]">
                           {stickyVariantLabel}
                         </span>
                       )}

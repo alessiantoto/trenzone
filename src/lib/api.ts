@@ -38,8 +38,8 @@ export interface Product {
     }[];
   };
   bundleVariants?: {
-    size: { label: string | Record<string, string>; options: string[] };
-    flavor: { 
+    size?: { label: string | Record<string, string>; options: string[] };
+    flavor?: { 
       label: string | Record<string, string>; 
       options: { 
         name: string | Record<string, string>; 

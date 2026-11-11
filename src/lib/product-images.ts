@@ -8,6 +8,10 @@ function toAbsoluteAssetUrl(url: string): string {
   return `https://www.trenzone.fit${cdnResolved.startsWith('/') ? '' : '/'}${cdnResolved}`;
 }
 
+export function isWideProductImage(url?: string | null): boolean {
+  return typeof url === 'string' && url.includes('shirt_');
+}
+
 function matchTrenzoneGearImage(rawText: string): string | null {
   const s = rawText.toLowerCase();
 
@@ -17,8 +21,13 @@ function matchTrenzoneGearImage(rawText: string): string | null {
   if (s.includes('centur') || s.includes('belt')) {
     return '/images/products/trenzone_belt_default.webp';
   }
-  if (s.includes('tricou') || s.includes('t-shirt') || s.includes('tshirt')) {
-    return '/images/products/trenzone_tshirt_default.webp';
+  if (s.includes('eat tren')) return '/images/products/shirt_eat_tren_sleep_repeat.webp';
+  if (s.includes('stay hard')) return '/images/products/shirt_stay_hard.webp';
+  if (s.includes('soldier')) return '/images/products/shirt_soldier_of_god.webp';
+  if (s.includes('pain creates')) return '/images/products/shirt_pain_creates_men.webp';
+  if (s.includes('beast')) return '/images/products/shirt_beast.webp';
+  if (s.includes('tricou') || s.includes('t-shirt') || s.includes('tshirt') || s.includes('oversized tee')) {
+    return '/images/products/shirt_stay_hard.webp';
   }
   if (s.includes('x10')) {
     return (s.includes('white') || s.includes('alb'))

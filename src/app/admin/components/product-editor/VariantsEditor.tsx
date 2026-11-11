@@ -124,6 +124,7 @@ export function VariantsEditor({ product, onChange }: VariantsEditorProps) {
               className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
             >
               <option value="flavor">Culori (cu Color Swatch)</option>
+              <option value="design">Modele / Printuri (cu Poză)</option>
               <option value="size">Mărimi / Text simplu</option>
             </select>
           </div>

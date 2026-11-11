@@ -223,24 +223,34 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       price: 239.99,
       originalPrice: 279.99,
       badge: "OVERSIZED FIT",
-      image: "/images/products/trenzone_tshirt_default.webp",
+      image: "/images/products/shirt_stay_hard.webp",
       images: [
-        "/images/products/trenzone_tshirt_default.webp"
+        "/images/products/shirt_stay_hard.webp",
+        "/images/products/shirt_eat_tren_sleep_repeat.webp",
+        "/images/products/shirt_beast.webp",
+        "/images/products/shirt_soldier_of_god.webp",
+        "/images/products/shirt_pain_creates_men.webp"
       ],
       variants: {
-        type: "size",
-        label: { ro: "Mărime", en: "Size" },
+        type: "design",
+        label: { ro: "Model", en: "Design" },
         options: [
-          { name: { ro: "S", en: "S" }, stock_status: "in_stock" },
-          { name: { ro: "M", en: "M" }, stock_status: "in_stock" },
-          { name: { ro: "L", en: "L" }, badge: "POPULAR", stock_status: "in_stock" },
-          { name: { ro: "XL", en: "XL" }, stock_status: "in_stock" },
-          { name: { ro: "XXL", en: "XXL" }, stock_status: "in_stock" }
+          { name: { ro: "Stay Hard", en: "Stay Hard" }, badge: "BEST SELLER", image: "/images/products/shirt_stay_hard.webp", imageIndex: 0, stock_status: "in_stock" },
+          { name: { ro: "Eat Tren Sleep Repeat", en: "Eat Tren Sleep Repeat" }, badge: "TRENZONE OG", image: "/images/products/shirt_eat_tren_sleep_repeat.webp", imageIndex: 1, stock_status: "in_stock" },
+          { name: { ro: "Beast", en: "Beast" }, badge: "POPULAR", image: "/images/products/shirt_beast.webp", imageIndex: 2, stock_status: "in_stock" },
+          { name: { ro: "Soldier of God", en: "Soldier of God" }, badge: "LIMITED", image: "/images/products/shirt_soldier_of_god.webp", imageIndex: 3, stock_status: "in_stock" },
+          { name: { ro: "Pain Creates Men", en: "Pain Creates Men" }, badge: "HARDCORE", image: "/images/products/shirt_pain_creates_men.webp", imageIndex: 4, stock_status: "in_stock" }
         ]
       },
+      bundleVariants: {
+        size: {
+          label: { ro: "Mărime", en: "Size" },
+          options: ["S", "M", "L", "XL", "XXL"]
+        }
+      },
       description: {
-        ro: "Tricou heavy-cotton premium oversized fit. Bumbac 100% pieptănat de 260 GSM, croială rezistentă pentru antrenament și lifestyle, guler întărit și branding minimalist TrenZone®.",
-        en: "Heavy-cotton premium oversized fit tee. 100% combed cotton 260 GSM, heavy-duty build for lifting and streetwear, reinforced collar, and minimalist TrenZone® branding."
+        ro: "Tricou heavy-cotton premium oversized fit (washed black). Bumbac 100% pieptănat de 260 GSM, printuri statement high-definition, guler întărit și emblemă TrenZone®.",
+        en: "Heavy-cotton premium washed-black oversized fit tee. 100% combed cotton 260 GSM, high-definition statement prints, reinforced collar, and TrenZone® emblem."
       },
       stock_quantity: 100,
       weight: 0.35,

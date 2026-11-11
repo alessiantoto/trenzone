@@ -149,7 +149,7 @@ export function CartSheet() {
     };
   }, [isCartOpen, allProducts.length]);
 
-  const { itemCount: totalItemsCount, nextTierPercent } = getBundleSummary(items);
+  const { itemCount: totalItemsCount } = getBundleSummary(items);
 
   const totalSaved = Number((discount + couponDiscount).toFixed(2));
   const effectiveSubtotal = Math.max(0, Number((subtotal - totalSaved).toFixed(2)));
@@ -213,7 +213,7 @@ export function CartSheet() {
     <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
       <SheetContent
         showCloseButton={false}
-        className="h-[100dvh] data-[side=right]:w-full data-[side=right]:max-w-none data-[side=right]:sm:w-full data-[side=right]:sm:max-w-[470px] bg-[#f6f6f8] text-[#111111] p-0 flex flex-col gap-0 border-none sm:border-l sm:border-zinc-200 shadow-2xl overflow-hidden overscroll-behavior-x-none font-sans"
+        className="h-[100dvh] data-[side=right]:w-full data-[side=right]:max-w-none data-[side=right]:sm:w-full data-[side=right]:sm:max-w-[470px] bg-[#f6f6f8] text-[#111111] p-0 flex flex-col gap-0 border-none sm:border-l sm:border-zinc-200 shadow-2xl overflow-hidden overscroll-x-none font-sans"
       >
         {/* ═══ HEADER & STRUCTURED REWARDS CARD ═══ */}
         <div className="flex-shrink-0 bg-white border-b border-zinc-200/80 z-30 px-4 sm:px-5 pt-4 pb-3.5">
@@ -386,7 +386,7 @@ export function CartSheet() {
               <div className="flex flex-col items-center text-center relative z-10">
                 <div
                   className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center text-[10.5px] font-black tracking-tight tabular-nums transition-colors duration-300",
+                    "w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-black tracking-tighter tabular-nums transition-colors duration-300",
                     bundlePercent >= 10
                       ? "bg-emerald-600 text-white"
                       : "bg-white border border-zinc-200 text-zinc-400"
@@ -555,11 +555,11 @@ export function CartSheet() {
                                 onClick={() => setCartOpen(false)}
                                 className="hover:text-[#e32f8c] transition-colors flex-1 min-w-0"
                               >
-                                <h4 className="text-[13px] font-extrabold uppercase tracking-tight text-[#111111] leading-snug line-clamp-1">
+                                <h4 className="text-[13px] font-extrabold uppercase tracking-tight text-[#111111] leading-[1.25] line-clamp-2">
                                   {getLocalized(item.name, locale)}
                                 </h4>
                               </Link>
-                              <span className="text-[13.5px] font-black text-[#111111] tabular-nums shrink-0">
+                              <span className="text-[13.5px] font-black text-[#111111] tabular-nums whitespace-nowrap shrink-0">
                                 {formatPrice(
                                   getProductPrice(item.price, currency) * item.quantity,
                                   currency
@@ -655,7 +655,7 @@ export function CartSheet() {
             {availableUpsells.length > 0 && (
               <div className="pt-3.5 pb-4">
                 <div className="px-4 sm:px-5 mb-2.5 flex items-center justify-between gap-2">
-                  <h3 className="text-[12px] font-black uppercase tracking-[0.06em] text-[#111111] truncate">
+                  <h3 className="text-[12px] font-black uppercase tracking-[0.06em] text-[#111111] leading-tight">
                     {bundlePercent === 5
                       ? isEn
                         ? "Add 1 more item for 10% off"
@@ -705,39 +705,43 @@ export function CartSheet() {
 
                 <div
                   ref={carouselRef}
-                  className="flex gap-2.5 overflow-x-auto scrollbar-hide px-4 sm:px-5 pb-1 snap-x scroll-smooth"
+                  className="flex gap-2.5 overflow-x-auto scrollbar-hide px-4 sm:px-5 scroll-pl-4 sm:scroll-pl-5 pb-1 snap-x snap-mandatory scroll-smooth"
                 >
                   {availableUpsells.map((p) => {
                     const price = getProductPrice(p.price, currency);
-                    const nextPct = nextTierPercent || bundlePercent;
-                    const discountedHint =
-                      nextPct > 0 ? Number((price * (1 - nextPct / 100)).toFixed(2)) : null;
 
                     return (
                       <div
                         key={p.id}
-                        className="w-[138px] sm:w-[148px] shrink-0 snap-start bg-white rounded-xl p-1.5 border border-zinc-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:border-zinc-300 transition-all flex flex-col group select-none"
+                        className="w-[146px] sm:w-[158px] shrink-0 snap-start bg-white rounded-xl p-2 border border-zinc-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:border-purple-300/80 hover:shadow-[0_4px_14px_rgba(147,51,234,0.08)] transition-all flex flex-col group select-none"
                       >
-                        <div className="relative w-full aspect-[4/5] bg-zinc-950 rounded-lg overflow-hidden">
+                        <Link
+                          href={`/product/${p.slug}`}
+                          onClick={() => setCartOpen(false)}
+                          className="relative w-full aspect-[4/5] bg-zinc-950 rounded-lg overflow-hidden block"
+                        >
+                          <Image
+                            src={p.image}
+                            alt={getLocalized(p.name, locale)}
+                            fill
+                            sizes="160px"
+                            className="object-cover object-center group-hover:scale-[1.03] transition-transform duration-500"
+                          />
+                        </Link>
+
+                        <div className="flex-1 flex flex-col justify-between pt-2.5 px-0.5 min-w-0">
                           <Link
                             href={`/product/${p.slug}`}
                             onClick={() => setCartOpen(false)}
-                            className="absolute inset-0 z-0"
+                            className="block min-w-0"
                           >
-                            <Image
-                              src={p.image}
-                              alt={getLocalized(p.name, locale)}
-                              fill
-                              sizes="150px"
-                              className="object-cover object-center group-hover:scale-104 transition-transform duration-500"
-                            />
+                            <h4 className="text-[11.5px] font-bold text-[#111111] group-hover:text-[#9333ea] transition-colors leading-snug line-clamp-2 min-h-[2rem]">
+                              {getLocalized(p.name, locale)}
+                            </h4>
+                            <p className="text-[13px] font-black text-[#111111] tabular-nums whitespace-nowrap mt-1">
+                              {formatPrice(price, currency)}
+                            </p>
                           </Link>
-
-                          {nextPct > 0 && (
-                            <span className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded bg-[#111111]/90 text-white text-[9.5px] font-extrabold tracking-wide">
-                              -{nextPct}%
-                            </span>
-                          )}
 
                           <button
                             type="button"
@@ -754,38 +758,12 @@ export function CartSheet() {
                               }
                             }}
                             aria-label={`Add ${getLocalized(p.name, locale)} to cart`}
-                            className="absolute bottom-2 right-2 z-10 h-7 px-2.5 rounded-md bg-white hover:bg-[#e32f8c] text-[#111111] hover:text-white active:scale-95 text-[10px] font-extrabold uppercase tracking-wider shadow-md flex items-center gap-1 transition-colors cursor-pointer"
+                            className="mt-2.5 h-8 w-full rounded-lg bg-[#f4f4f6] hover:bg-[#111111] text-[#111111] hover:text-white border border-zinc-200/90 hover:border-[#111111] active:scale-[0.98] text-[10.5px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
                           >
-                            <Plus className="w-3 h-3 stroke-[2.75]" />
+                            <Plus className="w-3 h-3 stroke-[2.5] shrink-0" />
                             <span>{isEn ? "Add" : "Adaugă"}</span>
                           </button>
                         </div>
-
-                        <Link
-                          href={`/product/${p.slug}`}
-                          onClick={() => setCartOpen(false)}
-                          className="flex flex-col px-1 pt-2 pb-1 min-w-0"
-                        >
-                          <h4 className="text-[11.5px] font-bold text-[#111111] group-hover:text-[#e32f8c] transition-colors leading-snug line-clamp-2 min-h-[2rem]">
-                            {getLocalized(p.name, locale)}
-                          </h4>
-                          <div className="flex items-center gap-1.5 mt-1 tabular-nums">
-                            {discountedHint && discountedHint < price ? (
-                              <>
-                                <span className="text-[12.5px] font-black text-[#111111]">
-                                  {formatPrice(discountedHint, currency)}
-                                </span>
-                                <span className="text-[10.5px] font-medium text-zinc-400 line-through">
-                                  {formatPrice(price, currency)}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-[12.5px] font-bold text-[#111111]">
-                                {formatPrice(price, currency)}
-                              </span>
-                            )}
-                          </div>
-                        </Link>
                       </div>
                     );
                   })}
@@ -793,10 +771,10 @@ export function CartSheet() {
 
                 {/* Carousel Progress Indicator */}
                 {(canScrollLeft || canScrollRight) && (
-                  <div className="mx-4 sm:mx-5 mt-2 flex items-center gap-3">
-                    <div className="flex-1 h-[2px] bg-zinc-200 rounded-full overflow-hidden relative">
+                  <div className="mx-4 sm:mx-5 mt-2.5 flex items-center">
+                    <div className="flex-1 h-[3px] bg-purple-950/[0.08] rounded-full overflow-hidden relative">
                       <div
-                        className="h-full bg-[#111111] rounded-full transition-all duration-100 ease-out"
+                        className="h-full rounded-full bg-gradient-to-r from-[#7c3aed] via-[#9333ea] to-[#c026d3] transition-all duration-150 ease-out"
                         style={{
                           width: "35%",
                           transform: `translateX(${scrollProgress * 1.85}%)`,
@@ -855,47 +833,47 @@ export function CartSheet() {
 
                   {/* Summary Breakdown */}
                   <div className="pt-3 border-t border-zinc-100 space-y-2 text-[12.5px] tabular-nums">
-                    <div className="flex justify-between text-zinc-600">
+                    <div className="flex justify-between items-center gap-3 text-zinc-600">
                       <span>{isEn ? "Subtotal" : "Subtotal"}</span>
-                      <span className="font-bold text-[#111111]">
+                      <span className="font-bold text-[#111111] whitespace-nowrap shrink-0">
                         {formatPrice(subtotal, currency)}
                       </span>
                     </div>
 
                     {discount > 0 && (
-                      <div className="flex justify-between items-center text-[#111111]">
+                      <div className="flex justify-between items-center gap-3 text-[#111111]">
                         <span className="font-semibold text-zinc-700">
                           {isEn
                             ? `Bundle discount (-${bundlePercent}%)`
                             : `Reducere pachet (-${bundlePercent}%)`}
                         </span>
-                        <span className="font-extrabold text-[#e32f8c]">
+                        <span className="font-extrabold text-[#e32f8c] whitespace-nowrap shrink-0">
                           -{formatPrice(discount, currency)}
                         </span>
                       </div>
                     )}
 
                     {appliedCoupon && couponDiscount > 0 && (
-                      <div className="flex justify-between items-center text-[#111111]">
+                      <div className="flex justify-between items-center gap-3 text-[#111111]">
                         <span className="font-semibold text-zinc-700">
                           {isEn
                             ? `Promo code (${appliedCoupon.code})`
                             : `Cod reducere (${appliedCoupon.code})`}
                         </span>
-                        <span className="font-extrabold text-emerald-600">
+                        <span className="font-extrabold text-emerald-600 whitespace-nowrap shrink-0">
                           -{formatPrice(couponDiscount, currency)}
                         </span>
                       </div>
                     )}
 
-                    <div className="flex justify-between text-zinc-600">
+                    <div className="flex justify-between items-center gap-3 text-zinc-600">
                       <span>{isEn ? "Shipping" : "Livrare"}</span>
                       {isFreeShippingUnlocked ? (
-                        <span className="font-bold text-emerald-600">
+                        <span className="font-bold text-emerald-600 whitespace-nowrap shrink-0">
                           {isEn ? "Free" : "Gratuită"}
                         </span>
                       ) : (
-                        <span className="text-zinc-500">
+                        <span className="text-zinc-500 text-right">
                           {isEn ? "Calculated at checkout" : "Calculată la checkout"}
                         </span>
                       )}
@@ -921,19 +899,19 @@ export function CartSheet() {
           {items.length > 0 && (
             <div className="flex-shrink-0 px-4 sm:px-5 pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-white border-t border-zinc-200 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] z-20">
               <div className="flex items-center justify-between gap-2 mb-2.5 tabular-nums">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap">
                   <span className="text-xs font-black uppercase tracking-wider text-zinc-500">
                     Total
                   </span>
                   {totalSaved > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10.5px] font-bold">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10.5px] font-bold whitespace-nowrap">
                       {isEn
                         ? `You save ${formatPrice(totalSaved, currency)}`
                         : `Economisești ${formatPrice(totalSaved, currency)}`}
                     </span>
                   )}
                 </div>
-                <span className="text-[19px] font-black text-[#111111] tracking-tight">
+                <span className="text-[19px] font-black text-[#111111] tracking-tight whitespace-nowrap shrink-0">
                   {formatPrice(total, currency)}
                 </span>
               </div>

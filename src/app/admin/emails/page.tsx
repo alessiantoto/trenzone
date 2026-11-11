@@ -182,13 +182,13 @@ export default function AdminEmailsPage() {
     
     const mockUpsell = [
       {
-        name: { ro: 'X10 Wrist Wraps Heavy-Duty', en: 'X10 Heavy-Duty Wrist Wraps' },
+        name: { ro: 'X10 Wrist Wraps', en: 'X10 Wrist Wraps' },
         price: 299.99,
         slug: 'x10-wrist-wraps',
         image: '/images/products/trenzone_wristwraps_default.webp'
       },
       {
-        name: { ro: 'Tricou Heavy Duty TrenZone', en: 'TrenZone Heavy Duty T-Shirt' },
+        name: { ro: 'Tricou Oversized', en: 'Oversized T-Shirt' },
         price: 239.99,
         slug: 'tricou-trenzone',
         image: '/images/products/trenzone_tshirt_default.webp'

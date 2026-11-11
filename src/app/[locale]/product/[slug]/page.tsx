@@ -32,9 +32,10 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const dbMetaTitle = (product.meta_title && typeof product.meta_title === 'object') ? (product.meta_title as any)[locale] : product.meta_title;
   const dbMetaDesc = (product.meta_description && typeof product.meta_description === 'object') ? (product.meta_description as any)[locale] : product.meta_description;
 
+  const isElbowWrap = slug.includes('elbow');
   const fallbackTitle = locale === 'ro'
-    ? `${name} | Benzi de Cot Heavy-Duty TrenZone® by Vlad Tren`
-    : `${name} | Heavy-Duty Elbow Wraps TrenZone® by Vlad Tren`;
+    ? `${name} | ${isElbowWrap ? 'Benzi de Cot Heavy-Duty TrenZone®' : 'Echipament Oficial TrenZone®'} by Vlad Tren`
+    : `${name} | ${isElbowWrap ? 'Heavy-Duty Elbow Wraps TrenZone®' : 'Official TrenZone® Gear'} by Vlad Tren`;
   const fallbackDesc = typeof product.description === 'object' ? (product.description as any)[locale] : product.description;
 
   const title = (dbMetaTitle as string) || fallbackTitle;

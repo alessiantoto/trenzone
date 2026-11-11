@@ -42,10 +42,16 @@ const normalizeProductImageUrl = (url: any): string => {
 };
 
 // Map DB row to Product interface
-const mapProduct = (p: any): Product => {
+const mapProduct = (p: any, preserveLocalized: boolean = false): Product => {
   // name and description might be JSONB for i18n
-  const nameStr = typeof p.name === 'object' ? (p.name.ro || p.name.en || '') : (p.name || '');
-  const descStr = typeof p.description === 'object' ? (p.description.ro || p.description.en || '') : (p.description || '');
+  const parsedName = parseJSONB(p.name);
+  const parsedDesc = parseJSONB(p.description);
+  const nameVal = preserveLocalized
+    ? (parsedName && typeof parsedName === 'object' ? parsedName : (p.name || ''))
+    : (parsedName && typeof parsedName === 'object' ? (parsedName.ro || parsedName.en || '') : (p.name || ''));
+  const descVal = preserveLocalized
+    ? (parsedDesc && typeof parsedDesc === 'object' ? parsedDesc : (p.description || ''))
+    : (parsedDesc && typeof parsedDesc === 'object' ? (parsedDesc.ro || parsedDesc.en || '') : (p.description || ''));
 
   const DEFAULT_IMAGE = '/images/products/x10_elbow_wraps_purple_1.webp';
   const rawMain = (p.main_image && typeof p.main_image === 'string' && !p.main_image.includes('cdn.shopify.com')) ? p.main_image : DEFAULT_IMAGE;
@@ -67,11 +73,11 @@ const mapProduct = (p: any): Product => {
   return {
     id: p.id,
     slug: p.slug,
-    name: nameStr,
+    name: nameVal,
     price: p.price_numeric ? parseFloat(p.price_numeric) : 0,
     originalPrice: p.original_price_numeric ? parseFloat(p.original_price_numeric) : undefined,
     badge: p.badge || undefined,
-    description: descStr,
+    description: descVal,
     image: mainImage,
     images: allImages,
     stock_quantity: p.stock_quantity || 0,
@@ -217,8 +223,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     id: "def7b180-aaa9-42eb-babf-e0ae1a981aba",
     slug: "x10-wrist-wraps",
     name: {
-      ro: "Fașe Încheieturi X10 TrenZone®",
-      en: "X10 Wrist Wraps TrenZone®"
+      ro: "X10 Wrist Wraps",
+      en: "X10 Wrist Wraps"
     },
     price: 299.99,
     originalPrice: 349.99,
@@ -289,8 +295,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     id: "dd477884-5fd8-4d8f-ab75-1cade13c1cc8",
     slug: "centura-powerlifting",
     name: {
-      ro: "Centură Piele Concurs TrenZone®",
-      en: "TrenZone® Competition Powerlifting Belt"
+      ro: "Centură Powerlifting 13mm",
+      en: "13mm Powerlifting Belt"
     },
     price: 749.99,
     originalPrice: 849.99,
@@ -350,8 +356,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     id: "35ad173c-9305-42d8-b0c1-0e9bdabdb31c",
     slug: "tricou-trenzone",
     name: {
-      ro: "Tricou Oversized TrenZone®",
-      en: "TrenZone® Oversized T-Shirt"
+      ro: "Tricou Oversized",
+      en: "Oversized T-Shirt"
     },
     price: 239.99,
     originalPrice: 279.99,
@@ -455,13 +461,13 @@ const getCachedProducts = unstable_cache(
         return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
       }
 
-      const mapped = (data || []).map(mapProduct);
+      const mapped = (data || []).map((p) => mapProduct(p, true));
       return mapped.length > 0 ? sortProductsCanonical(mapped) : sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
     } catch {
       return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
     }
   },
-  ['public-products-list-v5'],
+  ['public-products-list-v6'],
   {
     revalidate: 2592000, // 30 days cache — purged on admin edit or manual cache clear
     tags: ['products']
@@ -488,7 +494,7 @@ export async function getAdminProductsServer(): Promise<Product[]> {
       return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
     }
 
-    return sortProductsCanonical((data || []).map(mapProduct));
+    return sortProductsCanonical((data || []).map((p) => mapProduct(p, false)));
   } catch {
     return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
   }
@@ -509,13 +515,13 @@ const getCachedProductBySlug = unstable_cache(
         return fallback ? sortProductsCanonical([fallback])[0] : null;
       }
 
-      return mapProduct(data);
+      return mapProduct(data, true);
     } catch {
       const fallback = FALLBACK_TRENZONE_PRODUCTS.find(p => p.slug === decodedSlug || p.slug.includes(decodedSlug) || decodedSlug.includes(p.slug));
       return fallback ? sortProductsCanonical([fallback])[0] : null;
     }
   },
-  ['product-by-slug-v5'],
+  ['product-by-slug-v6'],
   {
     revalidate: 2592000, // 30 days cache — purged on admin edit or manual cache clear
     tags: ['products']

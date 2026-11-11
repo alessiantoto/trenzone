@@ -136,8 +136,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       id: "def7b180-aaa9-42eb-babf-e0ae1a981aba",
       slug: "x10-wrist-wraps",
       name: {
-        ro: "Fașe Încheieturi X10 TrenZone®",
-        en: "X10 Wrist Wraps TrenZone®"
+        ro: "X10 Wrist Wraps",
+        en: "X10 Wrist Wraps"
       },
       price: 299.99,
       originalPrice: 349.99,
@@ -182,8 +182,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       id: "dd477884-5fd8-4d8f-ab75-1cade13c1cc8",
       slug: "centura-powerlifting",
       name: {
-        ro: "Centură Piele Concurs TrenZone®",
-        en: "TrenZone® Competition Powerlifting Belt"
+        ro: "Centură Powerlifting 13mm",
+        en: "13mm Powerlifting Belt"
       },
       price: 749.99,
       originalPrice: 849.99,
@@ -217,8 +217,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       id: "35ad173c-9305-42d8-b0c1-0e9bdabdb31c",
       slug: "tricou-trenzone",
       name: {
-        ro: "Tricou Oversized TrenZone®",
-        en: "TrenZone® Oversized T-Shirt"
+        ro: "Tricou Oversized",
+        en: "Oversized T-Shirt"
       },
       price: 239.99,
       originalPrice: 279.99,

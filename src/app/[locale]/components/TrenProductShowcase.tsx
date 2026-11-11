@@ -217,8 +217,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       id: "35ad173c-9305-42d8-b0c1-0e9bdabdb31c",
       slug: "tricou-trenzone",
       name: {
-        ro: "Tricou Power Oversized",
-        en: "Power Oversized Tee"
+        ro: "TREN Oversized Tee",
+        en: "TREN Oversized Tee"
       },
       price: 239.99,
       originalPrice: 279.99,

@@ -69,15 +69,15 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
               if (error) setError(null);
             }}
             onKeyDown={(e) => e.key === "Enter" && handleApply()}
-            placeholder={isEn ? "Enter code" : "Introdu codul"}
-            className="flex-1 min-w-0 h-10 bg-white border border-zinc-300 focus:border-[#111111] rounded-md px-3 text-xs font-bold uppercase tracking-wider text-[#111111] placeholder:text-zinc-400 placeholder:normal-case placeholder:font-medium focus:outline-none transition-colors"
+            placeholder={isEn ? "Enter promo code" : "Introdu codul de reducere"}
+            className="flex-1 min-w-0 h-10 bg-[#f6f6f8] border border-zinc-200 focus:border-[#111111] focus:bg-white rounded-lg px-3 text-xs font-bold uppercase tracking-wider text-[#111111] placeholder:text-zinc-400 placeholder:normal-case placeholder:font-medium focus:outline-none transition-colors"
             disabled={loading}
           />
           <button
             type="button"
             onClick={handleApply}
             disabled={loading || !code.trim()}
-            className="h-10 px-5 rounded-md bg-[#111111] hover:bg-zinc-800 text-white text-xs font-bold tracking-wide transition-colors disabled:opacity-40 cursor-pointer shrink-0 flex items-center justify-center"
+            className="h-10 px-5 rounded-lg bg-[#111111] hover:bg-[#e32f8c] text-white text-xs font-bold tracking-wide transition-colors disabled:bg-zinc-200 disabled:text-zinc-500 disabled:cursor-not-allowed cursor-pointer shrink-0 flex items-center justify-center"
           >
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (isEn ? "Apply" : "Aplică")}
           </button>

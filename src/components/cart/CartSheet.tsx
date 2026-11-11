@@ -10,6 +10,10 @@ import {
   ChevronRight,
   Clock,
   Ticket,
+  Trash2,
+  Check,
+  Truck,
+  ArrowRight,
 } from "lucide-react";
 import Image from "next/image";
 import { useCartStore, isPreorder } from "@/store/useCartStore";
@@ -31,51 +35,47 @@ type VariantOption = NonNullable<Product["variants"]>["options"][number];
 
 function PaymentTrustMarks() {
   return (
-    <div className="flex items-center justify-center gap-1.5 mt-2.5 select-none" aria-label="Accepted payment methods">
-      {/* VISA */}
-      <span className="inline-flex items-center justify-center h-[22px] w-[36px] rounded-[4px] border border-zinc-200 bg-white">
-        <svg viewBox="0 0 38 12" className="w-6 h-2.5" aria-hidden="true">
-          <text
-            x="19"
-            y="10"
-            textAnchor="middle"
-            fill="#1434CB"
-            fontFamily="system-ui, -apple-system, sans-serif"
-            fontSize="11"
-            fontWeight="900"
-            fontStyle="italic"
-            letterSpacing="-0.5"
-          >
-            VISA
-          </text>
+    <div
+      className="flex items-center justify-center gap-2 mt-2.5 select-none"
+      aria-label="Accepted payment methods"
+    >
+      {/* VISA - Crisp Solid Visa Blue Badge */}
+      <span className="inline-flex items-center justify-center h-[24px] w-[42px] rounded-[4px] bg-[#1434CB] shadow-2xs">
+        <svg viewBox="-2 0 46 16" className="w-7 h-3 fill-white" aria-hidden="true">
+          <path d="M19.5 1.2L16.3 14.8h3.7L23.2 1.2h-3.7zm14.2 8.7l1.9-5.3 1.1 5.3h-3zm4.1 4.9h3.4L38.3 1.2h-3.1c-.7 0-1.3.4-1.6 1l-5.7 12.6h3.9l.8-2.1h4.7l.5 2.1zm-9.6-4.4c0-3.5-4.9-3.7-4.8-5.3 0-.5.5-1 1.5-1.1.5-.1 2-.1 3.6.6l.6-3c-.9-.3-2-.6-3.4-.6-3.6 0-6.1 1.9-6.1 4.6 0 2 1.8 3.1 3.2 3.8 1.4.7 1.9 1.1 1.9 1.7 0 .9-1.1 1.3-2.2 1.4-1.8 0-2.9-.5-3.7-.9l-.7 3.1c.8.4 2.4.7 4 .7 3.8.1 6.1-1.8 6.1-4.9zM14.3 1.2L8.4 14.8H4.5L1.6 3.7c-.2-.7-.3-1-.9-1.3C0 2-.9 1.7-1.6 1.5l.1-.3h6.1c.8 0 1.5.5 1.7 1.4l1.5 7.9 3.7-9.3h2.8z" />
         </svg>
       </span>
 
       {/* Mastercard */}
-      <span className="inline-flex items-center justify-center h-[22px] w-[36px] rounded-[4px] border border-zinc-200 bg-white">
-        <svg viewBox="0 0 28 18" className="w-6 h-3.5" aria-hidden="true">
-          <circle cx="10.5" cy="9" r="6.5" fill="#EB001B" />
-          <circle cx="17.5" cy="9" r="6.5" fill="#F79E1B" fillOpacity="0.9" />
+      <span className="inline-flex items-center justify-center h-[24px] w-[42px] rounded-[4px] border border-zinc-200 bg-white shadow-2xs">
+        <svg viewBox="0 0 32 20" className="w-6 h-4" aria-hidden="true">
+          <circle cx="11.5" cy="10" r="6.5" fill="#EB001B" />
+          <circle cx="20.5" cy="10" r="6.5" fill="#F79E1B" fillOpacity="0.9" />
         </svg>
       </span>
 
-      {/* Apple Pay */}
-      <span className="inline-flex items-center justify-center h-[22px] px-2 rounded-[4px] bg-[#111111] text-white text-[9px] font-bold tracking-tight leading-none gap-0.5">
-        <svg viewBox="0 0 14 17" className="w-2.5 h-2.5 fill-current -mt-0.5" aria-hidden="true">
-          <path d="M11.6 9c0-1.9 1.5-2.8 1.6-2.9-.9-1.3-2.2-1.5-2.7-1.5-1.1-.1-2.2.7-2.8.7s-1.5-.7-2.4-.6C4.1 4.7 3 5.4 2.4 6.5c-1.2 2.1-.3 5.3.9 7 .6.8 1.3 1.8 2.2 1.7.9 0 1.2-.6 2.3-.6s1.4.6 2.3.6c1 0 1.6-.8 2.2-1.7.7-1 1-2 1-2-.1 0-1.7-.7-1.7-2.5zM9.8 3.3c.5-.6.8-1.4.7-2.3-.7 0-1.6.5-2.1 1.1-.4.5-.8 1.4-.7 2.2.8.1 1.6-.4 2.1-1z" />
-        </svg>
-        <span>Pay</span>
+      {/* Official Apple Pay Logo from public/images/pay */}
+      <span className="inline-flex items-center justify-center h-[24px] px-2 rounded-[4px] border border-zinc-200 bg-white shadow-2xs">
+        <Image
+          src="/images/pay/Apple_Pay-Logo.wine.svg"
+          alt="Apple Pay"
+          width={38}
+          height={20}
+          unoptimized
+          className="h-[18px] w-auto object-contain"
+        />
       </span>
 
-      {/* Google Pay */}
-      <span className="inline-flex items-center justify-center h-[22px] px-2 rounded-[4px] border border-zinc-200 bg-white text-[#111111] text-[9px] font-bold tracking-tight leading-none gap-0.5">
-        <svg viewBox="0 0 16 16" className="w-2.5 h-2.5" aria-hidden="true">
-          <path fill="#4285F4" d="M15.6 8.2c0-.6 0-1.1-.1-1.6H8v3h4.3c-.2 1-.7 1.8-1.6 2.4v2h2.6c1.5-1.4 2.3-3.4 2.3-5.8z" />
-          <path fill="#34A853" d="M8 16c2.1 0 3.9-.7 5.2-1.9l-2.6-2c-.7.5-1.6.8-2.6.8-2 0-3.7-1.4-4.3-3.2H1v2.1C2.3 14.3 5 16 8 16z" />
-          <path fill="#FBBC05" d="M3.7 9.7c-.2-.5-.2-1.1-.2-1.7s.1-1.2.2-1.7V4.2H1C.4 5.3 0 6.6 0 8s.4 2.7 1 3.8l2.7-2.1z" />
-          <path fill="#EA4335" d="M8 3.1c1.2 0 2.2.4 3 1.2l2.3-2.3C11.9.7 10.1 0 8 0 5 0 2.3 1.7 1 4.2l2.7 2.1C4.3 4.5 6 3.1 8 3.1z" />
-        </svg>
-        <span>Pay</span>
+      {/* Official Google Pay Logo from public/images/pay */}
+      <span className="inline-flex items-center justify-center h-[24px] px-2 rounded-[4px] border border-zinc-200 bg-white shadow-2xs">
+        <Image
+          src="/images/pay/Google_Pay-Logo.wine.svg"
+          alt="Google Pay"
+          width={40}
+          height={20}
+          unoptimized
+          className="h-[18px] w-auto object-contain"
+        />
       </span>
     </div>
   );
@@ -162,10 +162,6 @@ export function CartSheet() {
   const isFreeShippingUnlocked =
     items.length > 0 &&
     (appliedCoupon?.type === "free_shipping" || effectiveSubtotal >= freeShippingThreshold);
-  const amountToFreeShipping = Math.max(
-    0,
-    Number((freeShippingThreshold - effectiveSubtotal).toFixed(2))
-  );
 
   // Preorder & mixed cart fulfillment detection
   const hasPreorderInCart = items.some((item) => isPreorder(item, item.selectedVariant));
@@ -203,134 +199,160 @@ export function CartSheet() {
     <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
       <SheetContent
         showCloseButton={false}
-        className="h-[100dvh] data-[side=right]:w-full data-[side=right]:max-w-none data-[side=right]:sm:w-full data-[side=right]:sm:max-w-[460px] bg-white text-[#111111] p-0 flex flex-col gap-0 border-none sm:border-l sm:border-zinc-200 shadow-2xl overflow-hidden overscroll-behavior-x-none font-sans"
+        className="h-[100dvh] data-[side=right]:w-full data-[side=right]:max-w-none data-[side=right]:sm:w-full data-[side=right]:sm:max-w-[470px] bg-[#f6f6f8] text-[#111111] p-0 flex flex-col gap-0 border-none sm:border-l sm:border-zinc-200 shadow-2xl overflow-hidden overscroll-behavior-x-none font-sans"
       >
-        {/* ═══ ARCHITECTURAL LIGHT HEADER + DUAL PROGRESS TRACK ═══ */}
-        <div className="flex-shrink-0 bg-white border-b border-zinc-200/90 z-30 px-5 sm:px-6 pt-4 pb-3.5">
-          <div className="flex items-center justify-between gap-3 mb-2.5">
-            <h2 className="text-[14px] font-black uppercase tracking-[0.12em] text-[#111111] leading-none">
-              {isEn ? "YOUR CART" : "COȘUL TĂU"}
-              <span className="ml-1.5 font-bold text-zinc-400 tabular-nums">({totalItemsCount})</span>
-            </h2>
+        {/* ═══ HEADER & STRUCTURED REWARDS CARD ═══ */}
+        <div className="flex-shrink-0 bg-white border-b border-zinc-200/80 z-30 px-4 sm:px-5 pt-4 pb-3.5">
+          {/* Header Row */}
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[17px] sm:text-[18px] font-black uppercase tracking-tight text-[#111111] leading-none">
+                {isEn ? "Your Cart" : "Coșul tău"}
+              </h2>
+              <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#111111] text-white text-[11px] font-extrabold tabular-nums">
+                {totalItemsCount}
+              </span>
+            </div>
 
             <button
               type="button"
               onClick={() => setCartOpen(false)}
-              className="p-1.5 -mr-1.5 text-zinc-500 hover:text-[#111111] transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 hover:text-[#111111] flex items-center justify-center transition-colors cursor-pointer"
               aria-label="Close cart"
             >
-              <X className="w-5 h-5" strokeWidth={1.75} />
+              <X className="w-4 h-4" strokeWidth={2.25} />
             </button>
           </div>
 
-          {/* Crisp Bundle + Free Shipping Status Row */}
-          <div className="flex items-center justify-between gap-2 text-[12px] leading-snug mb-2">
-            <p className="text-zinc-700 font-medium truncate">
-              {totalItemsCount === 0 &&
-                (isEn
-                  ? "Add 2 items for -5% or 3+ for -10% off"
-                  : "Adaugă 2 produse pentru -5% sau 3+ pentru -10%")}
-              {totalItemsCount === 1 &&
-                (isEn ? (
-                  <>
-                    Add <strong className="font-bold text-[#111111]">1 more item</strong> for{" "}
-                    <strong className="font-bold text-[#e32f8c]">-5% off</strong>
-                  </>
-                ) : (
-                  <>
-                    Mai adaugă <strong className="font-bold text-[#111111]">1 produs</strong> pentru{" "}
-                    <strong className="font-bold text-[#e32f8c]">-5% reducere</strong>
-                  </>
-                ))}
-              {totalItemsCount === 2 &&
-                (isEn ? (
-                  <>
-                    <strong className="font-bold text-[#111111]">-5% unlocked</strong> · Add{" "}
-                    <strong className="font-bold text-[#111111]">1 more</strong> for{" "}
-                    <strong className="font-bold text-[#e32f8c]">-10%</strong>
-                  </>
-                ) : (
-                  <>
-                    Ai <strong className="font-bold text-[#111111]">-5% activ</strong> · +1 produs pentru{" "}
-                    <strong className="font-bold text-[#e32f8c]">-10%</strong>
-                  </>
-                ))}
-              {totalItemsCount >= 3 &&
-                (isEn ? (
-                  <>
-                    <strong className="font-bold text-[#111111]">-10% max unlocked</strong> (−
-                    {formatPrice(discount, currency)})
-                  </>
-                ) : (
-                  <>
-                    Reducere maximă <strong className="font-bold text-[#111111]">-10% activată</strong> (−
-                    {formatPrice(discount, currency)})
-                  </>
-                ))}
-            </p>
+          {/* Crisp Matte-Carbon Bundle & Free Shipping Card */}
+          <div className="rounded-xl bg-[#121216] text-white p-3.5">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-[12px] font-semibold text-zinc-200 leading-snug">
+                {totalItemsCount === 0 &&
+                  (isEn
+                    ? "Add 2 items for 5% off or 3+ for 10% off"
+                    : "Adaugă 2 produse pentru -5% sau 3+ pentru -10%")}
+                {totalItemsCount === 1 &&
+                  (isEn ? (
+                    <>
+                      Add <strong className="text-white">1 more item</strong> for{" "}
+                      <strong className="text-[#ff4da6]">5% off</strong>
+                    </>
+                  ) : (
+                    <>
+                      Mai adaugă <strong className="text-white">1 produs</strong> pentru{" "}
+                      <strong className="text-[#ff4da6]">-5% reducere</strong>
+                    </>
+                  ))}
+                {totalItemsCount === 2 &&
+                  (isEn ? (
+                    <>
+                      <strong className="text-white">5% off applied</strong> — add{" "}
+                      <strong className="text-[#ff4da6]">1 more for 10% off</strong>
+                    </>
+                  ) : (
+                    <>
+                      Ai <strong className="text-white">-5% reducere</strong> — adaugă{" "}
+                      <strong className="text-[#ff4da6]">încă 1 pentru -10%</strong>
+                    </>
+                  ))}
+                {totalItemsCount >= 3 &&
+                  (isEn ? (
+                    <>
+                      <strong className="text-emerald-400">10% bundle discount</strong> applied (−
+                      {formatPrice(discount, currency)})
+                    </>
+                  ) : (
+                    <>
+                      Ai activat <strong className="text-emerald-400">reducerea de 10%</strong> (−
+                      {formatPrice(discount, currency)})
+                    </>
+                  ))}
+              </p>
 
-            {items.length > 0 && (
-              isFreeShippingUnlocked ? (
-                <span className="text-[11px] font-bold text-emerald-700 shrink-0">
-                  {isEn ? "Free shipping ✓" : "Livrare gratuită ✓"}
+              {bundlePercent === 10 ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-[#09090b] text-[10px] font-extrabold uppercase tracking-wider shrink-0">
+                  -10%
+                </span>
+              ) : bundlePercent === 5 ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-[#e32f8c] text-white text-[10px] font-extrabold uppercase tracking-wider shrink-0">
+                  -5%
                 </span>
               ) : (
-                <span className="text-[11px] font-medium text-zinc-400 shrink-0 tabular-nums">
-                  {isEn
-                    ? `+${formatPrice(amountToFreeShipping, currency)} free ship`
-                    : `+${formatPrice(amountToFreeShipping, currency)} livrare 0`}
+                <span className="px-2 py-0.5 rounded-full bg-white/10 text-zinc-300 text-[10px] font-bold shrink-0 tabular-nums">
+                  {totalItemsCount}/3
                 </span>
-              )
-            )}
-          </div>
-
-          {/* 3px Architectural Bar */}
-          <div className="w-full h-[3px] bg-zinc-200 rounded-full overflow-hidden">
-            <div
-              className={cn(
-                "h-full transition-all duration-500 ease-out rounded-full",
-                bundlePercent >= 5 ? "bg-[#e32f8c]" : "bg-[#111111]"
               )}
-              style={{ width: `${bundleProgressPercent}%` }}
-            />
-          </div>
+            </div>
 
-          {/* Minimalist Milestone Labels */}
-          <div className="grid grid-cols-3 items-center mt-1.5 text-[10px] font-bold uppercase tracking-[0.06em] tabular-nums">
-            <span className={cn("text-left", totalItemsCount >= 1 ? "text-[#111111]" : "text-zinc-400")}>
-              {isEn ? "1 item" : "1 prod."}
-            </span>
-            <span className={cn("text-center", bundlePercent >= 5 ? "text-[#e32f8c]" : "text-zinc-400")}>
-              {isEn ? "2 · -5%" : "2 · -5%"}
-            </span>
-            <span className={cn("text-right", bundlePercent >= 10 ? "text-[#111111]" : "text-zinc-400")}>
-              {isEn ? "3+ · -10%" : "3+ · -10%"}
-            </span>
+            {/* Progress Track */}
+            <div className="w-full h-1.5 bg-white/15 rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-500 ease-out",
+                  bundlePercent === 10
+                    ? "bg-emerald-400"
+                    : bundlePercent === 5
+                      ? "bg-[#e32f8c]"
+                      : "bg-white"
+                )}
+                style={{ width: `${bundleProgressPercent}%` }}
+              />
+            </div>
+
+            {/* Clean Step Legend + Free Shipping Status */}
+            <div className="flex items-center justify-between gap-2 mt-2 text-[10.5px] font-medium text-zinc-400">
+              <div className="flex items-center gap-3">
+                <span className={cn(bundlePercent >= 5 ? "text-white font-bold" : "text-zinc-400")}>
+                  {isEn ? "2 items: 5% off" : "2 produse: -5%"}
+                </span>
+                <span className="text-zinc-600">|</span>
+                <span className={cn(bundlePercent >= 10 ? "text-emerald-400 font-bold" : "text-zinc-400")}>
+                  {isEn ? "3+ items: 10% off" : "3+ produse: -10%"}
+                </span>
+              </div>
+
+              {items.length > 0 && (
+                isFreeShippingUnlocked ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-bold shrink-0">
+                    <Check className="w-3 h-3 stroke-[3]" />
+                    {isEn ? "Free shipping" : "Livrare gratuită"}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-zinc-300 font-semibold shrink-0 tabular-nums">
+                    <Truck className="w-3 h-3 text-zinc-400" />
+                    {isEn
+                      ? `Free over ${formatPrice(freeShippingThreshold, currency)}`
+                      : `Gratuită peste ${formatPrice(freeShippingThreshold, currency)}`}
+                  </span>
+                )
+              )}
+            </div>
           </div>
         </div>
 
-        {/* ═══ SCROLLABLE BODY (ITEMS + NEUTRAL UPSELLS + PROMO + SUMMARY) ═══ */}
-        <div className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-hidden bg-white">
-          <ScrollArea className="flex-1 min-h-0 overflow-x-hidden overscroll-behavior-y-contain [&_[data-slot=scroll-area-scrollbar]]:w-1 [&_[data-slot=scroll-area-scrollbar]]:bg-transparent [&_[data-slot=scroll-area-thumb]]:bg-zinc-300/80 hover:[&_[data-slot=scroll-area-thumb]]:bg-zinc-400">
+        {/* ═══ SCROLLABLE BODY ═══ */}
+        <div className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-hidden bg-[#f6f6f8]">
+          <ScrollArea className="flex-1 min-h-0 overflow-x-hidden overscroll-behavior-y-contain [&_[data-slot=scroll-area-scrollbar]]:w-1 [&_[data-slot=scroll-area-scrollbar]]:bg-transparent [&_[data-slot=scroll-area-thumb]]:bg-zinc-300 hover:[&_[data-slot=scroll-area-thumb]]:bg-zinc-400">
             {/* INLINE PREORDER SEPARATION PROMPT */}
             {preorderConflict && (
-              <div className="mx-5 sm:mx-6 my-3 p-4 rounded-lg bg-[#f5f5f7] border border-zinc-300">
+              <div className="mx-4 sm:mx-5 mt-3 p-4 rounded-xl bg-white border border-[#e32f8c]/40 shadow-xs">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#e32f8c] flex items-center gap-1.5">
-                    <Clock size={12} />
-                    {isEn ? "SEPARATE SHIPMENT" : "LIVRARE SEPARATĂ"}
+                  <span className="text-[11px] font-black uppercase tracking-wider text-[#e32f8c] flex items-center gap-1.5">
+                    <Clock size={13} />
+                    {isEn ? "Separate shipment" : "Livrare separată"}
                   </span>
                   <button
                     type="button"
                     onClick={closePreorderConflict}
-                    className="text-zinc-500 hover:text-[#111111] p-1 cursor-pointer transition-colors"
+                    className="text-zinc-400 hover:text-[#111111] p-1 cursor-pointer transition-colors"
                     aria-label="Dismiss"
                   >
                     <X size={14} />
                   </button>
                 </div>
 
-                <p className="text-xs text-zinc-700 leading-snug mb-3">
+                <p className="text-xs text-zinc-600 leading-snug mb-3">
                   {preorderConflict.incomingIsPreorder
                     ? isEn
                       ? "Pre-orders ship in a separate batch and cannot be combined with in-stock items."
@@ -344,22 +366,22 @@ export function CartSheet() {
                   <button
                     type="button"
                     onClick={resolvePreorderConflictWithReplace}
-                    className="flex-1 py-2 px-3 bg-[#111111] hover:bg-[#e32f8c] text-white text-[11px] font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer text-center"
+                    className="flex-1 py-2 px-3 bg-[#111111] hover:bg-[#e32f8c] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer text-center"
                   >
                     {preorderConflict.incomingIsPreorder
                       ? isEn
-                        ? "SWITCH TO PRE-ORDER"
-                        : "TRECI PE PRECOMANDĂ"
+                        ? "Switch to pre-order"
+                        : "Treci pe precomandă"
                       : isEn
-                        ? "SWITCH TO IN-STOCK"
-                        : "TRECI PE ÎN STOC"}
+                        ? "Switch to in-stock"
+                        : "Treci pe produse din stoc"}
                   </button>
                   <button
                     type="button"
                     onClick={closePreorderConflict}
-                    className="py-2 px-3 bg-white border border-zinc-300 hover:border-[#111111] text-zinc-700 text-[11px] font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer text-center"
+                    className="py-2 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition-colors cursor-pointer text-center"
                   >
-                    {isEn ? "KEEP CART" : "PĂSTREAZĂ COȘUL"}
+                    {isEn ? "Keep current cart" : "Păstrează coșul"}
                   </button>
                 </div>
               </div>
@@ -367,12 +389,12 @@ export function CartSheet() {
 
             {/* RESOLVER FOR MIXED CARTS */}
             {hasMixedOrder && (
-              <div className="mx-5 sm:mx-6 my-3 p-4 rounded-lg bg-[#f5f5f7] border border-amber-500/50">
-                <div className="flex items-center gap-1.5 text-amber-700 text-[10px] font-black uppercase tracking-[0.14em] mb-1.5">
-                  <Clock size={12} />
-                  <span>{isEn ? "SEPARATE ORDERS REQUIRED" : "COMANDĂ MIXTĂ NEPERMISĂ"}</span>
+              <div className="mx-4 sm:mx-5 mt-3 p-4 rounded-xl bg-white border border-amber-400 shadow-xs">
+                <div className="flex items-center gap-1.5 text-amber-700 text-[11px] font-black uppercase tracking-wider mb-1.5">
+                  <Clock size={13} />
+                  <span>{isEn ? "Separate orders required" : "Comandă mixtă nepermisă"}</span>
                 </div>
-                <p className="text-xs text-zinc-700 mb-3 leading-snug">
+                <p className="text-xs text-zinc-600 mb-3 leading-snug">
                   {isEn
                     ? "In-stock and pre-order items ship separately. Choose which order to proceed with:"
                     : "Produsele din stoc și precomenzile se livrează separat. Alege comanda dorită:"}
@@ -385,9 +407,9 @@ export function CartSheet() {
                         items: items.filter((item) => !isPreorder(item, item.selectedVariant)),
                       });
                     }}
-                    className="flex-1 py-2 bg-[#111111] text-white font-bold uppercase text-[10px] tracking-wider rounded-md hover:bg-zinc-800 transition-colors cursor-pointer"
+                    className="flex-1 py-2 bg-[#111111] text-white font-bold text-xs rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
                   >
-                    {isEn ? "KEEP IN-STOCK" : "DOAR ÎN STOC"}
+                    {isEn ? "Keep in-stock" : "Doar din stoc"}
                   </button>
                   <button
                     type="button"
@@ -396,17 +418,17 @@ export function CartSheet() {
                         items: items.filter((item) => isPreorder(item, item.selectedVariant)),
                       });
                     }}
-                    className="flex-1 py-2 bg-white border border-zinc-300 text-[#111111] font-bold uppercase text-[10px] tracking-wider rounded-md hover:border-[#111111] transition-colors cursor-pointer"
+                    className="flex-1 py-2 bg-zinc-100 text-[#111111] font-bold text-xs rounded-lg hover:bg-zinc-200 transition-colors cursor-pointer"
                   >
-                    {isEn ? "KEEP PRE-ORDER" : "DOAR PRECOMANDĂ"}
+                    {isEn ? "Keep pre-order" : "Doar precomandă"}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* CART ITEMS LIST */}
+            {/* CART ITEMS LIST (ELEVATED WHITE CARDS) */}
             {items.length > 0 ? (
-              <div className="px-5 sm:px-6 divide-y divide-zinc-200/80 min-w-0 bg-white">
+              <div className="px-4 sm:px-5 pt-3.5 pb-2 space-y-2.5 min-w-0">
                 <AnimatePresence initial={false}>
                   {items.map((item) => {
                     const variantName = item.selectedVariant
@@ -430,13 +452,13 @@ export function CartSheet() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, height: 0, margin: 0, overflow: "hidden" }}
                         transition={{ duration: 0.18 }}
-                        className="flex gap-3.5 py-4 items-start"
+                        className="flex gap-3.5 p-3 rounded-xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] items-center"
                       >
-                        {/* 4:5 Editorial Studio Thumbnail */}
+                        {/* 4:5 Product Thumbnail */}
                         <Link
                           href={`/product/${item.slug}`}
                           onClick={() => setCartOpen(false)}
-                          className="w-[74px] h-[92px] sm:w-[78px] sm:h-[96px] bg-zinc-950 rounded-md overflow-hidden shrink-0 relative"
+                          className="w-[72px] h-[88px] sm:w-[76px] sm:h-[94px] bg-zinc-950 rounded-lg overflow-hidden shrink-0 relative"
                         >
                           <Image
                             src={displayImage}
@@ -448,70 +470,86 @@ export function CartSheet() {
                           />
                         </Link>
 
-                        {/* Metadata & Controls */}
-                        <div className="flex-1 min-w-0 flex flex-col">
-                          <div className="flex items-start justify-between gap-2.5">
-                            <Link
-                              href={`/product/${item.slug}`}
-                              onClick={() => setCartOpen(false)}
-                              className="hover:text-[#e32f8c] transition-colors flex-1 min-w-0"
-                            >
-                              <h4 className="text-[12.5px] font-extrabold uppercase tracking-[0.04em] text-[#111111] leading-snug line-clamp-1">
-                                {getLocalized(item.name, locale)}
-                              </h4>
-                            </Link>
-                            <span className="text-[13px] font-bold text-[#111111] tabular-nums shrink-0">
-                              {formatPrice(getProductPrice(item.price, currency) * item.quantity, currency)}
-                            </span>
+                        {/* Details & Controls */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-between self-stretch py-0.5">
+                          <div>
+                            <div className="flex items-start justify-between gap-2.5">
+                              <Link
+                                href={`/product/${item.slug}`}
+                                onClick={() => setCartOpen(false)}
+                                className="hover:text-[#e32f8c] transition-colors flex-1 min-w-0"
+                              >
+                                <h4 className="text-[13px] font-extrabold uppercase tracking-tight text-[#111111] leading-snug line-clamp-1">
+                                  {getLocalized(item.name, locale)}
+                                </h4>
+                              </Link>
+                              <span className="text-[13.5px] font-black text-[#111111] tabular-nums shrink-0">
+                                {formatPrice(
+                                  getProductPrice(item.price, currency) * item.quantity,
+                                  currency
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              {item.selectedVariant && (
+                                <span className="inline-block px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 text-[10px] font-bold uppercase tracking-wider">
+                                  {getLocalized(item.selectedVariant.name, locale)}
+                                </span>
+                              )}
+                              {isPreorder(item, item.selectedVariant) && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
+                                  <Clock size={10} />
+                                  {isEn ? "Pre-order" : "Precomandă"}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
-                          {item.selectedVariant && (
-                            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500 mt-1">
-                              {getLocalized(item.selectedVariant.name, locale)}
-                            </p>
-                          )}
-
-                          {isPreorder(item, item.selectedVariant) && (
-                            <p className="text-[10.5px] font-semibold text-amber-700 mt-1 flex items-center gap-1">
-                              <Clock size={11} />
-                              {isEn ? "Pre-order — ships on next batch" : "Precomandă — lot nou"}
-                            </p>
-                          )}
-
-                          {/* Hairline Quantity Stepper + Clean Remove Link */}
-                          <div className="flex items-center gap-4 mt-3">
-                            <div className="inline-flex items-center border border-zinc-300 rounded-md h-8 bg-white">
+                          <div className="flex items-center justify-between mt-3">
+                            <div className="inline-flex items-center bg-[#f4f4f6] border border-zinc-200/90 rounded-lg h-8">
                               <button
                                 type="button"
                                 onClick={() =>
                                   item.quantity > 1
-                                    ? updateQuantity(item.id, item.quantity - 1, item.selectedVariant?.name)
+                                    ? updateQuantity(
+                                        item.id,
+                                        item.quantity - 1,
+                                        item.selectedVariant?.name
+                                      )
                                     : removeItem(item.id, item.selectedVariant?.name)
                                 }
                                 className="w-8 h-full flex items-center justify-center text-zinc-600 hover:text-[#111111] transition-colors cursor-pointer"
                                 aria-label="Decrease quantity"
                               >
-                                <Minus className="w-3 h-3" />
+                                <Minus className="w-3.5 h-3.5" />
                               </button>
-                              <span className="text-xs font-bold w-6 text-center select-none text-[#111111] tabular-nums">
+                              <span className="text-xs font-extrabold w-6 text-center select-none text-[#111111] tabular-nums">
                                 {item.quantity}
                               </span>
                               <button
                                 type="button"
-                                onClick={() => updateQuantity(item.id, item.quantity + 1, item.selectedVariant?.name)}
+                                onClick={() =>
+                                  updateQuantity(
+                                    item.id,
+                                    item.quantity + 1,
+                                    item.selectedVariant?.name
+                                  )
+                                }
                                 className="w-8 h-full flex items-center justify-center text-zinc-600 hover:text-[#111111] transition-colors cursor-pointer"
                                 aria-label="Increase quantity"
                               >
-                                <Plus className="w-3 h-3" />
+                                <Plus className="w-3.5 h-3.5" />
                               </button>
                             </div>
 
                             <button
                               type="button"
                               onClick={() => removeItem(item.id, item.selectedVariant?.name)}
-                              className="text-[11px] font-medium text-zinc-500 hover:text-[#111111] underline underline-offset-2 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
                             >
-                              {isEn ? "Remove" : "Elimină"}
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>{isEn ? "Remove" : "Elimină"}</span>
                             </button>
                           </div>
                         </div>
@@ -521,51 +559,39 @@ export function CartSheet() {
                 </AnimatePresence>
               </div>
             ) : (
-              /* EMPTY CART STATE */
-              <div className="px-6 py-8 text-center bg-white flex flex-col items-center">
-                <div className="w-11 h-11 rounded-md border border-zinc-200 flex items-center justify-center mb-3 text-zinc-400">
-                  <ShoppingCart className="w-5 h-5" strokeWidth={1.5} />
+              /* EMPTY CART NOTICE */
+              <div className="mx-4 sm:mx-5 mt-3.5 p-6 rounded-xl bg-white border border-zinc-200/80 text-center flex flex-col items-center">
+                <div className="w-11 h-11 rounded-xl bg-zinc-100 flex items-center justify-center mb-3 text-zinc-500">
+                  <ShoppingCart className="w-5 h-5" strokeWidth={1.75} />
                 </div>
-                <h3 className="text-xs font-black uppercase tracking-[0.14em] text-[#111111]">
-                  {isEn ? "YOUR CART IS EMPTY" : "COȘUL TĂU ESTE GOL"}
+                <h3 className="text-sm font-black uppercase tracking-tight text-[#111111]">
+                  {isEn ? "Your cart is empty" : "Coșul tău este gol"}
                 </h3>
-                <p className="text-[11.5px] font-medium text-zinc-500 mt-1.5 max-w-[260px] leading-relaxed">
+                <p className="text-xs font-medium text-zinc-500 mt-1 max-w-[270px] leading-relaxed">
                   {isEn
-                    ? "Add 2 items below for -5% or 3+ for -10% off. Promo codes stack on top."
-                    : "Adaugă 2 produse pentru -5% sau 3+ pentru -10%. Codurile de reducere se cumulează."}
+                    ? "Add 2 items below to unlock 5% off, or 3+ items for 10% off."
+                    : "Adaugă 2 produse mai jos pentru 5% reducere sau minim 3 pentru 10%."}
                 </p>
               </div>
             )}
 
-            {/* ═══ NEUTRAL GYMSHARK-STYLE UPSELL BAND (#f5f5f7) ═══ */}
+            {/* ═══ PRODUCT RECOMMENDATIONS CAROUSEL ═══ */}
             {availableUpsells.length > 0 && (
-              <div className="bg-[#f5f5f7] border-y border-zinc-200/80 py-4.5">
-                <div className="px-5 sm:px-6 mb-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <h3 className="text-[11.5px] font-black uppercase tracking-[0.14em] text-[#111111] truncate">
-                      {bundlePercent === 5
+              <div className="pt-3.5 pb-4">
+                <div className="px-4 sm:px-5 mb-2.5 flex items-center justify-between gap-2">
+                  <h3 className="text-[12px] font-black uppercase tracking-[0.06em] text-[#111111] truncate">
+                    {bundlePercent === 5
+                      ? isEn
+                        ? "Add 1 more item for 10% off"
+                        : "Mai adaugă un produs pentru -10%"
+                      : bundlePercent === 0 && totalItemsCount === 1
                         ? isEn
-                          ? "UNLOCK -10% MAX"
-                          : "URCĂ LA -10% MAXIM"
-                        : bundlePercent === 10
-                          ? isEn
-                            ? "ADD A LITTLE EXTRA"
-                            : "COMPLETEAZĂ SETUL"
-                          : isEn
-                            ? "BUILD YOUR BUNDLE"
-                            : "ADAUGĂ ÎN PACHET"}
-                    </h3>
-                    {bundlePercent === 0 && (
-                      <span className="text-[10.5px] font-bold text-[#e32f8c] shrink-0">
-                        {totalItemsCount === 1 ? "+1 → -5%" : "-5% / -10%"}
-                      </span>
-                    )}
-                    {bundlePercent === 5 && (
-                      <span className="text-[10.5px] font-bold text-[#e32f8c] shrink-0">
-                        +1 → -10%
-                      </span>
-                    )}
-                  </div>
+                          ? "Add 1 more item for 5% off"
+                          : "Mai adaugă un produs pentru -5%"
+                        : isEn
+                          ? "Complete your setup"
+                          : "Completează echipamentul"}
+                  </h3>
 
                   {(canScrollLeft || canScrollRight) && (
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -575,9 +601,9 @@ export function CartSheet() {
                         disabled={!canScrollLeft}
                         aria-label="Previous items"
                         className={cn(
-                          "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white",
+                          "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
                           canScrollLeft
-                            ? "border-zinc-300 text-[#111111] hover:border-[#111111] cursor-pointer"
+                            ? "border-zinc-200 text-[#111111] hover:border-[#111111] cursor-pointer"
                             : "border-zinc-200 text-zinc-300 opacity-50 pointer-events-none"
                         )}
                       >
@@ -589,9 +615,9 @@ export function CartSheet() {
                         disabled={!canScrollRight}
                         aria-label="Next items"
                         className={cn(
-                          "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white",
+                          "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
                           canScrollRight
-                            ? "border-zinc-300 text-[#111111] hover:border-[#111111] cursor-pointer"
+                            ? "border-zinc-200 text-[#111111] hover:border-[#111111] cursor-pointer"
                             : "border-zinc-200 text-zinc-300 opacity-50 pointer-events-none"
                         )}
                       >
@@ -601,10 +627,9 @@ export function CartSheet() {
                   )}
                 </div>
 
-                {/* Crisp 4:5 Portrait Product Cards */}
                 <div
                   ref={carouselRef}
-                  className="flex gap-3 overflow-x-auto no-scrollbar px-5 sm:px-6 snap-x scroll-smooth"
+                  className="flex gap-2.5 overflow-x-auto no-scrollbar px-4 sm:px-5 pb-1 snap-x scroll-smooth"
                 >
                   {availableUpsells.map((p) => {
                     const price = getProductPrice(p.price, currency);
@@ -615,9 +640,9 @@ export function CartSheet() {
                     return (
                       <div
                         key={p.id}
-                        className="w-[124px] sm:w-[132px] shrink-0 snap-start flex flex-col group select-none"
+                        className="w-[138px] sm:w-[148px] shrink-0 snap-start bg-white rounded-xl p-1.5 border border-zinc-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:border-zinc-300 transition-all flex flex-col group select-none"
                       >
-                        <div className="relative w-full aspect-[4/5] bg-zinc-950 rounded-md overflow-hidden">
+                        <div className="relative w-full aspect-[4/5] bg-zinc-950 rounded-lg overflow-hidden">
                           <Link
                             href={`/product/${p.slug}`}
                             onClick={() => setCartOpen(false)}
@@ -627,13 +652,13 @@ export function CartSheet() {
                               src={p.image}
                               alt={getLocalized(p.name, locale)}
                               fill
-                              sizes="140px"
+                              sizes="150px"
                               className="object-cover object-center group-hover:scale-104 transition-transform duration-500"
                             />
                           </Link>
 
                           {nextPct > 0 && (
-                            <span className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-[3px] bg-white text-[#111111] text-[9.5px] font-black tracking-wide">
+                            <span className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded bg-[#111111]/90 text-white text-[9.5px] font-extrabold tracking-wide">
                               -{nextPct}%
                             </span>
                           )}
@@ -653,32 +678,33 @@ export function CartSheet() {
                               }
                             }}
                             aria-label={`Add ${getLocalized(p.name, locale)} to cart`}
-                            className="absolute bottom-2 right-2 z-10 w-8 h-8 rounded-[5px] bg-[#111111] hover:bg-[#e32f8c] text-white flex items-center justify-center shadow-sm transition-colors cursor-pointer"
+                            className="absolute bottom-2 right-2 z-10 h-7 px-2.5 rounded-md bg-white hover:bg-[#e32f8c] text-[#111111] hover:text-white active:scale-95 text-[10px] font-extrabold uppercase tracking-wider shadow-md flex items-center gap-1 transition-colors cursor-pointer"
                           >
-                            <Plus className="w-4 h-4 stroke-[2.25]" />
+                            <Plus className="w-3 h-3 stroke-[2.75]" />
+                            <span>{isEn ? "Add" : "Adaugă"}</span>
                           </button>
                         </div>
 
                         <Link
                           href={`/product/${p.slug}`}
                           onClick={() => setCartOpen(false)}
-                          className="flex flex-col mt-2 min-w-0"
+                          className="flex flex-col px-1 pt-2 pb-1 min-w-0"
                         >
-                          <h4 className="text-[11.5px] font-semibold text-[#111111] group-hover:text-[#e32f8c] transition-colors leading-snug line-clamp-2 min-h-[2rem]">
+                          <h4 className="text-[11.5px] font-bold text-[#111111] group-hover:text-[#e32f8c] transition-colors leading-snug line-clamp-2 min-h-[2rem]">
                             {getLocalized(p.name, locale)}
                           </h4>
-                          <div className="flex items-center gap-1.5 mt-0.5 tabular-nums">
+                          <div className="flex items-center gap-1.5 mt-1 tabular-nums">
                             {discountedHint && discountedHint < price ? (
                               <>
-                                <span className="text-[12px] font-bold text-[#111111]">
+                                <span className="text-[12.5px] font-black text-[#111111]">
                                   {formatPrice(discountedHint, currency)}
                                 </span>
-                                <span className="text-[11px] font-medium text-zinc-400 line-through">
+                                <span className="text-[10.5px] font-medium text-zinc-400 line-through">
                                   {formatPrice(price, currency)}
                                 </span>
                               </>
                             ) : (
-                              <span className="text-[12px] font-semibold text-zinc-700">
+                              <span className="text-[12.5px] font-bold text-[#111111]">
                                 {formatPrice(price, currency)}
                               </span>
                             )}
@@ -689,9 +715,9 @@ export function CartSheet() {
                   })}
                 </div>
 
-                {/* Hairline Scroll Progress */}
+                {/* Carousel Progress Indicator */}
                 {(canScrollLeft || canScrollRight) && (
-                  <div className="mx-5 sm:mx-6 mt-3 flex items-center gap-3">
+                  <div className="mx-4 sm:mx-5 mt-2 flex items-center gap-3">
                     <div className="flex-1 h-[2px] bg-zinc-200 rounded-full overflow-hidden relative">
                       <div
                         className="h-full bg-[#111111] rounded-full transition-all duration-100 ease-out"
@@ -706,141 +732,132 @@ export function CartSheet() {
               </div>
             )}
 
-            {/* ═══ DIRECT DISCOUNT CODE & ORDER SUMMARY (GYMSHARK FLOW) ═══ */}
+            {/* ═══ PROMO CODE & ORDER SUMMARY CARD ═══ */}
             {items.length > 0 && (
-              <div className="px-5 sm:px-6 py-4 bg-white">
-                {/* Discount Code (1-click ready) */}
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-[11px] font-black uppercase tracking-[0.14em] text-[#111111]">
-                      {isEn ? "DISCOUNT CODE" : "COD DE REDUCERE"}
-                    </span>
-                    {discount > 0 && !appliedCoupon && (
-                      <span className="text-[10.5px] font-semibold text-emerald-700">
-                        {isEn ? `Stacks with -${bundlePercent}%` : `Cumulabil cu -${bundlePercent}%`}
-                      </span>
+              <div className="px-4 sm:px-5 pb-4">
+                <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] space-y-3.5">
+                  <div>
+                    <label className="block text-[11.5px] font-black uppercase tracking-wider text-[#111111] mb-2">
+                      {isEn ? "Promo code" : "Cod de reducere"}
+                    </label>
+
+                    {!appliedCoupon ? (
+                      <CouponInput variant="cart" />
+                    ) : (
+                      <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                          <Ticket className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span className="uppercase tracking-wider font-black text-[#111111]">
+                            {appliedCoupon.code}
+                          </span>
+                          <span className="text-emerald-700 font-bold">
+                            {appliedCoupon.type === "percentage"
+                              ? `(-${appliedCoupon.value}%)`
+                              : appliedCoupon.type === "free_shipping"
+                                ? isEn
+                                  ? "Free shipping"
+                                  : "Livrare gratuită"
+                                : `(-${formatPrice(couponDiscount, currency)})`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCoupon(null);
+                            if (typeof window !== "undefined") {
+                              localStorage.removeItem("tz_referral_code");
+                            }
+                          }}
+                          className="p-1 text-zinc-400 hover:text-[#111111] transition-colors cursor-pointer"
+                          title={isEn ? "Remove code" : "Elimină cod"}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </div>
 
-                  {!appliedCoupon ? (
-                    <CouponInput variant="cart" />
-                  ) : (
-                    <div className="flex items-center justify-between px-3 py-2.5 rounded-md bg-[#f5f5f7] border border-zinc-200 text-xs">
-                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                        <Ticket className="w-3.5 h-3.5 text-[#111111] shrink-0" />
-                        <span className="uppercase tracking-wider font-black text-[#111111]">
-                          {appliedCoupon.code}
-                        </span>
-                        <span className="text-zinc-500 font-medium">
-                          {appliedCoupon.type === "percentage"
-                            ? `(-${appliedCoupon.value}%)`
-                            : appliedCoupon.type === "free_shipping"
-                              ? isEn
-                                ? "Free Shipping"
-                                : "Livrare Gratuită"
-                              : `(-${formatPrice(couponDiscount, currency)})`}
-                        </span>
-                        {discount > 0 && (
-                          <span className="text-[9.5px] font-bold uppercase tracking-wider text-emerald-700">
-                            · {isEn ? "Stacked" : "Cumulat"}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCoupon(null);
-                          if (typeof window !== "undefined") {
-                            localStorage.removeItem("tz_referral_code");
-                          }
-                        }}
-                        className="p-1 text-zinc-400 hover:text-[#111111] transition-colors cursor-pointer"
-                        title={isEn ? "Remove code" : "Elimină cod"}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                  {/* Summary Breakdown */}
+                  <div className="pt-3 border-t border-zinc-100 space-y-2 text-[12.5px] tabular-nums">
+                    <div className="flex justify-between text-zinc-600">
+                      <span>{isEn ? "Subtotal" : "Subtotal"}</span>
+                      <span className="font-bold text-[#111111]">
+                        {formatPrice(subtotal, currency)}
+                      </span>
                     </div>
-                  )}
-                </div>
 
-                {/* Order Summary Breakdown */}
-                <div className="mt-4 pt-4 border-t border-zinc-200/80 space-y-2 text-[12px] tabular-nums">
-                  <h4 className="text-[11px] font-black uppercase tracking-[0.14em] text-[#111111] mb-2">
-                    {isEn ? "ORDER SUMMARY" : "SUMAR COMANDĂ"}
-                  </h4>
+                    {discount > 0 && (
+                      <div className="flex justify-between items-center text-[#111111]">
+                        <span className="font-semibold text-zinc-700">
+                          {isEn
+                            ? `Bundle discount (-${bundlePercent}%)`
+                            : `Reducere pachet (-${bundlePercent}%)`}
+                        </span>
+                        <span className="font-extrabold text-[#e32f8c]">
+                          -{formatPrice(discount, currency)}
+                        </span>
+                      </div>
+                    )}
 
-                  <div className="flex justify-between text-zinc-600">
-                    <span>{isEn ? "Sub Total" : "Subtotal"}</span>
-                    <span className="font-semibold text-[#111111]">{formatPrice(subtotal, currency)}</span>
+                    {appliedCoupon && couponDiscount > 0 && (
+                      <div className="flex justify-between items-center text-[#111111]">
+                        <span className="font-semibold text-zinc-700">
+                          {isEn
+                            ? `Promo code (${appliedCoupon.code})`
+                            : `Cod reducere (${appliedCoupon.code})`}
+                        </span>
+                        <span className="font-extrabold text-emerald-600">
+                          -{formatPrice(couponDiscount, currency)}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between text-zinc-600">
+                      <span>{isEn ? "Shipping" : "Livrare"}</span>
+                      {isFreeShippingUnlocked ? (
+                        <span className="font-bold text-emerald-600">
+                          {isEn ? "Free" : "Gratuită"}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500">
+                          {isEn ? "Calculated at checkout" : "Calculată la checkout"}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {discount > 0 && (
-                    <div className="flex justify-between text-[#e32f8c] font-semibold">
+                  {hasPreorderInCart && !hasMixedOrder && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-medium text-amber-800">
+                      <Clock size={12} className="shrink-0" />
                       <span>
                         {isEn
-                          ? `Bundle (${totalItemsCount} items · -${bundlePercent}%)`
-                          : `Reducere pachet (${totalItemsCount} prod. · -${bundlePercent}%)`}
+                          ? "Pre-order ships automatically when the new batch arrives."
+                          : "Precomanda se expediază automat la sosirea noului lot."}
                       </span>
-                      <span>-{formatPrice(discount, currency)}</span>
                     </div>
                   )}
-
-                  {appliedCoupon && couponDiscount > 0 && (
-                    <div className="flex justify-between text-emerald-700 font-semibold">
-                      <span>{isEn ? `Promo (${appliedCoupon.code})` : `Cod (${appliedCoupon.code})`}</span>
-                      <span>-{formatPrice(couponDiscount, currency)}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between text-zinc-600">
-                    <span>{isEn ? "Estimated Shipping" : "Livrare estimată"}</span>
-                    {isFreeShippingUnlocked ? (
-                      <span className="font-semibold text-emerald-700">
-                        {isEn ? "Free" : "Gratuită"}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-500">
-                        {isEn ? "Calculated at checkout" : "La pasul următor"}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex justify-between items-baseline pt-2 border-t border-zinc-200/80 text-[13.5px] font-black text-[#111111]">
-                    <span>{isEn ? "Total" : "Total"}</span>
-                    <span>{formatPrice(total, currency)}</span>
-                  </div>
                 </div>
-
-                {hasPreorderInCart && !hasMixedOrder && (
-                  <p className="mt-3 text-[11px] font-medium text-amber-700 flex items-center gap-1.5">
-                    <Clock size={12} className="shrink-0" />
-                    <span>
-                      {isEn
-                        ? "Pre-order ships automatically when the new production batch arrives."
-                        : "Precomanda se expediază automat la sosirea noului lot."}
-                    </span>
-                  </p>
-                )}
               </div>
             )}
           </ScrollArea>
 
-          {/* ═══ ULTRA-SLIM STICKY CHECKOUT DOCK (GYMSHARK CLEAN + LIVE TOTAL) ═══ */}
+          {/* ═══ STICKY CHECKOUT DOCK ═══ */}
           {items.length > 0 && (
-            <div className="flex-shrink-0 px-5 sm:px-6 pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-white border-t border-zinc-200 z-20">
-              <div className="flex items-center justify-between text-[11.5px] mb-2 tabular-nums">
-                {totalSaved > 0 ? (
-                  <span className="font-bold text-emerald-700">
-                    {isEn
-                      ? `Saving ${formatPrice(totalSaved, currency)} total`
-                      : `Economisești ${formatPrice(totalSaved, currency)}`}
+            <div className="flex-shrink-0 px-4 sm:px-5 pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-white border-t border-zinc-200 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] z-20">
+              <div className="flex items-center justify-between gap-2 mb-2.5 tabular-nums">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-zinc-500">
+                    Total
                   </span>
-                ) : (
-                  <span className="text-zinc-500">
-                    {isEn ? "Shipping calculated at checkout" : "Livrarea calculată la checkout"}
-                  </span>
-                )}
-                <span className="font-black text-[#111111]">
+                  {totalSaved > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10.5px] font-bold">
+                      {isEn
+                        ? `You save ${formatPrice(totalSaved, currency)}`
+                        : `Economisești ${formatPrice(totalSaved, currency)}`}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[19px] font-black text-[#111111] tracking-tight">
                   {formatPrice(total, currency)}
                 </span>
               </div>
@@ -854,21 +871,20 @@ export function CartSheet() {
                   router.push("/checkout");
                 }}
                 className={cn(
-                  "w-full h-12 rounded-md font-black uppercase tracking-[0.12em] text-xs flex items-center justify-center gap-2 transition-colors",
+                  "w-full h-12 rounded-xl font-black uppercase tracking-wider text-[13px] flex items-center justify-center gap-2 transition-colors shadow-xs",
                   hasMixedOrder
-                    ? "bg-zinc-300 text-zinc-500 cursor-not-allowed pointer-events-none"
+                    ? "bg-zinc-200 text-zinc-500 cursor-not-allowed pointer-events-none"
                     : "bg-[#111111] hover:bg-[#e32f8c] text-white active:scale-[0.99] cursor-pointer"
                 )}
               >
-                <Lock className="w-3.5 h-3.5 shrink-0" strokeWidth={2.25} />
+                <Lock className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
                 {hasMixedOrder ? (
-                  <span>{isEn ? "RESOLVE CART ABOVE" : "ALEGE TIPUL DE COMANDĂ"}</span>
+                  <span>{isEn ? "Resolve cart above" : "Alege tipul de comandă"}</span>
                 ) : (
-                  <span className="tabular-nums">
-                    {isEn
-                      ? `CHECKOUT · ${formatPrice(total, currency)}`
-                      : `FINALIZARE COMANDĂ · ${formatPrice(total, currency)}`}
-                  </span>
+                  <>
+                    <span>{isEn ? "Checkout securely" : "Finalizare comandă"}</span>
+                    <ArrowRight className="w-4 h-4 shrink-0" strokeWidth={2.5} />
+                  </>
                 )}
               </button>
 
@@ -876,7 +892,7 @@ export function CartSheet() {
             </div>
           )}
 
-          {/* ═══ MINIMALIST LIGHT VARIANT SELECTION MODAL ═══ */}
+          {/* ═══ VARIANT SELECTION MODAL ═══ */}
           <AnimatePresence>
             {selectingProduct && (
               <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
@@ -891,7 +907,7 @@ export function CartSheet() {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 16 }}
-                  className="relative w-full max-w-[360px] bg-white border border-zinc-200 p-5 sm:p-6 shadow-2xl flex flex-col rounded-xl text-[#111111]"
+                  className="relative w-full max-w-[360px] bg-white border border-zinc-200 p-5 sm:p-6 shadow-2xl flex flex-col rounded-2xl text-[#111111]"
                 >
                   {(() => {
                     const rawOptions = selectingProduct.variants?.options || [];
@@ -917,7 +933,7 @@ export function CartSheet() {
                     return (
                       <>
                         <div className="flex gap-3.5 mb-4 items-center">
-                          <div className="w-[54px] h-[68px] bg-zinc-950 relative overflow-hidden shrink-0 rounded-md">
+                          <div className="w-[54px] h-[68px] bg-zinc-950 relative overflow-hidden shrink-0 rounded-lg">
                             <Image
                               src={selectingProduct.image}
                               alt={prodName}
@@ -931,19 +947,19 @@ export function CartSheet() {
                             <h2 className="text-[13px] font-black uppercase tracking-tight text-[#111111] mb-0.5 leading-tight truncate">
                               {prodName}
                             </h2>
-                            <h3 className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-zinc-400">
+                            <h3 className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">
                               {isSize
                                 ? isEn
-                                  ? "SELECT SIZE"
-                                  : "ALEGE MĂRIMEA"
+                                  ? "Select size"
+                                  : "Alege mărimea"
                                 : isEn
-                                  ? "SELECT COLOR"
-                                  : "ALEGE CULOAREA"}
+                                  ? "Select color"
+                                  : "Alege culoarea"}
                             </h3>
                           </div>
                         </div>
 
-                        <div className="w-full bg-white border border-zinc-200 rounded-lg overflow-hidden flex flex-col text-left max-h-[min(460px,62vh)] overflow-y-auto custom-scrollbar divide-y divide-zinc-200">
+                        <div className="w-full bg-white border border-zinc-200 rounded-xl overflow-hidden flex flex-col text-left max-h-[min(460px,62vh)] overflow-y-auto custom-scrollbar divide-y divide-zinc-200">
                           {options.map((opt: VariantOption, idx: number) => {
                             const localizedName = getLocalized(opt.name, locale);
                             const isSoldOut = opt.stock_status === "sold_out";
@@ -992,7 +1008,9 @@ export function CartSheet() {
                                     <span
                                       className={cn(
                                         "text-xs md:text-[13px] uppercase tracking-wider truncate",
-                                        isSoldOut ? "font-semibold text-zinc-400" : "font-bold text-[#111111]"
+                                        isSoldOut
+                                          ? "font-semibold text-zinc-400"
+                                          : "font-bold text-[#111111]"
                                       )}
                                     >
                                       {localizedName}
@@ -1020,9 +1038,9 @@ export function CartSheet() {
                         <button
                           type="button"
                           onClick={() => setSelectingProduct(null)}
-                          className="mt-4 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400 hover:text-[#111111] transition-colors self-center cursor-pointer"
+                          className="mt-4 py-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400 hover:text-[#111111] transition-colors self-center cursor-pointer"
                         >
-                          {isEn ? "CANCEL" : "ANULEAZĂ"}
+                          {isEn ? "Cancel" : "Anulează"}
                         </button>
                       </>
                     );

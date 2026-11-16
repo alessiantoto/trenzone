@@ -103,17 +103,31 @@ export async function uploadPromoImage(formData: FormData) {
   return { success: true, url: publicUrlData.publicUrl };
 }
 
-export async function deletePromoImage(filePath: string) {
+export async function deletePromoImage(filePathOrUrl: string) {
   const isAuth = await isAdminAuthorized();
   if (!isAuth) return { success: false };
 
   try {
     const r2Base = getR2PublicBaseUrl();
-    if (filePath.includes('r2.dev') || (r2Base && filePath.includes(r2Base))) {
-      await deleteFromR2(filePath).catch(() => {});
+    if (
+      filePathOrUrl.includes('r2.dev') ||
+      filePathOrUrl.includes('cdn.trenzone.fit') ||
+      (r2Base && filePathOrUrl.includes(r2Base)) ||
+      filePathOrUrl.startsWith('marketing/')
+    ) {
+      let key = filePathOrUrl;
+      if (filePathOrUrl.startsWith('http')) {
+        try {
+          key = new URL(filePathOrUrl).pathname.replace(/^\/+/, '');
+        } catch {}
+      }
+      await deleteFromR2(key).catch(() => {});
       return { success: true };
     }
-    await supabaseAdmin.storage.from('marketing').remove([filePath]);
+    const storagePath = filePathOrUrl.includes('/public/marketing/')
+      ? filePathOrUrl.split('/public/marketing/')[1]
+      : filePathOrUrl;
+    await supabaseAdmin.storage.from('marketing').remove([storagePath]);
     return { success: true };
   } catch (e) {
     return { success: false };

@@ -1,22 +1,66 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import { useLocale } from "next-intl";
 import { CheckCircle2, ShieldCheck, Zap } from "lucide-react";
 import { getCdnUrl } from "@/lib/utils/cdn";
+import { useShippingConfig } from "@/lib/use-shipping-config";
+import { getFreeShippingThreshold } from "@/lib/cart-calculations";
+import { useCheckoutStore } from "@/store/useCheckoutStore";
+import { useRegionStore } from "@/store/useRegionStore";
 
 interface TrenHeroProps {
   freeShippingRo?: number;
   freeShippingIntl?: number;
 }
 
-export function TrenHero({ freeShippingRo = 499, freeShippingIntl = 200 }: TrenHeroProps) {
+export function TrenHero({ freeShippingRo = 500, freeShippingIntl = 150 }: TrenHeroProps) {
   const locale = useLocale();
-  const isRo = locale === "ro";
+  const isRoLocale = locale === "ro";
+  const isRo = isRoLocale;
+  const [mounted, setMounted] = useState(false);
 
-  const bannerText = isRo
-    ? `LIVRARE GRATUITĂ PESTE ${freeShippingRo} RON`
-    : `FREE SHIPPING OVER ${freeShippingIntl} EUR`;
+  const shippingConfig = useShippingConfig({
+    free_shipping_ro_ron: freeShippingRo,
+    free_shipping_intl_eur: freeShippingIntl,
+  });
+  const checkoutCountry = useCheckoutStore((s) => s.country);
+  const hasManualCountry = useCheckoutStore((s) => s.hasManualCountry);
+  const currency = useRegionStore((s) => s.currency);
+  const regionCountryCode = useRegionStore((s) => s.countryCode);
+  const hasDetectedCountry = useRegionStore((s) => s.hasDetectedCountry);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const effectiveCountry = mounted
+    ? (hasManualCountry
+        ? checkoutCountry
+        : currency === "RON"
+          ? "RO"
+          : hasDetectedCountry && regionCountryCode !== "RO"
+            ? regionCountryCode
+            : "INTL"
+      ).toUpperCase()
+    : isRoLocale
+      ? "RO"
+      : "INTL";
+
+  const isShippingRo = effectiveCountry === "RO";
+  const displayCurrency = mounted ? currency || (isShippingRo ? "RON" : "EUR") : isShippingRo ? "RON" : "EUR";
+
+  const thresholdDisplay =
+    isShippingRo && displayCurrency === "RON"
+      ? `${shippingConfig.free_shipping_ro_ron} RON`
+      : !isShippingRo && displayCurrency === "EUR"
+        ? `${shippingConfig.free_shipping_intl_eur} EUR`
+        : `${Math.round(getFreeShippingThreshold(effectiveCountry, displayCurrency, shippingConfig))} ${displayCurrency}`;
+
+  const bannerText = isRoLocale
+    ? `LIVRARE GRATUITĂ PESTE ${thresholdDisplay}`
+    : `FREE SHIPPING OVER ${thresholdDisplay}`;
 
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);

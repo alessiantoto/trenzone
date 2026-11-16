@@ -1,6 +1,9 @@
 import { getProductsServer } from "@/app/actions/products";
 import { getPublicReviewsStats } from "@/app/actions/admin-reviews";
 import { ShopProductGrid } from "@/components/shop/ShopProductGrid";
+import { ShopProgramsBanner } from "@/components/programs/ShopProgramsBanner";
+import { AmbassadorBanner } from "@/app/[locale]/components/AmbassadorBanner";
+import { isDigitalProgramItem } from "@/lib/programs";
 import { StarRating } from "@/components/ui/StarRating";
 import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/routing";
@@ -8,10 +11,11 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Metadata } from "next";
 import { generateProductListSchema, generateBreadcrumbSchema } from "@/lib/schema";
 import { getCdnUrl } from "@/lib/utils/cdn";
+import { getSiteUrl } from "@/lib/site-config";
 
 export const revalidate = 2592000; // Cache page for 30 days — admin actions & "Șterge Cache" trigger on-demand revalidation
 
-const BASE_URL = "https://www.trenzone.fit";
+const BASE_URL = getSiteUrl();
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
@@ -38,8 +42,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       canonical: canonicalUrl,
       languages: {
         "ro": `${BASE_URL}/ro/shop`,
+        "ro-RO": `${BASE_URL}/ro/shop`,
         "en": `${BASE_URL}/en/shop`,
-        "x-default": `${BASE_URL}/ro/shop`
+        "en-US": `${BASE_URL}/en/shop`,
+        "en-GB": `${BASE_URL}/en/shop`,
+        "x-default": `${BASE_URL}/en/shop`
       }
     },
     openGraph: {
@@ -69,6 +76,7 @@ export default async function ShopPage({ params }: { params: Promise<{ locale: s
     getTranslations("Shop")
   ]);
 
+  const physicalProducts = products.filter((p) => !isDigitalProgramItem(p));
   const productListSchema = generateProductListSchema(products, locale);
   const breadcrumbSchema = generateBreadcrumbSchema([
     { name: isRo ? "Acasă" : "Home", url: `${BASE_URL}/${locale}` },
@@ -140,12 +148,18 @@ export default async function ShopPage({ params }: { params: Promise<{ locale: s
         </div>
       </section>
 
-      {/* ═══ Products Grid ═══ */}
-      <div className="relative z-10 bg-transparent overflow-hidden pb-8 sm:pb-12 md:pb-16">
+      {/* ═══ Physical Equipment Grid ═══ */}
+      <div className="relative z-10 bg-transparent overflow-hidden pb-6 sm:pb-8 md:pb-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 sm:pt-7 md:pt-10 relative z-10">
-          <ShopProductGrid products={products} dark={true} />
+          <ShopProductGrid products={physicalProducts} dark={true} />
         </div>
       </div>
+
+      {/* ═══ 3-Books Digital Programs Banner CTA → /programs ═══ */}
+      <ShopProgramsBanner />
+
+      {/* ═══ Affiliate / Partner Banner (below Programs) ═══ */}
+      <AmbassadorBanner containerClassName="max-w-6xl mx-auto px-4 sm:px-6 pb-14 sm:pb-20" />
     </div>
   );
 }

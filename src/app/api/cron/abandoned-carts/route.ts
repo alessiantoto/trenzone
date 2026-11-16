@@ -4,6 +4,8 @@ import { resend } from '@/lib/resend-service';
 import { AbandonedCartEmail } from '@/components/email/AbandonedCartEmail';
 import { getEmailTemplate } from '@/app/actions/email-templates';
 import { isAdminAuthorized } from '@/app/actions/admin-auth';
+import { getSiteUrl, getResendFromEmail } from '@/lib/site-config';
+import { getServerExchangeRates, normalizeCartItemsCurrency } from '@/utils/pricing';
 
 // For Vercel Cron
 export const maxDuration = 60; // seconds
@@ -107,9 +109,10 @@ export async function GET(request: Request) {
       const locale = (!session.country || session.country === 'RO') ? 'ro' : 'en';
       const customerName = session.first_name || (locale === 'en' ? 'Friend' : 'Prieten');
       const baseSubject = locale === 'en' ? templateToUse.subject_en : templateToUse.subject_ro;
+      const default24hSubject = locale === 'en' ? 'You left items in your cart!' : 'Ai lăsat produse în coș!';
       const finalSubject = (emailType === '72h'
         ? (locale === 'en' ? `Here is your ${couponValue72h}% discount for your cart!` : `Ai ${couponValue72h}% reducere pentru produsele din coș!`)
-        : baseSubject
+        : (baseSubject || default24hSubject)
       )
         .replace('{{name}}', customerName.split(' ')[0])
         .replace('{{coupon}}', couponCode72h)
@@ -125,17 +128,23 @@ export async function GET(request: Request) {
       }
       if (!Array.isArray(parsedItems)) parsedItems = [];
 
-      const cronCartUrl = `https://www.trenzone.fit/${locale}/checkout${emailType === '72h' ? `?coupon=${encodeURIComponent(couponCode72h)}` : ''}`;
+      const siteUrl = getSiteUrl();
+      const cronCartUrl = `${siteUrl}/${locale}/checkout${emailType === '72h' ? `?coupon=${encodeURIComponent(couponCode72h)}` : ''}`;
+      const sessionCurrency = String(session.currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase();
+      const liveRates = await getServerExchangeRates().catch(() => undefined);
+      const normalizedItems = normalizeCartItemsCurrency(parsedItems, sessionCurrency, session.total_amount, liveRates);
       
       try {
-        await resend.emails.send({
-          from: 'TrenZone <contact@trenzone.fit>',
+        const resendResult = await resend.emails.send({
+          from: getResendFromEmail(),
           to: emailObj,
           subject: finalSubject,
           react: AbandonedCartEmail({
             customerName,
-            items: parsedItems,
+            items: normalizedItems,
             locale,
+            baseUrl: siteUrl,
+            currency: sessionCurrency,
             cartUrl: cronCartUrl,
             templateData: templateToUse as any,
             userEmail: emailObj,
@@ -143,6 +152,9 @@ export async function GET(request: Request) {
             couponValue: emailType === '72h' ? couponValue72h : undefined
           }) as any
         });
+        if (resendResult.error) {
+          throw new Error(resendResult.error.message || 'Resend error');
+        }
         
         // Update session that email was sent with timestamp and coupon details
         recoveryEmailsSent[emailType] = true;

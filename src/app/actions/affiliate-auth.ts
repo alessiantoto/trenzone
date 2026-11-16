@@ -60,8 +60,8 @@ export async function affiliateLoginAction(email: string, code: string, locale: 
       return { success: false, error: isEn ? 'Invalid login credentials.' : 'Date de autentificare invalide.' };
     }
 
-    // Block injection patterns (HTML tags, script tags, SQL/PostgREST wildcards, suspicious characters)
-    if (/[<>{}%_*(),]/i.test(email) || /[<>{}%_*(),]/i.test(code)) {
+    // Block injection patterns (HTML/script/SQL syntax) while permitting valid email/code underscores
+    if (/[<>{}%*(),\\]/i.test(email) || /[<>{}%*(),\\]/i.test(code)) {
       return { success: false, error: isEn ? 'Disallowed characters detected.' : 'Caractere nepermise detectate.' };
     }
 
@@ -78,12 +78,16 @@ export async function affiliateLoginAction(email: string, code: string, locale: 
       return { success: false, error: isEn ? 'Invalid affiliate code format.' : 'Formatul codului de afiliat este invalid.' };
     }
 
-    // 🛡️ 3. Safe Database Lookup (wildcards stripped above)
+    const escapedEmail = cleanedEmail.replace(/[\\%_]/g, '\\$&');
+    const escapedCode = cleanedCode.replace(/[\\%_]/g, '\\$&');
+
+    // 🛡️ 3. Safe Database Lookup (wildcards escaped above)
     const { data: affiliate, error } = await supabaseAdmin
       .from('affiliates')
       .select('id, name, email, code, status, social_links')
-      .ilike('email', cleanedEmail)
-      .eq('code', cleanedCode)
+      .ilike('email', escapedEmail)
+      .ilike('code', escapedCode)
+      .limit(1)
       .maybeSingle();
 
     if (error || !affiliate) {

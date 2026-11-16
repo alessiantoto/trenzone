@@ -2,6 +2,7 @@
   "Navigation": {
     "home": "Home",
     "shop": "Shop",
+    "programs": "Programs",
     "affiliate": "Affiliate",
     "about": "About Us",
     "blog": "Blog",
@@ -359,6 +360,7 @@
     "shipping_locker_suffix": " (Lockers & Box)",
     "contact_us_cta": "Contact Us",
     "payment_update_error": "Error updating secure payment.",
+    "system_error": "System error. Please try again.",
     "ai_busy_error": "Hi! I'm TRENZONE AI and I'm busy calibrating heavy strength gear right now. Please try again soon!",
     "verifying_payment": "Verifying order...",
     "processing_order": "Processing details, please wait.",

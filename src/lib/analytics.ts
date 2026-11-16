@@ -108,7 +108,14 @@ export function parseReferrer(rawReferrer: string = '') {
     if (host.includes('youtube.com') || host.includes('youtu.be')) return 'YouTube';
     if (host.includes('pinterest.')) return 'Pinterest';
     if (host.includes('t.co') || host.includes('twitter.com') || host.includes('x.com')) return 'X (Twitter)';
-    if (host.includes('trenzone.fit') || host.includes('localhost')) return 'Navigare Internă';
+    const siteHost = (() => {
+      try {
+        return new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.trenzone.fit').hostname.replace(/^www\./, '');
+      } catch {
+        return 'trenzone.fit';
+      }
+    })();
+    if (host.includes(siteHost) || host.includes('trenzone.fit') || host.includes('localhost')) return 'Navigare Internă';
     return host;
   } catch {
     return 'Direct / Bookmark';

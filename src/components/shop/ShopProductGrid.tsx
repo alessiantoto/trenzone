@@ -2,7 +2,6 @@
 
 import { Product } from "@/lib/api";
 import { ProductCard } from "@/components/product/ProductCard";
-import { AmbassadorBanner } from "@/app/[locale]/components/AmbassadorBanner";
 import { Dumbbell, Zap, ShieldCheck } from "lucide-react";
 import { useLocale } from "next-intl";
 
@@ -33,40 +32,35 @@ export function ShopProductGrid({ products, dark = true }: ShopProductGridProps)
         </div>
       )}
 
-      {/* ═══ 3 TRUST / PERFORMANCE GUARANTEES ═══ */}
+      {/* ═══ 3 TRUST / QUALITY GUARANTEES ═══ */}
       <div className="w-full max-w-4xl mx-auto grid grid-cols-3 gap-2 sm:gap-4 text-center">
         <div className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-zinc-900/60 border border-white/5 hover:border-[#e32f8c]/30 transition-colors">
           <Dumbbell className="w-4 h-4 text-[#e32f8c] mb-1.5" />
-          <span className="text-[10px] sm:text-xs font-black uppercase text-white tracking-tight">
-            {isRo ? 'MATERIAL SOLID' : 'SOLID BUILD'}
+          <span className="text-[10px] sm:text-xs font-black uppercase text-white tracking-tight leading-snug">
+            {isRo ? 'CALITATE PREMIUM' : 'HEAVY-DUTY BUILD'}
           </span>
-          <span className="text-[9px] sm:text-[11px] text-zinc-400 font-medium">
-            {isRo ? 'Nu se lasă în timp' : "Won't stretch"}
+          <span className="text-[9px] sm:text-[11px] text-zinc-400 font-medium mt-0.5 leading-snug">
+            {isRo ? 'Materiale groase, durabile' : 'Built to outlast heavy cycles'}
           </span>
         </div>
         <div className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-zinc-900/60 border border-white/5 hover:border-[#e32f8c]/30 transition-colors">
           <Zap className="w-4 h-4 text-[#e32f8c] mb-1.5" />
-          <span className="text-[10px] sm:text-xs font-black uppercase text-white tracking-tight">
-            {isRo ? 'TESTATE LA 200KG+' : 'TESTED AT 200KG+'}
+          <span className="text-[10px] sm:text-xs font-black uppercase text-white tracking-tight leading-snug">
+            {isRo ? 'TESTAT PE 200KG+' : 'TESTED AT 200KG+'}
           </span>
-          <span className="text-[9px] sm:text-[11px] text-zinc-400 font-medium">
-            {isRo ? 'Sigure pe greutăți mari' : 'Heavy set safe'}
+          <span className="text-[9px] sm:text-[11px] text-zinc-400 font-medium mt-0.5 leading-snug">
+            {isRo ? 'Suport real la greutăți mari' : 'Proven on serious lifts'}
           </span>
         </div>
         <div className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-zinc-900/60 border border-white/5 hover:border-[#e32f8c]/30 transition-colors">
           <ShieldCheck className="w-4 h-4 text-[#e32f8c] mb-1.5" />
-          <span className="text-[10px] sm:text-xs font-black uppercase text-white tracking-tight">
-            {isRo ? 'SUPORT & REBOUND' : 'REBOUND SUPPORT'}
+          <span className="text-[10px] sm:text-xs font-black uppercase text-white tracking-tight leading-snug">
+            {isRo ? 'CALITATE VERIFICATĂ' : 'QUALITY GUARANTEED'}
           </span>
-          <span className="text-[9px] sm:text-[11px] text-zinc-400 font-medium">
-            {isRo ? 'Uită de dureri la împins' : 'No elbow pain'}
+          <span className="text-[9px] sm:text-[11px] text-zinc-400 font-medium mt-0.5 leading-snug">
+            {isRo ? 'Cusături ranforsate · Retur 14 zile' : 'Reinforced build · 14d return'}
           </span>
         </div>
-      </div>
-
-      {/* ═══ AMBASSADOR / PARTNER BANNER ═══ */}
-      <div className="w-full">
-        <AmbassadorBanner />
       </div>
     </div>
   );

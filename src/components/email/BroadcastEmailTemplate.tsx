@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import * as React from 'react';
 import { BaseEmailLayout } from './BaseEmailLayout';
+import { getSiteUrl } from '@/lib/site-config';
 
 interface BroadcastEmailTemplateProps {
   title: string;
@@ -10,6 +11,7 @@ interface BroadcastEmailTemplateProps {
   imageUrl?: string;
   locale?: 'ro' | 'en';
   userEmail?: string;
+  baseUrl?: string;
 }
 
 /**
@@ -23,9 +25,9 @@ export const BroadcastEmailTemplate: React.FC<Readonly<BroadcastEmailTemplatePro
   ctaLink,
   imageUrl,
   locale = 'ro',
-  userEmail
+  userEmail,
+  baseUrl = getSiteUrl()
 }) => {
-  const baseUrl = "https://www.trenzone.fit";
   
   return (
     <BaseEmailLayout locale={locale} baseUrl={baseUrl} userEmail={userEmail}>

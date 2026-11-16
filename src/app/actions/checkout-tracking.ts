@@ -69,6 +69,8 @@ export async function trackCheckoutSession(data: {
         .from("checkout_sessions")
         .select("id, status")
         .eq("payment_intent_id", payload.payment_intent_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (fetchError) throw fetchError;

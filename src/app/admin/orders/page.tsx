@@ -47,6 +47,13 @@ import { useSearchParams } from 'next/navigation';
 import { deleteOrderAction, updateOrderShippingAction, updateOrderStatusAction } from '@/app/actions/orders';
 import { generateManualAwbAction, deleteAwbAction, syncAllTrackingAction } from '@/app/actions/awb';
 import { emitOblioInvoiceAction } from '@/app/actions/invoices';
+import { syncRecentStripeOrdersAction } from '@/app/actions/admin-orders';
+import {
+  classifyOrderHistoricalOrActivePreorder,
+  classifyOrderIsActivePreorder,
+  isItemSnapshotPreorder,
+  matchesAdminOrderSearch,
+} from '@/utils/order-search';
 import { FulfillmentModal } from './FulfillmentModal';
 
 // 🌟 Modern Custom Checkbox Component
@@ -117,48 +124,14 @@ export function isOrderNotPrinted(o: any, trackingMap?: Record<string, any>): bo
   if (o.status === 'returned' || o.status === 'refunded' || o.status === 'cancelled') return false;
   return !isOrderPrinted(o, trackingMap);
 }
-// Helper to determine if an order has preorder items
-export function hasOrderPreorderItems(o: any): boolean {
-  if (!o) return false;
-  if (o.is_preorder || o.isPreorder) return true;
-  if (!o.items || !Array.isArray(o.items)) return false;
-  return o.items.some((item: any) => isItemPreorder(item));
+// Helper to determine if an order has active preorder items (respects historical classification)
+export function hasOrderPreorderItems(o: any, trackingMap?: Record<string, any>): boolean {
+  return classifyOrderHistoricalOrActivePreorder(o) && !trackingMap ? true : classifyOrderIsActivePreorder(o, trackingMap);
 }
 
-// Helper to determine if a specific item is a preorder item
+// Helper to determine if a specific item was a preorder item at order time (never checks live catalog)
 export function isItemPreorder(item: any): boolean {
-  if (!item) return false;
-  if (item.stock_status === 'preorder' || item.is_preorder === true) return true;
-  if (item.selectedVariant?.stock_status === 'preorder') return true;
-  const vName = typeof item.selectedVariant?.name === 'object' 
-    ? (item.selectedVariant.name.ro || item.selectedVariant.name.en || '')
-    : String(item.selectedVariant?.name || item.variant || '');
-  if (vName.toLowerCase().includes('precomand') || vName.toLowerCase().includes('pre-order')) return true;
-
-  if (item.variants?.options) {
-    const selectedOpt = item.variants.options.find((opt: any) => {
-      const optNameRo = typeof opt.name === 'object' ? opt.name.ro : opt.name;
-      const optNameEn = typeof opt.name === 'object' ? opt.name.en : opt.name;
-      const selNameRo = typeof item.selectedVariant?.name === 'object' ? (item.selectedVariant.name as any).ro : item.selectedVariant?.name;
-      const selNameEn = typeof item.selectedVariant?.name === 'object' ? (item.selectedVariant.name as any).en : item.selectedVariant?.name;
-      return optNameRo === selNameRo || optNameEn === selNameEn || optNameRo === selNameEn || optNameEn === selNameRo;
-    });
-    if (selectedOpt?.stock_status === 'preorder') return true;
-  }
-  if (item.bundleVariants?.flavor?.options) {
-    return item.bundleVariants.flavor.options.some((opt: any) => {
-      const optNameRo = typeof opt.name === 'object' ? opt.name.ro : opt.name;
-      const optNameEn = typeof opt.name === 'object' ? opt.name.en : opt.name;
-      const selNameRo = typeof item.selectedVariant?.name === 'object' ? (item.selectedVariant.name as any).ro : item.selectedVariant?.name;
-      const selNameEn = typeof item.selectedVariant?.name === 'object' ? (item.selectedVariant.name as any).en : item.selectedVariant?.name;
-      
-      const isIncluded = (selNameRo && typeof selNameRo === 'string' && optNameRo && selNameRo.includes(optNameRo)) ||
-                         (selNameEn && typeof selNameEn === 'string' && optNameEn && selNameEn.includes(optNameEn));
-
-      return opt.stock_status === 'preorder' && isIncluded;
-    });
-  }
-  return false;
+  return isItemSnapshotPreorder(item);
 }
 
 const KNOWN_FLAVORS_PREFIX_MAP: Record<string, string> = {
@@ -279,6 +252,7 @@ function OrdersPageContent() {
   const [trackingStatus, setTrackingStatus] = useState<Record<string, any>>({});
   const [fetchingTracking, setFetchingTracking] = useState<Record<string, boolean>>({});
   const [isSyncingAllTracking, setIsSyncingAllTracking] = useState(false);
+  const [isSyncingStripe, setIsSyncingStripe] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [generatingAwb, setGeneratingAwb] = useState(false);
   const [deletingAwb, setDeletingAwb] = useState<Record<string, boolean>>({});
@@ -512,6 +486,32 @@ function OrdersPageContent() {
       }
     } catch (err: any) {
       toast.error('A apărut o eroare la actualizarea comenzii.', { id: toastId });
+    }
+  };
+
+  const handleSyncStripe = async () => {
+    setIsSyncingStripe(true);
+    const toastId = toast.loading('Se sincronizează plățile recente din Stripe...');
+    try {
+      const res = await syncRecentStripeOrdersAction();
+      if (res.success && res.result) {
+        const { imported, recovered, backfilled, checked, errors } = res.result;
+        const msg = imported + recovered + backfilled > 0
+          ? `Stripe sync: ${imported} noi, ${recovered} recuperate, ${backfilled} receipt/chitanțe completate (verificate ${checked}).`
+          : `Toate cele ${checked} comenzi recente Stripe sunt deja sincronizate.`;
+        if (errors?.length > 0) {
+          toast.error(`${msg} (${errors.length} erori)`, { id: toastId });
+        } else {
+          toast.success(msg, { id: toastId });
+        }
+        await fetchOrders();
+      } else {
+        toast.error(res.error || 'Eroare la sincronizarea cu Stripe.', { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la sincronizarea cu Stripe.', { id: toastId });
+    } finally {
+      setIsSyncingStripe(false);
     }
   };
 
@@ -876,50 +876,63 @@ function OrdersPageContent() {
     }
   };
 
+  const availableMonths = useMemo(() => {
+    const map = new Map<string, string>();
+    const roMonths = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
+    orders.forEach((o) => {
+      if (!o.rawDate) return;
+      const d = new Date(o.rawDate);
+      if (Number.isNaN(d.getTime())) return;
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!map.has(ym)) {
+        map.set(ym, `${roMonths[d.getMonth()]} ${d.getFullYear()}`);
+      }
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([value, label]) => ({ value, label }));
+  }, [orders]);
+
   // Filter calculations
   const filteredOrders = useMemo(() => {
+    const hasSearch = searchQuery.trim().length > 0;
     return orders.filter(o => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch = !q || 
-        (o.id && o.id.toLowerCase().includes(q)) || 
-        (o.customer && o.customer.toLowerCase().includes(q)) ||
-        (o.customerEmail && o.customerEmail.toLowerCase().includes(q)) ||
-        (o.phone && o.phone.toLowerCase().includes(q)) ||
-        (o.customerPhone && o.customerPhone.toLowerCase().includes(q)) ||
-        (o.trackingNumber && o.trackingNumber.toLowerCase().includes(q)) ||
-        (o.couponCode && String(o.couponCode).toLowerCase().includes(q)) ||
-        (o.couponId && String(o.couponId).toLowerCase().includes(q));
-      
+      const matchesSearch = matchesAdminOrderSearch(o, searchQuery);
+
       let matchesMonth = true;
-      if (monthFilter !== 'all' && o.date) {
-        matchesMonth = o.date.includes(monthFilter) || o.date.includes(monthFilter.toLowerCase());
+      if (!hasSearch && monthFilter !== 'all') {
+        const rawYm = o.rawDate ? String(o.rawDate).slice(0, 7) : '';
+        matchesMonth = rawYm === monthFilter || (o.date && (o.date.includes(monthFilter) || o.date.includes(monthFilter.toLowerCase())));
       }
 
       let matchesStatus = true;
-      const isPreorder = hasOrderPreorderItems(o);
+      const isActivePreorderBucket = classifyOrderIsActivePreorder(o, trackingStatus);
 
-      if (statusFilter === 'all') {
-        matchesStatus = q ? true : !isPreorder;
+      if (hasSearch) {
+        // Never hide search results behind tabs or months
+        matchesStatus = true;
+      } else if (statusFilter === 'all') {
+        matchesStatus = !isActivePreorderBucket;
       } else if (statusFilter === 'pending_awb') {
-        matchesStatus = !o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled' && !isPreorder;
+        matchesStatus = !o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled' && !isActivePreorderBucket;
       } else if (statusFilter === 'generated_awb') {
-        matchesStatus = !!o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled' && !isPreorder;
+        matchesStatus = !!o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled' && !isActivePreorderBucket;
       } else if (statusFilter === 'printed') {
-        matchesStatus = isOrderPrinted(o, trackingStatus) && !isPreorder;
+        matchesStatus = isOrderPrinted(o, trackingStatus) && !isActivePreorderBucket;
       } else if (statusFilter === 'not_printed') {
-        matchesStatus = isOrderNotPrinted(o, trackingStatus) && !isPreorder;
+        matchesStatus = isOrderNotPrinted(o, trackingStatus) && !isActivePreorderBucket;
       } else if (statusFilter === 'delivered') {
-        matchesStatus = isOrderDelivered(o, trackingStatus) && !isPreorder;
+        matchesStatus = isOrderDelivered(o, trackingStatus) && !isActivePreorderBucket;
       } else if (statusFilter === 'returned') {
-        matchesStatus = (o.status === 'returned' || o.status === 'refunded') && !isPreorder;
+        matchesStatus = (o.status === 'returned' || o.status === 'refunded') && !isActivePreorderBucket;
       } else if (statusFilter === 'cancelled') {
-        matchesStatus = o.status === 'cancelled' && !isPreorder;
+        matchesStatus = o.status === 'cancelled' && !isActivePreorderBucket;
       } else if (statusFilter === 'preorder') {
-        matchesStatus = isPreorder;
+        matchesStatus = classifyOrderHistoricalOrActivePreorder(o);
       } else if (statusFilter === 'fulfillment_sent') {
-        matchesStatus = Boolean(o.fulfillmentDispatchedAt) && !isPreorder;
+        matchesStatus = Boolean(o.fulfillmentDispatchedAt) && !isActivePreorderBucket;
       } else if (statusFilter === 'fulfillment_pending') {
-        matchesStatus = !o.fulfillmentDispatchedAt && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded' && !isPreorder;
+        matchesStatus = !o.fulfillmentDispatchedAt && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded' && !isActivePreorderBucket;
       }
 
       let matchesPayment = true;
@@ -933,18 +946,20 @@ function OrdersPageContent() {
 
   // Status counts for quick filter pills
   const counts = useMemo(() => {
-    const total = orders.filter(o => !hasOrderPreorderItems(o)).length;
-    const pendingAwb = orders.filter(o => !hasOrderPreorderItems(o) && !o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled').length;
-    const generatedAwb = orders.filter(o => !hasOrderPreorderItems(o) && !!o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled').length;
-    const printed = orders.filter(o => !hasOrderPreorderItems(o) && isOrderPrinted(o, trackingStatus)).length;
-    const notPrinted = orders.filter(o => !hasOrderPreorderItems(o) && isOrderNotPrinted(o, trackingStatus)).length;
-    const delivered = orders.filter(o => !hasOrderPreorderItems(o) && isOrderDelivered(o, trackingStatus)).length;
-    const returned = orders.filter(o => !hasOrderPreorderItems(o) && (o.status === 'returned' || o.status === 'refunded')).length;
-    const cancelled = orders.filter(o => !hasOrderPreorderItems(o) && o.status === 'cancelled').length;
-    const preorder = orders.filter(o => hasOrderPreorderItems(o)).length;
-    const fulfillmentSent = orders.filter(o => !hasOrderPreorderItems(o) && Boolean(o.fulfillmentDispatchedAt)).length;
-    const fulfillmentPending = orders.filter(o => !hasOrderPreorderItems(o) && !o.fulfillmentDispatchedAt && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded').length;
-    return { total, pendingAwb, generatedAwb, printed, notPrinted, delivered, returned, cancelled, preorder, fulfillmentSent, fulfillmentPending };
+    const isActivePre = (o: any) => classifyOrderIsActivePreorder(o, trackingStatus);
+    const total = orders.filter(o => !isActivePre(o)).length;
+    const pendingAwb = orders.filter(o => !isActivePre(o) && !o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled').length;
+    const generatedAwb = orders.filter(o => !isActivePre(o) && !!o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled').length;
+    const printed = orders.filter(o => !isActivePre(o) && isOrderPrinted(o, trackingStatus)).length;
+    const notPrinted = orders.filter(o => !isActivePre(o) && isOrderNotPrinted(o, trackingStatus)).length;
+    const delivered = orders.filter(o => !isActivePre(o) && isOrderDelivered(o, trackingStatus)).length;
+    const returned = orders.filter(o => !isActivePre(o) && (o.status === 'returned' || o.status === 'refunded')).length;
+    const cancelled = orders.filter(o => !isActivePre(o) && o.status === 'cancelled').length;
+    const preorder = orders.filter(o => classifyOrderHistoricalOrActivePreorder(o)).length;
+    const activePreorder = orders.filter(o => isActivePre(o)).length;
+    const fulfillmentSent = orders.filter(o => !isActivePre(o) && Boolean(o.fulfillmentDispatchedAt)).length;
+    const fulfillmentPending = orders.filter(o => !isActivePre(o) && !o.fulfillmentDispatchedAt && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded').length;
+    return { total, pendingAwb, generatedAwb, printed, notPrinted, delivered, returned, cancelled, preorder, activePreorder, fulfillmentSent, fulfillmentPending };
   }, [orders, trackingStatus]);
 
   return (
@@ -986,6 +1001,16 @@ function OrdersPageContent() {
           >
             <Truck size={14} className={isSyncingAllTracking ? 'animate-bounce text-[#e32f8c]' : 'text-slate-500'} />
             <span className="hidden sm:inline">{isSyncingAllTracking ? 'Se sincronizează...' : 'Sincronizează AWB'}</span>
+          </button>
+
+          <button
+            onClick={handleSyncStripe}
+            disabled={isSyncingStripe || loading}
+            className="h-9 sm:h-10 px-3 bg-white border border-[#635BFF]/30 hover:border-[#635BFF]/60 hover:bg-[#635BFF]/5 rounded-xl text-[#635BFF] font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+            title="Scanează ultimele plăți reușite din Stripe și importă/recuperează automat orice comandă lipsă sau chitanță (#receipt)"
+          >
+            <CreditCard size={14} className={isSyncingStripe ? 'animate-pulse' : ''} />
+            <span className="hidden sm:inline">{isSyncingStripe ? 'Sync Stripe...' : 'Sincronizează Stripe'}</span>
           </button>
 
           {/* 📦 Centru Fulfillment Button */}
@@ -1049,6 +1074,45 @@ function OrdersPageContent() {
             className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer shadow-xs self-start sm:self-auto"
           >
             Deschide Fulfillment
+          </button>
+        </div>
+      )}
+
+      {/* 🔔 BANNERE PREVENTIVE COMENZI ÎN PRECOMENZI / DE GENERAT */}
+      {counts.activePreorder > 0 && statusFilter !== 'preorder' && !searchQuery.trim() && (
+        <div className="bg-violet-50 border border-violet-200 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
+              <Sparkles size={16} />
+            </div>
+            <p className="text-xs text-violet-900 font-semibold">
+              Există <span className="font-black">{counts.activePreorder}</span> {counts.activePreorder === 1 ? 'precomandă activă neexpediată' : 'precomenzi active neexpediate'} în tab-ul <span className="font-black">Precomenzi</span> (separate de comenzile de stoc).
+            </p>
+          </div>
+          <button
+            onClick={() => setStatusFilter('preorder')}
+            className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer shadow-xs self-start sm:self-auto"
+          >
+            Vezi Precomenzi ({counts.preorder})
+          </button>
+        </div>
+      )}
+
+      {counts.pendingAwb > 0 && ['delivered', 'returned', 'cancelled'].includes(statusFilter) && !searchQuery.trim() && (
+        <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+              <AlertTriangle size={16} />
+            </div>
+            <p className="text-xs text-sky-900 font-semibold">
+              Ai <span className="font-black">{counts.pendingAwb}</span> {counts.pendingAwb === 1 ? 'comandă activă fără AWB' : 'comenzi active fără AWB'} în așteptare în tab-ul <span className="font-black">De generat</span>.
+            </p>
+          </div>
+          <button
+            onClick={() => setStatusFilter('pending_awb')}
+            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer shadow-xs self-start sm:self-auto"
+          >
+            Vezi De generat ({counts.pendingAwb})
           </button>
         </div>
       )}
@@ -1225,7 +1289,7 @@ function OrdersPageContent() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input 
             type="text" 
-            placeholder="Caută după comandă (TZ), nume, telefon, email, AWB..." 
+            placeholder="Caută TZ, #receipt Stripe, pi_, nume, telefon, email, AWB, produs, adresă..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-9 text-xs sm:text-sm focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
@@ -1251,7 +1315,9 @@ function OrdersPageContent() {
               <div className="flex items-center gap-1.5 truncate">
                 <Calendar size={13} className="text-slate-400 shrink-0" />
                 <span className="truncate">
-                  {monthFilter === 'all' ? 'Toate lunile' : monthFilter === 'Aug' ? 'August' : monthFilter === 'Jul' ? 'Iulie' : 'Iunie'}
+                  {monthFilter === 'all'
+                    ? 'Toate lunile'
+                    : (availableMonths.find((m) => m.value === monthFilter)?.label || monthFilter)}
                 </span>
               </div>
               <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
@@ -1263,13 +1329,11 @@ function OrdersPageContent() {
                   initial={{ opacity: 0, y: 4, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                  className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 overflow-hidden"
+                  className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 overflow-hidden max-h-64 overflow-y-auto"
                 >
                   {[
                     { value: 'all', label: 'Toate lunile' },
-                    { value: 'Aug', label: 'August 2026' },
-                    { value: 'Jul', label: 'Iulie 2026' },
-                    { value: 'Jun', label: 'Iunie 2026' },
+                    ...availableMonths,
                   ].map((option) => (
                     <button
                       key={option.value}
@@ -1541,15 +1605,34 @@ function OrdersPageContent() {
                           <Banknote size={11} /> RAMBURS
                         </span>
                       ) : (
-                        <a 
-                          href={order.paymentIntentId ? `https://dashboard.stripe.com/payments/${order.paymentIntentId}` : undefined}
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#635BFF]/10 text-[#635BFF] hover:bg-[#635BFF]/20 border border-[#635BFF]/20 transition-colors shrink-0 cursor-pointer"
-                          title="Deschide în Stripe"
+                        <div className="inline-flex items-center gap-1.5 shrink-0">
+                          <a 
+                            href={order.paymentIntentId ? `https://dashboard.stripe.com/payments/${order.paymentIntentId}` : undefined}
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#635BFF]/10 text-[#635BFF] hover:bg-[#635BFF]/20 border border-[#635BFF]/20 transition-colors shrink-0 cursor-pointer"
+                            title={order.paymentIntentId ? `Deschide în Stripe (${order.paymentIntentId})` : 'Deschide în Stripe'}
+                          >
+                            <CreditCard size={11} /> CARD {order.paymentIntentId && <ExternalLink size={9} />}
+                          </a>
+                          {order.stripeReceiptNumber && (
+                            <span
+                              className="inline-flex items-center h-6 px-2 rounded-full text-[10px] font-bold tracking-wider bg-slate-100 text-slate-700 border border-slate-200 shrink-0"
+                              title={`Stripe Receipt #${String(order.stripeReceiptNumber).replace(/^#/, '')}`}
+                            >
+                              #{String(order.stripeReceiptNumber).replace(/^#/, '')}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {order.lastCommError && (
+                        <span
+                          className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0"
+                          title={`Eroare non-fatală post-procesare (comanda este plătită și activă): ${order.lastCommError}`}
                         >
-                          <CreditCard size={11} /> CARD {order.paymentIntentId && <ExternalLink size={9} />}
-                        </a>
+                          <AlertTriangle size={10} className="text-amber-600" /> Email/PDF Err
+                        </span>
                       )}
 
                       {/* Special status badge: Only show in header if Cancelled or Returned (standard status is shown in AWB box below) */}
@@ -1986,7 +2069,7 @@ function OrdersPageContent() {
                                         let rawImage = item.image || item.selectedVariant?.image;
                                         if (details.isBundle) {
                                           if (!rawImage || String(rawImage).includes('placeholder')) {
-                                            rawImage = '/images/products/x10_elbow_wraps_purple_1.webp';
+                                            rawImage = '/images/products/x10_elbow_wraps_purple.webp';
                                           }
                                         } else {
                                           // Non-bundle (produs individual): Nu folosi imagini de bundle

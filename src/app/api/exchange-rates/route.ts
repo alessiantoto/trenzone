@@ -6,11 +6,9 @@ const DEFAULT_RATES: Record<string, number> = {
   EUR: 5.30,
   USD: 4.88,
   GBP: 6.20,
-  PLN: 1.23,
-  CHF: 5.60,
 };
 
-const ALLOWED_CURRENCIES = ['EUR', 'USD', 'GBP', 'PLN', 'CHF'];
+const ALLOWED_CURRENCIES = ['EUR', 'USD', 'GBP'];
 
 /**
  * GET /api/exchange-rates

@@ -9,13 +9,15 @@ interface StepIndicatorProps {
   setCurrentStep: (step: number) => void;
   isStep1Valid: boolean;
   isStep2Valid: boolean;
+  digitalOnlyCart?: boolean;
 }
 
 export function StepIndicator({ 
   currentStep, 
   setCurrentStep, 
   isStep1Valid, 
-  isStep2Valid 
+  isStep2Valid,
+  digitalOnlyCart = false,
 }: StepIndicatorProps) {
   const t = useTranslations("Checkout");
 
@@ -46,9 +48,9 @@ export function StepIndicator({
           // Navigation logic: can go back anytime, can go forward only if previous is valid
           let isClickable = false;
           if (step.id === 1) isClickable = true;
-          if (step.id === 2) isClickable = isStep1Valid;
-          if (step.id === 3) isClickable = isStep1Valid && isStep2Valid;
-          if (step.id === 4) isClickable = isStep1Valid && isStep2Valid;
+          if (step.id === 2) isClickable = !digitalOnlyCart && isStep1Valid;
+          if (step.id === 3) isClickable = !digitalOnlyCart && isStep1Valid && isStep2Valid;
+          if (step.id === 4) isClickable = isStep1Valid && (digitalOnlyCart || isStep2Valid);
           
           const Icon = step.icon;
 

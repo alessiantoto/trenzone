@@ -46,8 +46,10 @@ import {
   activateAffiliate, 
   deleteAffiliate, 
   createAdminAffiliate,
-  recordAffiliatePayoutAction
+  recordAffiliatePayoutAction,
+  deleteAffiliatePayoutAction
 } from '@/app/actions/admin-affiliates';
+import { formatRon, formatOriginalAmount, classifyOrderNonCountable } from '@/lib/affiliate-stats';
 import toast from 'react-hot-toast';
 
 import Link from 'next/link';
@@ -102,6 +104,8 @@ function AffiliatePortalView({
   onActivate,
   onDelete,
   onRecordPayout,
+  onDeletePayout,
+  deletingPayoutId,
   processingId,
   copiedKey,
   onCopy,
@@ -115,12 +119,15 @@ function AffiliatePortalView({
   onActivate: (id: string) => void;
   onDelete: (id: string) => void;
   onRecordPayout: (aff: any) => void;
+  onDeletePayout: (affiliateId: string, payoutId: string) => void;
+  deletingPayoutId: string | null;
   processingId: string | null;
   copiedKey: string | null;
   onCopy: (text: string, key: string, label: string) => void;
   onClose?: () => void;
 }) {
   const [orderSearch, setOrderSearch] = useState('');
+  const [confirmDeletePayoutId, setConfirmDeletePayoutId] = useState<string | null>(null);
 
   const filteredOrders = useMemo(() => {
     if (!affiliate.orders || !Array.isArray(affiliate.orders)) return [];
@@ -245,7 +252,9 @@ function AffiliatePortalView({
             <TrendingUp size={14} className="text-[#e32f8c]" />
           </div>
           <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.totalSales}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">Comenzi atrase</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+            Net comisionabil: {affiliate.totalNetSales || affiliate.totalSales}
+          </p>
         </div>
 
         {/* Total Commissions */}
@@ -255,17 +264,35 @@ function AffiliatePortalView({
             <DollarSign size={14} className="text-emerald-600" />
           </div>
           <p className="text-base sm:text-lg font-black text-emerald-600">{affiliate.totalCommissions}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">Calculat la {affiliate.commission}</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-0.5">Ratǎ {affiliate.commission} din net</p>
         </div>
 
         {/* Pending Payout */}
-        <div className="bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
-          <div className="flex items-center justify-between text-amber-700 mb-1">
+        <div className={`p-3.5 rounded-2xl border shadow-2xs ${
+          (affiliate.pendingPayoutRaw || 0) > 0
+            ? 'bg-amber-50/70 border-amber-200/90'
+            : 'bg-slate-50/70 border-slate-200'
+        }`}>
+          <div className={`flex items-center justify-between mb-1 ${
+            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-amber-700' : 'text-slate-400'
+          }`}>
             <span className="text-[10px] font-black uppercase tracking-wider">De Plată</span>
-            <Clock size={14} className="text-amber-600" />
+            <Clock size={14} className={(affiliate.pendingPayoutRaw || 0) > 0 ? 'text-amber-600' : 'text-slate-400'} />
           </div>
-          <p className="text-base sm:text-lg font-black text-amber-900">{affiliate.pendingPayout}</p>
-          <p className="text-[10px] font-bold text-amber-700 mt-0.5">Neachitat către IBAN</p>
+          <p className={`text-base sm:text-lg font-black ${
+            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-amber-900' : 'text-slate-700'
+          }`}>
+            {affiliate.pendingPayout}
+          </p>
+          <p className={`text-[10px] font-bold mt-0.5 ${
+            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-amber-700' : 'text-emerald-600'
+          }`}>
+            {(affiliate.pendingPayoutRaw || 0) > 0
+              ? 'Neachitat către IBAN'
+              : (affiliate.totalCommissionsRaw || 0) > 0
+                ? 'Achitat integral'
+                : 'Sold 0'}
+          </p>
         </div>
 
         {/* Paid Payout */}
@@ -275,17 +302,24 @@ function AffiliatePortalView({
             <CheckCircle2 size={14} className="text-emerald-500" />
           </div>
           <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.paidPayout}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">Transferat</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+            {affiliate.payoutProgressPercent ?? 0}% achitat
+            {(affiliate.overpaidAmountRaw || 0) > 0 ? ` (+${formatRon(affiliate.overpaidAmountRaw)} avans)` : ''}
+          </p>
         </div>
 
         {/* Total Usages / Orders */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[10px] font-black uppercase tracking-wider">Comenzi</span>
+            <span className="text-[10px] font-black uppercase tracking-wider">Comenzi Valide</span>
             <ShoppingBag size={14} className="text-blue-500" />
           </div>
           <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.usages}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">Utilizări cod</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+            {(affiliate.cancelledOrdersCount || 0) > 0
+              ? `${affiliate.cancelledOrdersCount} anulate / excluse`
+              : 'Utilizări cod active'}
+          </p>
         </div>
 
         {/* Average Order Value (AOV) */}
@@ -295,24 +329,24 @@ function AffiliatePortalView({
             <Award size={14} className="text-purple-500" />
           </div>
           <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.aov}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">AOV pe comandă</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-0.5">AOV pe comandă validă</p>
         </div>
       </div>
 
-      {/* 💳 IBAN & PAYMENT DETAILS BOX */}
-      <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs">
+      {/* 💳 IBAN, PROGRES DECONTARE & ISTORIC PLĂȚI */}
+      <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-[#e32f8c]/10 text-[#008ba3] flex items-center justify-center shrink-0 font-bold">
               <CreditCard size={16} />
             </div>
             <div>
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Date Virament Bancar (IBAN)</h4>
-              <p className="text-[11px] text-slate-500">Pentru plata comisioanelor în contul bancar al afiliatului</p>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Decontare Comisioane & Date IBAN</h4>
+              <p className="text-[11px] text-slate-500">Evidența transferurilor bancare către afiliat</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {affiliate.paymentDetails?.iban ? (
               <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <CheckCircle2 size={11} /> IBAN Configurat
@@ -336,8 +370,28 @@ function AffiliatePortalView({
           </div>
         </div>
 
+        {/* Commission Settlement Progress Bar */}
+        {((affiliate.totalCommissionsRaw || 0) > 0 || (affiliate.paidPayoutRaw || 0) > 0) && (
+          <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] font-bold">
+              <span className="text-slate-600">
+                Progres decontare comisioane ({affiliate.payoutProgressPercent ?? 0}%)
+              </span>
+              <span className="text-slate-800 font-black">
+                {affiliate.paidPayout} / {affiliate.totalCommissions}
+              </span>
+            </div>
+            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, affiliate.payoutProgressPercent ?? 0)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {affiliate.paymentDetails?.iban ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
             <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between gap-2">
               <div className="overflow-hidden min-w-0">
                 <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Cod IBAN</span>
@@ -364,9 +418,90 @@ function AffiliatePortalView({
             </div>
           </div>
         ) : (
-          <p className="text-xs text-amber-800 bg-amber-50/60 p-3 rounded-xl border border-amber-100 mt-3">
+          <p className="text-xs text-amber-800 bg-amber-50/60 p-3 rounded-xl border border-amber-100">
             Afiliatul nu a completat încă un cont IBAN din panoul său. Când îl adaugă din portal, datele vor apărea automat aici.
           </p>
+        )}
+
+        {/* Payout History Audit List */}
+        {Array.isArray(affiliate.paymentDetails?.payouts) && affiliate.paymentDetails.payouts.length > 0 && (
+          <div className="pt-2 border-t border-slate-100 space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+              Istoric Transferuri Efectuate ({affiliate.paymentDetails.payouts.length})
+            </span>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              {affiliate.paymentDetails.payouts.map((payout: any) => (
+                <div
+                  key={payout.id}
+                  className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-emerald-50/50 border border-emerald-200/70 text-xs"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-black text-emerald-800">+{formatRon(payout.amount)}</span>
+                      {payout.paidAt && (
+                        <span className="text-[11px] font-bold text-slate-500">
+                          {new Date(payout.paidAt).toLocaleString('ro-RO', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      )}
+                      {payout.ibanSnapshot && (
+                        <span className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]">
+                          {payout.ibanSnapshot}
+                        </span>
+                      )}
+                    </div>
+                    {payout.note && (
+                      <p className="text-[11px] text-slate-600 font-medium mt-0.5 truncate">{payout.note}</p>
+                    )}
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-1">
+                    {confirmDeletePayoutId === payout.id ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={deletingPayoutId === payout.id}
+                          onClick={() => {
+                            onDeletePayout(affiliate.id, payout.id);
+                            setConfirmDeletePayoutId(null);
+                          }}
+                          className="px-2 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black cursor-pointer disabled:opacity-50"
+                        >
+                          Confirmă ștergerea
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeletePayoutId(null)}
+                          className="px-2 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-bold cursor-pointer"
+                        >
+                          Anulează
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={deletingPayoutId === payout.id}
+                        onClick={() => setConfirmDeletePayoutId(payout.id)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Șterge această înregistrare de plată (corecție)"
+                      >
+                        {deletingPayoutId === payout.id ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={13} />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
@@ -440,11 +575,13 @@ function AffiliatePortalView({
         ) : (
           <div className="space-y-3">
             {filteredOrders.map((order: any, oIdx: number) => {
-              const orderStatus = String(order.status || '').toLowerCase().trim();
-              const isCancelled = ['cancelled', 'anulat', 'anulata'].includes(orderStatus);
-              const isReturned = ['returned', 'returnat', 'returnata', 'neridicat', 'refused'].includes(orderStatus);
-              const isRefunded = ['refunded', 'rambursat'].includes(orderStatus);
-              const isNonCountable = isCancelled || isReturned || isRefunded || order.isCountable === false;
+              const statusCheck = classifyOrderNonCountable(order.status);
+              const isNonCountable = !statusCheck.isCountable || order.isCountable === false;
+              const nonCountableLabel = order.nonCountableLabel || statusCheck.label || 'Exclusă';
+              const hasForeignCurrency =
+                order.originalCurrency &&
+                order.originalCurrency !== 'RON' &&
+                Number(order.originalTotalAmount) > 0;
 
               return (
               <div key={order.id || oIdx} className={`border rounded-xl p-3.5 space-y-2.5 transition-all ${
@@ -453,7 +590,7 @@ function AffiliatePortalView({
                 
                 {/* Order Top Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-xs font-black text-slate-900">{order.orderNumber}</span>
                     <span className="text-slate-300">•</span>
                     <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
@@ -463,16 +600,15 @@ function AffiliatePortalView({
                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
                       order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                       order.status === 'shipped' ? 'bg-teal-50 text-teal-700 border-teal-200' :
-                      isCancelled ? 'bg-red-50 text-red-700 border-red-200' :
-                      isReturned ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                      isRefunded ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      statusCheck.reason === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                      statusCheck.reason === 'returned' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                      statusCheck.reason === 'refunded' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      statusCheck.reason === 'failed' ? 'bg-rose-50 text-rose-700 border-rose-200' :
                       'bg-blue-50 text-blue-700 border-blue-200'
                     }`}>
                       {order.status === 'delivered' ? 'Livrat' : 
                        order.status === 'shipped' ? 'Expediat' : 
-                       isCancelled ? 'Anulat' :
-                       isReturned ? 'Returnat / Neridicat' : 
-                       isRefunded ? 'Rambursat' : 
+                       isNonCountable ? nonCountableLabel :
                        'În procesare'}
                     </span>
                   </div>
@@ -481,18 +617,28 @@ function AffiliatePortalView({
                     <div className="text-right">
                       <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Coș</span>
                       <span className={`text-xs font-black ${isNonCountable ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                        {order.totalAmount?.toFixed(2)} {order.currency || 'RON'}
+                        {formatRon(order.totalAmount)}
                       </span>
+                      {hasForeignCurrency && (
+                        <span className="text-[10px] font-bold text-slate-500 block">
+                          plătit {formatOriginalAmount(order.originalTotalAmount, order.originalCurrency)}
+                        </span>
+                      )}
+                      {!isNonCountable && (
+                        <span className="text-[10px] font-medium text-slate-400 block">
+                          bază netă: {formatRon(order.subtotal)}
+                        </span>
+                      )}
                     </div>
                     <div className="text-right pl-2 border-l border-slate-200">
                       <span className="text-[10px] text-slate-400 uppercase font-bold block">Comision Afiliat</span>
                       {isNonCountable || order.commissionAmount === 0 ? (
                         <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200/60 inline-block">
-                          0.00 {order.currency || 'RON'} ({isCancelled ? 'Anulat' : 'Neridicat'})
+                          0.00 RON ({nonCountableLabel})
                         </span>
                       ) : (
                         <span className="text-xs font-black text-emerald-700">
-                          +{order.commissionAmount?.toFixed(2)} {order.currency || 'RON'}
+                          +{formatRon(order.commissionAmount)}
                         </span>
                       )}
                     </div>
@@ -655,7 +801,16 @@ export default function AffiliatesPage() {
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
   const [affiliates, setAffiliates] = useState<any[]>([]);
-  const [stats, setStats] = useState({ totalSales: 0, totalCommissions: 0, activeCount: 0 });
+  const [stats, setStats] = useState({
+    totalSales: 0,
+    totalNetSales: 0,
+    totalCommissions: 0,
+    totalPaid: 0,
+    totalPending: 0,
+    totalOrders: 0,
+    activeCount: 0,
+    pendingCount: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   const selectedPortalAffiliate = useMemo(() => {
@@ -727,11 +882,17 @@ export default function AffiliatesPage() {
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [payoutAffiliate, setPayoutAffiliate] = useState<any | null>(null);
   const [payoutAmount, setPayoutAmount] = useState<string>('');
+  const [payoutNote, setPayoutNote] = useState<string>('');
   const [isRecordingPayout, setIsRecordingPayout] = useState(false);
+  const [deletingPayoutId, setDeletingPayoutId] = useState<string | null>(null);
 
   const openPayoutModal = (affiliate: any) => {
     setPayoutAffiliate(affiliate);
-    setPayoutAmount(String(affiliate.pendingPayoutRaw || affiliate.totalCommissionsRaw || '0'));
+    const defaultAmount = affiliate.pendingPayoutRaw > 0
+      ? Number(affiliate.pendingPayoutRaw).toFixed(2)
+      : '';
+    setPayoutAmount(defaultAmount);
+    setPayoutNote('');
     setIsPayoutModalOpen(true);
   };
 
@@ -744,16 +905,30 @@ export default function AffiliatesPage() {
     }
 
     setIsRecordingPayout(true);
-    const res = await recordAffiliatePayoutAction(payoutAffiliate.id, amount);
+    const res = await recordAffiliatePayoutAction(payoutAffiliate.id, amount, payoutNote);
     setIsRecordingPayout(false);
 
     if (res.success) {
-      toast.success(`Plata de ${amount.toFixed(2)} RON către ${payoutAffiliate.name} a fost înregistrată!`);
+      toast.success(`Plata de ${formatRon(amount)} către ${payoutAffiliate.name} a fost înregistrată!`);
       setIsPayoutModalOpen(false);
       setPayoutAffiliate(null);
+      setPayoutNote('');
       await fetchAffiliates();
     } else {
       toast.error(res.error || 'Eroare la înregistrarea plății.');
+    }
+  };
+
+  const handleDeletePayout = async (affiliateId: string, payoutId: string) => {
+    setDeletingPayoutId(payoutId);
+    const res = await deleteAffiliatePayoutAction(affiliateId, payoutId);
+    setDeletingPayoutId(null);
+
+    if (res.success) {
+      toast.success('Înregistrarea plății a fost ștearsă și soldul recalculat.');
+      await fetchAffiliates();
+    } else {
+      toast.error(res.error || 'Eroare la ștergerea plății.');
     }
   };
 
@@ -812,7 +987,11 @@ export default function AffiliatesPage() {
     const { updateAffiliate } = await import('@/app/actions/admin-affiliates');
     const res = await updateAffiliate(editingData.id, editingData.code, editingData.commission);
     if (res.success) {
-      toast.success(`Datele afiliatului ${editingData.name} au fost actualizate!`);
+      if (res.emailSent === false) {
+        toast.error(`Datele au fost actualizate, DAR emailul de notificare nu s-a putut trimite (${res.emailError || 'eroare Resend'}).`, { duration: 7000 });
+      } else {
+        toast.success(`Datele afiliatului ${editingData.name} au fost actualizate și emailul a fost trimis!`);
+      }
       setIsEditModalOpen(false);
       setEditingData(null);
       await fetchAffiliates();
@@ -831,7 +1010,11 @@ export default function AffiliatesPage() {
     setProcessingId(approvingData.id);
     const res = await approveAffiliate(approvingData.id, approvingData.code, approvingData.commission);
     if (res.success) {
-      toast.success(`Afiliatul ${approvingData.name} a fost aprobat! Emailul a fost trimis la ${approvingData.email}.`);
+      if (res.emailSent === false) {
+        toast.error(`Afiliatul ${approvingData.name} a fost aprobat și codul este activ, DAR emailul către ${approvingData.email} nu a putut fi trimis (${res.emailError || 'verifică RESEND_API_KEY'}).`, { duration: 8000 });
+      } else {
+        toast.success(`Afiliatul ${approvingData.name} a fost aprobat! Emailul a fost trimis la ${approvingData.email}.`);
+      }
       setIsApproveModalOpen(false);
       setApprovingData(null);
       await fetchAffiliates();
@@ -850,7 +1033,11 @@ export default function AffiliatesPage() {
     setIsCreating(true);
     const res = await createAdminAffiliate(newAffiliate);
     if (res.success) {
-      toast.success(`Afiliatul ${newAffiliate.name} a fost adăugat! Codul "${newAffiliate.code}" este activ.`);
+      if (newAffiliate.sendEmail && res.emailSent === false) {
+        toast.error(`Afiliatul ${newAffiliate.name} și codul "${newAffiliate.code}" sunt active, DAR emailul nu s-a putut trimite (${res.emailError || 'eroare Resend'}).`, { duration: 7000 });
+      } else {
+        toast.success(`Afiliatul ${newAffiliate.name} a fost adăugat! Codul "${newAffiliate.code}" este activ.`);
+      }
       setIsAddModalOpen(false);
       setNewAffiliate({ name: '', email: '', code: '', commission: 10, sendEmail: true });
       await fetchAffiliates();
@@ -910,13 +1097,17 @@ export default function AffiliatesPage() {
   };
 
   const filteredAffiliates = affiliates.filter(a => {
-    const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          a.code.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q ||
+                          a.name.toLowerCase().includes(q) || 
+                          a.code.toLowerCase().includes(q) ||
+                          (a.email || '').toLowerCase().includes(q);
                           
     let matchesFilter = true;
     if (filterType === 'active') matchesFilter = a.status === 'active';
     if (filterType === 'pending') matchesFilter = a.status === 'pending';
     if (filterType === 'suspended') matchesFilter = a.status === 'suspended';
+    if (filterType === 'rejected') matchesFilter = a.status === 'rejected';
     
     return matchesSearch && matchesFilter;
   });
@@ -942,27 +1133,64 @@ export default function AffiliatesPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-500">Vânzări totale Afiliați</h3>
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Vânzări Totale Afiliați</h3>
             <TrendingUp size={16} className="text-[#e32f8c]" />
           </div>
-          <p className="text-2xl font-black mt-2">{stats.totalSales.toLocaleString('ro-RO')} RON</p>
+          <p className="text-2xl font-black mt-2 text-slate-900">{formatRon(stats.totalSales)}</p>
+          <p className="text-xs font-bold text-slate-400 mt-1">
+            {stats.totalOrders || 0} comenzi valide • net {formatRon(stats.totalNetSales || 0)}
+          </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-500">Total Comisioane (de plată)</h3>
-            <UserCheck size={16} className="text-[#e32f8c]" />
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Comisioane Generate</h3>
+            <UserCheck size={16} className="text-[#008ba3]" />
           </div>
-          <p className="text-2xl font-black mt-2">{stats.totalCommissions.toLocaleString('ro-RO')} RON</p>
+          <p className="text-2xl font-black mt-2 text-slate-900">{formatRon(stats.totalCommissions)}</p>
+          <p className="text-xs font-bold text-slate-400 mt-1">
+            {stats.activeCount} activi
+            {(stats.pendingCount || 0) > 0 && (
+              <span className="ml-1.5 text-amber-600">• {stats.pendingCount} în așteptare</span>
+            )}
+          </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+
+        <div className={`border rounded-3xl p-5 sm:p-6 shadow-sm ${
+          (stats.totalPending || 0) > 0
+            ? 'bg-amber-50/70 border-amber-200'
+            : 'bg-white border-slate-200'
+        }`}>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-500">Afiliați Activi</h3>
-            <ArrowUpRight size={16} className="text-[#e32f8c]" />
+            <h3 className={`text-xs font-black uppercase tracking-wider ${
+              (stats.totalPending || 0) > 0 ? 'text-amber-800' : 'text-slate-500'
+            }`}>De Plată Acum</h3>
+            <Clock size={16} className={(stats.totalPending || 0) > 0 ? 'text-amber-600' : 'text-slate-400'} />
           </div>
-          <p className="text-2xl font-black mt-2">{stats.activeCount}</p>
+          <p className={`text-2xl font-black mt-2 ${
+            (stats.totalPending || 0) > 0 ? 'text-amber-900' : 'text-slate-900'
+          }`}>{formatRon(stats.totalPending || 0)}</p>
+          <p className={`text-xs font-bold mt-1 ${
+            (stats.totalPending || 0) > 0 ? 'text-amber-700' : 'text-emerald-600'
+          }`}>
+            {(stats.totalPending || 0) > 0 ? 'Rest neachitat către afiliați' : 'Toate comisionele sunt achitate'}
+          </p>
+        </div>
+
+        <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-3xl p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black uppercase tracking-wider text-emerald-800">Plătit Deja</h3>
+            <CheckCircle2 size={16} className="text-emerald-600" />
+          </div>
+          <p className="text-2xl font-black mt-2 text-emerald-900">{formatRon(stats.totalPaid || 0)}</p>
+          <p className="text-xs font-bold text-emerald-700 mt-1">
+            {stats.totalCommissions > 0
+              ? `${Math.min(100, Math.round(((stats.totalPaid || 0) / stats.totalCommissions) * 100))}% decontat din total`
+              : 'Transferuri bancare înregistrate'}
+          </p>
         </div>
       </div>
 
@@ -1023,6 +1251,13 @@ export default function AffiliatesPage() {
                     <div className="w-2 h-2 rounded-full bg-red-500"></div>
                     Suspendați
                   </button>
+                  <button 
+                    onClick={() => { setFilterType('rejected'); setIsFilterDropdownOpen(false); }}
+                    className={`text-left px-3 py-2 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${filterType === 'rejected' ? 'bg-[#e32f8c]/10 text-[#e32f8c]' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-slate-400"></div>
+                    Respinși
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1052,7 +1287,7 @@ export default function AffiliatesPage() {
                   </div>
                 </div>
                 
-                <div className="flex items-center justify-between">
+                <div className="grid grid-cols-2 gap-3 pt-1">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cod Reducere</span>
                     <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded text-xs font-mono font-bold text-slate-700 w-fit">
@@ -1061,10 +1296,23 @@ export default function AffiliatesPage() {
                   </div>
                   <div className="flex flex-col items-end">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vânzări Aplicate</span>
-                    <div className="flex flex-col items-end">
-                      <span className="text-sm font-black text-slate-900 leading-none">{affiliate.totalSales}</span>
-                      <span className="text-[10px] font-bold text-slate-400 mt-1">{affiliate.usages} utilizări</span>
-                    </div>
+                    <span className="text-sm font-black text-slate-900 leading-none">{affiliate.totalSales}</span>
+                    <span className="text-[10px] font-bold text-slate-400 mt-1">{affiliate.usages} comenzi valide</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Comision Generat</span>
+                    <span className="font-black text-emerald-700">{affiliate.totalCommissions}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Sold Plăți</span>
+                    {(affiliate.pendingPayoutRaw || 0) > 0 ? (
+                      <span className="font-black text-amber-700">De plată: {affiliate.pendingPayout}</span>
+                    ) : (
+                      <span className="font-bold text-slate-600">Plătit: {affiliate.paidPayout}</span>
+                    )}
                   </div>
                 </div>
                 
@@ -1083,9 +1331,10 @@ export default function AffiliatesPage() {
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Afiliat</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cod Reducere</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Comision</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cod & Rată</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vânzări Aplicate</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Comision Generat</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Plătit / De Plată</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right">Statistici</th>
               </tr>
@@ -1093,7 +1342,7 @@ export default function AffiliatesPage() {
             <tbody className="divide-y divide-slate-100">
               {paginatedAffiliates.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500 text-sm">Nu au fost găsiți afiliați.</td>
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500 text-sm">Nu au fost găsiți afiliați.</td>
                 </tr>
               ) : (
                 paginatedAffiliates.map((affiliate) => (
@@ -1107,22 +1356,51 @@ export default function AffiliatesPage() {
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#e32f8c]/20 to-blue-500/20 flex items-center justify-center text-[#e32f8c] font-bold text-xs shrink-0">
                           {affiliate.name.charAt(0)}
                         </div>
-                        <span className="text-sm font-bold text-slate-900 whitespace-nowrap">{affiliate.name}</span>
-                        <span className="text-[10px] text-slate-400 hidden lg:inline">{affiliate.email}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-bold text-slate-900 whitespace-nowrap">{affiliate.name}</span>
+                          <span className="text-[11px] text-slate-400 truncate max-w-[180px]">{affiliate.email}</span>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-xs font-mono font-bold text-slate-700">
-                        {affiliate.code}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-slate-700">{affiliate.commission}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-xs font-mono font-bold text-slate-700">
+                          {affiliate.code}
+                        </span>
+                        <span className="text-xs font-bold text-slate-500">{affiliate.commission}</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-slate-900">{affiliate.totalSales}</span>
-                        <span className="text-xs text-slate-500">{affiliate.usages} utilizări</span>
+                        <span className="text-xs text-slate-500">
+                          {affiliate.usages} comenzi valide
+                          {(affiliate.cancelledOrdersCount || 0) > 0 ? ` • ${affiliate.cancelledOrdersCount} excluse` : ''}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-black text-emerald-700">{affiliate.totalCommissions}</span>
+                        <span className="text-[11px] text-slate-400">din net {affiliate.totalNetSales || affiliate.totalSales}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-0.5">
+                        {(affiliate.pendingPayoutRaw || 0) > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs font-black w-fit">
+                            De plată: {affiliate.pendingPayout}
+                          </span>
+                        ) : (affiliate.totalCommissionsRaw || 0) > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold w-fit">
+                            Achitat integral
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-400">0,00 RON</span>
+                        )}
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          Plătit deja: {affiliate.paidPayout}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -1238,6 +1516,8 @@ export default function AffiliatesPage() {
                   setSelectedPortalAffiliateId(null);
                 }}
                 onRecordPayout={openPayoutModal}
+                onDeletePayout={handleDeletePayout}
+                deletingPayoutId={deletingPayoutId}
                 processingId={processingId}
                 copiedKey={copiedKey}
                 onCopy={handleCopy}
@@ -1559,22 +1839,59 @@ export default function AffiliatesPage() {
             </div>
 
             <div className="p-5 md:p-6 space-y-4">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5">
                 <p><span className="font-bold text-slate-500">Cont IBAN:</span> <span className="font-mono font-bold text-slate-900">{payoutAffiliate.paymentDetails?.iban || 'Necompletat'}</span></p>
                 <p><span className="font-bold text-slate-500">Balanță de plată actuală:</span> <span className="font-black text-amber-800">{payoutAffiliate.pendingPayout}</span></p>
-                <p><span className="font-bold text-slate-500">Plătit anterior:</span> <span className="font-bold text-slate-700">{payoutAffiliate.paidPayout}</span></p>
+                <p><span className="font-bold text-slate-500">Plătit anterior:</span> <span className="font-bold text-emerald-700">{payoutAffiliate.paidPayout}</span></p>
               </div>
+
+              {(payoutAffiliate.pendingPayoutRaw || 0) > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPayoutAmount(Number(payoutAffiliate.pendingPayoutRaw).toFixed(2))}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Achită tot soldul ({payoutAffiliate.pendingPayout})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayoutAmount((Number(payoutAffiliate.pendingPayoutRaw) / 2).toFixed(2))}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    50% ({formatRon(Number(payoutAffiliate.pendingPayoutRaw) / 2)})
+                  </button>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Suma Virată (RON) *</label>
                 <input 
                   type="number" 
                   step="0.01"
+                  min="0.01"
                   required 
                   value={payoutAmount}
                   onChange={(e) => setPayoutAmount(e.target.value)}
                   placeholder="ex: 150.00"
                   className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-black text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                />
+                {Number(payoutAmount) > (payoutAffiliate.pendingPayoutRaw || 0) + 0.01 && (
+                  <p className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                    Atenție: Suma introdusă depășește soldul curent datorat ({payoutAffiliate.pendingPayout}). Diferența va fi înregistrată ca avans.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Notă / Referință Transfer (opțional)</label>
+                <input 
+                  type="text" 
+                  maxLength={200}
+                  value={payoutNote}
+                  onChange={(e) => setPayoutNote(e.target.value)}
+                  placeholder="ex: OP Banca Transilvania • Decont Decembrie"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                 />
               </div>
             </div>

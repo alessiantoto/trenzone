@@ -4,6 +4,13 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getAffiliateSession } from './affiliate-auth';
 import { revalidatePath } from 'next/cache';
 import { convertToRon, getServerExchangeRates } from '@/utils/pricing';
+import {
+  computeAffiliateOrderMetrics,
+  computeAffiliateFinancialSummary,
+  convertAffiliateItemPriceToRon,
+  type AffiliateNonCountableReason,
+  type AffiliatePayoutRecord,
+} from '@/lib/affiliate-stats';
 
 export interface AffiliateOrderItem {
   name: string;
@@ -19,12 +26,17 @@ export interface AffiliateOrderHistory {
   createdAt: string;
   status: string;
   currency: string;
+  originalCurrency: string;
+  originalTotalAmount: number;
   totalAmount: number;
   subtotal: number;
+  shippingAmount: number;
   commissionAmount: number;
   customerName?: string;
   customerCity?: string;
-  isCountable?: boolean;
+  isCountable: boolean;
+  nonCountableReason?: AffiliateNonCountableReason | null;
+  nonCountableLabel?: string;
   items: AffiliateOrderItem[];
 }
 
@@ -34,11 +46,17 @@ export interface AffiliateDashboardResponse {
   code: string;
   commissionPercent: number;
   totalSales: number;
+  totalNetSales: number;
   totalCommissions: number;
   pendingPayout: number;
   paidPayout: number;
+  overpaidAmount: number;
+  payoutProgressPercent: number;
   usagesCount: number;
+  cancelledOrdersCount: number;
   joinedAt: string;
+  lastPayoutAt: string | null;
+  payoutHistory: AffiliatePayoutRecord[];
   paymentDetails: {
     iban?: string;
     bankName?: string;
@@ -73,12 +91,13 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
 
   const commissionPercent = Number(affiliate.commission_percent) || 10;
   const affiliateCode = (affiliate.code || '').trim().replace(/[^A-Za-z0-9_-]/g, '');
+  const escapedCode = affiliateCode.replace(/[\\%_]/g, '\\$&');
 
   // 2. Fetch coupons associated with this affiliate code (case-insensitive)
   const { data: coupons } = await supabaseAdmin
     .from('coupons')
     .select('id, code')
-    .ilike('code', affiliateCode);
+    .ilike('code', escapedCode);
 
   let couponList = coupons || [];
   if (couponList.length === 0 && affiliateCode) {
@@ -102,14 +121,14 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
     orFilters.push(`coupon_id.in.(${couponIds.join(',')})`);
   }
   if (affiliateCode) {
-    orFilters.push(`carrier_metadata->>coupon_code.ilike.${affiliateCode}`);
-    orFilters.push(`carrier_metadata->>coupon.ilike.${affiliateCode}`);
+    orFilters.push(`carrier_metadata->>coupon_code.ilike.${escapedCode}`);
+    orFilters.push(`carrier_metadata->>coupon.ilike.${escapedCode}`);
   }
 
   if (orFilters.length > 0) {
     const { data: ordersData, error: ordersError } = await supabaseAdmin
       .from('orders')
-      .select('id, payment_intent_id, receipt_url, coupon_id, total_amount, subtotal, discount_total, currency, status, items, created_at, customer_firstname, customer_lastname, addr_city')
+      .select('id, payment_intent_id, receipt_url, coupon_id, total_amount, subtotal, discount_total, shipping_amount, currency, status, items, created_at, customer_firstname, customer_lastname, addr_city')
       .or(orFilters.join(','))
       .order('created_at', { ascending: false });
 
@@ -122,29 +141,10 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
 
   // 4. Map and enrich orders with products and commission calculations
   const liveRates = await getServerExchangeRates();
-  let calculatedSales = 0;
-  let calculatedCommissions = 0;
-  let validOrdersCount = 0;
+  const toRon = (amount: number, currency: string) => convertToRon(amount, currency, liveRates);
 
   const mappedOrders: AffiliateOrderHistory[] = fetchedOrders.map((o) => {
-    const rawOrderTotal = Number(o.total_amount) || 0;
-    const rawDiscount = Number(o.discount_total) || 0;
-    const rawShipping = Number(o.shipping_amount) || 0;
-    const rawBaseSubtotal = Number(o.subtotal) > 0 ? Number(o.subtotal) : Math.max(0, rawOrderTotal - rawShipping);
-    const netOrderSubtotal = Math.max(0, rawBaseSubtotal - rawDiscount);
-    const orderCurrency = (o.currency || 'RON').toUpperCase();
-    const orderTotal = convertToRon(rawOrderTotal, orderCurrency, liveRates);
-    const orderSubtotal = convertToRon(netOrderSubtotal, orderCurrency, liveRates);
-
-    // Filter out canceled, returned, refunded, or failed orders from commission tally
-    const isNonCountable = ['cancelled', 'anulat', 'anulata', 'returned', 'returnat', 'returnata', 'refunded', 'rambursat', 'failed', 'refused', 'neridicat'].includes(String(o.status || '').toLowerCase().trim());
-    const commission = isNonCountable ? 0 : Math.round((orderSubtotal * (commissionPercent / 100)) * 100) / 100;
-
-    if (!isNonCountable) {
-      calculatedSales += orderTotal;
-      calculatedCommissions += commission;
-      validOrdersCount += 1;
-    }
+    const metrics = computeAffiliateOrderMetrics(o, commissionPercent, toRon);
 
     // Clean order number (prefer human-friendly ODIN reference over raw payment id)
     const odinId = o.receipt_url?.match(/(?:TZ|ODIN)-[A-Za-z0-9-]+/)?.[0] 
@@ -162,6 +162,10 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
 
     // Process items (what was bought: title, flavor/variant, quantity, image)
     const rawItems = Array.isArray(o.items) ? o.items : [];
+    const rawItemsSum = rawItems.reduce(
+      (sum: number, it: any) => sum + (Number(it.price) || 0) * Math.max(1, Number(it.quantity) || 1),
+      0
+    );
     const items: AffiliateOrderItem[] = rawItems.map((item: any) => {
       let itemName = typeof item.name === 'object' && item.name !== null
         ? item.name.ro || item.name.en || Object.values(item.name)[0] || 'Produs'
@@ -175,7 +179,7 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
       return {
         name: itemName,
         quantity: Math.max(1, Number(item.quantity) || 1),
-        price: Number(item.price) || 0,
+        price: convertAffiliateItemPriceToRon(Number(item.price) || 0, rawItemsSum, o, toRon),
         variant: variantStr,
         image: item.image || item.main_image || ''
       };
@@ -188,28 +192,30 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
       customerCity,
       createdAt: o.created_at || new Date().toISOString(),
       status: o.status || 'processing',
-      isCountable: !isNonCountable,
-      currency: (o.currency || 'RON').toUpperCase(),
-      totalAmount: orderTotal,
-      subtotal: orderSubtotal,
-      commissionAmount: commission,
+      isCountable: metrics.isCountable,
+      nonCountableReason: metrics.nonCountableReason,
+      nonCountableLabel: metrics.nonCountableLabel,
+      // Converted amounts are always expressed in RON
+      currency: 'RON',
+      originalCurrency: metrics.originalCurrency,
+      originalTotalAmount: metrics.originalTotalAmount,
+      totalAmount: metrics.totalAmount,
+      subtotal: metrics.subtotal,
+      shippingAmount: metrics.shippingAmount,
+      commissionAmount: metrics.commissionAmount,
       items
     };
   });
 
   // Accurate totals: ground truth from valid non-cancelled orders
-  const totalSales = mappedOrders.length > 0
-    ? Math.round(calculatedSales * 100) / 100
-    : (Number(affiliate.total_earnings_ron) || 0);
-
-  const totalCommissions = mappedOrders.length > 0
-    ? Math.round(calculatedCommissions * 100) / 100
-    : Math.round((totalSales * (commissionPercent / 100)) * 100) / 100;
-
   const paymentDetails = affiliate.payment_details || {};
-  const paidPayout = Number(paymentDetails.paid_amount) || 0;
-  const pendingPayout = Math.max(0, Math.round((totalCommissions - paidPayout) * 100) / 100);
-  const usagesCount = mappedOrders.length > 0 ? validOrdersCount : (Number(affiliate.usage_count) || 0);
+  const summary = computeAffiliateFinancialSummary(
+    mappedOrders,
+    commissionPercent,
+    paymentDetails,
+    Number(affiliate.total_earnings_ron) || 0,
+    Number(affiliate.usage_count) || 0
+  );
 
   return {
     success: true,
@@ -218,17 +224,23 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
       email: affiliate.email,
       code: affiliate.code,
       commissionPercent,
-      totalSales,
-      totalCommissions,
-      pendingPayout,
-      paidPayout,
-      usagesCount,
+      totalSales: summary.totalSales,
+      totalNetSales: summary.totalNetSales,
+      totalCommissions: summary.totalCommissions,
+      pendingPayout: summary.pendingPayout,
+      paidPayout: summary.paidPayout,
+      overpaidAmount: summary.overpaidAmount,
+      payoutProgressPercent: summary.payoutProgressPercent,
+      usagesCount: summary.validOrdersCount,
+      cancelledOrdersCount: summary.cancelledOrdersCount,
       joinedAt: affiliate.activated_at || affiliate.requested_at || new Date().toISOString(),
+      lastPayoutAt: summary.lastPayoutAt,
+      payoutHistory: summary.payouts,
       paymentDetails: {
         iban: paymentDetails.iban || '',
         bankName: paymentDetails.bank_name || paymentDetails.bank || '',
         accountHolder: paymentDetails.account_holder || affiliate.name,
-        paidAmount: paidPayout
+        paidAmount: summary.paidPayout
       },
       orders: mappedOrders
     }

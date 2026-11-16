@@ -78,7 +78,7 @@ export function Footer() {
                 </Link>
                 <p className="text-zinc-300 text-base leading-relaxed font-medium mb-10 max-w-sm">
                   {locale === 'ro' 
-                    ? "Built for Strength. Designed for Performance. Echipamente heavy-duty pentru împins la piept și powerlifting." 
+                    ? "Construit pentru forță. Proiectat pentru performanță. Echipamente de competiție pentru împins la piept și powerlifting." 
                     : "Built for Strength. Designed for Performance. Heavy-duty elbow wraps for serious powerlifters and lifters."}
                 </p>
 
@@ -184,6 +184,7 @@ export function Footer() {
                         <li><Link href="/" className="hover:text-primary transition-colors">{t('home')}</Link></li>
                         <li><Link href="/shop" className="hover:text-primary transition-colors">{t('shop')}</Link></li>
                         <li><Link href="/affiliate" className="hover:text-primary transition-colors">{tNav('affiliate')}</Link></li>
+                        <li><Link href="/affiliate/login" className="hover:text-primary transition-colors">{locale === 'en' ? 'Affiliate Login' : 'Autentificare Afiliat'}</Link></li>
                         <li><Link href="/about" className="hover:text-primary transition-colors">{tNav('about')}</Link></li>
                         <li><Link href="/contact" className="hover:text-primary transition-colors">{t('contact')}</Link></li>
                       </ul>
@@ -196,6 +197,7 @@ export function Footer() {
                   <li><Link href="/" className="hover:text-primary transition-colors">{t('home')}</Link></li>
                   <li><Link href="/shop" className="hover:text-primary transition-colors">{t('shop')}</Link></li>
                   <li><Link href="/affiliate" className="hover:text-primary transition-colors">{tNav('affiliate')}</Link></li>
+                  <li><Link href="/affiliate/login" className="hover:text-primary transition-colors">{locale === 'en' ? 'Affiliate Login' : 'Autentificare Afiliat'}</Link></li>
                   <li><Link href="/about" className="hover:text-primary transition-colors">{tNav('about')}</Link></li>
                   <li><Link href="/contact" className="hover:text-primary transition-colors">{t('contact')}</Link></li>
                 </ul>

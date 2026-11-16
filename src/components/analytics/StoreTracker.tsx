@@ -61,6 +61,22 @@ export function StoreTracker({ enabled = false }: { enabled?: boolean }) {
 
       const payload = JSON.stringify(payloadObj);
 
+      // Fire standard GA4 E-Commerce events when gtag is loaded
+      const gtagFn = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
+      if (typeof gtagFn === "function") {
+        if (event === "cart") {
+          gtagFn("event", "add_to_cart", { event_category: "ecommerce", page_path: window.location.pathname });
+        } else if (event === "checkout") {
+          if (window.location.pathname.includes("/checkout/success")) {
+            gtagFn("event", "purchase", { event_category: "ecommerce", page_path: window.location.pathname });
+          } else {
+            gtagFn("event", "begin_checkout", { event_category: "ecommerce", page_path: window.location.pathname });
+          }
+        } else if (event === "pageview" && window.location.pathname.includes("/product/")) {
+          gtagFn("event", "view_item", { event_category: "ecommerce", page_path: window.location.pathname });
+        }
+      }
+
       // Primary: fetch with keepalive and application/json
       if (typeof fetch === 'function') {
         fetch("/api/analytics/track", {

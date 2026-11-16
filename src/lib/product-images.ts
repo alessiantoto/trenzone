@@ -1,25 +1,43 @@
 import { getCdnUrl } from '@/lib/utils/cdn';
+import { getSiteUrl } from '@/lib/site-config';
 
-const DEFAULT_TRENZONE_IMAGE = '/images/products/x10_elbow_wraps_purple_1.webp';
+const DEFAULT_TRENZONE_IMAGE = '/images/products/x10_elbow_wraps_purple.webp';
 
 function toAbsoluteAssetUrl(url: string): string {
   const cdnResolved = getCdnUrl(url);
   if (cdnResolved.startsWith('http')) return cdnResolved;
-  return `https://www.trenzone.fit${cdnResolved.startsWith('/') ? '' : '/'}${cdnResolved}`;
+  return `${getSiteUrl()}${cdnResolved.startsWith('/') ? '' : '/'}${cdnResolved}`;
 }
 
 export function isWideProductImage(url?: string | null): boolean {
-  return typeof url === 'string' && url.includes('shirt_');
+  return (
+    typeof url === 'string' &&
+    (url.includes('shirt_') || url.includes('program_complete_'))
+  );
 }
 
 function matchTrenzoneGearImage(rawText: string): string | null {
   const s = rawText.toLowerCase();
 
+  if (s.includes('food plan') && s.includes('bench')) {
+    return '/images/products/program_complete_trio_v2.webp';
+  }
+  if (s.includes('food plan')) {
+    return '/images/products/program_food_plan.webp';
+  }
+  if (s.includes('training program')) {
+    return '/images/products/program_training_program.webp';
+  }
+  if (s.includes('bench program')) {
+    return '/images/products/program_bench_program.webp';
+  }
   if (s.includes('wrist') || s.includes('încheietur') || s.includes('incheietur')) {
-    return '/images/products/trenzone_wristwraps_default.webp';
+    return (s.includes('white') || s.includes('alb'))
+      ? '/images/products/x10_wrist_wraps_white.webp'
+      : '/images/products/x10_wrist_wraps_purple.webp';
   }
   if (s.includes('centur') || s.includes('belt')) {
-    return '/images/products/trenzone_belt_default.webp';
+    return '/images/products/heavy_lifting_belt.webp';
   }
   if (s.includes('eat tren')) return '/images/products/shirt_eat_tren_sleep_repeat.webp';
   if (s.includes('stay hard')) return '/images/products/shirt_stay_hard.webp';
@@ -31,8 +49,8 @@ function matchTrenzoneGearImage(rawText: string): string | null {
   }
   if (s.includes('x10')) {
     return (s.includes('white') || s.includes('alb'))
-      ? '/images/products/x10_elbow_wraps_white_1.webp'
-      : '/images/products/x10_elbow_wraps_purple_1.webp';
+      ? '/images/products/x10_elbow_wraps_white.webp'
+      : '/images/products/x10_elbow_wraps_purple.webp';
   }
   if (s.includes('x5')) {
     if (s.includes('red') || s.includes('rosu') || s.includes('roșu')) {
@@ -44,10 +62,10 @@ function matchTrenzoneGearImage(rawText: string): string | null {
     return '/images/products/x5_elbow_wraps_purple_1.webp';
   }
 
-  if (s.includes('purple') || s.includes('mov')) return '/images/products/x10_elbow_wraps_purple_1.webp';
+  if (s.includes('purple') || s.includes('mov')) return '/images/products/x10_elbow_wraps_purple.webp';
   if (s.includes('red') || s.includes('rosu') || s.includes('roșu')) return '/images/products/x5_elbow_wraps_red_1.webp';
   if (s.includes('blue') || s.includes('albastr')) return '/images/products/x5_elbow_wraps_blue_1.webp';
-  if (s.includes('white') || s.includes('alb')) return '/images/products/x10_elbow_wraps_white_1.webp';
+  if (s.includes('white') || s.includes('alb')) return '/images/products/x10_elbow_wraps_white.webp';
 
   return null;
 }

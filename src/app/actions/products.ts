@@ -6,6 +6,11 @@ import { isAdminAuthorized } from './admin-auth';
 import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
 import { getCdnUrl } from '@/lib/utils/cdn';
 import { uploadToR2, deleteFromR2, getR2PublicBaseUrl } from '@/lib/r2';
+import { DIGITAL_PROGRAM_PRODUCTS, isDigitalProgramId } from '@/lib/programs';
+import {
+  DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG,
+  type DigitalProgramsVideoConfig,
+} from '@/lib/product-features';
 
 // Helper to safely parse JSONB fields from DB
 const parseJSONB = (val: any) => {
@@ -16,30 +21,57 @@ const parseJSONB = (val: any) => {
 };
 
 const LOCAL_PRODUCT_IMAGES = new Set([
-  'x10_elbow_wraps_purple_1.webp',
-  'x10_elbow_wraps_purple_2.webp',
-  'x10_elbow_wraps_purple_square.webp',
-  'x10_elbow_wraps_white_1.webp',
-  'x10_elbow_wraps_white_2.webp',
-  'x10_elbow_wraps_white_3.webp',
+  'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_white.webp',
+  'x10_wrist_wraps_purple.webp',
+  'x10_wrist_wraps_white.webp',
+  'heavy_lifting_belt.webp',
+  'program_food_plan.webp',
+  'program_training_program.webp',
+  'program_bench_program.webp',
+  'program_complete_bundle.webp',
+  'program_complete_3_bundle.webp',
+  'program_complete_trio_v2.webp',
   'x5_elbow_wraps_blue_1.webp',
   'x5_elbow_wraps_purple_1.webp',
   'x5_elbow_wraps_purple_2.webp',
   'x5_elbow_wraps_purple_square.webp',
   'x5_elbow_wraps_red_1.webp',
-  'trenzone_tshirt_default.webp',
   'shirt_stay_hard.webp',
   'shirt_eat_tren_sleep_repeat.webp',
   'shirt_beast.webp',
   'shirt_soldier_of_god.webp',
   'shirt_pain_creates_men.webp',
-  'trenzone_belt_default.webp',
-  'trenzone_wristwraps_default.webp',
 ]);
+
+const LEGACY_PRODUCT_IMAGE_MAP: Record<string, string> = {
+  'x10_elbow_wraps_purple_1.webp': 'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_purple_2.webp': 'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_purple_square.webp': 'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_purple.png': 'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_white_1.webp': 'x10_elbow_wraps_white.webp',
+  'x10_elbow_wraps_white_2.webp': 'x10_elbow_wraps_white.webp',
+  'x10_elbow_wraps_white_3.webp': 'x10_elbow_wraps_white.webp',
+  'x10_elbow_wraps_white.PNG': 'x10_elbow_wraps_white.webp',
+  'x10_elbow_wraps_white.png': 'x10_elbow_wraps_white.webp',
+  'trenzone_belt_default.webp': 'heavy_lifting_belt.webp',
+  'heavy_lifting_belt.PNG': 'heavy_lifting_belt.webp',
+  'heavy_lifting_belt.png': 'heavy_lifting_belt.webp',
+  'trenzone_wristwraps_default.webp': 'x10_wrist_wraps_purple.webp',
+  'x10_wrist_wraps_purple.PNG': 'x10_wrist_wraps_purple.webp',
+  'x10_wrist_wraps_purple.png': 'x10_wrist_wraps_purple.webp',
+  'x10_wrist_wraps_white.PNG': 'x10_wrist_wraps_white.webp',
+  'x10_wrist_wraps_white.png': 'x10_wrist_wraps_white.webp',
+  'trenzone_tshirt_default.webp': 'shirt_stay_hard.webp',
+  'program_complete_bundle.webp': 'program_complete_trio_v2.webp',
+  'program_complete_3_bundle.webp': 'program_complete_trio_v2.webp',
+};
 
 const normalizeProductImageUrl = (url: any): string => {
   if (!url || typeof url !== 'string') return '';
-  const fileName = url.split('/').pop()?.split('?')[0]?.split('#')[0] || '';
+  if (url.startsWith('data:')) return url;
+  const rawName = url.split('/').pop()?.split('?')[0]?.split('#')[0] || '';
+  const fileName = LEGACY_PRODUCT_IMAGE_MAP[rawName] || rawName;
   if (LOCAL_PRODUCT_IMAGES.has(fileName)) {
     return getCdnUrl(`/images/products/${fileName}`);
   }
@@ -58,7 +90,7 @@ const mapProduct = (p: any, preserveLocalized: boolean = false): Product => {
     ? (parsedDesc && typeof parsedDesc === 'object' ? parsedDesc : (p.description || ''))
     : (parsedDesc && typeof parsedDesc === 'object' ? (parsedDesc.ro || parsedDesc.en || '') : (p.description || ''));
 
-  const DEFAULT_IMAGE = '/images/products/x10_elbow_wraps_purple_1.webp';
+  const DEFAULT_IMAGE = '/images/products/x10_elbow_wraps_purple.webp';
   const rawMain = (p.main_image && typeof p.main_image === 'string' && !p.main_image.includes('cdn.shopify.com')) ? p.main_image : DEFAULT_IMAGE;
   const mainImage = normalizeProductImageUrl(rawMain) || DEFAULT_IMAGE;
   const allImages = p.images && p.images.length > 0 
@@ -75,30 +107,85 @@ const mapProduct = (p: any, preserveLocalized: boolean = false): Product => {
     }));
   }
 
+  const parsedSpecsSummary = parseJSONB(p.specs_summary) || undefined;
+  const isDigital =
+    Boolean(parsedSpecsSummary?.is_digital) || isDigitalProgramId(p.id || p.slug);
+  const fallbackDigital = isDigital
+    ? DIGITAL_PROGRAM_PRODUCTS.find((dp) => dp.id === p.id || dp.slug === p.slug)
+    : undefined;
+  const parsedAdvantages = parseJSONB(p.advantages) || fallbackDigital?.benefits || undefined;
+
+  // Normalize legacy verbose digital program names/emojis if present in DB
+  let finalName = nameVal;
+  if (isDigital && fallbackDigital) {
+    const rawStr = typeof nameVal === 'object' ? `${nameVal.ro || ''} ${nameVal.en || ''}` : String(nameVal || '');
+    if (
+      rawStr.includes('FOOD PLAN —') ||
+      rawStr.includes('BENCH PROGRAM —') ||
+      rawStr.includes('PACHET COMPLET:') ||
+      rawStr.includes('Complete Nutrition &') ||
+      rawStr.includes('Bench Press Technique')
+    ) {
+      finalName = preserveLocalized
+        ? fallbackDigital.name
+        : (typeof fallbackDigital.name === 'object' ? fallbackDigital.name.ro : fallbackDigital.name);
+    }
+  }
+
+  let finalVariants = parsedVariants?.options?.length ? parsedVariants : (fallbackDigital?.variants || parsedVariants);
+  if (isDigital && finalVariants?.options && Array.isArray(finalVariants.options)) {
+    finalVariants = {
+      ...finalVariants,
+      label: { ro: 'Limbă', en: 'Language' },
+      options: finalVariants.options.map((opt: any) => {
+        const cleanStr = (s: any) =>
+          typeof s === 'string'
+            ? s.replace(/^(🇷🇴|🇬🇧)\s*/g, '').replace(/\s*\(PDF\)/gi, '').trim()
+            : s;
+        const rawBadge = typeof opt.badge === 'string' ? opt.badge.trim().toUpperCase() : '';
+        const cleanedBadge = (rawBadge === 'ROMÂNĂ' || rawBadge === 'ROMANA' || rawBadge === 'ENGLISH')
+          ? undefined
+          : opt.badge;
+        return {
+          ...opt,
+          badge: cleanedBadge,
+          name: typeof opt.name === 'object' && opt.name !== null
+            ? { ro: cleanStr(opt.name.ro), en: cleanStr(opt.name.en) }
+            : cleanStr(opt.name),
+        };
+      }),
+    };
+  }
+
   return {
     id: p.id,
     slug: p.slug,
-    name: nameVal,
-    price: p.price_numeric ? parseFloat(p.price_numeric) : 0,
-    originalPrice: p.original_price_numeric ? parseFloat(p.original_price_numeric) : undefined,
-    badge: p.badge || undefined,
+    is_digital: isDigital,
+    name: finalName,
+    price: p.price_numeric !== null && p.price_numeric !== undefined ? parseFloat(p.price_numeric) : (fallbackDigital ? Number(fallbackDigital.price) : 0),
+    originalPrice: p.original_price_numeric ? parseFloat(p.original_price_numeric) : (fallbackDigital?.originalPrice ? Number(fallbackDigital.originalPrice) : undefined),
+    badge: p.badge || fallbackDigital?.badge || undefined,
     description: descVal,
     image: mainImage,
     images: allImages,
-    stock_quantity: p.stock_quantity || 0,
-    weight: p.weight || 0.5,
-    length_mm: p.length_mm || 100,
-    width_mm: p.width_mm || 100,
-    height_mm: p.height_mm || 100,
-    is_active: p.is_active,
-    variants: parsedVariants,
+    stock_quantity: p.stock_quantity ?? (isDigital ? 9999 : 0),
+    weight: isDigital ? 0 : (p.weight || 0.5),
+    length_mm: isDigital ? 0 : (p.length_mm || 100),
+    width_mm: isDigital ? 0 : (p.width_mm || 100),
+    height_mm: isDigital ? 0 : (p.height_mm || 100),
+    is_active: p.is_active ?? true,
+    variants: finalVariants,
     bundleVariants: parseJSONB(p.bundlevariants || p.bundleVariants) || undefined,
-    advantages: parseJSONB(p.advantages) || undefined,
+    advantages: parsedAdvantages,
+    benefits: parsedAdvantages,
+    specs: fallbackDigital?.specs || undefined,
+    specs_summary: parsedSpecsSummary,
     usage_signs: parseJSONB(p.usage_signs) || undefined,
+    metadata: parseJSONB(p.metadata) || undefined,
   };
 };
 
-const PUBLIC_PRODUCT_COLUMNS = 'id, slug, name, price_numeric, original_price_numeric, description, main_image, images, badge, stock_quantity, weight, length_mm, width_mm, height_mm, is_active, variants, bundlevariants, advantages, usage_signs';
+const PUBLIC_PRODUCT_COLUMNS = 'id, slug, name, price_numeric, original_price_numeric, description, main_image, images, badge, stock_quantity, weight, length_mm, width_mm, height_mm, is_active, variants, bundlevariants, advantages, usage_signs, specs_summary, metadata';
 
 const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
   {
@@ -111,13 +198,10 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     price: 529.99,
     originalPrice: 599.99,
     badge: "PR CHASER · +20 KG",
-    image: "/images/products/x10_elbow_wraps_purple_1.webp",
+    image: "/images/products/x10_elbow_wraps_purple.webp",
     images: [
-      "/images/products/x10_elbow_wraps_purple_1.webp",
-      "/images/products/x10_elbow_wraps_purple_2.webp",
-      "/images/products/x10_elbow_wraps_white_3.webp",
-      "/images/products/x10_elbow_wraps_white_1.webp",
-      "/images/products/x10_elbow_wraps_white_2.webp"
+      "/images/products/x10_elbow_wraps_purple.webp",
+      "/images/products/x10_elbow_wraps_white.webp"
     ],
     variants: {
       type: "flavor",
@@ -126,7 +210,7 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
         {
           name: { ro: "Purple", en: "Purple" },
           color: "#a855f7",
-          image: "/images/products/x10_elbow_wraps_purple_1.webp",
+          image: "/images/products/x10_elbow_wraps_purple.webp",
           imageIndex: 0,
           stock_status: "in_stock",
           badge: "BEST SELLER"
@@ -134,8 +218,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
         {
           name: { ro: "White (Precomandă)", en: "White (Pre-Order)" },
           color: "#f8fafc",
-          image: "/images/products/x10_elbow_wraps_white_3.webp",
-          imageIndex: 2,
+          image: "/images/products/x10_elbow_wraps_white.webp",
+          imageIndex: 1,
           stock_status: "preorder",
           badge: "PRECOMANDĂ"
         }
@@ -155,9 +239,9 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     },
     stock_quantity: 80,
     weight: 1.2,
-    length_mm: 1000,
-    width_mm: 80,
-    height_mm: 15,
+    length_mm: 350,
+    width_mm: 180,
+    height_mm: 90,
     is_active: true
   },
   {
@@ -234,9 +318,10 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     price: 299.99,
     originalPrice: 349.99,
     badge: "EXTREME STIFFNESS",
-    image: "/images/products/trenzone_wristwraps_default.webp",
+    image: "/images/products/x10_wrist_wraps_purple.webp",
     images: [
-      "/images/products/trenzone_wristwraps_default.webp"
+      "/images/products/x10_wrist_wraps_purple.webp",
+      "/images/products/x10_wrist_wraps_white.webp"
     ],
     variants: {
       type: "flavor",
@@ -245,16 +330,16 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
         {
           name: { ro: "Purple", en: "Purple" },
           color: "#a855f7",
-          image: "/images/products/trenzone_wristwraps_default.webp",
+          image: "/images/products/x10_wrist_wraps_purple.webp",
           imageIndex: 0,
           stock_status: "in_stock",
           badge: "BEST SELLER"
         },
         {
-          name: { ro: "Stealth Black", en: "Stealth Black" },
-          color: "#18181b",
-          image: "/images/products/trenzone_wristwraps_default.webp",
-          imageIndex: 0,
+          name: { ro: "White", en: "White" },
+          color: "#f8fafc",
+          image: "/images/products/x10_wrist_wraps_white.webp",
+          imageIndex: 1,
           stock_status: "in_stock"
         }
       ]
@@ -300,39 +385,41 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     id: "dd477884-5fd8-4d8f-ab75-1cade13c1cc8",
     slug: "centura-powerlifting",
     name: {
-      ro: "Centură Lever Powerlifting",
-      en: "Powerlifting Lever Belt"
+      ro: "Heavy Lifting Belt",
+      en: "Heavy Lifting Belt"
     },
     price: 749.99,
     originalPrice: 849.99,
     badge: "IPF GRADE · 13MM",
-    image: "/images/products/trenzone_belt_default.webp",
+    image: "/images/products/heavy_lifting_belt.webp",
     images: [
-      "/images/products/trenzone_belt_default.webp"
+      "/images/products/heavy_lifting_belt.webp"
     ],
     variants: {
       type: "size",
       label: { ro: "Mărime", en: "Size" },
       options: [
+        { name: { ro: "XS (57.5-70 cm)", en: "XS (57.5-70 cm)" }, stock_status: "in_stock" },
         { name: { ro: "S (65-80 cm)", en: "S (65-80 cm)" }, stock_status: "in_stock" },
-        { name: { ro: "M (75-90 cm)", en: "M (75-90 cm)" }, badge: "POPULAR", stock_status: "in_stock" },
-        { name: { ro: "L (85-100 cm)", en: "L (85-100 cm)" }, stock_status: "in_stock" },
-        { name: { ro: "XL (95-115 cm)", en: "XL (95-115 cm)" }, stock_status: "in_stock" }
+        { name: { ro: "M (72.5-90 cm)", en: "M (72.5-90 cm)" }, badge: "POPULAR", stock_status: "in_stock" },
+        { name: { ro: "L (80-100 cm)", en: "L (80-100 cm)" }, stock_status: "in_stock" },
+        { name: { ro: "XL (87.5-110 cm)", en: "XL (87.5-110 cm)" }, stock_status: "in_stock" },
+        { name: { ro: "2XL (95-120 cm)", en: "2XL (95-120 cm)" }, stock_status: "in_stock" }
       ]
     },
     description: {
-      ro: "Centură profesională de powerlifting din piele naturală veritabilă multi-strat, grosime 13mm și cataramă metalică rapidă cu levier (Quick-Release Lever). Presiune intra-abdominală maximă și suport complet pentru coloană la genuflexiuni și îndreptări de nivel competițional.",
-      en: "Competition-grade 13mm multi-layer genuine leather powerlifting belt with heavy-duty quick-release steel lever. Maximizes intra-abdominal pressure and provides unyielding lumbar support for heavy squats and deadlifts."
+      ro: "Centură profesională de powerlifting din 100% piele naturală veritabilă, grosime 13mm și cataramă metalică rapidă cu levier (Quick-Release Lever). Presiune intra-abdominală maximă și suport complet pentru coloană la genuflexiuni și îndreptări de nivel competițional.",
+      en: "Competition-grade 13mm 100% genuine leather powerlifting belt with heavy-duty quick-release steel lever. Maximizes intra-abdominal pressure and provides unyielding lumbar support for heavy squats and deadlifts."
     },
     advantages: {
       ro: [
-        "Piele naturală tratată de 13mm grosime maximă aprobată",
+        "100% Piele naturală tratată de 13mm grosime maximă aprobată",
         "Cataramă lever din oțel masiv cu închidere instantanee",
         "Susținere intra-abdominală de neclintit pe genuflexiuni și deadlifts",
         "Finisaj interior velur anti-alunecare pentru aderență optimă pe haine"
       ],
       en: [
-        "13mm competition-spec multi-layer genuine treated leather",
+        "13mm competition-spec 100% genuine treated leather",
         "Heavy-duty steel quick-release lever mechanism",
         "Unyielding intra-abdominal support for maximum lifts",
         "Non-slip inner suede lining locks securely onto apparel"
@@ -352,9 +439,9 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     },
     stock_quantity: 50,
     weight: 1.5,
-    length_mm: 1100,
-    width_mm: 100,
-    height_mm: 13,
+    length_mm: 400,
+    width_mm: 200,
+    height_mm: 140,
     is_active: true
   },
   {
@@ -419,25 +506,25 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     bundleVariants: {
       size: {
         label: { ro: "Mărime", en: "Size" },
-        options: ["S", "M", "L", "XL", "XXL"]
+        options: ["S", "M", "L", "XL", "2XL"]
       }
     },
     description: {
-      ro: "Tricou heavy-cotton premium oversized fit (washed black). Bumbac 100% pieptănat de 260 GSM, printuri statement high-definition, guler întărit și emblemă TrenZone®.",
-      en: "Heavy-cotton premium washed-black oversized fit tee. 100% combed cotton 260 GSM, high-definition statement prints, reinforced collar, and TrenZone® emblem."
+      ro: "Tricou heavy-weight premium oversized fit (washed black), realizat din 80% bumbac și 20% poliester (240 GSM), printuri statement high-definition, guler întărit și emblemă TrenZone®.",
+      en: "Heavy-weight premium washed-black oversized fit tee crafted from an 80% cotton, 20% polyester blend (240 GSM), featuring high-definition statement prints, a reinforced collar, and TrenZone® emblem."
     },
     advantages: {
       ro: [
-        "Bumbac 100% pieptănat de densitate înaltă 260 GSM",
-        "Croială relaxată oversized perfectă pentru sală",
-        "Cusături duble ranforsate rezistente la uzură",
-        "Nu intră la apă și își păstrează forma după spălări repetate"
+        "Amestec premium 80% bumbac, 20% poliester de densitate înaltă (240 GSM)",
+        "Croială relaxată oversized perfectă pentru sală și stradă",
+        "Cusături duble ranforsate rezistente la uzură intensă",
+        "Își păstrează forma și aspectul după spălări repetate"
       ],
       en: [
-        "100% premium heavy combed cotton 260 GSM",
-        "Relaxed oversized drape ideal for lifting",
-        "Reinforced double-stitched seams for durability",
-        "Pre-shrunk fabric retains shape wash after wash"
+        "Premium 80% cotton, 20% polyester heavy blend (240 GSM)",
+        "Relaxed oversized drape ideal for lifting and streetwear",
+        "Reinforced double-stitched seams for long-term durability",
+        "Retains shape, structure, and finish wash after wash"
       ]
     },
     usage_signs: {
@@ -458,7 +545,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
     width_mm: 250,
     height_mm: 20,
     is_active: true
-  }
+  },
+  ...DIGITAL_PROGRAM_PRODUCTS,
 ];
 
 const PRODUCT_DISPLAY_ORDER: Record<string, number> = {
@@ -467,6 +555,28 @@ const PRODUCT_DISPLAY_ORDER: Record<string, number> = {
   'x10-wrist-wraps': 3,
   'centura-powerlifting': 4,
   'tricou-trenzone': 5,
+  'pachet-programe-vlad-tren': 6,
+  'food-plan-vlad-tren': 7,
+  'training-program-vlad-tren': 8,
+  'bench-program-vlad-tren': 9,
+};
+
+const mergeWithDigitalPrograms = (list: Product[], preserveLocalized = true): Product[] => {
+  const merged = [...list];
+  for (const dp of DIGITAL_PROGRAM_PRODUCTS) {
+    if (!merged.some((p) => p.id === dp.id || p.slug === dp.slug)) {
+      if (preserveLocalized) {
+        merged.push(dp);
+      } else {
+        merged.push({
+          ...dp,
+          name: typeof dp.name === 'object' ? (dp.name.ro || dp.name.en || '') : dp.name,
+          description: typeof dp.description === 'object' ? (dp.description.ro || dp.description.en || '') : dp.description,
+        });
+      }
+    }
+  }
+  return merged;
 };
 
 const sortProductsCanonical = (list: Product[]): Product[] => {
@@ -506,13 +616,13 @@ const getCachedProducts = unstable_cache(
         return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
       }
 
-      const mapped = (data || []).map((p) => mapProduct(p, true));
+      const mapped = mergeWithDigitalPrograms((data || []).map((p) => mapProduct(p, true)), true);
       return mapped.length > 0 ? sortProductsCanonical(mapped) : sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
     } catch {
       return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
     }
   },
-  ['public-products-list-v9'],
+  ['public-products-list-v18'],
   {
     revalidate: 2592000, // 30 days cache — purged on admin edit or manual cache clear
     tags: ['products']
@@ -539,7 +649,7 @@ export async function getAdminProductsServer(): Promise<Product[]> {
       return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
     }
 
-    return sortProductsCanonical((data || []).map((p) => mapProduct(p, false)));
+    return sortProductsCanonical(mergeWithDigitalPrograms((data || []).map((p) => mapProduct(p, false)), false));
   } catch {
     return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
   }
@@ -566,7 +676,7 @@ const getCachedProductBySlug = unstable_cache(
       return fallback ? sortProductsCanonical([fallback])[0] : null;
     }
   },
-  ['product-by-slug-v9'],
+  ['product-by-slug-v17'],
   {
     revalidate: 2592000, // 30 days cache — purged on admin edit or manual cache clear
     tags: ['products']
@@ -578,10 +688,10 @@ export async function getProductBySlugServer(slug: string): Promise<Product | nu
 }
 
 const LOCAL_TEST_INFLUENCERS: InfluencerVideo[] = [
-  { id: 'trenwraps-1', influencer_name: 'Vlad Tren', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_1.mp4', display_order: 1, is_active: true },
-  { id: 'trenwraps-2', influencer_name: 'Logan Dishman', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_2.mp4', display_order: 2, is_active: true },
-  { id: 'trenwraps-3', influencer_name: 'Honza Jeruse', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_3.mp4', display_order: 3, is_active: true },
-  { id: 'trenwraps-4', influencer_name: 'Cipi Raw', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_4.mp4', display_order: 4, is_active: true },
+  { id: 'trenwraps-1', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_1.mp4', display_order: 1, is_active: true },
+  { id: 'trenwraps-2', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_2.mp4', display_order: 2, is_active: true },
+  { id: 'trenwraps-3', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_3.mp4', display_order: 3, is_active: true },
+  { id: 'trenwraps-4', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_4.mp4', display_order: 4, is_active: true },
   { id: 'trenwraps-5', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_5.mp4', display_order: 5, is_active: true },
   { id: 'trenwraps-6', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_6.mp4', display_order: 6, is_active: true },
   { id: 'trenwraps-7', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_7.mp4', display_order: 7, is_active: true },
@@ -613,7 +723,7 @@ const getCachedPublicInfluencers = unstable_cache(
       }));
     }
   },
-  ['public-influencers-v8'],
+  ['public-influencers-v9'],
   {
     revalidate: 2592000, // 30 days cache — purged on admin edit or manual cache clear
     tags: ['influencers']
@@ -622,6 +732,60 @@ const getCachedPublicInfluencers = unstable_cache(
 
 export async function getPublicInfluencers(): Promise<InfluencerVideo[]> {
   return getCachedPublicInfluencers();
+}
+
+const getCachedDigitalProgramsVideoConfig = unstable_cache(
+  async (): Promise<DigitalProgramsVideoConfig> => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('store_settings')
+        .select('value')
+        .eq('key', 'digital_programs_video_config')
+        .maybeSingle();
+
+      if (error || !data?.value || typeof data.value !== 'object') {
+        return DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG;
+      }
+
+      const raw = data.value as Partial<DigitalProgramsVideoConfig>;
+      return {
+        show_on_programs:
+          typeof raw.show_on_programs === 'boolean'
+            ? raw.show_on_programs
+            : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.show_on_programs,
+        influencer_ids: Array.isArray(raw.influencer_ids)
+          ? raw.influencer_ids.map(String)
+          : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.influencer_ids,
+        title_ro:
+          typeof raw.title_ro === 'string' && raw.title_ro.trim()
+            ? raw.title_ro.trim()
+            : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.title_ro,
+        title_en:
+          typeof raw.title_en === 'string' && raw.title_en.trim()
+            ? raw.title_en.trim()
+            : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.title_en,
+        subtitle_ro:
+          typeof raw.subtitle_ro === 'string' && raw.subtitle_ro.trim()
+            ? raw.subtitle_ro.trim()
+            : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.subtitle_ro,
+        subtitle_en:
+          typeof raw.subtitle_en === 'string' && raw.subtitle_en.trim()
+            ? raw.subtitle_en.trim()
+            : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.subtitle_en,
+      };
+    } catch {
+      return DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG;
+    }
+  },
+  ['digital-programs-video-config-v1'],
+  {
+    revalidate: 2592000,
+    tags: ['influencers', 'products'],
+  }
+);
+
+export async function getDigitalProgramsVideoConfig(): Promise<DigitalProgramsVideoConfig> {
+  return getCachedDigitalProgramsVideoConfig();
 }
 
 export async function deleteProductServer(id: string): Promise<{ success: boolean; error?: string }> {
@@ -829,28 +993,64 @@ export async function saveProductServer(formData: FormData): Promise<{ success: 
 
     // 3. Upsert DB Row
     const slug = productData.slug || generateSlug(productData.name);
+    const isDigital =
+      Boolean(productData.is_digital || productData.specs_summary?.is_digital) ||
+      isDigitalProgramId(slug);
     
     // Format JSONB variants properly.
+    const defaultDigitalOptions = [
+      {
+        name: { ro: 'Română', en: 'Romanian' },
+        color: '#e32f8c',
+        image: mainImageUrl || '/images/products/program_complete_trio_v2.webp',
+        imageIndex: 0,
+        stock_status: 'in_stock',
+      },
+      {
+        name: { ro: 'English', en: 'English' },
+        color: '#3b82f6',
+        image: mainImageUrl || '/images/products/program_complete_trio_v2.webp',
+        imageIndex: 0,
+        stock_status: 'in_stock',
+      },
+    ];
+
     const variantsJsonb = { 
-      type: productData.variant_type || 'flavor', 
-      options: finalVariants 
+      type: productData.variant_type || 'flavor',
+      ...(isDigital ? { label: { ro: 'Limbă', en: 'Language' } } : {}),
+      options: isDigital && finalVariants.length === 0 ? defaultDigitalOptions : finalVariants,
     };
 
-    const payload = {
+    const payload: any = {
       name: { ro: productData.name || 'Produs Nou', en: productData.name || 'New Product' },
       slug,
       price_numeric: parseFloat(productData.price) || 0,
-      stock_quantity: parseInt(productData.inventory) || 0,
+      stock_quantity: isDigital ? 9999 : (parseInt(productData.inventory) || 0),
+      weight: isDigital ? 0 : 0.5,
+      length_mm: isDigital ? 0 : 100,
+      width_mm: isDigital ? 0 : 100,
+      height_mm: isDigital ? 0 : 100,
       main_image: mainImageUrl,
+      images: mainImageUrl ? [mainImageUrl] : [],
       variants: variantsJsonb,
+      specs_summary: {
+        ...(productData.specs_summary && typeof productData.specs_summary === 'object' ? productData.specs_summary : {}),
+        ...(isDigital ? { is_digital: true } : {}),
+      },
       is_active: productData.status === 'active'
     };
 
     let result;
     if (isNew) {
       result = await supabaseAdmin.from('products').insert(payload).select().single();
-    } else {
+    } else if (oldProduct) {
       result = await supabaseAdmin.from('products').update(payload).eq('id', productData.id).select().single();
+    } else {
+      result = await supabaseAdmin
+        .from('products')
+        .upsert({ id: productData.id, ...payload }, { onConflict: 'id' })
+        .select()
+        .single();
     }
 
     if (result.error) {

@@ -84,7 +84,7 @@ export default function NotFound() {
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-5 bg-[#e32f8c] text-black font-black uppercase tracking-widest text-sm rounded-xl hover:bg-white transition-all active:scale-95 group shadow-[0_0_30px_rgba(227, 47, 140,0.3)] hover:shadow-[0_0_50px_rgba(255,255,255,0.4)]"
           >
             <Home className="w-5 h-5 group-hover:-translate-y-0.5 transition-transform" />
-            Înapoi Acasă
+            {locale === "ro" ? "Înapoi Acasă" : "Back Home"}
           </Link>
           
           <button
@@ -92,7 +92,7 @@ export default function NotFound() {
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-5 bg-white/5 border border-white/10 text-white font-black uppercase tracking-widest text-sm rounded-xl hover:bg-white/10 transition-all active:scale-95 group backdrop-blur-sm"
           >
             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-            Mergi Înapoi
+            {locale === "ro" ? "Mergi Înapoi" : "Go Back"}
           </button>
 
         </div>

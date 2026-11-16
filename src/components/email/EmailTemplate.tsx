@@ -3,6 +3,7 @@ import * as React from 'react';
 import { BaseEmailLayout } from './BaseEmailLayout';
 import { getProductPrice } from '@/utils/pricing';
 import { getMediaCdnBase } from '@/lib/utils/cdn';
+import { getSiteUrl } from '@/lib/site-config';
 
 interface EmailTemplateProps {
   orderId: string;
@@ -23,6 +24,7 @@ interface EmailTemplateProps {
   };
   userEmail?: string;
   upsellProducts?: any[];
+  programUpsellProducts?: any[];
   subtotal?: number | string;
   discount?: number | string;
   shipping?: number | string;
@@ -33,20 +35,22 @@ interface EmailTemplateProps {
   giftMessage?: string | null;
   cardDiscount?: number | string;
   isPreorder?: boolean;
+  exchangeRates?: Record<string, number>;
 }
 
 export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
-  orderId,
-  customerName,
-  totalAmount,
-  items,
+  orderId = '',
+  customerName = '',
+  totalAmount = '0.00',
+  items = [],
   locale = 'ro',
   trackingNumber,
-  baseUrl = "https://www.trenzone.fit",
+  baseUrl = getSiteUrl(),
   currency = "RON",
   templateData,
   userEmail,
   upsellProducts = [],
+  programUpsellProducts = [],
   subtotal,
   discount,
   cardDiscount,
@@ -56,7 +60,8 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
   giftPackaging,
   giftCost,
   giftMessage,
-  isPreorder = false
+  isPreorder = false,
+  exchangeRates
 }) => {
   const isEn = locale === 'en';
   
@@ -80,34 +85,71 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
     ? (isEn ? "VIEW PRE-ORDER" : "DETALII PRECOMANDĂ")
     : (isEn ? "VIEW TRACKING" : "URMĂREȘTE LIVRAREA");
 
-  const safeWelcome = (headingText || defaultWelcome).replace('{{name}}', customerName.split(' ')[0] || '');
-  const safeBody = bodyText || defaultBody;
+  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
+  const safeOrderId = String(orderId || '');
+  const applyPlaceholders = (text: string) =>
+    text.replaceAll('{{name}}', firstCustomerName).replaceAll('{{id}}', safeOrderId);
+
+  const safeWelcome = applyPlaceholders(headingText || defaultWelcome);
+  const safeBody = applyPlaceholders(bodyText || defaultBody);
   const safeCta = ctaText || defaultCta;
+
+  const resolveLocalizedName = (rawName: any): string => {
+    if (typeof rawName === 'string') return rawName;
+    if (rawName && typeof rawName === 'object') {
+      const candidate = rawName[locale] || rawName.en || rawName.ro || Object.values(rawName).find((v) => typeof v === 'string' && v.trim());
+      if (typeof candidate === 'string') return candidate;
+    }
+    return isEn ? 'Product' : 'Produs';
+  };
+
+  const isDigitalOnlyOrder =
+    Array.isArray(items) &&
+    items.length > 0 &&
+    items.every((it: any) =>
+      Boolean(
+        it?.is_digital ||
+        it?.specs_summary?.is_digital ||
+        /food[- ]?plan|training[- ]?program|bench[- ]?program|pachet[- ]?complet/i.test(String(it?.slug || it?.name || ''))
+      )
+    );
 
   const staticTranslations = isEn ? {
     thanks: isPreorder ? "Thank you for your pre-order!" : "Thank you for your purchase!",
-    status: isPreorder ? "Pre-order Status: SPOT RESERVED (IN PRODUCTION)" : "Order Status: PREPARING FOR SHIPMENT",
+    status: isDigitalOnlyOrder
+      ? "Order Status: INSTANT DIGITAL DELIVERY"
+      : isPreorder
+        ? "Pre-order Status: SPOT RESERVED (IN PRODUCTION)"
+        : "Order Status: PREPARING FOR SHIPMENT",
     shipped: isPreorder ? "PRE-ORDER ITEMS" : "ORDER DETAILS",
     upsell: "YOU MIGHT ALSO LIKE...",
     total: "TOTAL",
     buy_now: "BUY NOW",
     what_next_with_awb: "Our team is already preparing your package! Below you can find your tracking information. Click the button to view the real-time progress as your order moves toward you.",
-    what_next_no_awb: isPreorder 
-      ? "Your place in the upcoming production batch is 100% secured! As soon as the batch is ready, your order will be dispatched with top priority and you will receive your AWB tracking link."
-      : "Our team is already preparing your package! You will receive another email with your tracking information as soon as your order is handed over to the courier.",
-    pending_awb: isPreorder ? "BATCH RESERVED" : "AWB PENDING"
+    what_next_no_awb: isDigitalOnlyOrder
+      ? "Your order includes digital programs only — no physical shipping is required. You will receive a dedicated email with your PDF download links shortly."
+      : isPreorder
+        ? "Your place in the upcoming production batch is 100% secured! As soon as the batch is ready, your order will be dispatched with top priority and you will receive your AWB tracking link."
+        : "Our team is already preparing your package! You will receive another email with your tracking information as soon as your order is handed over to the courier.",
+    pending_awb: isDigitalOnlyOrder ? "DIGITAL DELIVERY" : isPreorder ? "BATCH RESERVED" : "AWB PENDING"
   } : {
-    thanks: isPreorder ? "Mulțumim pentru precomandă!" : "Multumim pentru comanda!",
-    status: isPreorder ? "Status Comandă: PRECOMANDĂ REZERVATĂ (ÎN LOTUL DE PRODUCȚIE)" : "Status Comanda: ÎN CURS DE PREGĂTIRE",
-    shipped: isPreorder ? "PRODUSE ÎN PRECOMANDĂ" : "DETALII COMANDA",
-    upsell: "S-AR PUTEA SA-TI PLACA SI...",
+    thanks: isPreorder ? "Mulțumim pentru precomandă!" : "Mulțumim pentru comandă!",
+    status: isDigitalOnlyOrder
+      ? "Status Comandă: LIVRARE DIGITALĂ INSTANT"
+      : isPreorder
+        ? "Status Comandă: PRECOMANDĂ REZERVATĂ (ÎN LOTUL DE PRODUCȚIE)"
+        : "Status Comandă: ÎN CURS DE PREGĂTIRE",
+    shipped: isPreorder ? "PRODUSE ÎN PRECOMANDĂ" : "DETALII COMANDĂ",
+    upsell: "S-AR PUTEA SĂ-ȚI PLACĂ ȘI...",
     total: "TOTAL",
-    buy_now: "CUMPARA ACUM",
+    buy_now: "CUMPĂRĂ ACUM",
     what_next_with_awb: "Echipa noastră pregătește deja coletul tău! Mai jos găsești numărul de urmărire (AWB). Apasă pe buton pentru a vedea progresul în timp real, pe măsură ce comanda înaintează spre tine.",
-    what_next_no_awb: isPreorder
-      ? "Locul tău din noul lot este garantat 100%! Imediat ce producția este finalizată, comanda va fi ambalată cu prioritate maximă și vei primi numărul AWB de urmărire pe email."
-      : "Echipa noastră pregătește deja coletul tău! Vei primi un email separat cu datele de urmărire (AWB) în momentul în care comanda este predată curierului.",
-    pending_awb: isPreorder ? "LOT REZERVAT (PRECOMANDĂ)" : "URMEAZĂ SĂ FIE PREDAT"
+    what_next_no_awb: isDigitalOnlyOrder
+      ? "Comanda ta conține exclusiv programe digitale — nu necesită livrare fizică prin curier. Vei primi un email separat cu accesul la fișierele PDF."
+      : isPreorder
+        ? "Locul tău din noul lot este garantat 100%! Imediat ce producția este finalizată, comanda va fi ambalată cu prioritate maximă și vei primi numărul AWB de urmărire pe email."
+        : "Echipa noastră pregătește deja coletul tău! Vei primi un email separat cu datele de urmărire (AWB) în momentul în care comanda este predată curierului.",
+    pending_awb: isDigitalOnlyOrder ? "LIVRARE DIGITALĂ" : isPreorder ? "LOT REZERVAT (PRECOMANDĂ)" : "URMEAZĂ SĂ FIE PREDAT"
   };
 
   const supabaseBase = getMediaCdnBase();
@@ -229,12 +271,10 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
             </div>
             <div style={{ display: 'table-cell', paddingLeft: '20px', verticalAlign: 'middle' }}>
               <p style={{ fontWeight: '900', margin: '0', fontSize: '16px' }}>
-                {typeof item.name === 'object' && item.name !== null 
-                  ? (item.name[locale] || item.name['ro'] || item.name['en'] || (isEn ? 'Product' : 'Produs')) 
-                  : item.name}
+                {resolveLocalizedName(item.name)}
               </p>
-              <p style={{ color: '#666', fontSize: '13px', margin: '4px 0' }}>x{item.quantity}</p>
-              <p style={{ fontWeight: '800', margin: '0', fontSize: '15px' }}>{item.price} {currency}</p>
+              <p style={{ color: '#666', fontSize: '13px', margin: '4px 0' }}>x{Number(item.quantity) || 1}</p>
+              <p style={{ fontWeight: '800', margin: '0', fontSize: '15px' }}>{Number(item.price || 0).toFixed(2)} {currency}</p>
             </div>
           </div>
         ))}
@@ -280,7 +320,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   <span style={{ fontWeight: '700', fontSize: '16px', color: '#666' }}>{isEn ? 'Priority Processing' : 'Procesare Prioritară'}</span>
                 </td>
                 <td style={{ textAlign: 'right', verticalAlign: 'bottom', paddingBottom: '8px' }}>
-                  <span style={{ fontWeight: '700', fontSize: '16px', color: '#666' }}>+{(priorityCost !== undefined ? Number(priorityCost) : getProductPrice(6.90, currency)).toFixed(2)} {currency}</span>
+                  <span style={{ fontWeight: '700', fontSize: '16px', color: '#666' }}>+{(priorityCost !== undefined ? Number(priorityCost) : getProductPrice(6.90, currency, exchangeRates)).toFixed(2)} {currency}</span>
                 </td>
               </tr>
             )}
@@ -291,7 +331,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   <span style={{ fontWeight: '700', fontSize: '16px', color: '#666' }}>{isEn ? 'Gift Packaging' : 'Împachetare Cadou'}</span>
                 </td>
                 <td style={{ textAlign: 'right', verticalAlign: 'bottom', paddingBottom: '8px' }}>
-                  <span style={{ fontWeight: '700', fontSize: '16px', color: '#666' }}>+{(giftCost !== undefined ? Number(giftCost) : getProductPrice(14.90, currency)).toFixed(2)} {currency}</span>
+                  <span style={{ fontWeight: '700', fontSize: '16px', color: '#666' }}>+{(giftCost !== undefined ? Number(giftCost) : getProductPrice(14.90, currency, exchangeRates)).toFixed(2)} {currency}</span>
                 </td>
               </tr>
             )}
@@ -328,72 +368,134 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
         </table>
       </div>
 
-      {/* ═══ Upsell Section ═══ */}
-      {upsellProducts && upsellProducts.length > 0 && (
-        <div style={{ padding: '60px 20px', textAlign: 'center', backgroundColor: '#111' }}>
-          <h3 style={{ 
-            fontSize: '18px', 
-            fontWeight: '900', 
-            marginBottom: '40px', 
-            letterSpacing: '-0.5px',
-            color: '#fff',
-            textTransform: 'uppercase'
-          }}>{staticTranslations.upsell}</h3>
-          
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <tbody>
-              <tr>
-                {upsellProducts.slice(0, 2).map((prod, idx) => {
-                  const productName = typeof prod.name === 'object' ? (locale === 'ro' ? (prod.name.ro || prod.name) : (prod.name.en || prod.name)) : prod.name;
-                  return (
-                    <td key={idx} style={{ width: '50%', padding: '0 8px', verticalAlign: 'top' }}>
-                      <a href={`${baseUrl}/${locale}/product/${prod.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <div style={{ 
-                          overflow: 'hidden', 
-                          borderRadius: '12px', 
-                          backgroundColor: '#222',
-                          marginBottom: '16px',
-                          position: 'relative',
-                          maxWidth: '200px',
-                          margin: '0 auto'
-                        }}>
-                          <img src={prod.image.startsWith('http') || prod.image.startsWith('/') ? prod.image : `${supabaseBase}${prod.image}`} style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'cover' }} />
-                          {baseUrl === "" && (
-                            <div style={{ position: 'absolute', top: '6px', right: '6px', background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '9px', padding: '2px 6px', borderRadius: '2px', fontWeight: 'bold' }}>
-                              EXEMPLU
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ height: '42px', overflow: 'hidden', marginBottom: '4px' }}>
-                          <p style={{ 
-                            fontWeight: '800', 
-                            margin: '0', 
-                            fontSize: '12px', 
-                            lineHeight: '1.2',
-                            color: '#fff' 
-                          }}>{productName}</p>
-                        </div>
-                        <p style={{ color: '#fff', fontWeight: '900', fontSize: '13px', marginBottom: '15px' }}>{getProductPrice(prod.price, currency).toFixed(2)} {currency}</p>
-                      </a>
-                      <a href={`${baseUrl}/${locale}/product/${prod.slug}`} style={{
-                        display: 'block',
-                        backgroundColor: '#fff',
-                        color: '#000',
-                        padding: '12px 0',
-                        borderRadius: '6px',
-                        textDecoration: 'none',
-                        fontSize: '11px',
-                        fontWeight: '900',
-                        textTransform: 'uppercase'
-                      }}>{staticTranslations.buy_now}</a>
-                    </td>
-                  );
-                })}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* ═══ Upsell Sections (Equipment + Digital Programs separated) ═══ */}
+      {[
+        {
+          heading: isEn ? 'YOU MIGHT ALSO LIKE — GEAR' : 'ECHIPAMENTE RECOMANDATE',
+          list: upsellProducts,
+        },
+        {
+          heading: isEn ? 'DIGITAL PROGRAMS (INSTANT PDF)' : 'PROGRAME DIGITALE (PDF INSTANT)',
+          list: programUpsellProducts,
+        },
+      ]
+        .filter((group) => group.list && group.list.length > 0)
+        .map((group, groupIdx) => (
+          <div
+            key={groupIdx}
+            style={{
+              padding: groupIdx === 0 ? '48px 20px 36px' : '28px 20px 52px',
+              textAlign: 'center',
+              backgroundColor: '#111',
+              borderTop: groupIdx > 0 ? '1px solid #222' : undefined,
+            }}
+          >
+            <h3
+              style={{
+                fontSize: '16px',
+                fontWeight: '900',
+                marginBottom: '28px',
+                letterSpacing: '-0.3px',
+                color: '#fff',
+                textTransform: 'uppercase',
+              }}
+            >
+              {group.heading}
+            </h3>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>
+                <tr>
+                  {group.list.slice(0, 2).map((prod, idx) => {
+                    const productName = resolveLocalizedName(prod.name);
+                    const upsellPrice =
+                      prod.convertedPrice !== undefined
+                        ? Number(prod.convertedPrice)
+                        : getProductPrice(prod.price, currency, exchangeRates);
+                    return (
+                      <td key={idx} style={{ width: '50%', padding: '0 8px', verticalAlign: 'top' }}>
+                        <a href={`${baseUrl}/${locale}/product/${prod.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                          <div
+                            style={{
+                              overflow: 'hidden',
+                              borderRadius: '12px',
+                              backgroundColor: '#222',
+                              marginBottom: '16px',
+                              position: 'relative',
+                              maxWidth: '200px',
+                              margin: '0 auto',
+                            }}
+                          >
+                            <img
+                              src={
+                                prod.image?.startsWith('http') || prod.image?.startsWith('/')
+                                  ? prod.image.startsWith('/')
+                                    ? `${baseUrl}${prod.image}`
+                                    : prod.image
+                                  : `${supabaseBase}${prod.image || ''}`
+                              }
+                              alt={productName}
+                              style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'cover' }}
+                            />
+                            {baseUrl === '' && (
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: '6px',
+                                  right: '6px',
+                                  background: 'rgba(0,0,0,0.7)',
+                                  color: '#fff',
+                                  fontSize: '9px',
+                                  padding: '2px 6px',
+                                  borderRadius: '2px',
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                {isEn ? 'SAMPLE' : 'EXEMPLU'}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ height: '42px', overflow: 'hidden', marginBottom: '4px' }}>
+                            <p
+                              style={{
+                                fontWeight: '800',
+                                margin: '0',
+                                fontSize: '12px',
+                                lineHeight: '1.2',
+                                color: '#fff',
+                              }}
+                            >
+                              {productName}
+                            </p>
+                          </div>
+                          <p style={{ color: '#fff', fontWeight: '900', fontSize: '13px', marginBottom: '15px' }}>
+                            {upsellPrice.toFixed(2)} {currency}
+                          </p>
+                        </a>
+                        <a
+                          href={`${baseUrl}/${locale}/product/${prod.slug}`}
+                          style={{
+                            display: 'block',
+                            backgroundColor: '#fff',
+                            color: '#000',
+                            padding: '12px 0',
+                            borderRadius: '6px',
+                            textDecoration: 'none',
+                            fontSize: '11px',
+                            fontWeight: '900',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {staticTranslations.buy_now}
+                        </a>
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ))}
     </BaseEmailLayout>
   );
 };

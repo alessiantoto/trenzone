@@ -11,14 +11,17 @@ import { Link } from "@/i18n/routing";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { InfluencerCarousel } from "@/app/[locale]/components/InfluencerCarousel";
 import { YouMayAlsoLike } from "@/components/product/YouMayAlsoLike";
-import { getPublicInfluencers } from "@/app/actions/products";
+import { getPublicInfluencers, getDigitalProgramsVideoConfig } from "@/app/actions/products";
 import { getAllReviewsServer } from "@/app/actions/public-reviews";
 import { formatPublicReviews } from "@/lib/utils/reviews";
 import { generateProductSchema, generateBreadcrumbSchema, generateFAQSchema } from "@/lib/schema";
+import { getSiteUrl } from "@/lib/site-config";
+import { isDigitalProgramItem } from "@/lib/programs";
+import { getResolvedProductFaqs, filterInfluencersForProduct } from "@/lib/product-features";
 
 export const revalidate = 2592000; // Cache product page for 30 days — admin actions & "Șterge Cache" trigger on-demand revalidation
 
-const BASE_URL = "https://www.trenzone.fit";
+const BASE_URL = getSiteUrl();
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string, slug: string }> }): Promise<Metadata> {
   const { locale, slug } = await params;
@@ -114,7 +117,10 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     other: {
       "og:price:amount": getProductPrice(product.price, locale === 'ro' ? 'RON' : 'EUR').toString(),
       "og:price:currency": locale === 'ro' ? 'RON' : 'EUR',
-      "product:availability": product.stock_quantity > 0 ? "in stock" : "out of stock",
+      "product:availability":
+        Boolean((product as any).metadata?.soft_stock_tracking) || product.stock_quantity > 0
+          ? "in stock"
+          : "out of stock",
       "product:condition": "new",
       "product:brand": (product as any).brand || "TrenZone",
     }
@@ -140,16 +146,17 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
   setRequestLocale(locale);
   
   // Parallel fetch for speed (all 100% cached for 30 days via unstable_cache)
-  const [product, stats, t, tShop, allProducts, influencers, rawReviews] = await Promise.all([
+  const [product, stats, t, tShop, allProducts, influencers, rawReviews, digitalVideoConfig] = await Promise.all([
     getProductBySlug(slug),
     getPublicReviewsStats(),
     getTranslations("Product"),
     getTranslations("Shop"),
     getProducts(),
     getPublicInfluencers(),
-    getAllReviewsServer()
+    getAllReviewsServer(),
+    getDigitalProgramsVideoConfig()
   ]);
-  const initialReviews = formatPublicReviews(rawReviews, 40);
+  const initialReviews = formatPublicReviews(rawReviews, 40, locale);
 
   if (!product) {
     redirect(`/${locale}/shop`);
@@ -157,18 +164,19 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
 
   const name = typeof product.name === 'object' ? product.name[locale] || product.name['ro'] : product.name;
   const numericPrice = getProductPrice(product.price, locale === 'ro' ? 'RON' : 'EUR');
-  // Related: exclude current product, sort by price descending (most expensive first)
-  const relatedProducts = allProducts
-    .filter(p => p.slug !== product!.slug)
-    .sort((a, b) => {
-      const priceA = getProductPrice(a.price, locale === 'ro' ? 'RON' : 'EUR');
-      const priceB = getProductPrice(b.price, locale === 'ro' ? 'RON' : 'EUR');
-      return priceB - priceA;
-    });
+  // Separate recommendations: physical equipment vs digital programs
+  const isCurrentDigital = isDigitalProgramItem(product);
+  const priceKey = locale === 'ro' ? 'RON' : 'EUR';
+  const equipmentRelated = allProducts
+    .filter((p) => p.slug !== product!.slug && p.is_active !== false && !isDigitalProgramItem(p))
+    .sort((a, b) => getProductPrice(b.price, priceKey) - getProductPrice(a.price, priceKey));
+  const programRelated = allProducts
+    .filter((p) => p.slug !== product!.slug && p.is_active !== false && isDigitalProgramItem(p))
+    .sort((a, b) => getProductPrice(b.price, priceKey) - getProductPrice(a.price, priceKey));
   
   // Rich JSON-LD for Google: Product + BreadcrumbList + FAQPage
   const currency = locale === 'ro' ? 'RON' : 'EUR';
-  const jsonLd = generateProductSchema(product, currency, locale, stats);
+  const jsonLd = generateProductSchema(product, currency, locale, stats, initialReviews);
 
   const breadcrumbJsonLd = generateBreadcrumbSchema([
     { name: 'TrenZone', url: BASE_URL },
@@ -176,21 +184,15 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
     { name: typeof product.name === 'object' ? product.name[locale] || product.name['ro'] : product.name, url: `${BASE_URL}/${locale}/product/${slug}` }
   ]);
 
-  // Product-specific FAQs
-  const productFaqItems = locale === 'ro' ? [
-    { question: "Cum aleg între modelul X5 și X10?", answer: "Alegerea depinde de stilul tău de antrenament: dacă vrei confort, mobilitate și protecție articulară pe serii de volum și culturism, alege X5 (suport 3.5/5 ferm și flexibil). Dacă vrei rigiditate extremă, blocare de fier pe coate și asistență mecanică de până la +20 kg la ieșirea din piept pe seriile grele și PR-uri, alege X10 (suport 5/5 de competiție)." },
-    { question: "Cât timp durează livrarea?", answer: "Comenzile sunt expediate prin curier rapid direct la adresă în 1-2 zile lucrătoare în România și 3-5 zile lucrătoare internațional. Livrare gratuită disponibilă peste pragul afișat." },
-    { question: "Sunt potrivite și pentru începători?", answer: "Modelul X5 este excelent pentru orice lifter care dorește să-și protejeze articulația cotului și tendoanele de uzură. Modelul X10 este recomandat sportivilor avansați care au deja stabilitate formată pe greutăți mari." },
-    { question: "Cum se întrețin benzile de cot?", answer: "Se recomandă aerisirea lor după fiecare antrenament intens și spălarea manuală la temperaturi reduse (apă călduță), fără uscare automată, pentru a păstra elasticitatea intactă." },
-    { question: "Care este politica de retur?", answer: "Beneficiezi de 14 zile drept de retur garantat fără riscuri. Dacă mărimea sau nivelul de rigiditate nu ți se potrivește, poți schimba sau returna produsul simplu și rapid." }
-  ] : [
-    { question: "How do I choose between X5 and X10?", answer: "Choose based on your training style: if you want versatile joint support, full mobility, and tendon protection for hypertrophy and volume, choose X5 (3.5/5 firmness). If you want extreme competition-grade stiffness and maximum lockout rebound on heavy sets, choose X10 (5/5 stiffness)." },
-    { question: "How long does delivery take?", answer: "Orders are shipped via express tracked courier to your doorstep in 1-2 business days in Romania and 3-5 business days across Europe, the UK, and the US. Free shipping is available above the threshold." },
-    { question: "Are these suitable for beginners?", answer: "The X5 model is great for lifters wanting reliable elbow protection and joint longevity. The X10 model is engineered for advanced lifters moving heavy poundages." },
-    { question: "How do I care for my elbow wraps?", answer: "Air-dry after intense sessions and hand wash with lukewarm water when needed. Do not machine tumble dry to ensure elastic tension remains at peak performance." },
-    { question: "What is the return policy?", answer: "We offer a 14-day hassle-free return window. If you wish to exchange models or return unused wraps, our support team handles it quickly." }
-  ];
+  // Product-specific FAQs (reads custom Admin FAQs or infers accurately per product type)
+  const productFaqItems = getResolvedProductFaqs(product, locale);
   const productFaqJsonLd = generateFAQSchema(productFaqItems);
+
+  // Filter influencer video clips dynamically per product / digital program settings
+  const filteredMedia = filterInfluencersForProduct(influencers, product, digitalVideoConfig);
+  const sectionVideos = filteredMedia.videos;
+  const videoTitle = locale === 'en' ? filteredMedia.titleEn : filteredMedia.titleRo;
+  const videoSubtitle = locale === 'en' ? filteredMedia.subtitleEn : filteredMedia.subtitleRo;
 
 
   return (
@@ -220,22 +222,32 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
       <div className="trenzone-luminous-divider" />
 
       {/* 2. RECOMANDAT DE ATLEȚI — Community Carousel */}
-      {influencers && influencers.length > 0 && (
+      {sectionVideos && sectionVideos.length > 0 && (
         <>
           <div className="relative z-10 pt-2 pb-8 md:pt-4 md:pb-12">
             <div className="container mx-auto px-4">
-              <InfluencerCarousel influencers={influencers} dark={true} />
+              <InfluencerCarousel
+                influencers={sectionVideos}
+                dark={true}
+                title={videoTitle}
+                subtitle={videoSubtitle}
+              />
             </div>
           </div>
           <div className="trenzone-luminous-divider" />
         </>
       )}
 
-      {/* 3. S-AR PUTEA SĂ-ȚI PLACĂ (Related Flagship Models) */}
-      {relatedProducts && relatedProducts.length > 0 && (
+      {/* 3. S-AR PUTEA SĂ-ȚI PLACĂ (2 separate sections: Equipment + Programs) */}
+      {(equipmentRelated.length > 0 || programRelated.length > 0) && (
         <>
           <div className="relative z-10 container mx-auto px-4 pt-12 pb-6">
-            <YouMayAlsoLike products={relatedProducts} locale={locale} />
+            <YouMayAlsoLike
+              equipmentProducts={equipmentRelated}
+              programProducts={programRelated}
+              locale={locale}
+              preferProgramsFirst={isCurrentDigital}
+            />
           </div>
           <div className="trenzone-luminous-divider" />
         </>

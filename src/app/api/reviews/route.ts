@@ -2,17 +2,21 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { sendReviewDiscountEmail, resend } from '@/lib/resend-service';
 import { rateLimiters, getClientIp, checkRateLimit } from '@/lib/ratelimit';
+import { getResendFromEmail, getSiteUrl } from '@/lib/site-config';
 
 import { getAllReviewsServer } from '@/app/actions/public-reviews';
-import { formatPublicReviews } from '@/lib/utils/reviews';
+import { formatPublicReviews, sanitizeReviewImageUrl } from '@/lib/utils/reviews';
+import { upsertReviewTranslation } from '@/lib/review-i18n';
 
 // Cache public GET reviews for 24h on Vercel/Cloudflare CDN (POST stays uncached; admin edits call revalidateTag/revalidatePath)
 export const revalidate = 86400;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const locale = searchParams.get('locale') === 'en' ? 'en' : 'ro';
     const rawReviews = await getAllReviewsServer();
-    const reviews = formatPublicReviews(rawReviews, 40);
+    const reviews = formatPublicReviews(rawReviews, 40, locale);
 
     return NextResponse.json(
       { reviews },
@@ -80,6 +84,10 @@ export async function POST(request: Request) {
     }
 
     // 3. Insert review strictly as 'pending' (NOT visible until approved by admin)
+    const cleanImages = Array.isArray(images)
+      ? images.map(sanitizeReviewImageUrl).filter((u): u is string => Boolean(u)).slice(0, 5)
+      : [];
+
     const { data, error } = await supabaseAdmin
       .from('reviews')
       .insert([
@@ -88,9 +96,10 @@ export async function POST(request: Request) {
           email,
           comment: text,
           rating,
-          images: Array.isArray(images) ? images.slice(0, 5) : [],
+          image_url: cleanImages[0] || null,
+          images: cleanImages,
           product_id: resolvedProductId,
-          locale: locale === 'en' ? 'en' : 'ro',
+          locale: reqLocale,
           status: 'pending'
         }
       ])
@@ -100,6 +109,10 @@ export async function POST(request: Request) {
     if (error) {
       console.error("❌ [REVIEWS API] Error inserting review:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (data?.id) {
+      await upsertReviewTranslation(data.id, { [reqLocale]: text }).catch(() => {});
     }
 
     console.log(`✅ [REVIEWS API] New review saved with status PENDING (id: ${data?.id})`);
@@ -146,14 +159,14 @@ export async function POST(request: Request) {
       const safeText = escapeHtml(text);
 
       await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'TrenZone Alerts <onboarding@resend.dev>',
+        from: getResendFromEmail('TrenZone Alerts'),
         to: ['trenzone483@gmail.com'],
         reply_to: email || 'trenzone483@gmail.com',
         subject: `[Recenzie Nouă În Așteptare] ${rating}★ de la ${cleanSubjectName}`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #eaeaea; border-radius: 16px; background: #ffffff;">
             <div style="background: #000000; padding: 20px; text-align: center; border-radius: 12px; margin-bottom: 24px;">
-              <img src="https://www.trenzone.fit/images/logos/trenzone_logo.webp" alt="TrenZone" style="height: 40px; object-fit: contain; margin: 0 auto;" />
+              <img src="${getSiteUrl()}/images/logos/trenzone_logo.webp" alt="TrenZone" style="height: 40px; object-fit: contain; margin: 0 auto;" />
             </div>
             <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; text-transform: uppercase; margin-top: 0; margin-bottom: 8px;">
               ⭐ Recenzie Nouă Primită (Status: În Așteptare)
@@ -186,7 +199,7 @@ export async function POST(request: Request) {
             </table>
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #e32f8c; padding: 16px; border-radius: 8px; font-size: 14px; color: #1e293b; margin-bottom: 24px; line-height: 1.6; white-space: pre-wrap;">${safeText}</div>
             <div style="text-align: center;">
-              <a href="https://www.trenzone.fit/admin/reviews" style="display: inline-block; background: #000000; color: #ffffff; text-decoration: none; padding: 14px 32px; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; border-radius: 10px;">
+              <a href="${getSiteUrl()}/admin/reviews" style="display: inline-block; background: #000000; color: #ffffff; text-decoration: none; padding: 14px 32px; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; border-radius: 10px;">
                 Moderează în Panoul Admin
               </a>
             </div>

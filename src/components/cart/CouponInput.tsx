@@ -32,6 +32,10 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
     try {
       const result = await validateCoupon(code, subtotal, "RON", locale);
       if (result.isValid && result.coupon) {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("tz_manual_coupon_override", "1");
+          localStorage.removeItem("tz_referral_code");
+        }
         setCoupon(result.coupon);
         setCode("");
         onApplied?.();
@@ -49,6 +53,7 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
     setCoupon(null);
     setError(null);
     if (typeof window !== "undefined") {
+      sessionStorage.setItem("tz_manual_coupon_override", "1");
       localStorage.removeItem("tz_referral_code");
     }
   };

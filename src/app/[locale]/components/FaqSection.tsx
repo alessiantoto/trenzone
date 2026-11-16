@@ -279,21 +279,10 @@ export function FaqSection({
   const isRo = locale === "ro";
   const { currency } = useRegionStore();
 
-  const [activeCategory, setActiveCategory] = useState<FaqCategory>("all");
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set(["x5-vs-x10"]));
 
   const x5PriceStr = formatPrice(getProductPrice(x5Price, currency), currency);
   const x10PriceStr = formatPrice(getProductPrice(x10Price, currency), currency);
-
-  const categories = useMemo(
-    () => [
-      { id: "all" as const, label: isRo ? "Toate" : "All" },
-      { id: "models" as const, label: isRo ? "X5 vs X10 & Mărime" : "Models & Sizing" },
-      { id: "performance" as const, label: isRo ? "Folosire & Calitate" : "Performance" },
-      { id: "shipping" as const, label: isRo ? "Livrare & Retur" : "Shipping & Returns" },
-    ],
-    [isRo]
-  );
 
   const faqs: FaqEntry[] = useMemo(
     () => [
@@ -405,8 +394,8 @@ export function FaqSection({
         },
         paragraphs: [
           {
-            ro: "Produsele din stoc ajung în 1-2 zile lucrătoare în România (la ușă sau la locker) și prin curier rapid cu tracking în UE, Marea Britanie și SUA.",
-            en: "In-stock orders arrive in 1-2 business days in Romania and ship via tracked express courier across the EU, UK, and USA.",
+            ro: "Produsele din stoc ajung în 1–3 zile lucrătoare în România (la ușă sau la locker) și prin curier cu tracking în UE (3–8 zile lucrătoare) și internațional în restul lumii (7–17 zile lucrătoare). Pentru livrările în afara UE (ex: UK, Elveția, Norvegia, SUA, Canada), eventualele taxe vamale sau TVA locale de import sunt suportate de destinatar.",
+            en: "In-stock orders arrive in 1–3 business days in Romania, 3–8 business days across the EU, and 7–17 business days worldwide via tracked courier. For deliveries outside the EU (e.g., UK, Switzerland, Norway, USA, Canada), any local customs duties or import VAT/GST are the recipient's responsibility.",
           },
           {
             ro: "Dacă un model este în precomandă, comanda îți rezervă perechea din următorul lot care intră în depozit, iar coletul pleacă cu prioritate imediat ce sosește stocul.",
@@ -439,14 +428,6 @@ export function FaqSection({
     [x5PriceStr, x10PriceStr]
   );
 
-  const filteredFaqs = useMemo(
-    () =>
-      activeCategory === "all"
-        ? faqs
-        : faqs.filter((f) => f.category === activeCategory),
-    [activeCategory, faqs]
-  );
-
   const handleToggle = useCallback((id: string) => {
     setOpenIds((prev) => {
       const next = new Set(prev);
@@ -458,20 +439,6 @@ export function FaqSection({
       return next;
     });
   }, []);
-
-  const handleCategoryChange = useCallback(
-    (category: FaqCategory) => {
-      setActiveCategory(category);
-      const firstInCategory =
-        category === "all"
-          ? faqs[0]
-          : faqs.find((item) => item.category === category);
-      if (firstInCategory) {
-        setOpenIds(new Set([firstInCategory.id]));
-      }
-    },
-    [faqs]
-  );
 
   return (
     <section
@@ -496,35 +463,11 @@ export function FaqSection({
               ? "Răspunsuri scurte despre X5, X10, mărime, livrare și retur."
               : "Straight answers about X5, X10, sizing, shipping, and returns."}
           </p>
-
-          {/* Filter Bar */}
-          <div className="w-full flex justify-center mt-6">
-            <div className="inline-flex max-w-full overflow-x-auto scrollbar-hide items-center gap-1 p-1 rounded-xl bg-[#0e1017] border border-white/10">
-              {categories.map((cat) => {
-                const isActive = activeCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => handleCategoryChange(cat.id)}
-                    style={{ WebkitTapHighlightColor: "transparent" }}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer touch-manipulation transition-colors duration-150 ${
-                      isActive
-                        ? "bg-[#e32f8c] text-white"
-                        : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
 
         {/* Hairline Shopify Accordion */}
         <div className="rounded-2xl border border-white/10 bg-[#0e1017] divide-y divide-white/[0.08] overflow-hidden">
-          {filteredFaqs.map((faq) => (
+          {faqs.map((faq) => (
             <FaqAccordionItem
               key={faq.id}
               faq={faq}

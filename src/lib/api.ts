@@ -59,6 +59,14 @@ export interface Product {
   sku?: string;
   gtin?: string;
   price_numeric?: number;
+  original_price_numeric?: number;
+  is_digital?: boolean;
+  main_image?: string;
+  rating?: number;
+  reviews?: number;
+  inStock?: boolean;
+  benefits?: Record<string, string[]>;
+  metadata?: Record<string, any>;
 }
 
 export interface Category {
@@ -108,7 +116,7 @@ const mapProduct = (p: any): Product => {
     return val;
   };
 
-  const DEFAULT_IMAGE = '/images/products/x10_elbow_wraps_purple_1.webp';
+  const DEFAULT_IMAGE = '/images/products/x10_elbow_wraps_purple.webp';
   const mainImage = (p.main_image && typeof p.main_image === 'string' && !p.main_image.includes('cdn.shopify.com')) ? p.main_image : DEFAULT_IMAGE;
   const allImages = p.images && p.images.length > 0 
     ? p.images.filter((img: string) => typeof img === 'string' && !img.includes('cdn.shopify.com')) 
@@ -173,12 +181,18 @@ export interface Review {
   rating: number;
   title?: string;
   comment: string;
-  image_url?: string;
+  comment_ro?: string;
+  comment_en?: string;
+  image_url?: string | null;
   images?: string[];
   email?: string;
   locale?: string;
-  item_type?: string;
-  fit?: string;
+  item_type?: string | null;
+  item_type_ro?: string;
+  item_type_en?: string;
+  fit?: string | null;
+  fit_ro?: string;
+  fit_en?: string;
   helpful_count?: number;
   status: 'pending' | 'approved' | 'rejected';
   is_verified_buyer?: boolean;

@@ -470,7 +470,7 @@ export default function CouponsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('manual');
+  const [activeTab, setActiveTab] = useState<'all' | 'manual' | 'auto'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired'>('all');
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
   const [selectedAffiliateId, setSelectedAffiliateId] = useState<string>('');
@@ -615,14 +615,17 @@ export default function CouponsPage() {
     }
   };
 
-  const isAutomated = (code: string) => {
+  const isAutomated = (couponOrCode: any) => {
+    const code = typeof couponOrCode === 'string' ? couponOrCode : couponOrCode?.code;
+    const desc = typeof couponOrCode === 'object' ? String(couponOrCode?.description || '') : '';
     const upper = (code || '').toUpperCase();
     return (
       upper.startsWith('SCRATCH-') ||
       upper.startsWith('NEWS-') ||
       upper.startsWith('NEWSLETTER') ||
       upper.startsWith('REVIEW') ||
-      upper.startsWith('REV-')
+      upper.startsWith('REV-') ||
+      desc.includes('[AUTO_SCRATCH]')
     );
   };
 
@@ -651,8 +654,8 @@ export default function CouponsPage() {
   }, [coupons]);
 
   // Tab counts
-  const manualCount = useMemo(() => coupons.filter(c => !isAutomated(c.code)).length, [coupons]);
-  const autoCount = useMemo(() => coupons.filter(c => isAutomated(c.code)).length, [coupons]);
+  const manualCount = useMemo(() => coupons.filter(c => !isAutomated(c)).length, [coupons]);
+  const autoCount = useMemo(() => coupons.filter(c => isAutomated(c)).length, [coupons]);
 
   // Filtered coupons
   const filteredCoupons = useMemo(() => {
@@ -667,7 +670,7 @@ export default function CouponsPage() {
         : false;
 
       const matchesSearch = !q || codeMatches || affMatches;
-      const matchesTab = activeTab === 'manual' ? !isAutomated(c.code) : isAutomated(c.code);
+      const matchesTab = activeTab === 'all' ? true : activeTab === 'manual' ? !isAutomated(c) : isAutomated(c);
 
       // Status filter
       const exp = c.expiry_date || c.expires_at;
@@ -772,6 +775,19 @@ export default function CouponsPage() {
         {/* Category Tabs */}
         <div className="flex items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/60 overflow-x-auto custom-scrollbar">
           <button
+            onClick={() => setActiveTab('all')}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeTab === 'all' 
+                ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' 
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <span>Toate</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${activeTab === 'all' ? 'bg-[#e32f8c]/20 text-[#c81e78]' : 'bg-slate-200 text-slate-600'}`}>
+              {coupons.length}
+            </span>
+          </button>
+          <button
             onClick={() => setActiveTab('manual')}
             className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
               activeTab === 'manual' 
@@ -780,7 +796,7 @@ export default function CouponsPage() {
             }`}
           >
             <span>Manuale</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${activeTab === 'manual' ? 'bg-[#e32f8c]/20 text-[#008ba3]' : 'bg-slate-200 text-slate-600'}`}>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${activeTab === 'manual' ? 'bg-[#e32f8c]/20 text-[#c81e78]' : 'bg-slate-200 text-slate-600'}`}>
               {manualCount}
             </span>
           </button>
@@ -794,7 +810,7 @@ export default function CouponsPage() {
           >
             <span>Automate</span>
             <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">(Răzuiri / Recenzii)</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${activeTab === 'auto' ? 'bg-[#e32f8c]/20 text-[#008ba3]' : 'bg-slate-200 text-slate-600'}`}>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${activeTab === 'auto' ? 'bg-[#e32f8c]/20 text-[#c81e78]' : 'bg-slate-200 text-slate-600'}`}>
               {autoCount}
             </span>
           </button>

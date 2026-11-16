@@ -1494,7 +1494,7 @@ export default function AbandonedCartsPage() {
                             const isBundle = String(item.id || '').includes('-bundle-') || /pachet|bundle/i.test(item.name || '');
                             let rawImg = item.image;
                             if (isBundle) {
-                              if (!rawImg || String(rawImg).includes('placeholder')) rawImg = '/images/products/x10_elbow_wraps_purple_1.webp';
+                              if (!rawImg || String(rawImg).includes('placeholder')) rawImg = '/images/products/x10_elbow_wraps_purple.webp';
                             } else {
                               if (!rawImg || String(rawImg).includes('bundle') || String(rawImg).includes('pachet')) {
                                 rawImg = getSingleFlavorImage(item.name);
@@ -1509,8 +1509,8 @@ export default function AbandonedCartsPage() {
                                 onError={(e) => {
                                   const target = e.currentTarget;
                                   if (isBundle) {
-                                    if (!target.src.includes('/images/products/x10_elbow_wraps_purple_1.webp')) {
-                                      target.src = '/images/products/x10_elbow_wraps_purple_1.webp';
+                                    if (!target.src.includes('/images/products/x10_elbow_wraps_purple.webp')) {
+                                      target.src = '/images/products/x10_elbow_wraps_purple.webp';
                                     }
                                   } else {
                                     const fallback = getOptimizedImageUrl(getSingleFlavorImage(item.name));
@@ -1648,7 +1648,7 @@ export default function AbandonedCartsPage() {
                                     {(() => {
                                       let rawImg = item.image;
                                       if (details.isBundle) {
-                                        if (!rawImg || String(rawImg).includes('placeholder')) rawImg = '/images/products/x10_elbow_wraps_purple_1.webp';
+                                        if (!rawImg || String(rawImg).includes('placeholder')) rawImg = '/images/products/x10_elbow_wraps_purple.webp';
                                       } else {
                                         if (!rawImg || String(rawImg).includes('bundle') || String(rawImg).includes('pachet')) {
                                           rawImg = getSingleFlavorImage(details.variantStr || details.rawName);
@@ -1663,8 +1663,8 @@ export default function AbandonedCartsPage() {
                                           onError={(e) => {
                                             const target = e.currentTarget;
                                             if (details.isBundle) {
-                                              if (!target.src.includes('/images/products/x10_elbow_wraps_purple_1.webp')) {
-                                                target.src = '/images/products/x10_elbow_wraps_purple_1.webp';
+                                              if (!target.src.includes('/images/products/x10_elbow_wraps_purple.webp')) {
+                                                target.src = '/images/products/x10_elbow_wraps_purple.webp';
                                               }
                                             } else {
                                               const fallback = getOptimizedImageUrl(getSingleFlavorImage(details.variantStr || details.rawName));

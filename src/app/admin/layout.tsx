@@ -69,6 +69,7 @@ export default async function AdminLayout({
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
     { name: 'Web Analytics', icon: <Activity size={20} />, path: '/admin?tab=web-analytics' },
     { name: 'Comenzi', icon: <ShoppingBag size={20} />, path: '/admin/orders' },
+    { name: 'Programe Vândute', icon: <ShoppingBag size={20} />, path: '/admin/programs' },
     { name: 'Precomenzi', icon: <Clock size={20} />, path: '/admin/preorders' },
     { name: 'Coșuri Abandonate', icon: <ShoppingCart size={20} />, path: '/admin/abandoned-carts' },
     { name: 'Facturi', icon: <FileText size={20} />, path: '/admin/invoices' },

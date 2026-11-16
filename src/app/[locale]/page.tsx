@@ -11,6 +11,7 @@ import { ComparisonSection } from "./components/ComparisonSection";
 import { StaticReviewSection } from "@/components/product/StaticReviewSection";
 import { FaqSection } from "./components/FaqSection";
 import { AmbassadorBanner } from "./components/AmbassadorBanner";
+import { ProgramsShowcaseSection } from "@/components/programs/ProgramsShowcaseSection";
 
 import { getShippingConfig } from "@/app/actions/shipping";
 import { getPublicInfluencers } from "@/app/actions/products";
@@ -18,8 +19,9 @@ import { getAllReviewsServer } from "@/app/actions/public-reviews";
 import { formatPublicReviews } from "@/lib/utils/reviews";
 import { getCdnUrl } from "@/lib/utils/cdn";
 import { getProducts } from "@/lib/api";
+import { getSiteUrl } from "@/lib/site-config";
 
-const BASE_URL = "https://www.trenzone.fit";
+const BASE_URL = getSiteUrl();
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
@@ -31,7 +33,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     : "TREN WRAPS by Vlad Tren | Heavy-Duty Elbow Wraps TrenZone®";
 
   const description = isRo
-    ? "Built for Strength. Designed for Performance. Benzi de cot profesionale pentru powerlifting și greutăți mari. Compresie rigidă, stabilitate totală sub bară și până la +20 kg pe bench press."
+    ? "Construit pentru forță. Proiectat pentru performanță. Benzi de cot profesionale pentru powerlifting și greutăți mari. Compresie rigidă, stabilitate totală sub bară și până la +20 kg pe împins la piept."
     : "Built for Strength. Designed for Performance. Competition-grade elbow wraps for powerlifting and heavy pressing. Extreme compression, joint stability, and up to +20 kg bench rebound.";
 
   const canonicalUrl = `${BASE_URL}/${locale}`;
@@ -46,8 +48,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       canonical: canonicalUrl,
       languages: {
         "ro": `${BASE_URL}/ro`,
+        "ro-RO": `${BASE_URL}/ro`,
         "en": `${BASE_URL}/en`,
-        "x-default": `${BASE_URL}/ro`,
+        "en-US": `${BASE_URL}/en`,
+        "en-GB": `${BASE_URL}/en`,
+        "x-default": `${BASE_URL}/en`,
       }
     },
     openGraph: {
@@ -80,7 +85,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
     getProducts(),
     getAllReviewsServer(),
   ]);
-  const initialReviews = formatPublicReviews(rawReviews, 40);
+  const initialReviews = formatPublicReviews(rawReviews, 40, locale);
 
   const x5Product = allProducts.find((p: any) => p.slug?.startsWith("x5")) || allProducts.find((p: any) => p.slug?.includes("x5"));
   const x10Product = allProducts.find((p: any) => p.slug?.startsWith("x10")) || allProducts.find((p: any) => p.slug?.includes("x10"));
@@ -195,6 +200,13 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         {/* 4. DEDICATED MODEL GUIDE: X5 vs. X10 */}
         <div className="relative z-10">
           <ModelGuideSection />
+        </div>
+
+        <div className="trenzone-luminous-divider" />
+
+        {/* 4.5. OFFICIAL DIGITAL PROGRAMS: FOOD PLAN & BENCH PROGRAM */}
+        <div className="relative z-10">
+          <ProgramsShowcaseSection products={allProducts} />
         </div>
       </div>
 

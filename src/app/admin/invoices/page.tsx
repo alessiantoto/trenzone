@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { emitOblioInvoiceAction } from '@/app/actions/invoices';
+import { emitOblioInvoiceAction, setOblioEnabledAction } from '@/app/actions/invoices';
 import toast from 'react-hot-toast';
 
 const MONTHS_RO = [
@@ -138,14 +138,16 @@ export default function InvoicesPage() {
 
   // Oblio Integration State
   const [oblioStatus, setOblioStatus] = useState<{
+    enabled: boolean;
     configured: boolean;
     cif?: string | null;
     series?: string;
     connected?: boolean;
     companyName?: string | null;
     connectionError?: string | null;
-  }>({ configured: false });
+  }>({ enabled: false, configured: false });
 
+  const [togglingOblio, setTogglingOblio] = useState(false);
   const [emittingOblio, setEmittingOblio] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -163,6 +165,7 @@ export default function InvoicesPage() {
       setOrders(ordersData || []);
       if (oblioData && oblioData.success) {
         setOblioStatus({
+          enabled: Boolean(oblioData.enabled),
           configured: Boolean(oblioData.configured),
           cif: oblioData.cif,
           series: oblioData.series,
@@ -360,8 +363,43 @@ export default function InvoicesPage() {
     toast.success(`Export XML descărcat (${toExport.length} facturi)!`);
   };
 
+  const handleToggleOblio = async (newValue: boolean) => {
+    const previous = oblioStatus.enabled;
+    setOblioStatus(prev => ({ ...prev, enabled: newValue }));
+    setTogglingOblio(true);
+    try {
+      const res = await setOblioEnabledAction(newValue);
+      if (!res?.success) {
+        throw new Error(res?.error || 'Eroare la salvare');
+      }
+      setOblioStatus({
+        enabled: Boolean(res.enabled),
+        configured: Boolean(res.configured),
+        cif: res.cif,
+        series: res.series,
+        connected: res.connected,
+        companyName: res.companyName,
+        connectionError: res.connectionError,
+      });
+      toast.success(
+        newValue
+          ? 'Integrarea Oblio & SPV a fost activată.'
+          : 'Integrarea Oblio & SPV a fost dezactivată.'
+      );
+    } catch (err: any) {
+      setOblioStatus(prev => ({ ...prev, enabled: previous }));
+      toast.error(err?.message || 'Eroare la actualizarea stării Oblio.');
+    } finally {
+      setTogglingOblio(false);
+    }
+  };
+
   // Emit in Oblio Action
   const handleEmitOblio = async (orderId: string) => {
+    if (!oblioStatus.enabled) {
+      toast.error('Integrarea Oblio este dezactivată din Admin. Activează toggle-ul Oblio pentru a emite facturi.');
+      return;
+    }
     if (!oblioStatus.configured) {
       setShowOblioGuide(true);
       toast.error('Oblio nu este încă configurat. Consultă instrucțiunile de configurare de mai jos.');
@@ -388,6 +426,10 @@ export default function InvoicesPage() {
 
   // Bulk Emit in Oblio Action
   const handleBulkEmitOblio = async () => {
+    if (!oblioStatus.enabled) {
+      toast.error('Integrarea Oblio este dezactivată din Admin. Activează toggle-ul Oblio pentru a emite facturi.');
+      return;
+    }
     if (!oblioStatus.configured) {
       setShowOblioGuide(true);
       toast.error('Oblio nu este încă configurat. Consultă ghidul de mai sus.');
@@ -462,39 +504,51 @@ export default function InvoicesPage() {
 
       {/* 🇷🇴 OBLIO & SPV BANNER */}
       <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
-        oblioStatus.configured 
-          ? 'bg-emerald-50/40 border-emerald-200' 
-          : 'bg-amber-50/50 border-amber-200'
+        !oblioStatus.enabled
+          ? 'bg-slate-50 border-slate-200'
+          : oblioStatus.configured 
+            ? 'bg-emerald-50/40 border-emerald-200' 
+            : 'bg-amber-50/50 border-amber-200'
       }`}>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-start sm:items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              oblioStatus.configured ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
+              !oblioStatus.enabled
+                ? 'bg-slate-400 text-white'
+                : oblioStatus.configured
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-amber-500 text-white'
             }`}>
               <Building2 size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-black text-slate-900">Integrare Oblio & ANAF e-Factura (SPV)</h3>
                 <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                  oblioStatus.connected 
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : oblioStatus.configured 
-                      ? 'bg-blue-100 text-blue-800' 
-                      : 'bg-amber-200/80 text-amber-900'
+                  !oblioStatus.enabled
+                    ? 'bg-rose-100 text-rose-800'
+                    : oblioStatus.connected 
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : oblioStatus.configured 
+                        ? 'bg-blue-100 text-blue-800' 
+                        : 'bg-amber-200/80 text-amber-900'
                 }`}>
-                  {oblioStatus.connected 
-                    ? `API Activ (${oblioStatus.companyName || 'Conectat'})`
-                    : oblioStatus.configured 
-                      ? 'Configurat' 
-                      : 'Neconfigurat'}
+                  {!oblioStatus.enabled
+                    ? 'Dezactivat'
+                    : oblioStatus.connected 
+                      ? `API Activ (${oblioStatus.companyName || 'Conectat'})`
+                      : oblioStatus.configured 
+                        ? 'Configurat' 
+                        : 'Neconfigurat'}
                 </span>
               </div>
               <p className="text-xs text-slate-600 mt-0.5">
-                {oblioStatus.configured 
-                  ? `Facturile se emit direct în contul Oblio (Serie: ${oblioStatus.series}, CIF: ${oblioStatus.cif}) și se transmit automat în SPV.`
-                  : 'Pentru a trimite automat facturile în SPV, conectează cheile API Oblio în fișierul de configurare.'}
-                {oblioStatus.connectionError && (
+                {!oblioStatus.enabled
+                  ? 'Integrarea Oblio & SPV este oprită manual din Admin. Facturile PDF interne continuă să fie generate normal pentru comenzi.'
+                  : oblioStatus.configured 
+                    ? `Facturile se emit direct în contul Oblio (Serie: ${oblioStatus.series}, CIF: ${oblioStatus.cif}) și se transmit automat în SPV.`
+                    : 'Pentru a trimite automat facturile în SPV, conectează cheile API Oblio în fișierul de configurare.'}
+                {oblioStatus.enabled && oblioStatus.connectionError && (
                   <span className="text-red-500 block text-[11px] mt-0.5 font-medium">
                     Notă conexiune: {oblioStatus.connectionError}
                   </span>
@@ -503,13 +557,39 @@ export default function InvoicesPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowOblioGuide(!showOblioGuide)}
-            className="text-xs font-black text-[#009bb3] hover:underline flex items-center gap-1 shrink-0 self-end sm:self-center cursor-pointer"
-          >
-            <span>{showOblioGuide ? 'Ascunde instrucțiunile' : 'Cum conectez la Oblio & SPV?'}</span>
-            {showOblioGuide ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          <div className="flex items-center gap-4 self-end sm:self-center shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700">
+                {oblioStatus.enabled ? 'Pornit' : 'Oprit'}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={oblioStatus.enabled}
+                aria-label="Activează sau dezactivează integrarea Oblio"
+                disabled={togglingOblio}
+                onClick={() => handleToggleOblio(!oblioStatus.enabled)}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/20 disabled:opacity-60 ${
+                  oblioStatus.enabled ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    oblioStatus.enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowOblioGuide(!showOblioGuide)}
+              className="text-xs font-black text-[#009bb3] hover:underline flex items-center gap-1 shrink-0 cursor-pointer"
+            >
+              <span>{showOblioGuide ? 'Ascunde instrucțiunile' : 'Cum conectez la Oblio & SPV?'}</span>
+              {showOblioGuide ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          </div>
         </div>
 
         {/* Oblio Step-by-Step Instructions */}
@@ -662,14 +742,16 @@ export default function InvoicesPage() {
               <span>Exportă Excel ({selectedOrders.length})</span>
             </button>
 
-            <button
-              onClick={handleBulkEmitOblio}
-              className="h-8 sm:h-9 px-3 bg-[#e32f8c] hover:bg-[#00bad9] text-slate-950 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-              title="Emite facturile selectate în Oblio și trimite în SPV"
-            >
-              <Send size={13} />
-              <span>Emite în Oblio ({selectedOrders.length})</span>
-            </button>
+            {oblioStatus.enabled && (
+              <button
+                onClick={handleBulkEmitOblio}
+                className="h-8 sm:h-9 px-3 bg-[#e32f8c] hover:bg-[#00bad9] text-slate-950 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                title="Emite facturile selectate în Oblio și trimite în SPV"
+              >
+                <Send size={13} />
+                <span>Emite în Oblio ({selectedOrders.length})</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -779,10 +861,15 @@ export default function InvoicesPage() {
                           ✓ Transmisă automat în ANAF SPV
                         </p>
                       </div>
-                    ) : (
+                    ) : oblioStatus.enabled ? (
                       <div className="space-y-1">
                         <span className="text-slate-400 text-[11px]">Neemisă încă în Oblio</span>
                         <p className="text-[10px] text-slate-500">Poate fi trimisă cu 1-click în SPV.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <span className="text-slate-400 text-[11px]">Oblio dezactivat</span>
+                        <p className="text-[10px] text-slate-500">Se folosește factura PDF internă.</p>
                       </div>
                     )}
                   </div>
@@ -818,7 +905,7 @@ export default function InvoicesPage() {
                     </a>
 
                     {/* Emit to Oblio & SPV Button */}
-                    {!isCancelled(inv.status) && (
+                    {oblioStatus.enabled && !isCancelled(inv.status) && (
                       <button
                         onClick={() => handleEmitOblio(targetOrderId)}
                         disabled={isEmitting}

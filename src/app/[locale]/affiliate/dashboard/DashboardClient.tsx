@@ -1,7 +1,7 @@
 'use client';
 
 import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { 
@@ -37,16 +37,63 @@ import {
   updateAffiliatePaymentDetailsAction,
   deleteAffiliatePaymentDetailsAction
 } from '@/app/actions/affiliate-dashboard';
+import {
+  classifyOrderNonCountable,
+  formatMoneyInCurrency,
+  formatOriginalAmount,
+  normalizeDisplayCurrency,
+  roundCurrency,
+} from '@/lib/affiliate-stats';
+import { useRegionStore } from '@/store/useRegionStore';
+import { convertFromRon, FALLBACK_RATES } from '@/utils/pricing';
 
 interface DashboardClientProps {
   data: AffiliateDashboardResponse;
   locale: string;
+  exchangeRates?: Record<string, number>;
 }
 
 type PeriodFilter = 'all' | 'today' | '7d' | '30d' | 'this_month' | 'last_month';
 
-export default function DashboardClient({ data, locale }: DashboardClientProps) {
+export default function DashboardClient({ data, locale, exchangeRates: serverRates }: DashboardClientProps) {
   const isRo = locale === 'ro';
+  const uiLocale: 'ro' | 'en' = isRo ? 'ro' : 'en';
+
+  const {
+    currency: storeCurrency,
+    exchangeRates: storeRates,
+    fetchExchangeRates,
+    hasDetectedIP,
+    detectInitialRegion,
+  } = useRegionStore();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    if (!hasDetectedIP) {
+      detectInitialRegion(locale);
+    }
+    fetchExchangeRates();
+  }, [detectInitialRegion, fetchExchangeRates, hasDetectedIP, locale]);
+
+  const displayCurrency = normalizeDisplayCurrency(
+    mounted ? storeCurrency : (isRo ? 'RON' : 'EUR'),
+    isRo ? 'RON' : 'EUR'
+  );
+
+  const effectiveRates = useMemo(
+    () => ({ ...FALLBACK_RATES, ...(storeRates || {}), ...(serverRates || {}) }),
+    [serverRates, storeRates]
+  );
+
+  const toDisplayAmount = (amountRon: number) => {
+    const safeRon = Number(amountRon) || 0;
+    if (displayCurrency === 'RON') return roundCurrency(safeRon);
+    return convertFromRon(safeRon, displayCurrency, effectiveRates);
+  };
+
+  const formatMoney = (amountRon: number) =>
+    formatMoneyInCurrency(toDisplayAmount(amountRon), displayCurrency, uiLocale, 2);
 
   // State
   const [copiedCode, setCopiedCode] = useState(false);
@@ -153,23 +200,26 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
 
   // Aggregated dynamic stats for the active filter
   const activeStats = useMemo(() => {
-    const isOrderCountable = (o: any) => {
+    const isOrderCountable = (o: AffiliateOrderHistory) => {
       if (typeof o.isCountable === 'boolean') return o.isCountable;
-      const st = String(o.status || '').toLowerCase().trim();
-      return !['cancelled', 'anulat', 'anulata', 'returned', 'returnat', 'returnata', 'refunded', 'rambursat', 'failed', 'refused', 'neridicat'].includes(st);
+      return classifyOrderNonCountable(o.status).isCountable;
     };
 
     const countableOrders = filteredOrders.filter(isOrderCountable);
     const totalSales = countableOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const totalNetSales = countableOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0);
     const totalCommissions = countableOrders.reduce((sum, o) => sum + (o.commissionAmount || 0), 0);
     const usagesCount = countableOrders.length;
+    const cancelledCount = filteredOrders.length - usagesCount;
     const aov = usagesCount > 0 ? totalSales / usagesCount : 0;
 
     return {
-      totalSales: Math.round(totalSales * 100) / 100,
-      totalCommissions: Math.round(totalCommissions * 100) / 100,
+      totalSales: roundCurrency(totalSales),
+      totalNetSales: roundCurrency(totalNetSales),
+      totalCommissions: roundCurrency(totalCommissions),
       usagesCount,
-      aov: Math.round(aov * 100) / 100
+      cancelledCount,
+      aov: roundCurrency(aov),
     };
   }, [filteredOrders]);
 
@@ -339,7 +389,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                     {isRo ? 'Link de recomandare' : 'Referral Link'}
                   </p>
                   <p className="text-xs sm:text-sm font-bold font-mono text-slate-700 truncate max-w-[160px] sm:max-w-[200px]">
-                    trenzone.fit/?ref={data.code}
+                    {typeof window !== 'undefined' ? window.location.host : 'trenzone.fit'}/{isRo ? 'ro' : 'en'}?ref={data.code}
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-slate-200/80 flex items-center justify-center text-slate-600 group-hover:scale-110 transition-transform">
@@ -367,7 +417,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-black uppercase tracking-widest text-[#008ba3]">
-                {isRo ? 'De Încasat în Total' : 'Pending Payout'}
+                {isRo ? 'De Încasat Acum' : 'Pending Payout'}
               </span>
               <div className="w-8 h-8 rounded-lg bg-[#e32f8c]/15 flex items-center justify-center text-[#008ba3]">
                 <Clock size={16} />
@@ -375,14 +425,28 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                {data.pendingPayout.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatMoney(data.pendingPayout)}
               </span>
-              <span className="text-sm font-black text-[#008ba3]">RON</span>
             </div>
-            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+            {displayCurrency !== 'RON' && data.pendingPayout > 0 && (
+              <p className="text-[10px] font-bold text-slate-400 mt-1">
+                ≈ {formatMoneyInCurrency(data.pendingPayout, 'RON', uiLocale, 2)} {isRo ? 'bază contabilă' : 'base settlement'}
+              </p>
+            )}
+            {(data.totalCommissions > 0 || data.paidPayout > 0) && (
+              <div className="mt-3">
+                <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-[#008ba3] to-emerald-500 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, data.payoutProgressPercent ?? 0)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
               <span className="text-slate-500">{isRo ? 'Încasat deja:' : 'Already paid:'}</span>
-              <span className="font-bold text-slate-700">
-                {data.paidPayout.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} RON
+              <span className="font-bold text-emerald-700">
+                {formatMoney(data.paidPayout)}
               </span>
             </div>
           </motion.div>
@@ -404,14 +468,17 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                {(period === 'all' ? data.totalSales : activeStats.totalSales).toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatMoney(period === 'all' ? data.totalSales : activeStats.totalSales)}
               </span>
-              <span className="text-sm font-black text-slate-400">RON</span>
             </div>
-            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+            <p className="text-[10px] font-bold text-slate-400 mt-1">
+              {isRo ? 'Bază netă (fără transp.): ' : 'Commissionable net: '}
+              {formatMoney(period === 'all' ? (data.totalNetSales ?? data.totalSales) : activeStats.totalNetSales)}
+            </p>
+            <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
               <span className="text-slate-500">{isRo ? 'Comision total generat:' : 'Total commission:'}</span>
               <span className="font-bold text-emerald-600">
-                {(period === 'all' ? data.totalCommissions : activeStats.totalCommissions).toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} RON
+                {formatMoney(period === 'all' ? data.totalCommissions : activeStats.totalCommissions)}
               </span>
             </div>
           </motion.div>
@@ -425,7 +492,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                {isRo ? 'Comenzi cu Codul Tău' : 'Code Usages'}
+                {isRo ? 'Comenzi Valide' : 'Valid Orders'}
               </span>
               <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                 <ShoppingBag size={16} />
@@ -437,10 +504,16 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
               </span>
               <span className="text-xs font-bold text-slate-500">{isRo ? 'comenzi' : 'orders'}</span>
             </div>
-            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+            {(period === 'all' ? (data.cancelledOrdersCount ?? 0) : activeStats.cancelledCount) > 0 && (
+              <p className="text-[10px] font-bold text-slate-400 mt-1">
+                {period === 'all' ? data.cancelledOrdersCount : activeStats.cancelledCount}{' '}
+                {isRo ? 'anulate / excluse din calcul' : 'cancelled / excluded'}
+              </p>
+            )}
+            <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
               <span className="text-slate-500">{isRo ? 'Valoare medie coș:' : 'Average order:'}</span>
               <span className="font-bold text-slate-700">
-                {activeStats.aov.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} RON
+                {formatMoney(activeStats.aov)}
               </span>
             </div>
           </motion.div>
@@ -465,7 +538,10 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                 {data.commissionPercent}%
               </span>
             </div>
-            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+            <p className="text-[10px] font-bold text-slate-400 mt-1">
+              {isRo ? 'Calculat din subtotalul net (fără transport)' : 'Calculated on net order subtotal'}
+            </p>
+            <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
               <span className="text-slate-500">{isRo ? 'Status comision:' : 'Commission status:'}</span>
               <span className="font-bold text-emerald-600 flex items-center gap-1.5 text-[11px]">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -553,6 +629,62 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
             >
               <span>{isRo ? '+ Adaugă IBAN' : '+ Add IBAN'}</span>
             </button>
+          </div>
+        )}
+
+        {/* PAYOUT HISTORY SECTION (Visible when affiliate has received payouts) */}
+        {Array.isArray(data.payoutHistory) && data.payoutHistory.length > 0 && (
+          <div className="rounded-3xl p-5 sm:p-6 bg-white/95 border border-emerald-200/80 shadow-sm space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+                  <CheckCircle2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                    {isRo ? 'Istoric Plăți Primite' : 'Payouts Received History'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {isRo
+                      ? `${data.payoutHistory.length} transferuri înregistrate • Total achitat: ${formatMoney(data.paidPayout)}`
+                      : `${data.payoutHistory.length} transfers recorded • Total paid: ${formatMoney(data.paidPayout)}`}
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+                {data.payoutProgressPercent ?? 0}% {isRo ? 'achitat' : 'settled'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {data.payoutHistory.map((payout) => (
+                <div
+                  key={payout.id}
+                  className="p-3 rounded-2xl bg-emerald-50/40 border border-emerald-200/70 flex flex-col justify-between gap-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-black text-emerald-700">
+                      +{formatMoney(payout.amount)}
+                    </span>
+                    {payout.paidAt && (
+                      <span className="text-[11px] font-bold text-slate-500">
+                        {new Date(payout.paidAt).toLocaleDateString(isRo ? 'ro-RO' : 'en-US', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    )}
+                  </div>
+                  {payout.note && (
+                    <p className="text-[11px] font-medium text-slate-600 truncate">{payout.note}</p>
+                  )}
+                  {payout.ibanSnapshot && (
+                    <p className="text-[10px] font-mono text-slate-400 truncate">IBAN: {payout.ibanSnapshot}</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -689,11 +821,25 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                   hour: '2-digit',
                   minute: '2-digit'
                 });
-                const orderStatus = String(order.status || '').toLowerCase().trim();
-                const isCancelled = ['cancelled', 'anulat', 'anulata'].includes(orderStatus);
-                const isReturned = ['returned', 'returnat', 'returnata', 'neridicat', 'refused'].includes(orderStatus);
-                const isRefunded = ['refunded', 'rambursat'].includes(orderStatus);
-                const isNonCountable = isCancelled || isReturned || isRefunded || order.isCountable === false;
+                const statusCheck = classifyOrderNonCountable(order.status);
+                const isCancelled = statusCheck.reason === 'cancelled';
+                const isReturned = statusCheck.reason === 'returned';
+                const isRefunded = statusCheck.reason === 'refunded';
+                const isFailed = statusCheck.reason === 'failed';
+                const isNonCountable = !statusCheck.isCountable || order.isCountable === false;
+                const statusBadgeLabel = isCancelled
+                  ? (isRo ? 'Anulată' : 'Cancelled')
+                  : isReturned
+                    ? (isRo ? 'Returnată / Neridicată' : 'Returned')
+                    : isRefunded
+                      ? (isRo ? 'Rambursată' : 'Refunded')
+                      : isFailed
+                        ? (isRo ? 'Eșuată' : 'Failed')
+                        : order.nonCountableLabel || (isRo ? 'Fără comision' : 'No commission');
+                const hasForeignCurrency =
+                  order.originalCurrency &&
+                  order.originalCurrency !== displayCurrency &&
+                  Number(order.originalTotalAmount) > 0;
 
                 return (
                   <div
@@ -726,15 +872,19 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                             </span>
                             {isCancelled ? (
                               <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                                {isRo ? 'Anulată' : 'Cancelled'}
+                                {statusBadgeLabel}
                               </span>
                             ) : isReturned ? (
                               <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                                {isRo ? 'Returnată / Neridicată' : 'Returned'}
+                                {statusBadgeLabel}
                               </span>
                             ) : isRefunded ? (
                               <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                                {isRo ? 'Rambursată' : 'Refunded'}
+                                {statusBadgeLabel}
+                              </span>
+                            ) : isFailed || isNonCountable ? (
+                              <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                {statusBadgeLabel}
                               </span>
                             ) : (
                               <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -790,17 +940,23 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                             )}
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-400 italic">Pachet TrenZone</span>
+                          <span className="text-xs text-slate-400 italic">{isRo ? 'Pachet TrenZone' : 'TrenZone Bundle'}</span>
                         )}
                       </div>
 
                       {/* TOTAL COMANDĂ */}
                       <div className="col-span-2 text-right">
                         <p className={`text-sm font-black ${isNonCountable ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                          {order.totalAmount.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} {order.currency}
+                          {formatMoney(order.totalAmount)}
                         </p>
+                        {hasForeignCurrency && (
+                          <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+                            ({isRo ? 'plătit ' : 'paid '}
+                            {formatOriginalAmount(order.originalTotalAmount, order.originalCurrency)})
+                          </p>
+                        )}
                         <p className="text-[10px] text-slate-400 mt-0.5">
-                          subtotal: {order.subtotal.toFixed(2)} {order.currency}
+                          {isRo ? 'bază netă' : 'net base'}: {formatMoney(order.subtotal)}
                         </p>
                       </div>
 
@@ -809,16 +965,16 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                         {isNonCountable ? (
                           <>
                             <p className="text-sm font-black text-slate-400">
-                              0.00 {order.currency}
+                              {formatMoney(0)}
                             </p>
                             <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-red-700 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
-                              {isCancelled ? (isRo ? 'Anulată' : 'Cancelled') : (isRo ? 'Fără comision' : 'No commission')}
+                              {statusBadgeLabel}
                             </span>
                           </>
                         ) : (
                           <>
                             <p className="text-sm font-black text-emerald-600">
-                              +{order.commissionAmount.toLocaleString(isRo ? 'ro-RO' : 'en-US', { minimumFractionDigits: 2 })} {order.currency}
+                              +{formatMoney(order.commissionAmount)}
                             </p>
                             <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                               {data.commissionPercent}% {isRo ? 'comision' : 'earned'}
@@ -847,15 +1003,19 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                             </span>
                             {isCancelled ? (
                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                                {isRo ? 'Anulată' : 'Cancelled'}
+                                {statusBadgeLabel}
                               </span>
                             ) : isReturned ? (
                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                                {isRo ? 'Returnată / Neridicată' : 'Returned'}
+                                {statusBadgeLabel}
                               </span>
                             ) : isRefunded ? (
                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                                {isRo ? 'Rambursată' : 'Refunded'}
+                                {statusBadgeLabel}
+                              </span>
+                            ) : isFailed || isNonCountable ? (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                {statusBadgeLabel}
                               </span>
                             ) : (
                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -876,23 +1036,28 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                           {isNonCountable ? (
                             <>
                               <p className="text-xs font-black text-slate-400">
-                                0.00 {order.currency}
+                                {formatMoney(0)}
                               </p>
                               <p className="text-[10px] font-bold text-slate-400 mt-0.5 line-through">
-                                {isRo ? 'coș: ' : 'order: '}{order.totalAmount.toFixed(2)} {order.currency}
+                                {isRo ? 'coș: ' : 'order: '}{formatMoney(order.totalAmount)}
                               </p>
                               <span className="inline-block mt-0.5 text-[8px] font-black uppercase tracking-wider text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
-                                {isCancelled ? (isRo ? 'Anulată' : 'Cancelled') : (isRo ? 'Fără comision' : 'No commission')}
+                                {statusBadgeLabel}
                               </span>
                             </>
                           ) : (
                             <>
                               <p className="text-xs font-black text-emerald-600">
-                                +{order.commissionAmount.toFixed(2)} {order.currency}
+                                +{formatMoney(order.commissionAmount)}
                               </p>
                               <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                                {isRo ? 'coș: ' : 'order: '}{order.totalAmount.toFixed(2)} {order.currency}
+                                {isRo ? 'coș: ' : 'order: '}{formatMoney(order.totalAmount)}
                               </p>
+                              {hasForeignCurrency && (
+                                <p className="text-[9px] font-bold text-slate-400">
+                                  ({formatOriginalAmount(order.originalTotalAmount, order.originalCurrency)})
+                                </p>
+                              )}
                             </>
                           )}
                         </div>
@@ -930,7 +1095,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                             </div>
                             <div className="text-right shrink-0">
                               <span className="text-xs font-black text-slate-800">
-                                {(item.quantity * item.price).toFixed(2)} {order.currency}
+                                {formatMoney(item.quantity * item.price)}
                               </span>
                             </div>
                           </div>
@@ -979,12 +1144,12 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                                       <p className="text-[10px] text-[#008ba3] font-semibold mt-0.5">{item.variant}</p>
                                     )}
                                     <p className="text-[10px] text-slate-500 mt-0.5">
-                                      {item.quantity} x {item.price.toFixed(2)} {order.currency}
+                                      {item.quantity} x {formatMoney(item.price)}
                                     </p>
                                   </div>
                                   <div className="text-right">
                                     <span className="text-xs font-black text-slate-900">
-                                      {(item.quantity * item.price).toFixed(2)} {order.currency}
+                                      {formatMoney(item.quantity * item.price)}
                                     </span>
                                   </div>
                                 </div>
@@ -1106,7 +1271,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                     required
                     value={ibanInput}
                     onChange={e => setIbanInput(e.target.value.toUpperCase())}
-                    placeholder="RO49AAAA1B31007593840000"
+                    placeholder={isRo ? 'RO49AAAA1B31007593840000' : 'GB29NWBK60161331926819 / IBAN'}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#e32f8c] focus:bg-white focus:ring-1 focus:ring-[#e32f8c] transition-colors"
                   />
                 </div>
@@ -1119,7 +1284,7 @@ export default function DashboardClient({ data, locale }: DashboardClientProps) 
                     type="text"
                     value={bankNameInput}
                     onChange={e => setBankNameInput(e.target.value)}
-                    placeholder="ex: Banca Transilvania, ING, Revolut"
+                    placeholder={isRo ? 'ex: Banca Transilvania, ING, Revolut' : 'e.g. Revolut, Wise, Monzo, Barclays'}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#e32f8c] focus:bg-white focus:ring-1 focus:ring-[#e32f8c] transition-colors"
                   />
                 </div>

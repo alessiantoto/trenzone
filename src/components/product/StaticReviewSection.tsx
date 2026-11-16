@@ -9,33 +9,36 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from "@/lib/utils";
 import { WriteReviewModal } from './WriteReviewModal';
+import { extractReviewImages, resolveReviewComment, resolveReviewField, sanitizeReviewImageUrl } from '@/lib/utils/reviews';
 
 function mapClientReviews(list: any[], locale: string) {
   const dateLocale = locale === 'ro' ? 'ro-RO' : 'en-US';
-  return (list || []).map((r: any) => ({
-    id: r.id,
-    name: r.name || r.customer_name,
-    text: r.text || r.comment,
-    image:
-      r.images && r.images.length > 0 && typeof r.images[0] === 'string' && !r.images[0].includes('cdn.shopify.com')
-        ? r.images[0]
+  return (list || []).map((r: any) => {
+    const cleanImages = extractReviewImages(r);
+    return {
+      id: r.id,
+      productId: r.product_id || null,
+      name: r.name || r.customer_name,
+      text: resolveReviewComment(r, locale),
+      image: cleanImages[0] || null,
+      images: cleanImages,
+      date: r.created_at
+        ? new Date(r.created_at).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' })
+        : '',
+      rating: r.rating,
+      itemType: resolveReviewField(r, 'item_type', locale),
+      fit: resolveReviewField(r, 'fit', locale),
+      product: r.product
+        ? {
+            ...r.product,
+            image:
+              typeof r.product.image === 'string' && !r.product.image.includes('cdn.shopify.com')
+                ? r.product.image
+                : '',
+          }
         : null,
-    date: r.created_at
-      ? new Date(r.created_at).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' })
-      : '',
-    rating: r.rating,
-    itemType: r.item_type,
-    fit: r.fit,
-    product: r.product
-      ? {
-          ...r.product,
-          image:
-            typeof r.product.image === 'string' && !r.product.image.includes('cdn.shopify.com')
-              ? r.product.image
-              : '',
-        }
-      : null,
-  }));
+    };
+  });
 }
 
 function ReviewSectionInner({ 
@@ -83,7 +86,7 @@ function ReviewSectionInner({
 
     async function fetchReviews() {
       try {
-        const res = await fetch('/api/reviews');
+        const res = await fetch(`/api/reviews?locale=${locale}`);
         const data = await res.json();
         if (data.reviews) {
           setReviews(mapClientReviews(data.reviews, locale));
@@ -98,6 +101,12 @@ function ReviewSectionInner({
   }, [locale, hasInitialReviews]);
 
   useEffect(() => {
+    if (hasInitialReviews && initialReviews) {
+      setReviews(mapClientReviews(initialReviews, locale));
+    }
+  }, [locale, hasInitialReviews, initialReviews]);
+
+  useEffect(() => {
     if (searchParams.get('review') === 'open') {
       setIsWriteReviewOpen(true);
       // Optional: prefill rating if provided
@@ -105,18 +114,27 @@ function ReviewSectionInner({
     }
   }, [searchParams]);
 
+  // On individual product pages, show reviews for that specific product when available
+  // so photos/text always match the viewed product. Fallback to community reviews with product pill if 0.
+  const productMatchedReviews = product?.id
+    ? reviews.filter((r) => r.productId === product.id)
+    : [];
+  const hasExactProductReviews = Boolean(product?.id) && productMatchedReviews.length > 0;
+  const visibleReviews = hasExactProductReviews ? productMatchedReviews : reviews;
+
   // 8 cards per page: exactly 4 rows of 2 on mobile, 2 rows of 4 on desktop
   const REVIEWS_PER_PAGE = 8;
-  const totalPages = Math.ceil(reviews.length / REVIEWS_PER_PAGE);
+  const totalPages = Math.ceil(visibleReviews.length / REVIEWS_PER_PAGE);
+  const safePage = totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
 
-  const paginatedReviews = reviews.slice(
-    (currentPage - 1) * REVIEWS_PER_PAGE,
-    currentPage * REVIEWS_PER_PAGE
+  const paginatedReviews = visibleReviews.slice(
+    (safePage - 1) * REVIEWS_PER_PAGE,
+    safePage * REVIEWS_PER_PAGE
   );
 
-  const totalReviews = reviews.length;
+  const totalReviews = visibleReviews.length;
   const averageRating = totalReviews > 0 
-    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / totalReviews).toFixed(1) 
+    ? (visibleReviews.reduce((acc, r) => acc + (r.rating || 5), 0) / totalReviews).toFixed(1) 
     : "5.0";
 
   const handlePageChange = (newPage: number) => {
@@ -176,7 +194,7 @@ function ReviewSectionInner({
                 <ReviewCard 
                   review={review} 
                   locale={locale} 
-                  isProductPage={Boolean(product)}
+                  isProductPage={hasExactProductReviews}
                   onClick={() => setSelectedReview(review)} 
                 />
               </div>
@@ -189,14 +207,14 @@ function ReviewSectionInner({
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-12 pt-8 border-t border-white/[0.08]">
             <div className="text-xs font-bold text-zinc-400 tracking-wide uppercase">
               {locale === 'ro' 
-                ? `Afișare ${(currentPage - 1) * REVIEWS_PER_PAGE + 1}–${Math.min(currentPage * REVIEWS_PER_PAGE, totalReviews)} din ${totalReviews} recenzii verificate`
-                : `Showing ${(currentPage - 1) * REVIEWS_PER_PAGE + 1}–${Math.min(currentPage * REVIEWS_PER_PAGE, totalReviews)} of ${totalReviews} verified reviews`}
+                ? `Afișare ${(safePage - 1) * REVIEWS_PER_PAGE + 1}–${Math.min(safePage * REVIEWS_PER_PAGE, totalReviews)} din ${totalReviews} recenzii verificate`
+                : `Showing ${(safePage - 1) * REVIEWS_PER_PAGE + 1}–${Math.min(safePage * REVIEWS_PER_PAGE, totalReviews)} of ${totalReviews} verified reviews`}
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
+                onClick={() => handlePageChange(Math.max(1, safePage - 1))}
+                disabled={safePage === 1}
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider bg-zinc-900/90 border border-white/10 text-zinc-300 hover:text-white hover:border-[#e32f8c]/40 hover:bg-zinc-800 disabled:opacity-30 disabled:pointer-events-none transition-all duration-200 cursor-pointer"
                 title={locale === 'ro' ? 'Pagina anterioară' : 'Previous page'}
               >
@@ -207,7 +225,7 @@ function ReviewSectionInner({
               <div className="flex items-center gap-1.5">
                 {[...Array(totalPages)].map((_, i) => {
                   const pageNum = i + 1;
-                  const isActive = currentPage === pageNum;
+                  const isActive = safePage === pageNum;
                   return (
                     <button
                       key={pageNum}
@@ -225,8 +243,8 @@ function ReviewSectionInner({
               </div>
 
               <button
-                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
+                onClick={() => handlePageChange(Math.min(totalPages, safePage + 1))}
+                disabled={safePage === totalPages}
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider bg-zinc-900/90 border border-white/10 text-zinc-300 hover:text-white hover:border-[#e32f8c]/40 hover:bg-zinc-800 disabled:opacity-30 disabled:pointer-events-none transition-all duration-200 cursor-pointer"
                 title={locale === 'ro' ? 'Pagina următoare' : 'Next page'}
               >
@@ -252,7 +270,7 @@ function ReviewSectionInner({
           <ReviewModal 
             review={selectedReview} 
             locale={locale} 
-            isProductPage={Boolean(product)}
+            isProductPage={hasExactProductReviews}
             onClose={() => setSelectedReview(null)} 
           />
         )}
@@ -380,8 +398,9 @@ function ReviewCard({
             src={review.image}
             alt={`Review by ${review.name}`}
             loading="lazy"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+            className="w-full h-full object-cover object-[50%_20%] group-hover:scale-105 transition-transform duration-500 ease-out"
           />
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-zinc-950/90 via-zinc-950/30 to-transparent pointer-events-none" />
         </div>
       )}
       
@@ -413,14 +432,6 @@ function ReviewCard({
         <p className="text-xs sm:text-sm font-normal text-zinc-300 leading-relaxed group-hover:text-white transition-colors">
           "{review.text}"
         </p>
-
-        {/* Item Type (YoungLA style metadata, subtle text) */}
-        {review.itemType && (
-          <div className="mt-2.5 pt-2 border-t border-white/[0.06] text-[10px] sm:text-[11px]">
-            <span className="text-zinc-500 font-medium">{locale === 'ro' ? 'Model: ' : 'Item type: '}</span>
-            <span className="text-zinc-300 font-bold">{review.itemType}</span>
-          </div>
-        )}
 
         {/* Bottom details / Product Pill - ONLY on general / Home page */}
         {!isProductPage && review.product && (
@@ -497,21 +508,22 @@ function ReviewModal({
 
         {/* Dedicated Scroll Container with Modern Sleek Pink-Tinted Scrollbar */}
         <div className="w-full overflow-y-auto review-modal-scroll flex flex-col md:flex-row flex-1">
-          {/* Image Section */}
+          {/* Image Section (Edge-to-edge blended seamlessly into dark modal) */}
           {review.image && typeof review.image === 'string' && !review.image.includes('cdn.shopify.com') && (
-            <div className="w-full md:w-[50%] aspect-[4/5] md:aspect-auto md:min-h-[480px] relative bg-gradient-to-b from-black/80 via-zinc-950 to-zinc-900 border-b md:border-b-0 md:border-r border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
+            <div className="w-full md:w-[48%] aspect-[4/5] md:aspect-auto md:min-h-[480px] relative bg-zinc-950 shrink-0 overflow-hidden">
               <Image
                 src={review.image}
                 alt={`Review by ${review.name}`}
                 fill
-                className="object-contain p-3 md:p-6 drop-shadow-2xl"
-                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-cover object-[50%_20%]"
+                sizes="(max-width: 768px) 100vw, 48vw"
               />
+              <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-zinc-950/90 via-transparent to-black/25 md:bg-gradient-to-r md:from-transparent md:via-transparent md:to-zinc-950/85" />
             </div>
           )}
 
           {/* Content Section */}
-          <div className={`w-full p-5 sm:p-7 md:p-8 flex flex-col relative z-10 ${!review.image ? 'md:w-full' : 'md:w-[50%]'}`}>
+          <div className={`w-full p-5 sm:p-7 md:p-8 flex flex-col relative z-10 ${!review.image ? 'md:w-full' : 'md:w-[52%]'}`}>
             
             <div className="flex items-center gap-2 mb-1.5 pr-10">
               <span className="text-lg sm:text-xl md:text-2xl font-black text-white uppercase font-heading tracking-tight">
@@ -533,16 +545,6 @@ function ReviewModal({
             </p>
 
             <div className="mt-auto space-y-3">
-              {review.itemType && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="font-bold uppercase tracking-wider text-zinc-400">
-                    Model:
-                  </span>
-                  <span className="font-black text-white bg-white/5 border border-white/10 px-2 py-0.5 rounded">
-                    {review.itemType}
-                  </span>
-                </div>
-              )}
               {review.fit && (
                 <div className="flex items-center gap-2 text-xs">
                   <span className="font-bold uppercase tracking-wider text-zinc-400">

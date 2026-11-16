@@ -6,6 +6,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { Product } from '@/lib/api';
 import { isAdminAuthorized } from './admin-auth';
 import { uploadToR2, deleteFromR2, getR2PublicBaseUrl } from '@/lib/r2';
+import { DIGITAL_PROGRAM_PRODUCTS, isDigitalProgramId } from '@/lib/programs';
 
 export async function getAdminProductBySlug(slugOrId: string): Promise<any | null> {
   const isAuthorized = await isAdminAuthorized();
@@ -24,12 +25,39 @@ export async function getAdminProductBySlug(slugOrId: string): Promise<any | nul
 
   const { data, error } = await query.maybeSingle();
 
-  if (error) {
-    console.error('Error fetching admin product:', error);
+  const fallbackDigital = DIGITAL_PROGRAM_PRODUCTS.find(
+    (p) => p.slug === decoded || p.id === decoded
+  );
+
+  if (error || !data) {
+    if (fallbackDigital) {
+      return {
+        ...fallbackDigital,
+        is_digital: true,
+        price: Number(fallbackDigital.price) || 49,
+        originalPrice: fallbackDigital.originalPrice ? Number(fallbackDigital.originalPrice) : undefined,
+        badge: fallbackDigital.badge || null,
+        image: fallbackDigital.image,
+        images:
+          fallbackDigital.images && fallbackDigital.images.length > 0
+            ? fallbackDigital.images
+            : [fallbackDigital.image],
+        variants: fallbackDigital.variants || { type: 'flavor', options: [] },
+        advantages: fallbackDigital.advantages || fallbackDigital.benefits || { ro: [], en: [] },
+        usage_signs: fallbackDigital.usage_signs || { ro: [], en: [] },
+        stock_quantity: fallbackDigital.stock_quantity ?? 9999,
+        weight: 0,
+        length_mm: 0,
+        width_mm: 0,
+        height_mm: 0,
+        is_active: fallbackDigital.is_active ?? true,
+      };
+    }
+    if (error) {
+      console.error('Error fetching admin product:', error);
+    }
     return null;
   }
-
-  if (!data) return null;
 
   const parseJsonSafe = (val: any) => {
     if (typeof val === 'string') {
@@ -38,24 +66,30 @@ export async function getAdminProductBySlug(slugOrId: string): Promise<any | nul
     return val;
   };
 
+  const parsedSpecsSummary = parseJsonSafe(data.specs_summary) || undefined;
+  const isDigital =
+    Boolean(parsedSpecsSummary?.is_digital) || isDigitalProgramId(data.id || data.slug);
+
   return {
     ...data,
+    is_digital: isDigital,
     name: parseJsonSafe(data.name),
     description: parseJsonSafe(data.description),
     price: data.price_numeric !== null && data.price_numeric !== undefined ? Number(data.price_numeric) : 0,
     originalPrice: data.original_price_numeric !== null && data.original_price_numeric !== undefined ? Number(data.original_price_numeric) : undefined,
     badge: data.badge || null,
-    image: data.main_image || '/images/placeholder.jpg',
-    images: data.images && Array.isArray(data.images) && data.images.length > 0 ? data.images : (data.main_image ? [data.main_image] : ['/images/placeholder.jpg']),
-    variants: parseJsonSafe(data.variants) || { type: 'flavor', options: [] },
+    image: data.main_image || fallbackDigital?.image || '/images/placeholder.jpg',
+    images: data.images && Array.isArray(data.images) && data.images.length > 0 ? data.images : (data.main_image ? [data.main_image] : (fallbackDigital?.images || ['/images/placeholder.jpg'])),
+    variants: parseJsonSafe(data.variants) || fallbackDigital?.variants || { type: 'flavor', options: [] },
     bundleVariants: parseJsonSafe(data.bundlevariants || data.bundleVariants),
-    advantages: parseJsonSafe(data.advantages),
+    advantages: parseJsonSafe(data.advantages) || fallbackDigital?.benefits,
     usage_signs: parseJsonSafe(data.usage_signs),
-    stock_quantity: data.stock_quantity ?? 0,
-    weight: data.weight ?? 0.5,
-    length_mm: data.length_mm ?? 100,
-    width_mm: data.width_mm ?? 100,
-    height_mm: data.height_mm ?? 100,
+    specs_summary: parsedSpecsSummary,
+    stock_quantity: data.stock_quantity ?? (isDigital ? 9999 : 0),
+    weight: isDigital ? 0 : (data.weight ?? 0.5),
+    length_mm: isDigital ? 0 : (data.length_mm ?? 100),
+    width_mm: isDigital ? 0 : (data.width_mm ?? 100),
+    height_mm: isDigital ? 0 : (data.height_mm ?? 100),
     is_active: data.is_active ?? true,
   };
 }
@@ -93,20 +127,69 @@ export async function updateProductAdmin(product: Partial<Product> & { id: strin
   if ((product as any).bundlevariants !== undefined) updateData.bundlevariants = (product as any).bundlevariants;
   if (product.advantages !== undefined) updateData.advantages = product.advantages;
   if (product.usage_signs !== undefined) updateData.usage_signs = product.usage_signs;
+  if ((product as any).metadata !== undefined) updateData.metadata = (product as any).metadata;
+  if ((product as any).specs_summary !== undefined || (product as any).is_digital !== undefined) {
+    const baseSpecs =
+      (product as any).specs_summary && typeof (product as any).specs_summary === 'object'
+        ? { ...(product as any).specs_summary }
+        : {};
+    if ((product as any).is_digital !== undefined) {
+      baseSpecs.is_digital = Boolean((product as any).is_digital);
+    }
+    updateData.specs_summary = baseSpecs;
+  }
 
   // Check for deleted images to prevent ghost files
   const { data: oldProduct } = await supabaseAdmin
     .from('products')
-    .select('images')
+    .select('id, images')
     .eq('id', product.id)
-    .single();
+    .maybeSingle();
 
-  const { data, error } = await supabaseAdmin
-    .from('products')
-    .update(updateData)
-    .eq('id', product.id)
-    .select()
-    .single();
+  const fallbackDigital = DIGITAL_PROGRAM_PRODUCTS.find(
+    (p) => p.id === product.id || p.slug === product.slug
+  );
+
+  let data: any = null;
+  let error: any = null;
+
+  if (oldProduct) {
+    const res = await supabaseAdmin
+      .from('products')
+      .update(updateData)
+      .eq('id', product.id)
+      .select()
+      .single();
+    data = res.data;
+    error = res.error;
+  } else {
+    const insertPayload: any = {
+      id: product.id,
+      slug: updateData.slug || fallbackDigital?.slug || product.slug,
+      name: updateData.name || fallbackDigital?.name || { ro: 'Produs', en: 'Product' },
+      description: updateData.description || fallbackDigital?.description || { ro: '', en: '' },
+      price_numeric: updateData.price_numeric ?? fallbackDigital?.price ?? 49,
+      original_price_numeric: updateData.original_price_numeric ?? fallbackDigital?.originalPrice ?? null,
+      main_image: updateData.main_image ?? fallbackDigital?.image ?? null,
+      images: updateData.images ?? fallbackDigital?.images ?? (fallbackDigital?.image ? [fallbackDigital.image] : []),
+      variants: updateData.variants ?? fallbackDigital?.variants ?? null,
+      advantages: updateData.advantages ?? fallbackDigital?.benefits ?? null,
+      stock_quantity: updateData.stock_quantity ?? fallbackDigital?.stock_quantity ?? 9999,
+      weight: updateData.weight ?? fallbackDigital?.weight ?? 0,
+      length_mm: updateData.length_mm ?? 0,
+      width_mm: updateData.width_mm ?? 0,
+      height_mm: updateData.height_mm ?? 0,
+      is_active: updateData.is_active ?? true,
+      ...updateData,
+    };
+    const res = await supabaseAdmin
+      .from('products')
+      .upsert(insertPayload, { onConflict: 'id' })
+      .select()
+      .single();
+    data = res.data;
+    error = res.error;
+  }
 
   if (error) {
     console.error('Error updating product:', error);
@@ -128,6 +211,8 @@ export async function updateProductAdmin(product: Partial<Product> & { id: strin
   revalidatePath('/sitemap.xml');
   revalidatePath('/en/product/[slug]', 'page');
   revalidatePath('/ro/product/[slug]', 'page');
+  revalidatePath('/en/programs', 'page');
+  revalidatePath('/ro/programs', 'page');
   revalidatePath('/en/shop', 'page');
   revalidatePath('/ro/shop', 'page');
   revalidatePath('/admin/products');
@@ -250,10 +335,52 @@ export async function toggleProductStatus(id: string, isActive: boolean) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
-  const { error } = await supabaseAdmin
+  const { data: existing } = await supabaseAdmin
     .from('products')
-    .update({ is_active: isActive })
-    .eq('id', id);
+    .select('id')
+    .eq('id', id)
+    .maybeSingle();
+
+  let error: any = null;
+  if (existing) {
+    const res = await supabaseAdmin
+      .from('products')
+      .update({ is_active: isActive })
+      .eq('id', id);
+    error = res.error;
+  } else {
+    const fallbackDigital = DIGITAL_PROGRAM_PRODUCTS.find((p) => p.id === id);
+    if (fallbackDigital) {
+      const res = await supabaseAdmin.from('products').upsert(
+        {
+          id: fallbackDigital.id,
+          slug: fallbackDigital.slug,
+          name: fallbackDigital.name,
+          description: fallbackDigital.description,
+          price_numeric: Number(fallbackDigital.price) || 49,
+          original_price_numeric: fallbackDigital.originalPrice ? Number(fallbackDigital.originalPrice) : null,
+          main_image: fallbackDigital.image,
+          images: fallbackDigital.images || [fallbackDigital.image],
+          variants: fallbackDigital.variants,
+          advantages: fallbackDigital.benefits,
+          stock_quantity: 9999,
+          weight: 0,
+          length_mm: 0,
+          width_mm: 0,
+          height_mm: 0,
+          is_active: isActive,
+        },
+        { onConflict: 'id' }
+      );
+      error = res.error;
+    } else {
+      const res = await supabaseAdmin
+        .from('products')
+        .update({ is_active: isActive })
+        .eq('id', id);
+      error = res.error;
+    }
+  }
 
   if (error) {
     console.error('Error toggling product status:', error);
@@ -265,6 +392,8 @@ export async function toggleProductStatus(id: string, isActive: boolean) {
   revalidatePath('/api/products');
   revalidatePath('/sitemap.xml');
   revalidatePath('/admin/products');
+  revalidatePath('/en/programs', 'page');
+  revalidatePath('/ro/programs', 'page');
   revalidatePath('/en/shop', 'page');
   revalidatePath('/ro/shop', 'page');
 

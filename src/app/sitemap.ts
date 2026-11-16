@@ -1,17 +1,18 @@
 import { MetadataRoute } from 'next';
 import { routing } from '@/i18n/routing';
 import { getProducts } from '@/lib/api';
+import { getSiteUrl } from '@/lib/site-config';
 
-const BASE_URL = "https://www.trenzone.fit";
+const BASE_URL = getSiteUrl();
 
 export const revalidate = 86400;
 
-// All 25 countries we ship to — used for hreflang alternates
+// All 24 countries we currently ship to — used for hreflang alternates
 const SHIPPING_COUNTRY_LOCALES: Record<string, string> = {
   RO: 'ro', HU: 'en', BG: 'en', CZ: 'en', SK: 'en', PL: 'en',
   DE: 'en', AT: 'en', IT: 'en', FR: 'en', GR: 'en', BE: 'en',
   NL: 'en', HR: 'en', SI: 'en', ES: 'en', PT: 'en', GB: 'en',
-  SE: 'en', FI: 'en', EE: 'en', LV: 'en', LT: 'en', LU: 'en', CY: 'en'
+  SE: 'en', FI: 'en', EE: 'en', LV: 'en', LT: 'en', LU: 'en'
 };
 
 function getHreflangAlternates(path: string): Record<string, string> {
@@ -19,7 +20,9 @@ function getHreflangAlternates(path: string): Record<string, string> {
     'ro': `${BASE_URL}/ro${path}`,
     'ro-RO': `${BASE_URL}/ro${path}`,
     'en': `${BASE_URL}/en${path}`,
-    'x-default': `${BASE_URL}/ro${path}`
+    'en-US': `${BASE_URL}/en${path}`,
+    'en-GB': `${BASE_URL}/en${path}`,
+    'x-default': `${BASE_URL}/en${path}`
   };
 
   for (const [country, l] of Object.entries(SHIPPING_COUNTRY_LOCALES)) {
@@ -38,6 +41,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = [
     { path: '', changeFrequency: 'daily' as const, priority: 1.0 },
     { path: '/shop', changeFrequency: 'daily' as const, priority: 0.95 },
+    { path: '/programs', changeFrequency: 'weekly' as const, priority: 0.9 },
+    { path: '/affiliate', changeFrequency: 'weekly' as const, priority: 0.8 },
+    { path: '/reviews', changeFrequency: 'weekly' as const, priority: 0.8 },
+    { path: '/about', changeFrequency: 'monthly' as const, priority: 0.7 },
     { path: '/contact', changeFrequency: 'monthly' as const, priority: 0.6 },
     { path: '/politica-de-confidentialitate', changeFrequency: 'yearly' as const, priority: 0.3 },
     { path: '/politica-de-retur', changeFrequency: 'yearly' as const, priority: 0.5 },

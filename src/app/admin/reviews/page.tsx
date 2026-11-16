@@ -25,11 +25,42 @@ import {
   Table as TableIcon,
   Check,
   Clock,
-  User
+  User,
+  Pencil,
+  Globe,
+  Upload
 } from 'lucide-react';
 import { Review } from '@/lib/api';
-import { updateReviewStatus, deleteReview, addReview, uploadReviewImageAdmin } from '@/app/actions/admin-reviews';
+import { extractReviewImages } from '@/lib/utils/reviews';
+import {
+  updateReviewStatus,
+  deleteReview,
+  addReview,
+  updateReviewAdmin,
+  uploadReviewImageAdmin,
+} from '@/app/actions/admin-reviews';
 import toast from 'react-hot-toast';
+
+const GALLERY_REVIEW_PHOTOS = [
+  { path: '/images/reviews/review_1.jpeg', label: 'X10 Sală + Săculeț' },
+  { path: '/images/reviews/review_2.jpeg', label: 'X10 White/Black (Umeri)' },
+  { path: '/images/reviews/review_3.PNG', label: 'X10 Săculeț Mașină' },
+  { path: '/images/reviews/review_4.PNG', label: 'X10 Purple Camo (Braț)' },
+  { path: '/images/reviews/review_5.png', label: 'X10 White/Black (Braț)' },
+  { path: '/images/reviews/review_6.PNG', label: 'X10 Purple + Săculeț' },
+];
+
+interface ReviewFormState {
+  product_id: string;
+  customer_name: string;
+  rating: number;
+  status: 'approved' | 'pending' | 'rejected';
+  comment_ro: string;
+  comment_en: string;
+  item_type_ro: string;
+  item_type_en: string;
+  images: string[];
+}
 
 export default function ReviewsPage() {
   const [loading, setLoading] = useState(true);
@@ -54,56 +85,26 @@ export default function ReviewsPage() {
   // Delete confirmation modal state
   const [reviewToDelete, setReviewToDelete] = useState<any | null>(null);
 
-  // New review form state
-  const [newReview, setNewReview] = useState({
+  // Add / Edit modal state
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
+  const [reviewForm, setReviewForm] = useState<ReviewFormState>({
     product_id: '',
     customer_name: '',
     rating: 5,
-    title: '',
-    comment: '',
-    status: 'approved' as 'approved' | 'pending' | 'rejected',
-    is_verified_buyer: true,
+    status: 'approved',
+    comment_ro: '',
+    comment_en: '',
+    item_type_ro: '',
+    item_type_en: '',
+    images: [],
   });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
   const [isRatingDropdownOpen, setIsRatingDropdownOpen] = useState(false);
 
-  // Helper to safely extract all photos attached to a review
-  const getReviewImages = (rev: any): string[] => {
-    const list: string[] = [];
-    if (rev.image_url && typeof rev.image_url === 'string' && rev.image_url.trim()) {
-      list.push(rev.image_url.trim());
-    }
-    if (rev.images) {
-      if (Array.isArray(rev.images)) {
-        rev.images.forEach((img: any) => {
-          if (typeof img === 'string' && img.trim() && !list.includes(img.trim())) {
-            list.push(img.trim());
-          }
-        });
-      } else if (typeof rev.images === 'string') {
-        try {
-          const parsed = JSON.parse(rev.images);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((img: any) => {
-              if (typeof img === 'string' && img.trim() && !list.includes(img.trim())) {
-                list.push(img.trim());
-              }
-            });
-          } else if (rev.images.trim() && !list.includes(rev.images.trim())) {
-            list.push(rev.images.trim());
-          }
-        } catch {
-          if (rev.images.trim() && !list.includes(rev.images.trim())) {
-            list.push(rev.images.trim());
-          }
-        }
-      }
-    }
-    return list;
-  };
+  const getReviewImages = (rev: any): string[] => extractReviewImages(rev);
 
   useEffect(() => {
     fetchData();
@@ -143,13 +144,71 @@ export default function ReviewsPage() {
       const fetchedProducts = productsJson.products || [];
       setProducts(fetchedProducts);
       if (fetchedProducts.length > 0) {
-        setNewReview(prev => ({ ...prev, product_id: fetchedProducts[0].id }));
+        setReviewForm(prev => ({ ...prev, product_id: prev.product_id || fetchedProducts[0].id }));
       }
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Eroare la încărcarea recenziilor.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openAddModal = () => {
+    setEditingReviewId(null);
+    setShowGalleryPicker(false);
+    setIsProductDropdownOpen(false);
+    setIsRatingDropdownOpen(false);
+    setReviewForm({
+      product_id: products.length > 0 ? products[0].id : '',
+      customer_name: '',
+      rating: 5,
+      status: 'approved',
+      comment_ro: '',
+      comment_en: '',
+      item_type_ro: '',
+      item_type_en: '',
+      images: [],
+    });
+    setIsAddModalOpen(true);
+  };
+
+  const openEditModal = (rev: any) => {
+    setEditingReviewId(rev.id);
+    setShowGalleryPicker(false);
+    setIsProductDropdownOpen(false);
+    setIsRatingDropdownOpen(false);
+    setReviewForm({
+      product_id: rev.product_id || (products[0]?.id ?? ''),
+      customer_name: rev.customer_name || '',
+      rating: rev.rating || 5,
+      status: rev.status || 'approved',
+      comment_ro: rev.comment_ro || rev.comment || '',
+      comment_en: rev.comment_en || rev.comment || '',
+      item_type_ro: rev.item_type_ro || rev.item_type || '',
+      item_type_en: rev.item_type_en || rev.item_type || '',
+      images: getReviewImages(rev),
+    });
+    setIsAddModalOpen(true);
+  };
+
+  const handlePhotoUpload = async (file: File) => {
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadRes = await uploadReviewImageAdmin(formData);
+      if (uploadRes?.success && uploadRes?.url) {
+        setReviewForm(prev => ({
+          ...prev,
+          images: prev.images.includes(uploadRes.url) ? prev.images : [...prev.images, uploadRes.url],
+        }));
+        toast.success('Poză încărcată!');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la încărcarea pozei.');
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -182,48 +241,27 @@ export default function ReviewsPage() {
     }
   };
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newReview.product_id || !newReview.customer_name || !newReview.comment) {
-      toast.error("Completează câmpurile obligatorii.");
+    if (!reviewForm.product_id || !reviewForm.customer_name.trim() || (!reviewForm.comment_ro.trim() && !reviewForm.comment_en.trim())) {
+      toast.error("Completează produsul, numele și cel puțin un text (RO sau EN).");
       return;
     }
     setSubmitting(true);
     try {
-      let finalImageUrl = '';
-
-      if (imageFile) {
-        const formData = new FormData();
-        formData.append('file', imageFile);
-        const uploadRes = await uploadReviewImageAdmin(formData);
-        if (uploadRes?.success && uploadRes?.url) {
-          finalImageUrl = uploadRes.url;
-        }
+      if (editingReviewId) {
+        await updateReviewAdmin(editingReviewId, reviewForm);
+        toast.success("Recenzia a fost actualizată!");
+      } else {
+        await addReview(reviewForm);
+        toast.success("Recenzia a fost adăugată cu succes!");
       }
-
-      await addReview({
-        ...newReview,
-        image_url: finalImageUrl || undefined,
-        images: finalImageUrl ? [finalImageUrl] : []
-      });
-
-      setNewReview({
-        product_id: products.length > 0 ? products[0].id : '',
-        customer_name: '',
-        rating: 5,
-        title: '',
-        comment: '',
-        status: 'approved',
-        is_verified_buyer: true,
-      });
-      setImageFile(null);
-      setImagePreview(null);
       setIsAddModalOpen(false);
-      toast.success("Recenzia a fost adăugată cu succes!");
+      setEditingReviewId(null);
       fetchData();
     } catch (error) {
-      console.error("Failed to add review", error);
-      toast.error("Eroare la adăugarea recenziei.");
+      console.error("Failed to save review", error);
+      toast.error("Eroare la salvarea recenziei.");
     } finally {
       setSubmitting(false);
     }
@@ -256,8 +294,8 @@ export default function ReviewsPage() {
       const pName = typeof rev.product?.name === 'string' ? rev.product.name : (rev.product?.name as any)?.ro || '';
       const matchesSearch = !q || 
         rev.customer_name.toLowerCase().includes(q) || 
-        rev.comment.toLowerCase().includes(q) ||
-        (rev.title && rev.title.toLowerCase().includes(q)) ||
+        String(rev.comment_ro || rev.comment || '').toLowerCase().includes(q) ||
+        String(rev.comment_en || '').toLowerCase().includes(q) ||
         pName.toLowerCase().includes(q);
 
       if (!matchesSearch) return false;
@@ -284,7 +322,7 @@ export default function ReviewsPage() {
         </div>
 
         <button 
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={openAddModal}
           className="w-full sm:w-auto h-11 px-5 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-98 text-slate-950 font-black rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm shadow-[#e32f8c]/20 cursor-pointer text-xs sm:text-sm"
         >
           <Plus size={16} />
@@ -535,16 +573,27 @@ export default function ReviewsPage() {
                       </div>
                     </div>
 
-                    {/* Review Comment Text */}
-                    <div className="space-y-1">
-                      {rev.title && (
-                        <h4 className="text-xs sm:text-sm font-black text-slate-900">
-                          {rev.title}
-                        </h4>
+                    {/* Review Comment Text (Bilingual RO + EN) */}
+                    <div className="space-y-2">
+                      <div className="rounded-xl bg-slate-50/90 border border-slate-100 p-2.5">
+                        <span className="inline-block text-[9px] font-black uppercase tracking-widest text-[#e32f8c] mb-0.5">RO</span>
+                        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed break-words whitespace-pre-line">
+                          {rev.comment_ro || rev.comment}
+                        </p>
+                      </div>
+                      {rev.comment_en && rev.comment_en !== (rev.comment_ro || rev.comment) && (
+                        <div className="rounded-xl bg-slate-50/60 border border-slate-100 p-2.5">
+                          <span className="inline-block text-[9px] font-black uppercase tracking-widest text-indigo-600 mb-0.5">EN</span>
+                          <p className="text-xs text-slate-600 leading-relaxed break-words whitespace-pre-line">
+                            {rev.comment_en}
+                          </p>
+                        </div>
                       )}
-                      <p className="text-xs sm:text-sm text-slate-600 leading-relaxed break-words whitespace-pre-line">
-                        {rev.comment}
-                      </p>
+                      {rev.item_type && (
+                        <p className="text-[11px] font-bold text-slate-500">
+                          Model: <span className="text-slate-800">{rev.item_type}</span>
+                        </p>
+                      )}
                     </div>
 
                     {/* 📸 POZE REALE ATAȘATE DE CLIENT (PROMINENT & VISIBLE!) */}
@@ -619,7 +668,17 @@ export default function ReviewsPage() {
                       )}
                     </div>
 
-                    {/* Delete Button */}
+                    {/* Edit & Delete Buttons */}
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(rev)}
+                      className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                      title="Editează recenzia (RO/EN & Poze)"
+                    >
+                      <Pencil size={14} />
+                      <span>Editează</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setReviewToDelete(rev)}
@@ -708,9 +767,17 @@ export default function ReviewsPage() {
 
                         {/* Comment */}
                         <td className="px-5 py-4">
-                          <div className="flex flex-col max-w-sm">
-                            {rev.title && <span className="text-xs font-black text-slate-900 mb-0.5">{rev.title}</span>}
-                            <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">{rev.comment}</p>
+                          <div className="flex flex-col max-w-sm gap-1">
+                            <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">
+                              <span className="font-black text-[#e32f8c] mr-1">RO:</span>
+                              {rev.comment_ro || rev.comment}
+                            </p>
+                            {rev.comment_en && (
+                              <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                                <span className="font-black text-indigo-600 mr-1">EN:</span>
+                                {rev.comment_en}
+                              </p>
+                            )}
                           </div>
                         </td>
 
@@ -759,6 +826,13 @@ export default function ReviewsPage() {
                         {/* Actions */}
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => openEditModal(rev)}
+                              className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                              title="Editează"
+                            >
+                              <Pencil size={17} />
+                            </button>
                             {rev.status !== 'approved' && (
                               <button 
                                 onClick={() => handleStatusChange(rev.id, 'approved')} 
@@ -937,41 +1011,54 @@ export default function ReviewsPage() {
         </div>
       )}
 
-      {/* ➕ ADD MANUAL REVIEW MODAL */}
+      {/* ➕ / ✏️ ADD OR EDIT BILINGUAL REVIEW MODAL */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-5 sm:p-6 border-b border-slate-100 bg-slate-50/70">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setIsAddModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 sm:p-6 border-b border-slate-100 bg-slate-50/70 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#e32f8c]/10 text-[#008ba3] flex items-center justify-center shadow-2xs">
-                  <Star size={20} className="fill-[#008ba3]" />
+                <div className="w-10 h-10 rounded-2xl bg-[#e32f8c]/10 text-[#e32f8c] flex items-center justify-center shadow-2xs">
+                  {editingReviewId ? <Pencil size={18} /> : <Star size={20} className="fill-[#e32f8c]" />}
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900">Adaugă Recenzie Manuală</h3>
-                  <p className="text-xs text-slate-500">Recenzia va fi aprobată automat pe site.</p>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    {editingReviewId ? 'Editează Recenzia (RO + EN & Poze)' : 'Adaugă Recenzie Bilingvă (RO + EN)'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {editingReviewId
+                      ? 'Modifică textul pentru ambele limbi, produsul asociat sau pozele.'
+                      : 'Recenzia va fi salvată cu text pentru Română și Engleză.'}
+                  </p>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsAddModalOpen(false)} 
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
                 className="p-2 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 cursor-pointer shadow-2xs"
               >
                 <X size={16} />
               </button>
             </div>
-            
-            <form onSubmit={handleAddSubmit} className="p-5 sm:p-6 space-y-4">
+
+            <form onSubmit={handleFormSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
               {/* Product Select */}
               <div className="space-y-1.5 relative">
                 <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Produs *</label>
                 <div className="relative">
-                  <div 
+                  <div
                     onClick={() => { setIsProductDropdownOpen(!isProductDropdownOpen); setIsRatingDropdownOpen(false); }}
                     className={`w-full bg-slate-50 border ${isProductDropdownOpen ? 'border-[#e32f8c] ring-2 ring-[#e32f8c]/20' : 'border-slate-200'} rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 cursor-pointer flex items-center justify-between transition-all`}
                   >
                     <span className="truncate mr-2">
-                      {newReview.product_id 
+                      {reviewForm.product_id
                         ? (() => {
-                            const p = products.find(p => p.id === newReview.product_id);
+                            const p = products.find(p => p.id === reviewForm.product_id);
                             return p ? (typeof p.name === 'string' ? p.name : p.name?.ro || p.name?.en) : 'Selectează produs';
                           })()
                         : 'Selectează produs'
@@ -979,16 +1066,16 @@ export default function ReviewsPage() {
                     </span>
                     <ChevronDown size={16} className={`text-slate-400 transition-transform ${isProductDropdownOpen ? 'rotate-180 text-[#e32f8c]' : ''}`} />
                   </div>
-                  
+
                   {isProductDropdownOpen && (
                     <div className="absolute z-50 w-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-1 p-1">
                       {products.map(p => {
-                        const isSelected = p.id === newReview.product_id;
+                        const isSelected = p.id === reviewForm.product_id;
                         return (
-                          <div 
-                            key={p.id} 
+                          <div
+                            key={p.id}
                             onClick={() => {
-                              setNewReview({...newReview, product_id: p.id});
+                              setReviewForm({ ...reviewForm, product_id: p.id });
                               setIsProductDropdownOpen(false);
                             }}
                             className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl cursor-pointer transition-colors ${
@@ -1004,14 +1091,14 @@ export default function ReviewsPage() {
                 </div>
               </div>
 
-              {/* Customer Name & Rating */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Customer Name, Rating & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Nume Client *</label>
-                  <input 
-                    type="text" 
-                    value={newReview.customer_name}
-                    onChange={(e) => setNewReview({...newReview, customer_name: e.target.value})}
+                  <input
+                    type="text"
+                    value={reviewForm.customer_name}
+                    onChange={(e) => setReviewForm({ ...reviewForm, customer_name: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-colors"
                     placeholder="Ex: Alexandru B."
                     required
@@ -1021,26 +1108,26 @@ export default function ReviewsPage() {
                 <div className="space-y-1.5 relative">
                   <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Rating *</label>
                   <div className="relative">
-                    <div 
+                    <div
                       onClick={() => { setIsRatingDropdownOpen(!isRatingDropdownOpen); setIsProductDropdownOpen(false); }}
                       className={`w-full bg-slate-50 border ${isRatingDropdownOpen ? 'border-[#e32f8c] ring-2 ring-[#e32f8c]/20' : 'border-slate-200'} rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 cursor-pointer flex items-center justify-between transition-all`}
                     >
                       <span className="flex items-center gap-1">
                         <Star size={14} className="fill-amber-400 text-amber-400" />
-                        <span>{newReview.rating} Stele</span>
+                        <span>{reviewForm.rating} Stele</span>
                       </span>
                       <ChevronDown size={16} className={`text-slate-400 transition-transform ${isRatingDropdownOpen ? 'rotate-180 text-[#e32f8c]' : ''}`} />
                     </div>
-                    
+
                     {isRatingDropdownOpen && (
                       <div className="absolute z-50 w-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-1 p-1">
                         {[5, 4, 3, 2, 1].map(num => {
-                          const isSelected = num === newReview.rating;
+                          const isSelected = num === reviewForm.rating;
                           return (
-                            <div 
-                              key={num} 
+                            <div
+                              key={num}
                               onClick={() => {
-                                setNewReview({...newReview, rating: num});
+                                setReviewForm({ ...reviewForm, rating: num });
                                 setIsRatingDropdownOpen(false);
                               }}
                               className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl cursor-pointer transition-colors flex items-center gap-2 ${
@@ -1060,72 +1147,181 @@ export default function ReviewsPage() {
                     )}
                   </div>
                 </div>
-              </div>
 
-              {/* Review Title */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Titlu Recenzie (Opțional)</label>
-                <input 
-                  type="text" 
-                  value={newReview.title}
-                  onChange={(e) => setNewReview({...newReview, title: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-colors"
-                  placeholder="Ex: Rezultate excelente!"
-                />
-              </div>
-
-              {/* Photo Upload with Preview */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Poză Produs (Opțional)</label>
-                <div className="flex items-center gap-4">
-                  <label className="relative group w-20 h-20 rounded-2xl bg-slate-50 overflow-hidden border-2 border-dashed border-slate-300 hover:border-[#e32f8c] shrink-0 cursor-pointer flex items-center justify-center transition-all shadow-2xs">
-                    {imagePreview ? (
-                      <img src={getOptimizedImageUrl(imagePreview)} alt="Preview" className="w-full h-full object-cover group-hover:opacity-60 transition-opacity" />
-                    ) : (
-                      <ImageIcon className="text-slate-400 w-6 h-6 group-hover:text-[#008ba3] transition-colors" />
-                    )}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-xs">
-                      <span className="text-[10px] font-black uppercase text-white bg-black/70 px-2 py-1 rounded-md">Upload</span>
-                    </div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setImageFile(e.target.files[0]);
-                          setImagePreview(URL.createObjectURL(e.target.files[0]));
-                        }
-                      }} 
-                    />
-                  </label>
-                  <div className="text-xs text-slate-500">
-                    <p className="font-bold text-slate-800">Încarcă o poză reală cu produsul</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">JPG, PNG sau WebP.</p>
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Status</label>
+                  <select
+                    value={reviewForm.status}
+                    onChange={(e) => setReviewForm({ ...reviewForm, status: e.target.value as any })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-colors"
+                  >
+                    <option value="approved">Aprobat (Vizibil)</option>
+                    <option value="pending">În așteptare</option>
+                    <option value="rejected">Respins</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Comment Textarea */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Comentariu *</label>
-                <textarea 
-                  value={newReview.comment}
-                  onChange={(e) => setNewReview({...newReview, comment: e.target.value})}
-                  className="w-full h-24 resize-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-colors"
-                  placeholder="Scrie textul recenziei..."
-                  required
-                />
+              {/* Model / Variant labels (RO + EN) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Model / Variantă RO (Opțional)</label>
+                  <input
+                    type="text"
+                    value={reviewForm.item_type_ro}
+                    onChange={(e) => setReviewForm({ ...reviewForm, item_type_ro: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-colors"
+                    placeholder="Ex: X10 Purple Camo / White Gothic"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Model / Variantă EN (Opțional)</label>
+                  <input
+                    type="text"
+                    value={reviewForm.item_type_en}
+                    onChange={(e) => setReviewForm({ ...reviewForm, item_type_en: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-colors"
+                    placeholder="Ex: X10 Purple Camo / White Gothic"
+                  />
+                </div>
+              </div>
+
+              {/* Bilingual Comments (RO + EN) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Globe size={12} className="text-[#e32f8c]" />
+                    <span>Text Română (RO) *</span>
+                  </label>
+                  <textarea
+                    value={reviewForm.comment_ro}
+                    onChange={(e) => setReviewForm({ ...reviewForm, comment_ro: e.target.value })}
+                    className="w-full h-28 resize-y bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-colors"
+                    placeholder="Scrie recenzia în română..."
+                    required={!reviewForm.comment_en.trim()}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Globe size={12} className="text-indigo-600" />
+                    <span>Text Engleză (EN) *</span>
+                  </label>
+                  <textarea
+                    value={reviewForm.comment_en}
+                    onChange={(e) => setReviewForm({ ...reviewForm, comment_en: e.target.value })}
+                    className="w-full h-28 resize-y bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors"
+                    placeholder="Write the review in English..."
+                    required={!reviewForm.comment_ro.trim()}
+                  />
+                </div>
+              </div>
+
+              {/* Photos Manager */}
+              <div className="space-y-2.5 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">
+                    Poze atașate ({reviewForm.images.length}) — lasă gol pentru recenzie fără poze
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowGalleryPicker((v) => !v)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-black transition-colors cursor-pointer"
+                    >
+                      {showGalleryPicker ? 'Ascunde galeria locală' : 'Alege din /images/reviews/'}
+                    </button>
+                    {reviewForm.images.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setReviewForm(prev => ({ ...prev, images: [] }))}
+                        className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-black transition-colors cursor-pointer"
+                      >
+                        Scoate toate pozele
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Current attached photos + Upload tile */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {reviewForm.images.map((imgUrl, idx) => (
+                    <div key={imgUrl + idx} className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-900 shrink-0 group">
+                      <img src={getOptimizedImageUrl(imgUrl)} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setReviewForm(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
+                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md hover:bg-red-700 cursor-pointer"
+                        title="Elimină poza"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+
+                  <label className="w-20 h-20 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 hover:border-[#e32f8c] flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors text-slate-500 hover:text-[#e32f8c] shrink-0">
+                    <Upload size={18} />
+                    <span className="text-[10px] font-black uppercase">
+                      {uploadingPhoto ? '...' : 'Încarcă'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingPhoto}
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handlePhotoUpload(f);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* Quick picker for /images/reviews/ */}
+                {showGalleryPicker && (
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                    {GALLERY_REVIEW_PHOTOS.map((item) => {
+                      const isAdded = reviewForm.images.includes(item.path);
+                      return (
+                        <button
+                          key={item.path}
+                          type="button"
+                          onClick={() =>
+                            setReviewForm((prev) => ({
+                              ...prev,
+                              images: isAdded
+                                ? prev.images.filter((p) => p !== item.path)
+                                : [...prev.images, item.path],
+                            }))
+                          }
+                          className={`group relative rounded-xl overflow-hidden border-2 transition-all text-left cursor-pointer ${
+                            isAdded ? 'border-[#e32f8c] ring-2 ring-[#e32f8c]/20' : 'border-slate-200 hover:border-slate-400'
+                          }`}
+                        >
+                          <div className="aspect-square bg-slate-900">
+                            <img src={item.path} alt={item.label} className="w-full h-full object-cover" />
+                          </div>
+                          <p className="text-[9px] font-bold text-slate-700 p-1 truncate bg-white">{item.label}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Submit Button */}
               <div className="pt-2">
-                <button 
+                <button
                   type="submit"
-                  disabled={submitting}
-                  className="w-full h-12 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-98 text-slate-950 font-black rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-[#e32f8c]/20"
+                  disabled={submitting || uploadingPhoto}
+                  className="w-full h-12 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-98 text-white font-black rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-[#e32f8c]/20"
                 >
-                  {submitting ? 'Se salvează...' : 'Adaugă Recenzia'}
+                  {submitting
+                    ? 'Se salvează...'
+                    : editingReviewId
+                    ? 'Salvează Modificările'
+                    : 'Adaugă Recenzia'}
                 </button>
               </div>
             </form>

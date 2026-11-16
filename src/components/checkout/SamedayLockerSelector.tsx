@@ -40,54 +40,46 @@ export function SamedayLockerSelector({ isOpen, onClose, onSelect, selectedLocke
   useEffect(() => {
     if (!isOpen) return;
 
-    // Load the official Sameday plugin script if not already loaded
+    let cancelled = false;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
     const scriptId = 'sameday-locker-plugin-script';
-    let script = document.getElementById(scriptId) as HTMLScriptElement;
+    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
 
-    const initPlugin = () => {
-      if ((window as any).LockerPlugin) {
-        if (!pluginRef.current) {
-          pluginRef.current = (window as any).LockerPlugin.getInstance();
-          pluginRef.current.init({
-            clientId: SAMEDAY_CLIENT_ID,
-            countryCode: 'RO',
-            langCode: locale === 'en' ? 'en' : 'ro',
-            apiEnvironment: SAMEDAY_API_ENV,
-          });
-        }
-        
-        // Subscribe to the event
-        const handleLockerSelect = (lockerData: any) => {
-          if (lockerData && (lockerData.lockerId || lockerData.id)) {
-            onSelectRef.current({
-              id: lockerData.lockerId || lockerData.id,
-              name: lockerData.name,
-              county: lockerData.county,
-              city: lockerData.city,
-              address: lockerData.address,
-              lat: lockerData.lat,
-              lng: lockerData.lng,
-              postalCode: lockerData.postalCode || ''
-            });
-            onCloseRef.current(); // Close our wrapper when they select
-            pluginRef.current.close(); // Close their modal
-          }
-        };
-
-        // Unsubscribe if it exists to avoid duplicate listeners (though we only init once mostly)
-        if (pluginRef.current.unsubscribe) {
-           pluginRef.current.unsubscribe();
-        }
-        
-        pluginRef.current.subscribe(handleLockerSelect);
-        
-        // Open the plugin modal
-        pluginRef.current.open();
-
-        return () => {
-          // Cleanup handled by unmounting or close
-        };
+    const tryInitPlugin = () => {
+      if (cancelled || !(window as any).LockerPlugin) return false;
+      if (!pluginRef.current) {
+        pluginRef.current = (window as any).LockerPlugin.getInstance();
+        pluginRef.current.init({
+          clientId: SAMEDAY_CLIENT_ID,
+          countryCode: 'RO',
+          langCode: locale === 'en' ? 'en' : 'ro',
+          apiEnvironment: SAMEDAY_API_ENV,
+        });
       }
+
+      const handleLockerSelect = (lockerData: any) => {
+        if (lockerData && (lockerData.lockerId || lockerData.id)) {
+          onSelectRef.current({
+            id: lockerData.lockerId || lockerData.id,
+            name: lockerData.name,
+            county: lockerData.county,
+            city: lockerData.city,
+            address: lockerData.address,
+            lat: lockerData.lat,
+            lng: lockerData.lng,
+            postalCode: lockerData.postalCode || ''
+          });
+          onCloseRef.current();
+          pluginRef.current?.close?.();
+        }
+      };
+
+      if (pluginRef.current.unsubscribe) {
+        pluginRef.current.unsubscribe();
+      }
+      pluginRef.current.subscribe(handleLockerSelect);
+      pluginRef.current.open();
+      return true;
     };
 
     if (!script) {
@@ -95,16 +87,32 @@ export function SamedayLockerSelector({ isOpen, onClose, onSelect, selectedLocke
       script.id = scriptId;
       script.src = 'https://cdn.sameday.ro/locker-plugin/lockerpluginsdk.js';
       script.async = true;
-      script.onload = () => {
-        setTimeout(initPlugin, 100);
+      script.onerror = () => {
+        if (!cancelled) onCloseRef.current();
       };
       document.body.appendChild(script);
-    } else {
-      // If script is already there, just init
-      const cleanup = initPlugin();
-      return cleanup;
     }
-  }, [isOpen]);
+
+    if (!tryInitPlugin()) {
+      let attempts = 0;
+      pollTimer = setInterval(() => {
+        attempts++;
+        if (tryInitPlugin()) {
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = null;
+        } else if (attempts >= 50) {
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = null;
+          if (!cancelled) onCloseRef.current();
+        }
+      }, 100);
+    }
+
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [isOpen, locale]);
 
   // We don't render a visual modal anymore because Sameday's plugin renders its own overlay modal over the entire screen.
   return null;

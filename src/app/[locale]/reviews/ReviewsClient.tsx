@@ -20,6 +20,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "@/components/ui/StarRating";
 import { cn } from "@/lib/utils";
+import { extractReviewImages, resolveReviewComment } from "@/lib/utils/reviews";
 
 export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
   const t = useTranslations("ReviewsPage");
@@ -38,7 +39,7 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
     return {
       avg: parseFloat((total / reviews.length).toFixed(1)),
       count: reviews.length,
-      photos: reviews.filter((r) => r.image_url).length,
+      photos: reviews.filter((r) => extractReviewImages(r).length > 0).length,
     };
   }, [reviews]);
 
@@ -52,16 +53,18 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
             ? String(r.product.name[locale] || r.product.name.ro || r.product.name.en || "")
             : String(r.product.name)
           : "";
+        const localizedComment = resolveReviewComment(r, locale);
         const matchesSearch =
           String(r.customer_name || "").toLowerCase().includes(query) ||
           prodName.toLowerCase().includes(query) ||
-          String(r.comment || "").toLowerCase().includes(query);
+          localizedComment.toLowerCase().includes(query);
 
+        const hasPhoto = extractReviewImages(r).length > 0;
         const matchesFilter =
           activeFilter === "all"
             ? true
             : activeFilter === "photo"
-            ? !!r.image_url
+            ? hasPhoto
             : activeFilter === "recent"
             ? true
             : typeof activeFilter === "number"
@@ -294,20 +297,21 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
                       <div className="relative flex-1">
                         <Quote className="absolute -left-2 -top-2 w-8 h-8 text-primary opacity-10" />
                         <p className="text-zinc-300 text-base md:text-xl font-medium leading-relaxed italic relative z-10 pl-2">
-                          &quot;{rev.comment}&quot;
+                          &quot;{resolveReviewComment(rev, locale)}&quot;
                         </p>
                       </div>
 
                       {/* Photo if exists */}
-                      {rev.image_url && !rev.image_url.includes("cdn.shopify.com") && (
-                        <div className="mt-8 rounded-2xl overflow-hidden aspect-[16/9] relative group-hover:scale-[1.02] transition-transform duration-700">
+                      {extractReviewImages(rev)[0] && (
+                        <div className="mt-6 rounded-2xl overflow-hidden aspect-[4/5] relative group-hover:scale-[1.02] transition-transform duration-700 bg-black">
                           <Image
-                            src={rev.image_url}
-                            alt="Review Image"
+                            src={extractReviewImages(rev)[0]}
+                            alt={`Review by ${rev.customer_name}`}
                             fill
-                            className="object-cover"
+                            className="object-cover object-[50%_20%]"
                             sizes="(max-width: 768px) 100vw, 33vw"
                           />
+                          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-zinc-900/80 to-transparent pointer-events-none" />
                         </div>
                       )}
 

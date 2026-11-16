@@ -4,8 +4,9 @@ import { Resend } from 'resend';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/ratelimit';
 import { headers } from 'next/headers';
+import { getResendFromEmail, getSiteUrl } from '@/lib/site-config';
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_to_prevent_crash');
 
 export async function sendContactMessage(formData: {
   name: string;
@@ -55,7 +56,7 @@ export async function sendContactMessage(formData: {
     }
 
     const response = await resend.emails.send({
-      from: 'TrenZone Contact <onboarding@resend.dev>',
+      from: getResendFromEmail('TrenZone Contact'),
       to: ['trenzone483@gmail.com'],
       reply_to: email,
       subject: `[Formular Contact] ${subject} - ${name}`,
@@ -153,7 +154,7 @@ export async function sendContactReply(data: {
     const formattedHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0;">
         <div style="background: #000000; padding: 24px; text-align: center;">
-          <img src="https://www.trenzone.fit/images/logos/trenzone_logo.webp" alt="TrenZone" style="height: 48px; object-fit: contain; margin: 0 auto;" />
+          <img src="${getSiteUrl()}/images/logos/trenzone_logo.webp" alt="TrenZone" style="height: 48px; object-fit: contain; margin: 0 auto;" />
         </div>
         <div style="padding: 32px 24px;">
           <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 0; margin-bottom: 8px;">
@@ -178,7 +179,7 @@ export async function sendContactReply(data: {
       </div>
     `;
 
-    const fromAddress = process.env.RESEND_FROM_EMAIL || 'TrenZone Support <contact@trenzone.fit>';
+    const fromAddress = getResendFromEmail('TrenZone Support');
 
     const res = await resend.emails.send({
       from: fromAddress,

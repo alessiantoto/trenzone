@@ -340,7 +340,8 @@ export async function generateManualAwbAction(orderIds: string[]) {
         await supabaseAdmin.from('orders').update({ tracking_number: barcode }).eq('id', order.id);
 
         // Send Email (Fără să oprim generarea dacă dă eroare)
-        if (rawData.customer.email && barcode) {
+        const customerEmail = (rawData.customer.email || '').trim().toLowerCase();
+        if (customerEmail && customerEmail !== 'lipsa-email@trenzone.fit' && barcode) {
           try {
             await sendAwbTrackingEmail(rawData.customer.email, rawData, barcode, courier);
           } catch (emailErr) {

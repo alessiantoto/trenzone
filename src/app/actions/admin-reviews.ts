@@ -4,6 +4,22 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isAdminAuthorized } from './admin-auth';
 import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
 import { uploadToR2, deleteFromR2, getR2PublicBaseUrl } from '@/lib/r2';
+import {
+  attachReviewTranslations,
+  deleteReviewTranslation,
+  getReviewTranslationsMap,
+  upsertReviewTranslation,
+} from '@/lib/review-i18n';
+import { extractReviewImages } from '@/lib/utils/reviews';
+
+function revalidateReviewCaches() {
+  revalidateTag('reviews', 'max');
+  revalidatePath('/', 'layout');
+  revalidatePath('/api/reviews');
+  revalidatePath('/ro/reviews', 'page');
+  revalidatePath('/en/reviews', 'page');
+  revalidatePath('/admin/reviews');
+}
 
 const getCachedReviewsStats = unstable_cache(
   async (): Promise<{ count: number; average: number }> => {
@@ -46,58 +62,34 @@ export async function getAllAdminReviews() {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
-  const { data, error } = await supabaseAdmin
-    .from('reviews')
-    .select('*, product:products(name, slug, main_image)')
-    .order('created_at', { ascending: false });
+  const [{ data, error }, translationsMap] = await Promise.all([
+    supabaseAdmin
+      .from('reviews')
+      .select('*, product:products(name, slug, main_image)')
+      .order('created_at', { ascending: false }),
+    getReviewTranslationsMap(),
+  ]);
 
   if (error) {
     console.error('Error fetching admin reviews:', error);
     return [];
   }
 
-  return (data as any[]).map(r => {
-    let normalizedImages: string[] = [];
-    if (r.image_url && typeof r.image_url === 'string' && r.image_url.trim()) {
-      normalizedImages.push(r.image_url.trim());
-    }
-    if (r.images) {
-      if (Array.isArray(r.images)) {
-        r.images.forEach((img: any) => {
-          if (typeof img === 'string' && img.trim() && !normalizedImages.includes(img.trim())) {
-            normalizedImages.push(img.trim());
-          }
-        });
-      } else if (typeof r.images === 'string') {
-        try {
-          const parsed = JSON.parse(r.images);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((img: any) => {
-              if (typeof img === 'string' && img.trim() && !normalizedImages.includes(img.trim())) {
-                normalizedImages.push(img.trim());
-              }
-            });
-          } else if (r.images.trim() && !normalizedImages.includes(r.images.trim())) {
-            normalizedImages.push(r.images.trim());
-          }
-        } catch {
-          if (r.images.trim() && !normalizedImages.includes(r.images.trim())) {
-            normalizedImages.push(r.images.trim());
-          }
-        }
-      }
-    }
-
+  const mapped = (data as any[]).map((r) => {
+    const normalizedImages = extractReviewImages(r);
     return {
       ...r,
+      image_url: normalizedImages[0] || null,
       images: normalizedImages,
       product: {
         name: r.product?.name || 'Produs',
         slug: r.product?.slug || '#',
-        image: r.product?.main_image || ''
-      }
+        image: r.product?.main_image || '',
+      },
     };
   });
+
+  return attachReviewTranslations(mapped, translationsMap);
 }
 
 export async function updateReviewStatus(id: string, status: 'pending' | 'approved' | 'rejected') {
@@ -113,13 +105,7 @@ export async function updateReviewStatus(id: string, status: 'pending' | 'approv
 
   if (error) throw error;
   
-  // Revalidate frontend caches so reviews appear immediately
-  revalidateTag('reviews', 'max');
-  revalidatePath('/', 'layout');
-  revalidatePath('/api/reviews');
-  revalidatePath('/ro/reviews', 'page');
-  revalidatePath('/en/reviews', 'page');
-  revalidatePath('/admin/reviews');
+  revalidateReviewCaches();
   
   return data;
 }
@@ -142,6 +128,8 @@ export async function deleteReview(id: string) {
     .eq('id', id);
 
   if (error) throw error;
+
+  await deleteReviewTranslation(id);
 
   // 3. Ștergem imaginile din Cloudflare R2 sau Supabase Storage
   const imagesToDelete: string[] = [];
@@ -169,25 +157,47 @@ export async function deleteReview(id: string) {
     }
   }
 
-  // Revalidate frontend caches
-  revalidateTag('reviews', 'max');
-  revalidatePath('/', 'layout');
-  revalidatePath('/api/reviews');
-  revalidatePath('/ro/reviews', 'page');
-  revalidatePath('/en/reviews', 'page');
-  revalidatePath('/admin/reviews');
+  revalidateReviewCaches();
 
   return true;
 }
 
-export async function addReview(reviewData: any) {
+export interface AdminReviewInput {
+  product_id: string;
+  customer_name: string;
+  rating: number;
+  comment_ro: string;
+  comment_en: string;
+  item_type_ro?: string;
+  item_type_en?: string;
+  fit_ro?: string;
+  fit_en?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  images?: string[];
+  locale?: string;
+}
+
+export async function addReview(reviewData: AdminReviewInput) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
+  const commentRo = String(reviewData.comment_ro || '').trim();
+  const commentEn = String(reviewData.comment_en || '').trim();
+  const cleanImages = Array.isArray(reviewData.images)
+    ? reviewData.images.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+
   const payload = {
-    status: 'approved',
-    is_verified_buyer: true,
-    ...reviewData,
+    product_id: reviewData.product_id,
+    customer_name: String(reviewData.customer_name || '').trim(),
+    rating: Math.min(5, Math.max(1, Math.round(Number(reviewData.rating) || 5))),
+    comment: commentRo || commentEn,
+    item_type: reviewData.item_type_ro?.trim() || reviewData.item_type_en?.trim() || null,
+    fit: reviewData.fit_ro?.trim() || reviewData.fit_en?.trim() || null,
+    image_url: cleanImages[0] || null,
+    images: cleanImages,
+    locale: reviewData.locale || 'ro',
+    status: reviewData.status || 'approved',
   };
 
   const { data, error } = await supabaseAdmin
@@ -197,15 +207,66 @@ export async function addReview(reviewData: any) {
     .single();
 
   if (error) throw error;
-  
-  // Revalidate frontend caches
-  revalidateTag('reviews', 'max');
-  revalidatePath('/', 'layout');
-  revalidatePath('/api/reviews');
-  revalidatePath('/ro/reviews', 'page');
-  revalidatePath('/en/reviews', 'page');
-  revalidatePath('/admin/reviews');
-  
+
+  if (data?.id) {
+    await upsertReviewTranslation(data.id, {
+      ro: commentRo || commentEn,
+      en: commentEn || commentRo,
+      item_type_ro: reviewData.item_type_ro,
+      item_type_en: reviewData.item_type_en,
+      fit_ro: reviewData.fit_ro,
+      fit_en: reviewData.fit_en,
+    });
+  }
+
+  revalidateReviewCaches();
+  return data;
+}
+
+export async function updateReviewAdmin(id: string, reviewData: AdminReviewInput) {
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) throw new Error('Neautorizat');
+
+  const commentRo = String(reviewData.comment_ro || '').trim();
+  const commentEn = String(reviewData.comment_en || '').trim();
+  const cleanImages = Array.isArray(reviewData.images)
+    ? reviewData.images.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+
+  const updatePayload: Record<string, any> = {
+    product_id: reviewData.product_id,
+    customer_name: String(reviewData.customer_name || '').trim(),
+    rating: Math.min(5, Math.max(1, Math.round(Number(reviewData.rating) || 5))),
+    comment: commentRo || commentEn,
+    item_type: reviewData.item_type_ro?.trim() || reviewData.item_type_en?.trim() || null,
+    fit: reviewData.fit_ro?.trim() || reviewData.fit_en?.trim() || null,
+    image_url: cleanImages[0] || null,
+    images: cleanImages,
+  };
+
+  if (reviewData.status) {
+    updatePayload.status = reviewData.status;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('reviews')
+    .update(updatePayload)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  await upsertReviewTranslation(id, {
+    ro: commentRo,
+    en: commentEn,
+    item_type_ro: reviewData.item_type_ro,
+    item_type_en: reviewData.item_type_en,
+    fit_ro: reviewData.fit_ro,
+    fit_en: reviewData.fit_en,
+  });
+
+  revalidateReviewCaches();
   return data;
 }
 

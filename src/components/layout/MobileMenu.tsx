@@ -24,6 +24,7 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
   const menuItems = [
     { label: t('home', { defaultValue: 'ACASĂ' }), href: "/" },
     { label: t('shop', { defaultValue: 'MAGAZIN' }), href: "/shop" },
+    { label: t('programs', { defaultValue: 'PROGRAME' }), href: "/programs" },
     { label: t('affiliate', { defaultValue: 'Afiliere' }), href: "/affiliate" },
     { label: t('about', { defaultValue: 'DESPRE NOI' }), href: "/about" },
     { label: t('contact', { defaultValue: 'CONTACT' }), href: "/contact" },
@@ -33,11 +34,12 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent 
         side="left" 
-        className="w-full sm:max-w-[400px] bg-white border-none p-0 flex flex-col text-black overflow-hidden [&>button]:hidden shadow-2xl"
+        showCloseButton={false}
+        className="data-[side=left]:w-[86vw] data-[side=left]:sm:max-w-[390px] bg-white border-none p-0 flex flex-col text-black overflow-hidden shadow-2xl"
       >
         {/* Modern Header */}
-        <div className="flex items-center justify-between p-6 pb-2">
-           <Link href="/" onClick={() => onOpenChange(false)} className="group flex items-center gap-2.5">
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-zinc-100/80">
+           <Link href="/" onClick={() => onOpenChange(false)} className="group flex items-center gap-2.5 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0">
              <Image
                src={getCdnUrl("/images/logos/trenzone_logo.webp")}
                alt="TrenZone Emblem"
@@ -52,20 +54,21 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
 
            {/* Close Button on the right */}
            <button
+             type="button"
              onClick={() => onOpenChange(false)}
-             className="w-10 h-10 flex items-center justify-center text-black hover:bg-zinc-100 rounded-full transition-colors outline-none"
+             className="w-9 h-9 flex items-center justify-center text-black hover:bg-zinc-100 rounded-full transition-colors outline-none cursor-pointer"
              aria-label={locale === 'ro' ? "Închide meniul" : "Close menu"}
            >
-             <X className="w-6 h-6" strokeWidth={2} />
+             <X className="w-5 h-5" strokeWidth={2.25} />
            </button>
         </div>
 
         {/* Menu Links */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar flex flex-col" style={{ scrollBehavior: 'smooth' }}>
-          <nav className="flex flex-col px-6 pt-6 pb-4">
-            {menuItems.map((item, idx) => {
-              // Highlight the shop explicitly, but use a dot to show the actual active route
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar flex flex-col justify-between" style={{ scrollBehavior: 'smooth' }}>
+          <nav className="flex flex-col px-6 pt-4 pb-2">
+            {menuItems.map((item) => {
               const isShop = item.href === "/shop";
+              const isPrograms = item.href === "/programs";
               const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
               return (
                 <div key={item.href}>
@@ -80,40 +83,41 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
                         }, 300);
                       }
                     }}
-                    className="group flex items-center justify-between py-4 border-b border-zinc-100/0 hover:border-zinc-100 transition-colors"
+                    className="group flex items-center justify-between py-4 border-b border-zinc-100/80 last:border-b-0 transition-colors outline-none"
                   >
-                    <div className="flex items-center">
-                      <span className="w-4 flex-shrink-0 flex items-center justify-start">
-                         {isActive && <span className="w-2 h-2 rounded-full bg-[#e32f8c]"></span>}
-                      </span>
-                      <span className={`text-[27px] sm:text-[34px] font-black uppercase tracking-tighter leading-none transition-colors ${
-                        isShop ? "text-[#e32f8c]" : "text-black group-hover:text-zinc-600"
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {isActive && (
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#e32f8c]" />
+                      )}
+                      <span className={`text-[27px] sm:text-[31px] font-black uppercase tracking-tight leading-none transition-colors ${
+                        isShop
+                          ? "text-[#e32f8c]"
+                          : "text-black group-hover:text-zinc-600"
                       }`}>
                         {item.label}
                       </span>
+                      {isPrograms && (
+                        <span className="bg-black text-white text-[11px] font-black px-2 py-0.5 rounded-full tracking-wide shrink-0">
+                          -27%
+                        </span>
+                      )}
                     </div>
-                    <ChevronRight className={`w-6 h-6 transition-colors ${isActive ? 'text-[#e32f8c]' : 'text-zinc-300 group-hover:text-black'}`} strokeWidth={2.5} />
+                    <ChevronRight className={`w-6 h-6 shrink-0 transition-colors ${
+                      isShop ? 'text-[#e32f8c]' : isActive ? 'text-[#e32f8c]' : 'text-zinc-300 group-hover:text-black'
+                    }`} strokeWidth={2.5} />
                   </Link>
                 </div>
               );
             })}
           </nav>
 
-
-
-
-
-          {/* Action Links (Bottom) */}
-          <div className="mt-8 flex flex-col border-t border-zinc-100">
-
-             
-             {/* Region Switcher Integration */}
-             <div className="p-6 bg-zinc-50 border-t border-zinc-100">
-                <RegionSwitcher
-                  variant="light"
-                  scrollContainerRef={scrollContainerRef as any}
-                />
-             </div>
+          {/* Integrated Region & Language Controls */}
+          <div className="mt-4 px-6 pt-4 pb-6 bg-[#f6f6f8] border-t border-zinc-200/80">
+            <RegionSwitcher
+              variant="light"
+              inline={true}
+              scrollContainerRef={scrollContainerRef as any}
+            />
           </div>
         </div>
 

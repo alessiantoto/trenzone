@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { BaseEmailLayout } from './BaseEmailLayout';
 import { getMediaCdnBase } from '@/lib/utils/cdn';
+import { getSiteUrl } from '@/lib/site-config';
 
 interface AbandonedCartEmailProps {
   customerName: string;
@@ -24,10 +25,10 @@ interface AbandonedCartEmailProps {
 }
 
 export const AbandonedCartEmail: React.FC<Readonly<AbandonedCartEmailProps>> = ({
-  customerName,
-  items,
+  customerName = '',
+  items = [],
   locale = 'ro',
-  baseUrl = "https://www.trenzone.fit",
+  baseUrl = getSiteUrl(),
   currency = "RON",
   cartUrl,
   templateData,
@@ -41,10 +42,11 @@ export const AbandonedCartEmail: React.FC<Readonly<AbandonedCartEmailProps>> = (
   const bodyText = isEn ? templateData?.body_en : templateData?.body_ro;
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
 
-  const safeHeading = (headingText || (isEn ? "You left your gear behind!" : "Ți-ai uitat produsele!")).replace('{{name}}', customerName.split(' ')[0] || '');
+  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
+  const safeHeading = (headingText || (isEn ? "You left your gear behind!" : "Ți-ai uitat produsele!")).replace('{{name}}', firstCustomerName);
   
   let safeBody = (bodyText || (isEn ? "We noticed you left some items in your cart. Complete your order now." : "Am observat că ai adăugat produse excelente în coș, dar nu ai finalizat comanda."))
-    .replace('{{name}}', customerName.split(' ')[0] || '');
+    .replace('{{name}}', firstCustomerName);
     
   if (couponCode) {
     safeBody = safeBody
@@ -77,7 +79,17 @@ export const AbandonedCartEmail: React.FC<Readonly<AbandonedCartEmailProps>> = (
   if (!Array.isArray(safeItems)) safeItems = [];
 
   // Calculare total (just for display in email)
-  const cartTotal = safeItems.reduce((acc, item) => acc + (Number(item?.price || 0) * (item?.quantity || 1)), 0).toFixed(2);
+  const resolveItemPrice = (item: any): number => {
+    const raw = item?.price;
+    if (typeof raw === 'number' && !Number.isNaN(raw)) return raw;
+    if (raw && typeof raw === 'object') {
+      const val = Number(raw.ron ?? raw.ro ?? 0);
+      return Number.isNaN(val) ? 0 : val;
+    }
+    const parsed = Number(raw || 0);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  const cartTotal = safeItems.reduce((acc, item) => acc + (resolveItemPrice(item) * (Number(item?.quantity) || 1)), 0).toFixed(2);
 
   const cleanCoupon = (couponCode || '').trim();
   const directCartUrl = cleanCoupon && !cartUrl.includes('coupon=')
@@ -144,7 +156,11 @@ export const AbandonedCartEmail: React.FC<Readonly<AbandonedCartEmailProps>> = (
       {/* ═══ Cart Contents ═══ */}
       <div style={{ padding: '0 20px', marginBottom: '50px', backgroundColor: '#f9f9f9', borderRadius: '12px', paddingTop: '30px' }}>
         <h3 style={{ fontSize: '13px', fontWeight: '900', marginBottom: '25px', letterSpacing: '1px', textTransform: 'uppercase', textAlign: 'center' }}>{staticTranslations.cart_contents}</h3>
-        {safeItems.map((item, index) => (
+        {safeItems.map((item, index) => {
+          const resolvedName = typeof item?.name === 'object' && item.name !== null
+            ? String(item.name[locale] || item.name['ro'] || item.name['en'] || (isEn ? 'Product' : 'Produs'))
+            : String(item?.name || (isEn ? 'Product' : 'Produs'));
+          return (
           <div key={index} style={{ 
             display: 'table', 
             width: '100%',
@@ -157,27 +173,26 @@ export const AbandonedCartEmail: React.FC<Readonly<AbandonedCartEmailProps>> = (
                 src={(() => {
                   let img = item.image;
                   if (!img || img === 'undefined' || img === 'null') {
-                    return `${baseUrl}/images/products/x10_elbow_wraps_purple_1.webp`;
+                    return `${baseUrl}/images/products/x10_elbow_wraps_purple.webp`;
                   }
                   if (typeof img === 'string' && img.startsWith('http')) return img;
                   if (typeof img === 'string' && img.startsWith('/')) return `${baseUrl}${img}`;
                   return `${supabaseBase}${img}`;
                 })()} 
-                alt={item.name} 
+                alt={resolvedName} 
                 style={{ width: '90px', borderRadius: '8px', display: 'block' }} 
               />
             </div>
             <div style={{ display: 'table-cell', paddingLeft: '20px', verticalAlign: 'middle' }}>
               <p style={{ fontWeight: '900', margin: '0', fontSize: '16px' }}>
-                {typeof item.name === 'object' && item.name !== null 
-                  ? (item.name[locale] || item.name['ro'] || item.name['en'] || 'Produs') 
-                  : item.name}
+                {resolvedName}
               </p>
-              <p style={{ color: '#666', fontSize: '13px', margin: '4px 0' }}>x{item.quantity}</p>
-              <p style={{ fontWeight: '800', margin: '0', fontSize: '15px', color: '#e32f8c' }}>{item.price} {currency}</p>
+              <p style={{ color: '#666', fontSize: '13px', margin: '4px 0' }}>x{Number(item?.quantity) || 1}</p>
+              <p style={{ fontWeight: '800', margin: '0', fontSize: '15px', color: '#e32f8c' }}>{resolveItemPrice(item).toFixed(2)} {currency}</p>
             </div>
           </div>
-        ))}
+          );
+        })}
         <div style={{ textAlign: 'right', padding: '20px 0' }}>
             <span style={{ fontWeight: '900', fontSize: '14px', color: '#666', textTransform: 'uppercase', marginRight: '10px' }}>{staticTranslations.total}</span>
             <span style={{ fontWeight: '900', fontSize: '24px', color: '#000' }}>{cartTotal} {currency}</span>

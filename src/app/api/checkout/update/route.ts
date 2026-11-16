@@ -1,25 +1,33 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
-import { supabaseAdmin } from "@/lib/supabase-admin";
-import { validateCoupon } from "@/app/actions/coupons";
-import { getShippingCost } from "@/lib/shipping-config";
 import { rateLimiters, getClientIp, checkRateLimit } from "@/lib/ratelimit";
 import { verifyCsrfToken } from "@/lib/csrf";
-import { calculateOrderTotal, CartItem } from "@/lib/cart-calculations";
-import { getServerExchangeRates } from "@/utils/pricing";
+import { calculateOrderTotal } from "@/lib/cart-calculations";
+import { getServerExchangeRates, getProductPrice } from "@/utils/pricing";
+import { getShippingConfig } from "@/app/actions/shipping";
+import {
+  buildServerCalculationItems,
+  fetchServerProductsForItems,
+  parseAndStripBundleIds,
+  resolveServerCoupon,
+  validateShippingSelection,
+} from "@/lib/checkout-helpers";
+import {
+  backupCheckoutSessionForPI,
+  encodeOrderItemsForStripeMetadata,
+  getCurrencyMultiplier,
+  getStripeClient,
+  isStripeConfigured,
+} from "@/lib/stripe-order-sync";
+import { isDigitalOnlyCart, isDigitalProgramItem } from "@/lib/programs";
 
-export const dynamic = 'force-dynamic';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy_key", {
-  apiVersion: '2025-02-24.acacia',
-});
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
     const ip = getClientIp(req);
-    
+
     // 1. Parse request body
-    let body;
+    let body: any;
     try {
       body = await req.json();
     } catch {
@@ -28,37 +36,38 @@ export async function POST(req: Request) {
 
     const { isFinalSync } = body;
 
-    // 📝 DIAGNOSTIC LOG: Entrance (Post body-parse)
-    console.log(`🚀 [UPDATE API] Received update request for PI: ${body?.paymentIntentId || 'unknown'}`);
+    console.log(`🚀 [UPDATE API] Received update request (final=${Boolean(isFinalSync)}) for PI: ${body?.paymentIntentId || "unknown"}`);
 
-    // 2. Check rate limit on all update requests
+    // 2. Rate limit (distinct generous key on critical final sync before confirmPayment)
     const { allowed, retryAfter, headers: rlHeaders } = await checkRateLimit(
       rateLimiters.checkoutUpdate,
-      ip
+      ip,
+      isFinalSync === true ? "checkout-final-sync" : "checkout-update"
     );
 
     if (!allowed) {
       console.warn(`⚠️ [CHECKOUT-UPDATE] Rate limit exceeded for IP: ${ip}`);
       return NextResponse.json(
-        { error: 'Too many update requests. Please try again later.', retryAfter },
+        { error: "Too many update requests. Please try again later.", retryAfter },
         { status: 429, headers: rlHeaders }
       );
     }
 
     // 3. Verify CSRF token
-    const csrfToken = req.headers.get('x-csrf-token');
-    const isCsrfValid = await verifyCsrfToken(csrfToken || '');
+    const csrfToken = req.headers.get("x-csrf-token");
+    const isCsrfValid = await verifyCsrfToken(csrfToken || "");
 
     if (!isCsrfValid) {
       console.warn(`⚠️ [CSRF] Token verification failed for IP: ${ip}`);
       return NextResponse.json(
-        { error: 'CSRF token validation failed' },
+        { error: "CSRF token validation failed" },
         { status: 403 }
       );
     }
 
     const {
       paymentIntentId,
+      clientSecret,
       items,
       couponCode,
       shipping_type,
@@ -69,22 +78,22 @@ export async function POST(req: Request) {
       firstName,
       lastName,
       country,
-      currency = 'RON',
+      currency = "RON",
       phone,
       line1,
       line2,
       city,
       state,
       postal_code,
-      locale = 'ro',
+      locale = "ro",
       priority_processing,
       gift_packaging,
       gift_message,
-      payment_method
+      payment_method,
     } = body;
 
-    const SUPPORTED_CURRENCIES = ["RON", "EUR", "USD", "GBP", "PLN", "CHF"];
-    const safeCurrency = typeof currency === 'string' ? currency.toUpperCase() : 'RON';
+    const SUPPORTED_CURRENCIES = ["RON", "EUR", "USD", "GBP"];
+    const safeCurrency = typeof currency === "string" ? currency.toUpperCase() : "RON";
     if (!SUPPORTED_CURRENCIES.includes(safeCurrency)) {
       return NextResponse.json({ error: "Unsupported currency." }, { status: 400 });
     }
@@ -97,160 +106,222 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
     }
 
-    // Extraction unique IDs — handle bundle IDs: format `<real-uuid>-bundle-<qty>`
-    const BUNDLE_REGEX = /^(.+)-bundle-(\d+)$/;
-    const processedItems = items.map((item: any) => {
-      const match = item.id?.match(BUNDLE_REGEX);
-      if (match) {
-        return { ...item, _realId: match[1], _bundleQty: parseInt(match[2]), _isBundle: true };
-      }
-      return { ...item, _realId: item.id, _isBundle: false };
-    });
-
-    // Ensure server-side exchange rates cache is warm
     await getServerExchangeRates();
 
-    const itemIds = Array.from(new Set(processedItems.map((item: any) => item._realId)));
-    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const uuids = itemIds.filter(id => UUID_REGEX.test(String(id)));
-    const slugs = itemIds.filter(id => !UUID_REGEX.test(String(id)));
-
-    let dbProducts: any[] = [];
-    if (uuids.length > 0) {
-      const { data } = await supabaseAdmin.from("products").select("id, price_numeric, weight, slug").in("id", uuids);
-      if (data) dbProducts = [...dbProducts, ...data];
-    }
-    if (slugs.length > 0) {
-      const { data } = await supabaseAdmin.from("products").select("id, price_numeric, weight, slug").in("slug", slugs);
-      if (data) dbProducts = [...dbProducts, ...data];
+    const safeLocale: "ro" | "en" = locale === "en" ? "en" : "ro";
+    const parsedItems = parseAndStripBundleIds(items);
+    const dbProducts = await fetchServerProductsForItems(parsedItems);
+    const built = buildServerCalculationItems(parsedItems, dbProducts, safeLocale);
+    if (!built.ok) {
+      return NextResponse.json({ error: built.error }, { status: built.status });
     }
 
-    if (dbProducts.length === 0) {
-      throw new Error("Produsele nu au putut fi validate in baza de date.");
+    const { calculationItems, resolvedPerItem, hasPreorder: isPreorderOrder, hasInStock: hasInStockOrder } = built;
+
+    if (isPreorderOrder && hasInStockOrder) {
+      return NextResponse.json(
+        {
+          error:
+            safeLocale === "en"
+              ? "Mixed orders (in-stock + pre-order) are not allowed. Please place separate orders."
+              : "Comenzile mixte (produse din stoc + precomandă) nu sunt permise. Te rugăm să plasezi comenzi separate.",
+        },
+        { status: 400 }
+      );
     }
 
-    // Map price_numeric -> price for calculation
-    const dbProductsMapped = dbProducts.map((p: any) => ({ ...p, price: p.price_numeric }));
+    const shippingConfig = await getShippingConfig();
+    const lockersEnabled = Boolean(shippingConfig?.lockers_enabled);
+    const normalizedCountry = String(country || "RO").trim().toUpperCase() || "RO";
 
-    const calculationItems: CartItem[] = processedItems.map((clientItem: any) => {
-      const dbProduct = dbProductsMapped.find((p) => p.id === clientItem._realId || p.slug === clientItem._realId);
-      if (!dbProduct) throw new Error(`Invalid product: ${clientItem._realId}`);
-
-      let price = Number(dbProduct.price);
-      // Compute bundle discount strictly on the server (never trust client item.price)
-      if (clientItem._isBundle && clientItem._bundleQty > 1) {
-        const qty = Math.min(Math.max(1, Number(clientItem._bundleQty) || 1), 10);
-        const bundleDiscountRon = Math.max(0, (Math.min(qty, 4) - 1) * 15);
-        price = Math.max(price, (price * qty) - bundleDiscountRon);
+    const digitalOnly = isDigitalOnlyCart(calculationItems);
+    let validatedCarrierId = digitalOnly ? "digital" : (carrier_id ? String(carrier_id) : "");
+    if (!digitalOnly && isFinalSync === true) {
+      const shippingCheck = validateShippingSelection({
+        country: normalizedCountry,
+        shippingType: shipping_type || "hd",
+        carrierId: carrier_id ? String(carrier_id) : undefined,
+        branchId: branch_id ? String(branch_id) : undefined,
+        locale: safeLocale,
+        lockersEnabled,
+      });
+      if (!shippingCheck.ok) {
+        return NextResponse.json({ error: shippingCheck.error }, { status: 400 });
       }
+      validatedCarrierId = shippingCheck.carrierId;
+    }
 
+    const effectiveShippingType: "hd" | "pudo" =
+      !digitalOnly && shipping_type === "pudo" && lockersEnabled && normalizedCountry === "RO" ? "pudo" : "hd";
+    const effectiveCarrierId = validatedCarrierId || (carrier_id ? String(carrier_id) : "");
+    const effectiveBranchId = effectiveShippingType === "pudo" && branch_id ? String(branch_id) : "";
+    const effectiveBranchName = effectiveShippingType === "pudo" && branch_name ? String(branch_name) : "";
+
+    const multiplier = getCurrencyMultiplier(safeCurrency);
+    const couponResolution = await resolveServerCoupon(
+      couponCode,
+      calculationItems,
+      safeCurrency,
+      multiplier,
+      safeLocale,
+      Boolean(isFinalSync)
+    );
+    if (!couponResolution.ok) {
+      return NextResponse.json({ error: couponResolution.error }, { status: 400 });
+    }
+    const couponData = couponResolution.couponData;
+
+    const options = {
+      priority_processing,
+      gift_packaging,
+      payment_method: "online" as const,
+      free_shipping_ro_ron: shippingConfig.free_shipping_ro_ron,
+      free_shipping_intl_eur: shippingConfig.free_shipping_intl_eur,
+    };
+    const result = calculateOrderTotal(
+      calculationItems,
+      safeCurrency,
+      normalizedCountry,
+      effectiveShippingType,
+      couponData,
+      effectiveCarrierId || undefined,
+      options
+    );
+    const appliedCouponData = result.couponApplied ? couponData : null;
+
+    // Build validated full untruncated item snapshots for Supabase checkout_sessions & compact Stripe chunks
+    const serverValidatedItems = resolvedPerItem.map(({ parsed, dbProduct, isPreorder, price }) => {
+      const i = parsed.raw;
+      const resolvedName =
+        typeof i.name === "object"
+          ? i.name[safeLocale] || i.name.ro || i.name.en || Object.values(i.name)[0]
+          : i.name || (typeof dbProduct?.name === "object" ? dbProduct.name[safeLocale] || dbProduct.name.ro : dbProduct?.name) || (safeLocale === "en" ? "Product" : "Produs");
+
+      const localizedPrice = safeCurrency === "RON" ? price : getProductPrice(price, safeCurrency);
+      const isDigital = Boolean(i.is_digital || dbProduct?.specs_summary?.is_digital || isDigitalProgramItem(dbProduct || i));
       return {
-        id: clientItem.id, // Preserve original cart ID
-        quantity: Math.max(1, Number(clientItem.quantity) || 1),
-        weight: Number(dbProduct.weight) || 0.2,
-        price
+        id: i.id || i.slug || dbProduct?.id,
+        slug: i.slug || dbProduct?.slug,
+        name: resolvedName,
+        quantity: Math.max(1, Math.floor(Number(i.quantity) || 1)),
+        price: localizedPrice,
+        image: i.image || i.selectedVariant?.image || undefined,
+        is_digital: isDigital,
+        specs_summary: dbProduct?.specs_summary || i.specs_summary,
+        selectedVariant: i.selectedVariant || (i.variant ? { name: i.variant } : null),
+        _isBundle: parsed._isBundle,
+        is_preorder: isPreorder,
       };
     });
 
-    const ZERO_DECIMAL_CURRENCIES = ['JPY', 'KRW', 'BIF', 'CLP', 'PYG', 'VND', 'XAF', 'XOF', 'XPF'];
-    const isZeroDecimal = ZERO_DECIMAL_CURRENCIES.includes(safeCurrency);
-    const multiplier = isZeroDecimal ? 1 : 100;
-
-    const preResult = calculateOrderTotal(calculationItems, safeCurrency);
-    const subtotalMajor = preResult.subtotal / multiplier;
-
-    let couponResult = null;
-    let couponData = null;
-    if (couponCode) {
-      try {
-        couponResult = await validateCoupon(couponCode, subtotalMajor, safeCurrency, locale === 'en' ? 'en' : 'ro');
-        if (couponResult?.isValid && couponResult?.coupon) {
-          couponData = couponResult.coupon;
-        }
-      } catch (couponErr) {
-        console.warn("Coupon validation warning:", couponErr);
-      }
-    }
-
-    const options = { priority_processing, gift_packaging, payment_method };
-    const result = calculateOrderTotal(calculationItems, safeCurrency, country, shipping_type, couponData, carrier_id, options);
-
-    const safeLocale = locale === 'en' ? 'en' : 'ro';
-    const compactOrderItems = processedItems.map(i => {
-      let vName = i.selectedVariant?.name;
-      if (typeof vName === 'object') {
-        vName = safeLocale === 'en'
-          ? (vName.en || vName.ro || Object.values(vName)[0])
-          : (vName.ro || vName.en || Object.values(vName)[0]);
-      }
-      const calcItem = calculationItems.find(c => c.id === i.id);
-      const price = calcItem ? calcItem.price : (i.price || 0);
-      const name = (i.name || (safeLocale === 'en' ? 'Product' : 'Produs')).toString().replace(/\|/g, '-').replace(/\^\^/g, '--').substring(0, 150);
-      const variant = (vName || '').toString().replace(/\|/g, '-').replace(/\^\^/g, '--').substring(0, 150);
-      return `${i.id || i.slug}|${i.quantity}|${price}|${variant}|${name}`;
-    }).join('^^');
+    const chunkedOrderItems = encodeOrderItemsForStripeMetadata(serverValidatedItems, safeLocale);
+    const decimals = multiplier === 1 ? 0 : 2;
 
     const updatePayload: any = {
       amount: result.total,
       currency: safeCurrency.toLowerCase(),
-      description: `Order from ${firstName || 'Client'} ${lastName || ''}`.trim(),
+      description: `Order from ${firstName || "Client"} ${lastName || ""}`.trim(),
       metadata: {
-        coupon_id: couponData?.id || '',
-        coupon: String(couponCode || "none").substring(0, 500),
+        coupon_id: appliedCouponData?.id || "",
+        coupon: appliedCouponData?.code ? String(appliedCouponData.code).substring(0, 500) : "none",
         hasBundle: result.bundleDiscount > 0 ? "yes" : "no",
-        shipping_type: String(shipping_type || "none").substring(0, 500),
-        carrier_id: String(carrier_id || "none").substring(0, 500),
-        branch_id: String(branch_id || "none").substring(0, 500),
-        branch_name: String(branch_name || "none").substring(0, 500),
-        phone: (phone && phone !== 'none') ? String(phone).substring(0, 50) : "",
+        is_preorder: isPreorderOrder ? "yes" : "no",
+        shipping_type: effectiveShippingType,
+        carrier_id: String(effectiveCarrierId || "none").substring(0, 500),
+        branch_id: String(effectiveBranchId || "none").substring(0, 500),
+        branch_name: String(effectiveBranchName || "none").substring(0, 500),
+        phone: phone && phone !== "none" ? String(phone).substring(0, 50) : "",
         currency: safeCurrency.substring(0, 10),
-        subtotal: (result.subtotal / multiplier).toFixed(2),
-        bundleDiscount: (result.bundleDiscount / multiplier).toFixed(2),
-        couponDiscount: (result.couponDiscount / multiplier).toFixed(2),
-        cardDiscount: (result.cardDiscount / multiplier).toFixed(2),
-        shippingCost: (result.shippingCost / multiplier).toFixed(2),
-        final_total: (result.total / multiplier).toFixed(2),
-        // Ultracompact format split across up to 4 metadata keys (2000 chars total) so items are never truncated
-        order_items: compactOrderItems.substring(0, 500),
-        ...(compactOrderItems.length > 500 ? { order_items_2: compactOrderItems.substring(500, 1000) } : { order_items_2: "" }),
-        ...(compactOrderItems.length > 1000 ? { order_items_3: compactOrderItems.substring(1000, 1500) } : { order_items_3: "" }),
-        ...(compactOrderItems.length > 1500 ? { order_items_4: compactOrderItems.substring(1500, 2000) } : { order_items_4: "" }),
+        subtotal: (result.subtotal / multiplier).toFixed(decimals),
+        bundleDiscount: (result.bundleDiscount / multiplier).toFixed(decimals),
+        couponDiscount: (result.couponDiscount / multiplier).toFixed(decimals),
+        cardDiscount: (result.cardDiscount / multiplier).toFixed(decimals),
+        discount_total: ((result.bundleDiscount + result.couponDiscount) / multiplier).toFixed(decimals),
+        shippingCost: (result.shippingCost / multiplier).toFixed(decimals),
+        final_total: (result.total / multiplier).toFixed(decimals),
+        ...chunkedOrderItems,
         addr_line1: String(line1 || "").substring(0, 500),
         addr_line2: String(line2 || "").substring(0, 500),
         addr_city: String(city || "").substring(0, 500),
         addr_county: String(state || "").substring(0, 500),
         addr_state: String(state || "").substring(0, 500),
         addr_postal_code: String(postal_code || "").substring(0, 100),
-        addr_country: String(country || "").substring(0, 100),
-        customer_name: `${firstName} ${lastName}`.trim().substring(0, 500),
-        locale: String(locale || 'ro').substring(0, 10),
+        addr_country: normalizedCountry.substring(0, 100),
+        customer_name: `${firstName || ""} ${lastName || ""}`.trim().substring(0, 500),
+        locale: safeLocale,
         firstName: String(firstName || "").substring(0, 100),
         lastName: String(lastName || "").substring(0, 100),
         email: String(email || "").substring(0, 255),
-        priority_processing: priority_processing ? "yes" : "no",
-        gift_packaging: gift_packaging ? "yes" : "no",
-        gift_message: String(gift_message || "").substring(0, 500)
-      }
+        priority_processing: !digitalOnly && priority_processing ? "yes" : "no",
+        gift_packaging: !digitalOnly && gift_packaging ? "yes" : "no",
+        gift_message: !digitalOnly ? String(gift_message || "").substring(0, 500) : "",
+      },
     };
 
-    if (email && email.trim() !== "") {
-      updatePayload.receipt_email = email.trim();
+    if (email && String(email).trim() !== "") {
+      updatePayload.receipt_email = String(email).trim();
     }
 
-    if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY.includes('dummy')) {
-      return NextResponse.json({ success: true, stripeDisabled: true });
+    const persistSessionBackup = () =>
+      backupCheckoutSessionForPI({
+        paymentIntentId,
+        email: email || "",
+        firstName: firstName || "",
+        lastName: lastName || "",
+        phone: phone || "",
+        line1: line1 || "",
+        line2: line2 || "",
+        city: city || "",
+        state: state || "",
+        postalCode: postal_code || "",
+        country: normalizedCountry,
+        shippingType: effectiveShippingType,
+        carrierId: effectiveCarrierId || undefined,
+        branchId: effectiveBranchId || undefined,
+        branchName: effectiveBranchName || undefined,
+        items: serverValidatedItems,
+        totalAmount: result.total / multiplier,
+        currency: safeCurrency,
+      });
+
+    if (!isStripeConfigured()) {
+      await persistSessionBackup();
+      return NextResponse.json({
+        success: true,
+        stripeDisabled: true,
+        calculatedAmount: result.total / multiplier,
+      });
     }
 
+    const stripe = getStripeClient();
     const existingPi = await stripe.paymentIntents.retrieve(paymentIntentId);
-    if (!['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(existingPi.status)) {
-      return NextResponse.json({ success: true, status: existingPi.status });
+    if (!clientSecret || !existingPi.client_secret || String(clientSecret).trim() !== existingPi.client_secret) {
+      return NextResponse.json(
+        { error: "Invalid or missing payment session credential" },
+        { status: 403 }
+      );
     }
 
-    await stripe.paymentIntents.update(paymentIntentId, updatePayload);
+    if (!["requires_payment_method", "requires_confirmation", "requires_action"].includes(existingPi.status)) {
+      await persistSessionBackup();
+      return NextResponse.json({
+        success: true,
+        status: existingPi.status,
+        calculatedAmount: result.total / multiplier,
+      });
+    }
 
-    return NextResponse.json({ success: true });
+    await Promise.all([
+      stripe.paymentIntents.update(paymentIntentId, updatePayload),
+      persistSessionBackup(),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      calculatedAmount: result.total / multiplier,
+    });
   } catch (error) {
-    console.error("❌ Stripe update error:", error);
+    console.error("❌ Stripe update error:", error instanceof Error ? error.message : error);
     const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
     return NextResponse.json({ error: `Backend Error: ${errorDetails}` }, { status: 500 });
   }

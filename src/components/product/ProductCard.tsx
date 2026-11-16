@@ -12,8 +12,38 @@ import { formatPrice } from "@/utils/currency";
 import { getProductPrice } from "@/utils/pricing";
 import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { cn, getVariantColorClass, localizeBadge } from "@/lib/utils";
+import { cn, getVariantColorClass } from "@/lib/utils";
 import { isWideProductImage } from "@/lib/product-images";
+import { isDigitalProgramItem } from "@/lib/programs";
+
+function LanguageFlagSvg({ isEnglish, className = "w-5 h-3.5" }: { isEnglish: boolean; className?: string }) {
+  if (isEnglish) {
+    return (
+      <svg
+        viewBox="0 0 60 40"
+        className={cn("rounded-[3px] shadow-2xs border border-black/15 shrink-0", className)}
+        aria-hidden="true"
+      >
+        <rect width="60" height="40" fill="#012169" />
+        <path d="M0,0 L60,40 M60,0 L0,40" stroke="#FFFFFF" strokeWidth="7" />
+        <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="3.5" />
+        <path d="M30,0 V40 M0,20 H60" stroke="#FFFFFF" strokeWidth="11" />
+        <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      viewBox="0 0 24 16"
+      className={cn("rounded-[3px] shadow-2xs border border-black/15 shrink-0", className)}
+      aria-hidden="true"
+    >
+      <rect width="8" height="16" x="0" fill="#002B7F" />
+      <rect width="8" height="16" x="8" fill="#FCD116" />
+      <rect width="8" height="16" x="16" fill="#CE1126" />
+    </svg>
+  );
+}
 
 interface ProductCardProps {
   product: Product;
@@ -34,9 +64,10 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
   const sizeOptions = product.bundleVariants?.size?.options || [];
   const hasSizes = sizeOptions.length > 0;
   const isTrueBundle = Boolean(product.bundleVariants?.flavor?.options?.length);
+  const isDigital = isDigitalProgramItem(product);
   const [isAdded, setIsAdded] = useState(false);
   const [selectingVariant, setSelectingVariant] = useState(false);
-  const [selectedModalOptIdx, setSelectedModalOptIdx] = useState(0);
+  const [selectedModalOptIdx, setSelectedModalOptIdx] = useState(() => (locale === 'en' && isDigital ? 1 : 0));
   const [selectedModalSize, setSelectedModalSize] = useState<string>(() =>
     sizeOptions.includes("L") ? "L" : (sizeOptions[0] || "")
   );
@@ -45,6 +76,18 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
   useEffect(() => {
     setCurrentImage(product.image);
   }, [product.image]);
+
+  useEffect(() => {
+    if (isDigital && product.variants?.options?.length) {
+      const targetEng = locale === 'en';
+      const idx = product.variants.options.findIndex((o: any) => {
+        const raw = typeof o.name === 'object' ? `${o.name.en || ''} ${o.name.ro || ''}` : String(o.name || '');
+        const isEngOpt = raw.toLowerCase().includes('eng');
+        return targetEng ? isEngOpt : !isEngOpt;
+      });
+      setSelectedModalOptIdx(idx >= 0 ? idx : (targetEng ? 1 : 0));
+    }
+  }, [locale, isDigital, product.variants?.options]);
 
   // Stable reviews count based on ID to prevent hydration mismatches and flickering
   const stableReviewsCount = Math.abs(
@@ -65,12 +108,21 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
       return;
     }
 
-    // If product has variants, show selection modal
+    // If product has variants (including digital language options), open selection modal cleanly
     if (product.variants?.options && product.variants.options.length > 0) {
-      const matchedIdx = product.variants.options.findIndex((o) => o.image && o.image === currentImage);
-      setSelectedModalOptIdx(matchedIdx >= 0 ? matchedIdx : 0);
+      if (!isDigital) {
+        const sortedOpts = [...product.variants.options].sort(
+          (a: any, b: any) => (a.stock_status === 'sold_out' ? 1 : 0) - (b.stock_status === 'sold_out' ? 1 : 0)
+        );
+        const matchedIdx = sortedOpts.findIndex((o) => o.image && o.image === currentImage);
+        setSelectedModalOptIdx(matchedIdx >= 0 ? matchedIdx : 0);
+      }
       setSelectingVariant(true);
     } else {
+      const isSoftStock = Boolean((product as any).metadata?.soft_stock_tracking);
+      if (product.is_active === false || (!isSoftStock && typeof product.stock_quantity === 'number' && product.stock_quantity <= 0 && (product as any).stock_status !== 'preorder')) {
+        return;
+      }
       addItem(product);
       setIsAdded(true);
       setTimeout(() => setIsAdded(false), 2000);
@@ -90,7 +142,8 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
     addItem(product, {
       name: finalName,
       image: variant.image,
-      imageIndex: variant.imageIndex !== undefined ? variant.imageIndex : (product.images?.findIndex((img: string) => img === variant.image) ?? 0)
+      imageIndex: variant.imageIndex !== undefined ? variant.imageIndex : (product.images?.findIndex((img: string) => img === variant.image) ?? 0),
+      stock_status: variant.stock_status,
     });
     setSelectingVariant(false);
     setIsAdded(true);
@@ -147,20 +200,20 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
         </Link>
         
         {/* Style 2026 Quick Add Button */}
-        <div className="absolute right-2 bottom-2 md:right-4 md:bottom-4 z-20">
-          <motion.button 
+        <div className="absolute right-2.5 bottom-2.5 md:right-3.5 md:bottom-3.5 z-20">
+          <motion.button
+            type="button"
             onClick={handleAdd}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className={`p-3 rounded-xl transform-gpu md:opacity-0 md:translate-y-2 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-300 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/10 flex items-center justify-center overflow-hidden`}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            className={cn(
+              "w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl flex items-center justify-center md:opacity-0 md:translate-y-2 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-300 shadow-[0_6px_20px_rgba(0,0,0,0.35)] border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e32f8c]",
+              isAdded
+                ? "bg-emerald-500 border-emerald-500 text-white"
+                : "bg-white hover:bg-[#e32f8c] text-black hover:text-white border-black/15 hover:border-[#e32f8c]"
+            )}
             aria-label={t('add_to_cart')}
           >
-            {/* Composited background transition */}
-            <div 
-              className={`absolute inset-0 transition-opacity duration-300 ${isAdded ? 'opacity-100 bg-[#f97316]' : 'opacity-100 bg-white'}`} 
-            />
-            {/* Composited icon/text layer */}
-            <div className={`relative z-10 transition-colors duration-300 ${isAdded ? 'text-white' : 'text-black'}`}>
             <div className="relative w-4 h-4 md:w-5 md:h-5 flex items-center justify-center">
               <AnimatePresence mode="popLayout">
                 {isAdded ? (
@@ -186,8 +239,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                 )}
               </AnimatePresence>
             </div>
-          </div>
-        </motion.button>
+          </motion.button>
         </div>
       </div>
         );
@@ -201,10 +253,15 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
           </h3>
         </Link>
         
-        {/* Variant Dots or Model Count Pill */}
+        {/* Variant Dots or Separate Flag Options */}
         {product.variants?.options && product.variants.type !== 'size' && (
-          <div className="flex items-center justify-center gap-1.5 mt-1.5 mb-1 min-h-[20px]">
-            {product.variants.type === 'design' ? (
+          <div className="flex items-center justify-center gap-2 mt-1.5 mb-1 min-h-[22px]">
+            {isDigital ? (
+              <span className="inline-flex items-center gap-2 pointer-events-none select-none">
+                <LanguageFlagSvg isEnglish={true} className="w-[18px] h-[12px] opacity-90" />
+                <LanguageFlagSvg isEnglish={false} className="w-[18px] h-[12px] opacity-90" />
+              </span>
+            ) : product.variants.type === 'design' ? (
               <button
                 type="button"
                 onClick={(e) => {
@@ -299,22 +356,26 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                 (a: any, b: any) => (a.stock_status === 'sold_out' ? 1 : 0) - (b.stock_status === 'sold_out' ? 1 : 0)
               );
 
-              const isSize = options.some((opt: any) => {
-                const n = (typeof opt.name === 'object' ? (opt.name[locale] || opt.name['ro']) : opt.name).toLowerCase();
-                return ['s', 'm', 'l', 'xl', 'xxl'].includes(n) || n.includes('marime') || n.includes('size');
-              });
+              const isSize =
+                product.variants?.type === 'size' ||
+                options.some((opt: any) => {
+                  const n = (typeof opt.name === 'object' ? (opt.name[locale] || opt.name['ro']) : opt.name).toLowerCase();
+                  return ['s', 'm', 'l', 'xl', 'xxl', '2xl', 'xs'].includes(n) || n.includes('marime') || n.includes('size');
+                });
               const isDesign = product.variants?.type === 'design';
               const activeOpt = options[selectedModalOptIdx] || options[0];
               const previewImg = activeOpt?.image || product.image;
               const isWidePreview = isWideProductImage(previewImg);
 
-              const titleText = hasSizes
-                ? (locale === 'ro' ? 'Alege Modelul & Mărimea' : 'Select Design & Size')
-                : isSize
-                  ? (locale === 'ro' ? 'Alegeți Mărimea' : 'Select Size')
-                  : isDesign
-                    ? (locale === 'ro' ? 'Alegeți Modelul' : 'Select Design')
-                    : (locale === 'ro' ? 'Alegeți Culoarea' : 'Select Color');
+              const titleText = isDigital
+                ? (locale === 'ro' ? 'Alege Limba' : 'Select Language')
+                : hasSizes
+                  ? (locale === 'ro' ? 'Alege Modelul & Mărimea' : 'Select Design & Size')
+                  : isSize
+                    ? (locale === 'ro' ? 'Alegeți Mărimea' : 'Select Size')
+                    : isDesign
+                      ? (locale === 'ro' ? 'Alegeți Modelul' : 'Select Design')
+                      : (locale === 'ro' ? 'Alegeți Culoarea' : 'Select Color');
 
               return (
                 <>
@@ -368,7 +429,9 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                           )}
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            {isDesign && opt.image ? (
+                            {isDigital ? (
+                              <LanguageFlagSvg isEnglish={localizedName.toLowerCase().includes('eng')} />
+                            ) : isDesign && opt.image ? (
                               <div className="relative w-12 h-8 rounded-md bg-black border border-black/15 overflow-hidden shrink-0">
                                 <Image src={opt.image} alt={localizedName} fill sizes="48px" className="object-contain p-0.5" />
                               </div>
@@ -385,12 +448,12 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                               )}>
                                 {localizedName}
                               </span>
-                              {(opt.badge || isSoldOut) && (
+                              {(isSoldOut || opt.stock_status === "preorder") && (
                                 <span className={cn(
                                   "text-[10px] font-black uppercase tracking-widest mt-0.5",
-                                  isSoldOut ? "text-red-500" : "text-[#e32f8c]"
+                                  isSoldOut ? "text-red-500" : "text-amber-600"
                                 )}>
-                                  {isSoldOut ? (locale === "en" ? "SOLD OUT" : "STOC EPUIZAT") : localizeBadge(opt.badge, locale)}
+                                  {isSoldOut ? (locale === "en" ? "SOLD OUT" : "STOC EPUIZAT") : (locale === "en" ? "PRE-ORDER" : "PRECOMANDĂ")}
                                 </span>
                               )}
                             </div>

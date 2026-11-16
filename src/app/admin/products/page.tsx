@@ -10,6 +10,7 @@ import { toggleProductStatus } from '@/app/actions/admin-products';
 import { useRouter } from 'next/navigation';
 import ImageCropper from '@/components/ui/ImageCropper';
 import toast from 'react-hot-toast';
+import { TeeStockMatrixCard } from '@/components/admin/TeeStockMatrixCard';
 
 function VariantRow({ v, variants, setVariants, setCroppingImage, variantType }: { v: any, variants: any[], setVariants: any, setCroppingImage: any, variantType?: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -197,7 +198,8 @@ export default function ProductsPage() {
         price: `${p.price} RON`,
         variants: p.variants?.options?.length || 0,
         rawVariants: p.variants?.options || [],
-        variant_type: p.variants?.type || 'flavor'
+        variant_type: p.variants?.type || 'flavor',
+        metadata: p.metadata || null
       }));
       setProducts(formatted);
     } catch (err) {
@@ -213,6 +215,56 @@ export default function ProductsPage() {
 
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
+  const [savingMatrix, setSavingMatrix] = useState(false);
+
+  const teeStockProduct = useMemo(
+    () =>
+      products.find(
+        (p) => p.slug === 'tricou-trenzone' || Boolean(p.metadata?.variant_stock)
+      ) || null,
+    [products]
+  );
+
+  const handleSaveTeeMatrix = async (
+    nextMatrix: Record<string, Record<string, number>>,
+    totalStock: number
+  ) => {
+    if (!teeStockProduct) return;
+    setSavingMatrix(true);
+    try {
+      const nextMetadata = {
+        ...(teeStockProduct.metadata || {}),
+        soft_stock_tracking: true,
+        variant_stock: nextMatrix,
+      };
+      const res = await fetch('/api/admin/data?action=update-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: teeStockProduct.id,
+          slug: teeStockProduct.slug,
+          stock_quantity: totalStock,
+          metadata: nextMetadata,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Eroare la salvarea stocului');
+      }
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === teeStockProduct.id
+            ? { ...p, inventory: totalStock, metadata: nextMetadata }
+            : p
+        )
+      );
+      toast.success(`Stoc tricouri salvat (${totalStock} buc. total)`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la salvarea stocului');
+    } finally {
+      setSavingMatrix(false);
+    }
+  };
 
   const handleToggleStatus = async (e: React.MouseEvent, product: any) => {
     e.stopPropagation();
@@ -599,6 +651,20 @@ export default function ProductsPage() {
         </div>
       </div>
 
+      {/* 📊 INVENTAR TRICOURI (5 Modele × 5 Mărimi) */}
+      {teeStockProduct && (
+        <TeeStockMatrixCard
+          productName={teeStockProduct.name}
+          initialMatrix={teeStockProduct.metadata?.variant_stock}
+          initialSold={teeStockProduct.metadata?.variant_sold}
+          models={(teeStockProduct.rawVariants || [])
+            .map((o: any) => (typeof o.name === 'object' ? (o.name.ro || o.name.en) : String(o.name || '')))
+            .filter(Boolean)}
+          saving={savingMatrix}
+          onSave={handleSaveTeeMatrix}
+        />
+      )}
+
       {/* 🛠️ EDIT MODAL */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -647,6 +713,50 @@ export default function ProductsPage() {
                 </div>
               </div>
 
+              {selectedProduct.id === 'nou' && (
+                <div className="space-y-2">
+                  <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Tip Produs</label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProduct({
+                        ...selectedProduct,
+                        is_digital: false,
+                        specs_summary: { ...(selectedProduct.specs_summary || {}), is_digital: false },
+                        weight: selectedProduct.weight || 450,
+                      })}
+                      className={`px-3 py-2.5 rounded-xl border text-left transition-all ${
+                        !(selectedProduct.is_digital || selectedProduct.specs_summary?.is_digital)
+                          ? 'bg-[#e32f8c]/10 border-[#e32f8c] text-[#e32f8c]'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="text-xs font-black uppercase tracking-wider">Produs Fizic</div>
+                      <div className="text-[11px] font-medium opacity-80">Livrare Curier</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProduct({
+                        ...selectedProduct,
+                        is_digital: true,
+                        specs_summary: { ...(selectedProduct.specs_summary || {}), is_digital: true },
+                        inventory: 9999,
+                        weight: 0,
+                        variant_type: 'language',
+                      })}
+                      className={`px-3 py-2.5 rounded-xl border text-left transition-all ${
+                        (selectedProduct.is_digital || selectedProduct.specs_summary?.is_digital)
+                          ? 'bg-[#e32f8c]/10 border-[#e32f8c] text-[#e32f8c]'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="text-xs font-black uppercase tracking-wider">Program Digital</div>
+                      <div className="text-[11px] font-medium opacity-80">Livrare Email PDF</div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className={`space-y-2 ${selectedProduct.variant_type === 'size' ? 'col-span-2' : ''}`}>
                   <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Preț (RON)</label>
@@ -657,7 +767,7 @@ export default function ProductsPage() {
                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                   />
                 </div>
-                {selectedProduct.variant_type !== 'size' && (
+                {selectedProduct.variant_type !== 'size' && !(selectedProduct.is_digital || selectedProduct.specs_summary?.is_digital) && (
                   <div className="space-y-2">
                     <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Inventar Total</label>
                     <input 

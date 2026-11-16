@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { BaseEmailLayout } from './BaseEmailLayout';
 import { resolveItemImage } from '@/lib/product-images';
+import { getSiteUrl } from '@/lib/site-config';
 
 interface ReviewEmailTemplateProps {
   orderId: string;
@@ -21,12 +22,12 @@ interface ReviewEmailTemplateProps {
 }
 
 export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> = ({
-  orderId,
-  customerName,
-  items,
+  orderId = '',
+  customerName = '',
+  items = [],
   locale = 'ro',
   templateData,
-  baseUrl = "https://www.trenzone.fit",
+  baseUrl = getSiteUrl(),
   userEmail
 }) => {
   const isEn = locale === 'en';
@@ -35,13 +36,18 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
   const bodyText = isEn ? templateData?.body_en : templateData?.body_ro;
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
 
+  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
+  const safeOrderId = String(orderId || '');
+  const replaceVars = (text: string) =>
+    text.replaceAll('{{name}}', firstCustomerName).replaceAll('{{id}}', safeOrderId);
+
   const defaultHeading = isEn ? "HOW WAS YOUR EXPERIENCE?" : "CUM A FOST EXPERIENȚA TA?";
-  const safeHeading = (headingText || defaultHeading).replace('{{name}}', customerName.split(' ')[0] || '');
+  const safeHeading = replaceVars(headingText || defaultHeading);
 
   const defaultBody = isEn
     ? "We would love to hear how your new gear feels under heavy training. Your review helps us and the community, and it only takes a few seconds."
     : "Ne-ar ajuta enorm dacă ne-ai lăsa câteva cuvinte despre cum se simte noul tău echipament la antrenament. Părerea ta contează pentru întreaga comunitate de forță.";
-  const safeBody = (bodyText || defaultBody).replace('{{name}}', customerName.split(' ')[0] || '');
+  const safeBody = replaceVars(bodyText || defaultBody);
 
   // Scale texts (Dislike / Love it)
   const dislikeText = ctaText?.includes('|') ? ctaText.split('|')[0]?.trim() : (isEn ? "Dislike it" : "Nu-mi place");
@@ -50,14 +56,17 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
 
   const safeItems = Array.isArray(items) && items.length > 0 
     ? items 
-    : [{ name: 'X10 Elbow Wraps — Purple', slug: 'x10-elbow-wraps', image: '/images/products/x10_elbow_wraps_purple_1.webp' }];
+    : [{ name: 'X10 Elbow Wraps — Purple', slug: 'x10-elbow-wraps', image: '/images/products/x10_elbow_wraps_purple.webp' }];
 
   const isMultiProduct = safeItems.length > 1;
 
   // Helper to resolve product slug safely
   const resolveSlug = (item: any) => {
-    if (item.slug && typeof item.slug === 'string' && item.slug.trim()) return item.slug;
-    const nameLower = String(item.name || '').toLowerCase();
+    if (item?.slug && typeof item.slug === 'string' && item.slug.trim()) return item.slug;
+    const rawName = typeof item?.name === 'object' && item.name !== null
+      ? (item.name[locale] || item.name.en || item.name.ro || '')
+      : (item?.name || '');
+    const nameLower = String(rawName).toLowerCase();
     if (nameLower.includes('wrist') || nameLower.includes('încheietur') || nameLower.includes('incheietur')) return 'x10-wrist-wraps';
     if (nameLower.includes('centur') || nameLower.includes('belt')) return 'centura-powerlifting';
     if (nameLower.includes('tricou') || nameLower.includes('t-shirt') || nameLower.includes('tshirt')) return 'tricou-trenzone';
@@ -77,7 +86,7 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
       if (baseUrl) return `${baseUrl}${img.startsWith('/') ? '' : '/'}${img}`;
       return img;
     }
-    return '/images/products/x10_elbow_wraps_purple_1.webp';
+    return '/images/products/x10_elbow_wraps_purple.webp';
   };
 
   return (

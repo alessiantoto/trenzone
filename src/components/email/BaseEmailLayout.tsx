@@ -1,10 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
 import * as React from 'react';
+import { getSiteUrl } from '@/lib/site-config';
 
 interface BaseEmailLayoutProps {
   children: React.ReactNode;
   locale: 'ro' | 'en';
-  baseUrl: string;
+  baseUrl?: string;
   userEmail?: string;
   previewText?: string;
 }
@@ -29,7 +30,7 @@ import { Html, Head, Body, Preview } from '@react-email/components';
 export const BaseEmailLayout: React.FC<Readonly<BaseEmailLayoutProps>> = ({ 
   children, 
   locale = 'ro', 
-  baseUrl = "https://www.trenzone.fit",
+  baseUrl = getSiteUrl(),
   userEmail,
   previewText
 }) => {

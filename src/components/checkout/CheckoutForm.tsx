@@ -16,7 +16,7 @@ import { useCartStore, isPreorder } from "@/store/useCartStore";
 import { ChevronRight, Truck, MapPin, ShieldCheck, Check } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter, Link } from "@/i18n/routing";
-import { getShippingServices, getLocalizedServiceName, getShippingCost, isServiceAvailable, ParcelMetrics, COUNTRY_SERVICES, ALLOWED_SHIPPING_COUNTRIES } from "@/lib/shipping-config";
+import { getShippingServices, getLocalizedServiceName, getShippingCost, isServiceAvailable, ParcelMetrics, COUNTRY_SERVICES, ALLOWED_SHIPPING_COUNTRIES, EXPRESS_ALLOWED_COUNTRIES, toStripeIsoCountryCode, isEuCustomsCountry } from "@/lib/shipping-config";
 import { useRegionStore } from "@/store/useRegionStore";
 import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { formatPrice } from "@/utils/currency";
@@ -26,7 +26,46 @@ import { trackCheckoutSession } from "@/app/actions/checkout-tracking";
 import { getSingleFlavorImage } from "@/lib/product-images";
 import { SamedayLockerSelector } from "./SamedayLockerSelector";
 import { cn } from "@/lib/utils";
-import { calculateOrderTotal, CartItem } from "@/lib/cart-calculations";
+import { calculateOrderTotal, CartItem, getEffectiveItemWeight, getFreeShippingThreshold } from "@/lib/cart-calculations";
+import { useShippingConfig } from "@/lib/use-shipping-config";
+import {
+  DIGITAL_PROGRAM_PRODUCTS,
+  PROGRAM_SLUGS,
+  PROGRAM_UUIDS,
+  isDigitalProgramItem,
+  isDigitalOnlyCart,
+  hasAnyDigitalProgram,
+  type DigitalProgramLanguage,
+} from "@/lib/programs";
+
+function LanguageFlagSvg({ isEnglish }: { isEnglish: boolean }) {
+  if (isEnglish) {
+    return (
+      <svg
+        viewBox="0 0 60 40"
+        className="w-4 h-3 rounded-[2px] shadow-2xs border border-black/15 shrink-0"
+        aria-hidden="true"
+      >
+        <rect width="60" height="40" fill="#012169" />
+        <path d="M0,0 L60,40 M60,0 L0,40" stroke="#FFFFFF" strokeWidth="7" />
+        <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="3.5" />
+        <path d="M30,0 V40 M0,20 H60" stroke="#FFFFFF" strokeWidth="11" />
+        <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      viewBox="0 0 24 16"
+      className="w-4 h-3 rounded-[2px] shadow-2xs border border-black/15 shrink-0"
+      aria-hidden="true"
+    >
+      <rect width="8" height="16" x="0" fill="#002B7F" />
+      <rect width="8" height="16" x="8" fill="#FCD116" />
+      <rect width="8" height="16" x="16" fill="#CE1126" />
+    </svg>
+  );
+}
 
 const COUNTIES_LIST = [
   "Alba", "Arad", "Argeș", "Bacău", "Bihor", "Bistrița-Năsăud", "Botoșani", "Brăila", "Brașov",
@@ -53,16 +92,69 @@ const COUNTRY_DATA: Record<string, { name: string; nameEn: string; flag: string;
   HR: { name: "Croația", nameEn: "Croatia", flag: "https://flagcdn.com/w40/hr.png", prefix: "+385", placeholder: "09X XXX XXXX" },
   SI: { name: "Slovenia", nameEn: "Slovenia", flag: "https://flagcdn.com/w40/si.png", prefix: "+386", placeholder: "0XX XXX XXX" },
   ES: { name: "Spania", nameEn: "Spain", flag: "https://flagcdn.com/w40/es.png", prefix: "+34", placeholder: "6XX XXX XXX" },
+  "ES-BI": { name: "Spania — Insulele Baleare", nameEn: "Spain — Balearic Islands", flag: "https://flagcdn.com/w40/es.png", prefix: "+34", placeholder: "6XX XXX XXX" },
+  IC: { name: "Spania — Insulele Canare", nameEn: "Spain — Canary Islands", flag: "https://flagcdn.com/w40/es.png", prefix: "+34", placeholder: "6XX XXX XXX" },
   PT: { name: "Portugalia", nameEn: "Portugal", flag: "https://flagcdn.com/w40/pt.png", prefix: "+351", placeholder: "9XX XXX XXX" },
-  GB: { name: "UK", nameEn: "United Kingdom", flag: "https://flagcdn.com/w40/gb.png", prefix: "+44", placeholder: "7XXX XXXXXX" },
+  GB: { name: "Marea Britanie", nameEn: "United Kingdom", flag: "https://flagcdn.com/w40/gb.png", prefix: "+44", placeholder: "7XXX XXXXXX" },
   SE: { name: "Suedia", nameEn: "Sweden", flag: "https://flagcdn.com/w40/se.png", prefix: "+46", placeholder: "7X XXX XX XX" },
   FI: { name: "Finlanda", nameEn: "Finland", flag: "https://flagcdn.com/w40/fi.png", prefix: "+358", placeholder: "4X XXX XX XX" },
   EE: { name: "Estonia", nameEn: "Estonia", flag: "https://flagcdn.com/w40/ee.png", prefix: "+372", placeholder: "5X XXX XXX" },
   LV: { name: "Letonia", nameEn: "Latvia", flag: "https://flagcdn.com/w40/lv.png", prefix: "+371", placeholder: "2X XXX XXX" },
   LT: { name: "Lituania", nameEn: "Lithuania", flag: "https://flagcdn.com/w40/lt.png", prefix: "+370", placeholder: "6X XXX XXX" },
   LU: { name: "Luxemburg", nameEn: "Luxembourg", flag: "https://flagcdn.com/w40/lu.png", prefix: "+352", placeholder: "6XX XXX XXX" },
-  CY: { name: "Cipru", nameEn: "Cyprus", flag: "https://flagcdn.com/w40/cy.png", prefix: "+357", placeholder: "9X XXX XXX" }
+  DK: { name: "Danemarca", nameEn: "Denmark", flag: "https://flagcdn.com/w40/dk.png", prefix: "+45", placeholder: "XX XX XX XX" },
+  IE: { name: "Irlanda", nameEn: "Ireland", flag: "https://flagcdn.com/w40/ie.png", prefix: "+353", placeholder: "8X XXX XXXX" },
+  IS: { name: "Islanda", nameEn: "Iceland", flag: "https://flagcdn.com/w40/is.png", prefix: "+354", placeholder: "XXX XXXX" },
+  MT: { name: "Malta", nameEn: "Malta", flag: "https://flagcdn.com/w40/mt.png", prefix: "+356", placeholder: "XXXX XXXX" },
+  NO: { name: "Norvegia", nameEn: "Norway", flag: "https://flagcdn.com/w40/no.png", prefix: "+47", placeholder: "XXX XX XXX" },
+  CH: { name: "Elveția", nameEn: "Switzerland", flag: "https://flagcdn.com/w40/ch.png", prefix: "+41", placeholder: "7X XXX XX XX" },
+  CY: { name: "Cipru", nameEn: "Cyprus", flag: "https://flagcdn.com/w40/cy.png", prefix: "+357", placeholder: "9X XXX XXX" },
+  TR: { name: "Turcia", nameEn: "Turkey", flag: "https://flagcdn.com/w40/tr.png", prefix: "+90", placeholder: "5XX XXX XXXX" },
+  UA: { name: "Ucraina", nameEn: "Ukraine", flag: "https://flagcdn.com/w40/ua.png", prefix: "+380", placeholder: "XX XXX XXXX" },
+  US: { name: "Statele Unite", nameEn: "United States", flag: "https://flagcdn.com/w40/us.png", prefix: "+1", placeholder: "XXX XXX XXXX" },
+  CA: { name: "Canada", nameEn: "Canada", flag: "https://flagcdn.com/w40/ca.png", prefix: "+1", placeholder: "XXX XXX XXXX" },
+  MX: { name: "Mexic", nameEn: "Mexico", flag: "https://flagcdn.com/w40/mx.png", prefix: "+52", placeholder: "XX XXXX XXXX" },
+  AR: { name: "Argentina", nameEn: "Argentina", flag: "https://flagcdn.com/w40/ar.png", prefix: "+54", placeholder: "11 XXXX XXXX" },
+  BR: { name: "Brazilia", nameEn: "Brazil", flag: "https://flagcdn.com/w40/br.png", prefix: "+55", placeholder: "XX XXXXX XXXX" },
+  CL: { name: "Chile", nameEn: "Chile", flag: "https://flagcdn.com/w40/cl.png", prefix: "+56", placeholder: "9 XXXX XXXX" },
+  IL: { name: "Israel", nameEn: "Israel", flag: "https://flagcdn.com/w40/il.png", prefix: "+972", placeholder: "5X XXX XXXX" },
+  AE: { name: "Emiratele Arabe Unite", nameEn: "United Arab Emirates", flag: "https://flagcdn.com/w40/ae.png", prefix: "+971", placeholder: "5X XXX XXXX" },
+  CN: { name: "China", nameEn: "China", flag: "https://flagcdn.com/w40/cn.png", prefix: "+86", placeholder: "1XX XXXX XXXX" },
+  HK: { name: "Hong Kong", nameEn: "Hong Kong", flag: "https://flagcdn.com/w40/hk.png", prefix: "+852", placeholder: "XXXX XXXX" },
+  IN: { name: "India", nameEn: "India", flag: "https://flagcdn.com/w40/in.png", prefix: "+91", placeholder: "XXXXX XXXXX" },
+  ID: { name: "Indonezia", nameEn: "Indonesia", flag: "https://flagcdn.com/w40/id.png", prefix: "+62", placeholder: "8XX XXXX XXXX" },
+  JP: { name: "Japonia", nameEn: "Japan", flag: "https://flagcdn.com/w40/jp.png", prefix: "+81", placeholder: "90 XXXX XXXX" },
+  MY: { name: "Malaezia", nameEn: "Malaysia", flag: "https://flagcdn.com/w40/my.png", prefix: "+60", placeholder: "1X XXX XXXX" },
+  SG: { name: "Singapore", nameEn: "Singapore", flag: "https://flagcdn.com/w40/sg.png", prefix: "+65", placeholder: "XXXX XXXX" },
+  KR: { name: "Coreea de Sud", nameEn: "South Korea", flag: "https://flagcdn.com/w40/kr.png", prefix: "+82", placeholder: "10 XXXX XXXX" },
+  TW: { name: "Taiwan", nameEn: "Taiwan", flag: "https://flagcdn.com/w40/tw.png", prefix: "+886", placeholder: "9XX XXX XXX" },
+  TH: { name: "Thailanda", nameEn: "Thailand", flag: "https://flagcdn.com/w40/th.png", prefix: "+66", placeholder: "8X XXX XXXX" },
+  AU: { name: "Australia", nameEn: "Australia", flag: "https://flagcdn.com/w40/au.png", prefix: "+61", placeholder: "4XX XXX XXX" },
+  NZ: { name: "Noua Zeelandă", nameEn: "New Zealand", flag: "https://flagcdn.com/w40/nz.png", prefix: "+64", placeholder: "2X XXX XXXX" },
+  ZA: { name: "Africa de Sud", nameEn: "South Africa", flag: "https://flagcdn.com/w40/za.png", prefix: "+27", placeholder: "8X XXX XXXX" },
 };
+
+function formatPhoneWithPrefix(rawPhone: string, phoneCountry: string): string {
+  const cleaned = String(rawPhone || "").trim().replace(/[\s().-]/g, "");
+  if (!cleaned) return "";
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("00")) return `+${cleaned.slice(2)}`;
+  const prefix = COUNTRY_DATA[phoneCountry]?.prefix || "";
+  const prefixDigits = prefix.replace(/\D/g, "");
+  if (prefixDigits && cleaned.startsWith(prefixDigits) && cleaned.length >= prefixDigits.length + 7) {
+    return `+${cleaned}`;
+  }
+  return `${prefix}${cleaned.replace(/^0+/, "")}`;
+}
+
+function normalizeRoText(val: string): string {
+  return String(val || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .trim();
+}
 
 declare global {
   interface Window {
@@ -79,9 +171,12 @@ const StripePaymentSection = ({
 }: any) => {
   const stripe = useStripe();
   const elements = useElements();
+  const cartItems = useCartStore((s) => s.items);
+  const showNonEuCustomsNote = !isDigitalOnlyCart(cartItems) && !isEuCustomsCountry(country);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const submittingStripeRef = useRef(false);
 
   useEffect(() => {
     setMounted(true);
@@ -103,51 +198,68 @@ const StripePaymentSection = ({
     }
   }, [elements, stripeSyncTrigger]);
 
-  const handleStripeSubmit = async (e: React.FormEvent) => {
+  const handleStripeSubmit = async (e: React.FormEvent, expressEvent?: any) => {
     e.preventDefault();
+    if (submittingStripeRef.current) return;
     if (!agreedToTerms) {
       triggerTermsError();
+      expressEvent?.paymentFailed?.({ reason: 'fail' });
       return;
     }
-    if (!stripe || !elements) return;
+    if (!stripe || !elements) {
+      expressEvent?.paymentFailed?.({ reason: 'fail' });
+      return;
+    }
 
+    submittingStripeRef.current = true;
     setLoading(true);
     setMessage(null);
 
     try {
-      // 🚀 THE SAFETY GATE: Force a final metadata sync to ensure Stripe has ALL data before we pay
-      // This solves the 'paid but not received' issue by ensuring items/name are attached.
+      // Force a final metadata + checkout_sessions sync before payment confirmation
       console.log("🛡️ [PAYMENT] Forcing final metadata sync...");
       await forceMetadataUpdate();
+      if (typeof elements.fetchUpdates === 'function') {
+        await elements.fetchUpdates();
+      }
 
-      const { error } = await stripe.confirmPayment({
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/${locale}/checkout/success`,
           receipt_email: email.trim(),
           shipping: {
-            name: `${firstName} ${lastName}`,
-            phone: (COUNTRY_DATA[phoneCountry]?.prefix || "") + phone.replace(/^0/, ""),
+            name: `${firstName} ${lastName}`.trim(),
+            phone: formatPhoneWithPrefix(phone, phoneCountry),
             address: { 
               line1, 
               line2: line2 || "", 
               city, 
               state, 
               postal_code: postalCode, 
-              country 
+              country: toStripeIsoCountryCode(country)
             }
           }
         },
+        redirect: 'if_required',
       });
 
       if (error) {
         console.error("❌ Stripe Payment Error:", error);
-        setMessage(error.message || t('payment_error'));
+        const errText = error.message || t('payment_error');
+        setMessage(errText);
+        expressEvent?.paymentFailed?.({ reason: 'fail', message: errText });
+      } else if (paymentIntent?.id) {
+        const piId = paymentIntent.id;
+        window.location.href = `${window.location.origin}/${locale}/checkout/success?payment_intent=${piId}&payment_intent_client_secret=${encodeURIComponent(clientSecret)}&redirect_status=${paymentIntent.status || 'succeeded'}`;
       }
     } catch (err: any) {
       console.error("❌ Payment System Error:", err);
-      setMessage(err.message || t('system_error'));
+      const errText = err.message || t('system_error');
+      setMessage(errText);
+      expressEvent?.paymentFailed?.({ reason: 'fail', message: errText });
     } finally {
+      submittingStripeRef.current = false;
       setLoading(false);
     }
   };
@@ -169,6 +281,7 @@ const StripePaymentSection = ({
               onClick={(e: any) => {
                 if (!agreedToTerms) {
                   triggerTermsError();
+                  e?.reject?.();
                   return;
                 }
                 e?.resolve?.();
@@ -179,7 +292,7 @@ const StripePaymentSection = ({
                   event?.paymentFailed?.({ reason: 'fail' });
                   return;
                 }
-                await handleStripeSubmit({ preventDefault: () => {} } as any);
+                await handleStripeSubmit({ preventDefault: () => {} } as any, event);
               }}
             />
           </div>
@@ -188,6 +301,17 @@ const StripePaymentSection = ({
       </div>
       
       {message && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-bold border border-red-100">{message}</div>}
+
+      {showNonEuCustomsNote && (
+        <div className="mx-4 p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 text-[11px] text-amber-950 font-medium leading-relaxed">
+          <span className="font-black uppercase tracking-wider text-[10px] text-amber-800 block mb-0.5">
+            {locale === 'ro' ? 'Notă vamală (Livrare Non-UE)' : 'Non-EU Customs & Import Notice'}
+          </span>
+          {locale === 'ro'
+            ? 'Pentru livrările în afara Uniunii Europene, eventualele taxe vamale, TVA/GST de import sau comisioane de vămuire din țara de destinație sunt suportate de destinatar la livrare.'
+            : 'For shipments outside the European Union, local customs duties, import VAT/GST, or courier clearance fees (if applicable) are payable by the recipient upon delivery.'}
+        </div>
+      )}
       
       {/* Checkboxes inside StripePaymentSection for better button control */}
       <div id="terms-checkbox-container" className="space-y-3 py-3 px-4 scroll-mt-24">
@@ -572,7 +696,6 @@ const CustomPrefixSelect = ({ value, onChange, options }: { value: string; onCha
 const Step1ExpressCheckout = ({
   locale,
   clientSecret,
-  forceMetadataUpdate,
   items,
   currency,
   csrfToken,
@@ -581,10 +704,184 @@ const Step1ExpressCheckout = ({
   const stripe = useStripe();
   const elements = useElements();
   const { appliedCoupon } = useCartStore();
+  const { country: storeCountry, priorityProcessing, giftPackaging } = useCheckoutStore();
+  const shippingConfig = useShippingConfig();
   const [expressReady, setExpressReady] = useState(false);
   const [hasWallets, setHasWallets] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const selectedCountryRef = useRef<string>('RO');
+  const initialExpressCountry = (storeCountry && ALLOWED_SHIPPING_COUNTRIES.includes(storeCountry) ? storeCountry : 'RO').toUpperCase();
+  const selectedCountryRef = useRef<string>(initialExpressCountry);
+  const pendingSyncRef = useRef<Promise<void> | null>(null);
+  const submittingExpressRef = useRef<boolean>(false);
+
+  const mapSerializedItems = (sourceItems: any[]) =>
+    (sourceItems || []).map((item: any) => ({
+      id: item.id,
+      slug: item.slug,
+      quantity: item.quantity,
+      price: item.price,
+      name: item.name,
+      is_digital: Boolean(item.is_digital || item?.specs_summary?.is_digital),
+      specs_summary: item.specs_summary,
+      selectedVariant: item.selectedVariant || (item.variant ? { name: item.variant } : null),
+      stock_status: item.stock_status || item.selectedVariant?.stock_status,
+      image: item.image
+    }));
+
+  const buildStep1Details = (targetCountry: string) => {
+    const normalizedCountry = (targetCountry || 'RO').toUpperCase();
+    const calculationItems: CartItem[] = (items || []).map((item: any) => ({
+      id: item.id,
+      slug: item.slug,
+      name: item.name,
+      quantity: Math.max(1, Number(item.quantity) || 1),
+      price: item.price,
+      is_digital: Boolean(item.is_digital || item?.specs_summary?.is_digital),
+      specs_summary: item.specs_summary,
+      weight: isDigitalProgramItem(item) ? 0 : (Number(item.weight) > 0 ? Number(item.weight) : 0.2),
+    }));
+
+    const calc = calculateOrderTotal(
+      calculationItems,
+      currency || 'RON',
+      normalizedCountry,
+      'hd',
+      appliedCoupon,
+      undefined,
+      {
+        priority_processing: priorityProcessing,
+        gift_packaging: giftPackaging,
+        payment_method: 'online',
+        free_shipping_ro_ron: shippingConfig.free_shipping_ro_ron,
+        free_shipping_intl_eur: shippingConfig.free_shipping_intl_eur,
+      }
+    );
+
+    const lineItems: any[] = [
+      { name: locale === 'ro' ? 'Produse' : 'Items', amount: calc.subtotal }
+    ];
+
+    if (calc.bundleDiscount > 0) {
+      lineItems.push({
+        name: locale === 'ro' ? `Reducere pachet (${calc.bundlePercent}%)` : `Bundle discount (${calc.bundlePercent}%)`,
+        amount: -calc.bundleDiscount
+      });
+    }
+
+    if (calc.couponDiscount > 0) {
+      lineItems.push({
+        name: `${locale === 'ro' ? 'Cupon' : 'Coupon'} (${appliedCoupon?.code || ''})`,
+        amount: -calc.couponDiscount
+      });
+    }
+
+    if (calc.cardDiscount > 0) {
+      lineItems.push({
+        name: locale === 'ro' ? 'Reducere card' : 'Card discount',
+        amount: -calc.cardDiscount
+      });
+    }
+
+    const optionsCost = calc.optionsCost || 0;
+    if (optionsCost > 0) {
+      lineItems.push({
+        name: locale === 'ro' ? 'Procesare prioritară / Ambalaj cadou' : 'Priority / Gift options',
+        amount: optionsCost
+      });
+    }
+
+    // Reconcile lineItems sum with total so Apple Pay / Google Pay never reject min-amount clamping
+    const targetNonShipping = calc.total - calc.shippingCost;
+    const currentLineItemsSum = lineItems.reduce((sum, li) => sum + Number(li.amount || 0), 0);
+    const delta = targetNonShipping - currentLineItemsSum;
+    if (delta !== 0) {
+      lineItems.push({
+        name: locale === 'ro' ? 'Ajustare minim comandă' : 'Minimum order adjustment',
+        amount: delta
+      });
+    }
+
+    const shippingLabel = calc.shippingCost === 0
+      ? (locale === 'ro' ? 'Livrare gratuită' : 'Free shipping')
+      : (normalizedCountry === 'RO'
+          ? (locale === 'ro' ? 'Sameday Standard (1-3 Zile)' : 'Sameday Standard (1-3 Days)')
+          : (locale === 'ro' ? 'Livrare Standard / Internațională' : 'Standard International Shipping'));
+
+    // Stripe ExpressCheckout requires `shippingRates` with `displayName` (not `shippingOptions` with `label`)
+    const shippingRates = [
+      {
+        id: 'standard-shipping',
+        displayName: shippingLabel,
+        amount: calc.shippingCost,
+        deliveryEstimate: {
+          minimum: { unit: 'day' as const, value: 1 },
+          maximum: { unit: 'day' as const, value: 3 },
+        },
+      }
+    ];
+
+    return { calc, lineItems, shippingRates };
+  };
+
+  const syncCountryShippingToPI = async (targetCountry: string) => {
+    if (!clientSecret || !elements) return;
+    const countryCode = (targetCountry || 'RO').toUpperCase();
+    const piId = clientSecret.split('_secret')[0];
+    const defaultCarrierId = COUNTRY_SERVICES[countryCode]?.hd?.[0]?.id || COUNTRY_SERVICES['DEFAULT']?.hd?.[0]?.id || (countryCode === 'RO' ? '7' : '106');
+    try {
+      const res = await fetch("/api/checkout/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken || ""
+        },
+        body: JSON.stringify({
+          paymentIntentId: piId,
+          clientSecret,
+          country: countryCode,
+          shipping_type: 'hd',
+          carrier_id: defaultCarrierId,
+          currency: currency || 'RON',
+          couponCode: appliedCoupon?.code?.trim()?.toUpperCase() || null,
+          priority_processing: priorityProcessing,
+          gift_packaging: giftPackaging,
+          locale: locale || 'ro',
+          items: mapSerializedItems(items || []),
+          payment_method: 'online',
+          isFinalSync: false
+        })
+      });
+      if (res.ok && typeof elements.fetchUpdates === 'function') {
+        await elements.fetchUpdates();
+      }
+    } catch (err) {
+      console.warn("Step1ExpressCheckout background country sync warning:", err);
+    }
+  };
+
+  const itemsSignature = useMemo(
+    () => (items || []).map((i: any) => `${i.id}:${i.quantity}:${i.selectedVariant?.name || ''}`).join('|'),
+    [items]
+  );
+
+  // Pre-sync PI whenever items, coupon or addons change while user is on Step 1
+  useEffect(() => {
+    if (!clientSecret || !elements) return;
+    syncCountryShippingToPI(selectedCountryRef.current || initialExpressCountry);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedCoupon?.code, priorityProcessing, giftPackaging, itemsSignature, clientSecret]);
+
+  const handleExpressClick = (event: any) => {
+    setErrorMsg(null);
+    const country = selectedCountryRef.current || 'RO';
+    const { lineItems, shippingRates } = buildStep1Details(country);
+    // Keep server PaymentIntent aligned with Express 'hd' + 'online' without blocking synchronous event.resolve
+    pendingSyncRef.current = syncCountryShippingToPI(country);
+    event.resolve({
+      lineItems,
+      shippingRates
+    });
+  };
 
   const handleShippingAddressChange = (event: any) => {
     try {
@@ -592,76 +889,8 @@ const Step1ExpressCheckout = ({
       const country = (addr.country || 'RO').toUpperCase();
       selectedCountryRef.current = country;
 
-      const calculationItems: CartItem[] = (items || []).map((item: any) => {
-        const bundleMatch = String(item.id || '').match(/^(.+)-bundle-(\d+)$/);
-        const bundleQty = bundleMatch ? parseInt(bundleMatch[2], 10) : 1;
-        let w = Number(item.weight) || 0;
-        if (w <= 0) {
-          w = 0.2 * bundleQty;
-        } else if (bundleQty > 1 && w <= 0.25) {
-          w = w * bundleQty;
-        }
-        return {
-          id: item.id,
-          quantity: Math.max(1, Number(item.quantity) || 1),
-          price: item.price,
-          weight: w
-        };
-      });
-
-      const calc = calculateOrderTotal(
-        calculationItems,
-        currency || 'RON',
-        country,
-        'hd',
-        appliedCoupon,
-        undefined,
-        { payment_method: 'online' }
-      );
-
-      const lineItems: any[] = [
-        { name: locale === 'ro' ? 'Produse' : 'Items', amount: calc.subtotal }
-      ];
-
-      if (calc.bundleDiscount > 0) {
-        lineItems.push({
-          name: locale === 'ro' ? `Reducere pachet (${calc.bundlePercent}%)` : `Bundle discount (${calc.bundlePercent}%)`,
-          amount: -calc.bundleDiscount
-        });
-      }
-
-      if (calc.couponDiscount > 0) {
-        lineItems.push({
-          name: `${locale === 'ro' ? 'Cupon' : 'Coupon'} (${appliedCoupon?.code || ''})`,
-          amount: -calc.couponDiscount
-        });
-      }
-
-      if (calc.cardDiscount > 0) {
-        lineItems.push({
-          name: locale === 'ro' ? 'Reducere card' : 'Card discount',
-          amount: -calc.cardDiscount
-        });
-      }
-
-      const shippingLabel = calc.shippingCost === 0 
-        ? (locale === 'ro' ? 'Livrare gratuită' : 'Free shipping') 
-        : (country === 'RO'
-            ? (locale === 'ro' ? 'Sameday Standard (1-3 Zile)' : 'Sameday Standard (1-3 Days)')
-            : (locale === 'ro' ? 'Livrare Standard / Internațională' : 'Standard International Shipping'));
-
-      // Stripe ExpressCheckout requires `shippingRates` with `displayName` (not `shippingOptions` with `label`)
-      const shippingRates = [
-        {
-          id: 'standard-shipping',
-          displayName: shippingLabel,
-          amount: calc.shippingCost,
-          deliveryEstimate: {
-            minimum: { unit: 'day' as const, value: 1 },
-            maximum: { unit: 'day' as const, value: 3 },
-          },
-        }
-      ];
+      const { shippingRates, lineItems } = buildStep1Details(country);
+      pendingSyncRef.current = syncCountryShippingToPI(country);
 
       event.resolve({
         shippingRates,
@@ -670,106 +899,30 @@ const Step1ExpressCheckout = ({
     } catch (err) {
       console.error("Step1ExpressCheckout shipping address change error:", err);
       // Must include lineItems in resolve to avoid infinite loading in Stripe Express Checkout
-      const fallbackCalc = calculateOrderTotal(
-        (items || []).map((item: any) => ({ id: item.id, quantity: Math.max(1, Number(item.quantity) || 1), price: item.price, weight: item.weight || 0.2 })),
-        currency || 'RON', selectedCountryRef.current || 'RO', 'hd', appliedCoupon, undefined, { payment_method: 'online' }
-      );
-      event.resolve({
-        shippingRates: [
-          {
-            id: 'standard-shipping',
-            displayName: locale === 'ro' ? 'Livrare Standard' : 'Standard Shipping',
-            amount: fallbackCalc.shippingCost || 1499,
-            deliveryEstimate: {
-              minimum: { unit: 'day' as const, value: 1 },
-              maximum: { unit: 'day' as const, value: 3 },
-            },
-          }
-        ],
-        lineItems: [{ name: locale === 'ro' ? 'Produse' : 'Items', amount: fallbackCalc.subtotal }]
-      });
+      const { shippingRates, lineItems } = buildStep1Details(selectedCountryRef.current || 'RO');
+      event.resolve({ shippingRates, lineItems });
     }
   };
 
   const handleShippingRateChange = (event: any) => {
     try {
-      const country = selectedCountryRef.current || 'RO';
-
-      const calculationItems: CartItem[] = (items || []).map((item: any) => {
-        const bundleMatch = String(item.id || '').match(/^(.+)-bundle-(\d+)$/);
-        const bundleQty = bundleMatch ? parseInt(bundleMatch[2], 10) : 1;
-        let w = Number(item.weight) || 0;
-        if (w <= 0) {
-          w = 0.2 * bundleQty;
-        } else if (bundleQty > 1 && w <= 0.25) {
-          w = w * bundleQty;
-        }
-        return {
-          id: item.id,
-          quantity: Math.max(1, Number(item.quantity) || 1),
-          price: item.price,
-          weight: w
-        };
-      });
-
-      const calc = calculateOrderTotal(
-        calculationItems,
-        currency || 'RON',
-        country,
-        'hd',
-        appliedCoupon,
-        undefined,
-        { payment_method: 'online' }
-      );
-
-      const lineItems: any[] = [
-        { name: locale === 'ro' ? 'Produse' : 'Items', amount: calc.subtotal }
-      ];
-
-      if (calc.bundleDiscount > 0) {
-        lineItems.push({
-          name: locale === 'ro' ? `Reducere pachet (${calc.bundlePercent}%)` : `Bundle discount (${calc.bundlePercent}%)`,
-          amount: -calc.bundleDiscount
-        });
-      }
-
-      if (calc.couponDiscount > 0) {
-        lineItems.push({
-          name: `${locale === 'ro' ? 'Cupon' : 'Coupon'} (${appliedCoupon?.code || ''})`,
-          amount: -calc.couponDiscount
-        });
-      }
-
-      if (calc.cardDiscount > 0) {
-        lineItems.push({
-          name: locale === 'ro' ? 'Reducere card' : 'Card discount',
-          amount: -calc.cardDiscount
-        });
-      }
-
+      const { lineItems } = buildStep1Details(selectedCountryRef.current || 'RO');
       event.resolve({ lineItems });
     } catch (err) {
       console.error("Step1ExpressCheckout shipping rate change error:", err);
-      // Fallback: must resolve with at least lineItems to prevent infinite loading
-      const fallbackCalc = calculateOrderTotal(
-        (items || []).map((item: any) => ({ id: item.id, quantity: Math.max(1, Number(item.quantity) || 1), price: item.price, weight: item.weight || 0.2 })),
-        currency || 'RON', selectedCountryRef.current || 'RO', 'hd', appliedCoupon, undefined, { payment_method: 'online' }
-      );
-      event.resolve({ lineItems: [{ name: locale === 'ro' ? 'Produse' : 'Items', amount: fallbackCalc.subtotal }] });
+      event.resolve({ lineItems: buildStep1Details(selectedCountryRef.current || 'RO').lineItems.slice(0, 1) });
     }
   };
 
   const handleConfirm = async (event: any) => {
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || submittingExpressRef.current) return;
+    submittingExpressRef.current = true;
     try {
-      const { error: submitError } = await elements.submit();
-      if (submitError) {
-        event?.paymentFailed?.({ message: submitError.message });
-        setErrorMsg(submitError.message || t('payment_error'));
-        return;
+      if (pendingSyncRef.current) {
+        await pendingSyncRef.current.catch(() => {});
       }
 
-      // If customer provided info via Apple Pay / Google Pay sheet, sync it to Stripe metadata
+      // Mandatory final metadata + checkout_sessions backup sync BEFORE elements.submit()
       const walletShipping = event?.shippingAddress;
       const walletBilling = event?.billingDetails;
       const walletEmail = walletBilling?.email || event?.payerEmail || '';
@@ -777,72 +930,86 @@ const Step1ExpressCheckout = ({
       const walletPhone = walletShipping?.phone || walletBilling?.phone || event?.payerPhone || event?.phone || '';
       const walletAddr = walletShipping?.address;
 
-      if (walletEmail || walletName || walletAddr) {
-        try {
-          const nameParts = walletName.trim().split(/\s+/);
-          const fName = nameParts[0] || '';
-          const lName = nameParts.slice(1).join(' ') || fName;
-          const countryCode = (walletAddr?.country || walletShipping?.country || selectedCountryRef.current || 'RO').toUpperCase();
-          const defaultCarrierId = COUNTRY_SERVICES[countryCode]?.hd?.[0]?.id || COUNTRY_SERVICES['DEFAULT']?.hd?.[0]?.id || (countryCode === 'RO' ? '7' : '106');
-          
-          await fetch("/api/checkout/update", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              "x-csrf-token": csrfToken || ""
-            },
-            body: JSON.stringify({
-              paymentIntentId: clientSecret.split('_secret')[0],
-              firstName: fName,
-              lastName: lName,
-              email: walletEmail,
-              phone: walletPhone,
-              line1: walletAddr?.line1 || '',
-              line2: walletAddr?.line2 || '',
-              city: walletAddr?.city || '',
-              state: walletAddr?.state || '',
-              postal_code: walletAddr?.postal_code || '',
-              country: countryCode,
-              shipping_type: 'hd',
-              carrier_id: defaultCarrierId,
-              currency: currency || 'RON',
-              couponCode: appliedCoupon?.code?.trim()?.toUpperCase() || null,
-              locale: locale || 'ro',
-              items: (items || []).map((item: any) => ({ 
-                id: item.id, 
-                quantity: item.quantity, 
-                price: item.price, 
-                name: item.name, 
-                selectedVariant: item.selectedVariant, 
-                image: item.image 
-              })),
-              payment_method: 'online',
-              isFinalSync: true
-            })
-          });
-        } catch (syncErr) {
-          console.warn("Wallet info sync warning:", syncErr);
-        }
-      } else if (forceMetadataUpdate) {
-        await forceMetadataUpdate();
+      const piId = clientSecret.split('_secret')[0];
+      const nameParts = walletName.trim().split(/\s+/).filter(Boolean);
+      const fName = nameParts[0] || '';
+      const lName = nameParts.slice(1).join(' ') || '-';
+      const countryCode = (walletAddr?.country || walletShipping?.country || selectedCountryRef.current || 'RO').toUpperCase();
+      const defaultCarrierId = COUNTRY_SERVICES[countryCode]?.hd?.[0]?.id || COUNTRY_SERVICES['DEFAULT']?.hd?.[0]?.id || (countryCode === 'RO' ? '7' : '106');
+
+      const syncRes = await fetch("/api/checkout/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken || ""
+        },
+        body: JSON.stringify({
+          paymentIntentId: piId,
+          clientSecret,
+          firstName: fName,
+          lastName: lName,
+          email: walletEmail,
+          phone: walletPhone,
+          line1: walletAddr?.line1 || '',
+          line2: walletAddr?.line2 || '',
+          city: walletAddr?.city || '',
+          state: walletAddr?.state || '',
+          postal_code: walletAddr?.postal_code || '',
+          country: countryCode,
+          shipping_type: 'hd',
+          carrier_id: defaultCarrierId,
+          currency: currency || 'RON',
+          couponCode: appliedCoupon?.code?.trim()?.toUpperCase() || null,
+          priority_processing: priorityProcessing,
+          gift_packaging: giftPackaging,
+          locale: locale || 'ro',
+          items: mapSerializedItems(items || []),
+          payment_method: 'online',
+          isFinalSync: true
+        })
+      });
+
+      if (!syncRes.ok) {
+        const errPayload = await syncRes.json().catch(() => null);
+        const errMsg = errPayload?.error || (locale === 'en'
+          ? 'Failed to synchronize order details before payment. Please try again.'
+          : 'Sincronizarea datelor comenzii înainte de plată a eșuat. Te rugăm să reîncerci.');
+        event?.paymentFailed?.({ reason: 'fail', message: errMsg });
+        setErrorMsg(errMsg);
+        return;
       }
 
-      const { error } = await stripe.confirmPayment({
+      if (typeof elements.fetchUpdates === 'function') {
+        await elements.fetchUpdates();
+      }
+
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        event?.paymentFailed?.({ reason: 'fail', message: submitError.message });
+        setErrorMsg(submitError.message || t('payment_error'));
+        return;
+      }
+
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         clientSecret,
         confirmParams: {
           return_url: `${window.location.origin}/${locale}/checkout/success`,
-        }
+        },
+        redirect: 'if_required',
       });
       if (error) {
-        event?.paymentFailed?.({ message: error.message });
+        event?.paymentFailed?.({ reason: 'fail', message: error.message });
         setErrorMsg(error.message || t('payment_error'));
       } else {
-        window.location.href = `${window.location.origin}/${locale}/checkout/success?payment_intent=${clientSecret.split('_secret')[0]}&payment_intent_client_secret=${encodeURIComponent(clientSecret)}&redirect_status=succeeded`;
+        const resolvedPiId = paymentIntent?.id || piId;
+        window.location.href = `${window.location.origin}/${locale}/checkout/success?payment_intent=${resolvedPiId}&payment_intent_client_secret=${encodeURIComponent(clientSecret)}&redirect_status=${paymentIntent?.status || 'succeeded'}`;
       }
     } catch (err: any) {
-      event?.paymentFailed?.({ message: err.message });
+      event?.paymentFailed?.({ reason: 'fail', message: err.message });
       setErrorMsg(err.message || "Eroare de sistem.");
+    } finally {
+      submittingExpressRef.current = false;
     }
   };
 
@@ -872,7 +1039,7 @@ const Step1ExpressCheckout = ({
               shippingAddressRequired: true,
               emailRequired: true,
               phoneNumberRequired: true,
-              allowedShippingCountries: ALLOWED_SHIPPING_COUNTRIES,
+              allowedShippingCountries: EXPRESS_ALLOWED_COUNTRIES,
             }}
             onReady={({ availablePaymentMethods }: any) => {
               setExpressReady(true);
@@ -884,6 +1051,7 @@ const Step1ExpressCheckout = ({
               setExpressReady(true);
               setHasWallets(false);
             }}
+            onClick={handleExpressClick}
             onShippingAddressChange={handleShippingAddressChange}
             onShippingRateChange={handleShippingRateChange}
             onConfirm={handleConfirm}
@@ -937,8 +1105,16 @@ export default function CheckoutForm({
   const locale = useLocale();
   const router = useRouter();
   // Hooks removed from here - will be used in StripePaymentSection
-  const { items, appliedCoupon, getTotals } = useCartStore();
+  const { items, addItem, removeItem, appliedCoupon, getTotals } = useCartStore();
   const { currency } = useRegionStore();
+  const shippingConfig = useShippingConfig();
+  const [step3ProgLang, setStep3ProgLang] = useState<DigitalProgramLanguage>(
+    locale === "en" ? "en" : "ro"
+  );
+
+  useEffect(() => {
+    setStep3ProgLang(locale === "en" ? "en" : "ro");
+  }, [locale]);
 
   const {
     email, setEmail, firstName, setFirstName, lastName, setLastName,
@@ -951,24 +1127,54 @@ export default function CheckoutForm({
 
   const [loading, setLoading] = useState(false);
   const isFirstRender = useRef(true);
+  const submittingCodRef = useRef(false);
   const [isUpdatingPaymentInfo, setIsUpdatingPaymentInfo] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToMarketing, setAgreedToMarketing] = useState(false);
   const [animateTerms, setAnimateTerms] = useState(false);
   const [isSamedayLockerOpen, setIsSamedayLockerOpen] = useState(false);
+  const [lockersEnabled, setLockersEnabled] = useState(false);
+  const [liveCatalog, setLiveCatalog] = useState<any[]>([]);
   // Incremented each time we update Stripe's PaymentIntent amount, to trigger fetchUpdates in StripePaymentSection
   const [stripeSyncTrigger, setStripeSyncTrigger] = useState(0);
 
-  const hasPreorderItems = useMemo(() => items.some(item => isPreorder(item, item.selectedVariant)), [items]);
-  const hasNormalItems = useMemo(() => items.some(item => !isPreorder(item, item.selectedVariant)), [items]);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/shipping-config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data?.config) {
+          setLockersEnabled(data.config.lockers_enabled === true);
+        }
+      })
+      .catch(() => {});
+    fetch("/api/products")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && Array.isArray(data?.products)) {
+          setLiveCatalog(data.products);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const lockersAllowed = lockersEnabled && country === "RO";
+
+  const digitalOnlyCart = useMemo(() => isDigitalOnlyCart(items), [items]);
+  const hasDigitalItems = useMemo(() => hasAnyDigitalProgram(items), [items]);
+  const hasPreorderItems = useMemo(() => items.some(item => !isDigitalProgramItem(item) && isPreorder(item, item.selectedVariant)), [items]);
+  const hasNormalItems = useMemo(() => items.some(item => !isDigitalProgramItem(item) && !isPreorder(item, item.selectedVariant)), [items]);
   const isMixedCart = hasPreorderItems && hasNormalItems;
 
   useEffect(() => {
-    if (hasPreorderItems && paymentMethod === 'cod') {
+    if (!isStripeDisabled && (hasPreorderItems || hasDigitalItems) && paymentMethod === 'cod') {
       setPaymentMethod('online');
     }
-  }, [hasPreorderItems, paymentMethod, setPaymentMethod]);
+  }, [hasPreorderItems, hasDigitalItems, paymentMethod, setPaymentMethod, isStripeDisabled]);
 
   const triggerTermsError = useCallback(() => {
     setAnimateTerms(true);
@@ -988,13 +1194,14 @@ export default function CheckoutForm({
   const autocompleteServiceRef = useRef<any>(null);
   const placesServiceRef = useRef<any>(null);
 
-  const [errors, setErrors] = useState<{ email?: boolean; address?: boolean; phone?: boolean; name?: boolean; firstName?: boolean; lastName?: boolean; city?: boolean; state?: boolean }>({});
+  const [errors, setErrors] = useState<{ email?: boolean; address?: boolean; phone?: boolean; name?: boolean; firstName?: boolean; lastName?: boolean; city?: boolean; state?: boolean; postalCode?: boolean }>({});
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent('checkout-shipping-change', { detail: { country, shippingType, serviceId: selectedServiceId, step: currentStep } }));
+      const effectiveShippingType = !lockersAllowed && shippingType === 'pudo' ? 'hd' : shippingType;
+      window.dispatchEvent(new CustomEvent('checkout-shipping-change', { detail: { country, shippingType: effectiveShippingType, serviceId: selectedServiceId, step: currentStep } }));
     }
-  }, [country, shippingType, selectedServiceId, currentStep]);
+  }, [country, shippingType, selectedServiceId, currentStep, lockersAllowed]);
 
   const pacStyles = `
     .pac-container { z-index: 10000 !important; border-radius: 16px !important; }
@@ -1018,12 +1225,15 @@ export default function CheckoutForm({
     const isCityValid = city.trim().length >= 2;
     const isPhoneValid = phone.trim().replace(/\D/g, '').length >= 8;
     const isStateValid = country !== 'RO' || (!!state && state.trim().length > 0);
+    const isPostalCodeValid = country === 'RO' || postalCode.trim().length >= 3;
 
-    setIsStep1Valid(!!(isEmailValid && isFirstNameValid && isLastNameValid && isAddressValid && isCityValid && isPhoneValid && isStateValid));
+    setIsStep1Valid(!!(isEmailValid && isFirstNameValid && isLastNameValid && isAddressValid && isCityValid && isPhoneValid && isStateValid && isPostalCodeValid));
 
-    const isStep2Valid = !!selectedServiceId && (shippingType === 'hd' || (shippingType === 'pudo' && !!selectedBranches[selectedServiceId]));
+    const availableForCountry = getShippingServices(country, shippingType, { lockersEnabled: lockersAllowed });
+    const isServiceValidForCountry = availableForCountry.some(s => s.id === selectedServiceId);
+    const isStep2Valid = !!selectedServiceId && isServiceValidForCountry && (shippingType === 'hd' || (lockersAllowed && shippingType === 'pudo' && !!selectedBranches[selectedServiceId]));
     setIsStep2Valid(isStep2Valid);
-  }, [email, firstName, lastName, line1, city, phone, state, country, selectedServiceId, shippingType, selectedBranches, setIsStep1Valid, setIsStep2Valid]);
+  }, [email, firstName, lastName, line1, city, phone, state, postalCode, country, selectedServiceId, shippingType, selectedBranches, lockersAllowed, setIsStep1Valid, setIsStep2Valid]);
 
   useEffect(() => {
     // Skip clearing on initial mount so we don't wipe out persisted state from useCheckoutStore
@@ -1041,14 +1251,25 @@ export default function CheckoutForm({
   }, [country, setLine1, setLine2, setCity, setState, setPostalCode, setPhoneCountry]);
 
   useEffect(() => {
-    if (country !== 'RO' && paymentMethod === 'cod') {
+    if (!isStripeDisabled && country !== 'RO' && paymentMethod === 'cod') {
       setPaymentMethod('online');
     }
-    if (country !== 'RO' && shippingType === 'pudo') {
-      setShippingType('hd');
-      setSelectedServiceId('');
+    if (!lockersAllowed && isSamedayLockerOpen) {
+      setIsSamedayLockerOpen(false);
     }
-  }, [country, paymentMethod, setPaymentMethod, shippingType, setShippingType, setSelectedServiceId]);
+    if (!lockersAllowed && shippingType === 'pudo') {
+      setShippingType('hd');
+    }
+    const effectiveType = !lockersAllowed ? 'hd' : shippingType;
+    const validServices = getShippingServices(country, effectiveType, { lockersEnabled: lockersAllowed });
+    if (!validServices.some(s => s.id === selectedServiceId)) {
+      if (effectiveType === 'hd' && validServices.length > 0) {
+        setSelectedServiceId(validServices[0].id);
+      } else {
+        setSelectedServiceId('');
+      }
+    }
+  }, [country, paymentMethod, setPaymentMethod, shippingType, setShippingType, selectedServiceId, setSelectedServiceId, isStripeDisabled, lockersAllowed, isSamedayLockerOpen]);
 
   const handlePredictionSelect = useCallback((prediction: any) => {
     if (!window.google?.maps?.places) return;
@@ -1093,10 +1314,12 @@ export default function CheckoutForm({
       setCity(postalTown || locality);
       if (adminArea) {
         if (country === 'RO') {
-          const matchedCounty = COUNTIES_LIST.find(c =>
-            adminArea.toLowerCase().includes(c.toLowerCase()) ||
-            c.toLowerCase().includes(adminArea.toLowerCase())
-          );
+          const normAdmin = normalizeRoText(adminArea);
+          const mappedAdmin = normAdmin.includes('bucharest') ? 'bucuresti' : normAdmin;
+          const matchedCounty = COUNTIES_LIST.find(c => {
+            const normC = normalizeRoText(c);
+            return mappedAdmin.includes(normC) || normC.includes(mappedAdmin);
+          });
           if (matchedCounty) setState(matchedCounty);
         } else {
           setState(adminArea);
@@ -1122,7 +1345,7 @@ export default function CheckoutForm({
 
     autocompleteServiceRef.current.getPlacePredictions({
       input,
-      componentRestrictions: { country: country.toLowerCase() },
+      componentRestrictions: { country: toStripeIsoCountryCode(country).toLowerCase() },
       types: ['address']
     }, (results: any) => {
       setPredictions(results || []);
@@ -1158,7 +1381,11 @@ export default function CheckoutForm({
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      if (digitalOnlyCart && currentStep === 4) {
+        setCurrentStep(1);
+      } else {
+        setCurrentStep(currentStep - 1);
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -1207,13 +1434,14 @@ export default function CheckoutForm({
   };
 
   // 🔄 SYNC STRIPE PAYMENT METHOD: Update Stripe's PaymentIntent amount when the user
-  // selects a payment method (online vs cod) so Apple Pay / Google Pay show the correct total
+  // selects online payment so Stripe & Express wallets match the final order total
   const syncStripePaymentMethod = async (method: 'online' | 'cod') => {
-    if (!clientSecret) return;
+    if (!clientSecret || method === 'cod') return;
     const paymentIntentId = clientSecret.split('_secret_')[0];
     if (!paymentIntentId) return;
     try {
       setIsUpdatingPaymentInfo(true);
+      const effectiveType = digitalOnlyCart ? 'hd' : (lockersAllowed ? shippingType : 'hd');
       const res = await fetch("/api/checkout/update", {
         method: "POST",
         headers: { 
@@ -1222,13 +1450,14 @@ export default function CheckoutForm({
         },
         body: JSON.stringify({
           paymentIntentId,
-          shipping_type: shippingType,
-          carrier_id: selectedServiceId,
-          branch_id: selectedBranches[selectedServiceId]?.id || "",
-          branch_name: selectedBranches[selectedServiceId]?.name || "",
+          clientSecret,
+          shipping_type: effectiveType,
+          carrier_id: digitalOnlyCart ? 'digital' : selectedServiceId,
+          branch_id: !digitalOnlyCart && lockersAllowed ? (selectedBranches[selectedServiceId]?.id || "") : "",
+          branch_name: !digitalOnlyCart && lockersAllowed ? (selectedBranches[selectedServiceId]?.name || "") : "",
           payment_method: method,
           firstName, lastName, email,
-          phone: (COUNTRY_DATA[phoneCountry]?.prefix || "") + phone.replace(/^0/, ""),
+          phone: formatPhoneWithPrefix(phone, phoneCountry),
           line1, line2, city, state, postal_code: postalCode, country,
           currency,
           couponCode: appliedCoupon?.code?.trim()?.toUpperCase(),
@@ -1236,12 +1465,11 @@ export default function CheckoutForm({
           gift_packaging: giftPackaging,
           gift_message: giftMessage,
           locale: locale || 'ro',
-          items: items.map(i => ({ id: i.id, name: i.name, quantity: i.quantity, price: i.price, image: i.image })),
+          items: items.map(i => ({ id: i.id, slug: i.slug, name: i.name, quantity: i.quantity, price: i.price, image: i.image, is_digital: Boolean(i.is_digital || (i as any)?.specs_summary?.is_digital), specs_summary: (i as any).specs_summary, selectedVariant: i.selectedVariant || null, stock_status: i.stock_status || i.selectedVariant?.stock_status })),
           isFinalSync: false
         }),
       });
       if (res.ok) {
-        // Trigger StripePaymentSection to call elements.fetchUpdates()
         setStripeSyncTrigger(prev => prev + 1);
       }
     } catch (err) {
@@ -1251,11 +1479,53 @@ export default function CheckoutForm({
     }
   };
 
+  const prevStepRef = useRef(currentStep);
+  const lastSyncedClientSecretRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prevStep = prevStepRef.current;
+    prevStepRef.current = currentStep;
+    const needsSyncForNewSecret = currentStep === 4 && clientSecret && lastSyncedClientSecretRef.current !== clientSecret;
+    if (currentStep === 4 && (prevStep !== 4 || needsSyncForNewSecret) && clientSecret && !isStripeDisabled) {
+      const effectiveMethod = country !== 'RO' || hasPreorderItems || hasDigitalItems ? 'online' : paymentMethod;
+      if (effectiveMethod !== paymentMethod) {
+        setPaymentMethod(effectiveMethod);
+      }
+      lastSyncedClientSecretRef.current = clientSecret;
+      syncStripePaymentMethod(effectiveMethod);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, clientSecret, isStripeDisabled]);
+
+  const mainItemsSignature = useMemo(
+    () => (items || []).map((i: any) => `${i.id}:${i.quantity}:${i.selectedVariant?.name || ''}`).join('|'),
+    [items]
+  );
+  const prevCouponRef = useRef(appliedCoupon?.code);
+  const prevItemsSigRef = useRef(mainItemsSignature);
+  useEffect(() => {
+    const couponChanged = prevCouponRef.current !== appliedCoupon?.code;
+    const itemsChanged = prevItemsSigRef.current !== mainItemsSignature;
+    if (couponChanged || itemsChanged) {
+      prevCouponRef.current = appliedCoupon?.code;
+      prevItemsSigRef.current = mainItemsSignature;
+      if (currentStep === 4 && clientSecret && !isStripeDisabled) {
+        syncStripePaymentMethod(paymentMethod);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedCoupon?.code, mainItemsSignature]);
+
   // 🚀 FINAL SYNC: Force a metadata update before actual payment confirmation
   // We define it in the main component to have access to all state
   const forceMetadataUpdate = async () => {
     try {
-      if (!clientSecret) return;
+      if (!clientSecret) {
+        throw new Error(
+          locale === 'en'
+            ? "Payment session is not initialized. Please refresh the page."
+            : "Sesiunea de plată nu este inițializată. Te rugăm să reîmprospătezi pagina."
+        );
+      }
       
       const paymentIntentId = clientSecret.split('_secret_')[0];
       
@@ -1269,15 +1539,16 @@ export default function CheckoutForm({
         },
         body: JSON.stringify({
           paymentIntentId,
-          items: items.map(item => ({ id: item.id, quantity: item.quantity, price: item.price, name: item.name, selectedVariant: item.selectedVariant, image: item.image })),
+          clientSecret,
+          items: items.map(item => ({ id: item.id, slug: item.slug, quantity: item.quantity, price: item.price, name: item.name, is_digital: Boolean(item.is_digital || (item as any)?.specs_summary?.is_digital), specs_summary: (item as any).specs_summary, selectedVariant: item.selectedVariant || null, stock_status: item.stock_status || item.selectedVariant?.stock_status, image: item.image })),
           couponCode: appliedCoupon?.code?.trim()?.toUpperCase(),
-          shipping_type: shippingType,
-          carrier_id: selectedServiceId,
-          branch_id: selectedBranches[selectedServiceId]?.id || "",
-          branch_name: selectedBranches[selectedServiceId]?.name || "",
+          shipping_type: digitalOnlyCart ? 'hd' : (lockersAllowed ? shippingType : 'hd'),
+          carrier_id: digitalOnlyCart ? 'digital' : selectedServiceId,
+          branch_id: !digitalOnlyCart && lockersAllowed ? (selectedBranches[selectedServiceId]?.id || "") : "",
+          branch_name: !digitalOnlyCart && lockersAllowed ? (selectedBranches[selectedServiceId]?.name || "") : "",
           payment_method: "online",
           email, firstName, lastName,
-          phone: (COUNTRY_DATA[phoneCountry]?.prefix || "") + phone.replace(/^0/, ""),
+          phone: formatPhoneWithPrefix(phone, phoneCountry),
           line1, line2, city, state, postal_code: postalCode, country,
           currency,
           locale: locale || 'ro',
@@ -1289,13 +1560,12 @@ export default function CheckoutForm({
       });
 
       if (!response.ok) {
-        const txt = await response.text();
-        console.error("❌ Final Sync Failed:", txt);
-        throw new Error(
-          txt || (locale === 'ro'
-            ? "Sincronizarea datelor a eșuat. Verifică conexiunea."
-            : "Data synchronization failed. Please check your connection.")
-        );
+        const errJson = await response.json().catch(() => null);
+        const errMsg = errJson?.error || (locale === 'ro'
+          ? "Sincronizarea datelor a eșuat. Verifică conexiunea."
+          : "Data synchronization failed. Please check your connection.");
+        console.error("❌ Final Sync Failed:", errMsg);
+        throw new Error(errMsg);
       } else {
         console.log("✅ Final Sync Successful.");
       }
@@ -1309,34 +1579,30 @@ export default function CheckoutForm({
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || items.length === 0) return;
     try {
       const paymentIntentId = clientSecret ? clientSecret.split('_secret_')[0] : null;
+      const targetCur = currency || 'RON';
       const cartItemsPayload = items.map(item => {
         const isBundle = String(item.id).includes('-bundle-') || (item.name && String(item.name).toLowerCase().includes('pachet'));
         const effectiveImage = isBundle 
-          ? '/images/products/x10_elbow_wraps_purple_1.webp' 
+          ? '/images/products/x10_elbow_wraps_purple.webp' 
           : (item.selectedVariant?.image || (typeof item.image === 'string' && !item.image.includes('bundle') ? item.image : getSingleFlavorImage(item.selectedVariant?.name || item.name)));
         return {
           id: item.id,
           name: item.name,
           quantity: item.quantity,
-          price: item.price,
+          price: getProductPrice(item.price, targetCur),
           image: effectiveImage,
           selectedVariant: item.selectedVariant || null
         };
       });
 
-      const totalAmount = items.reduce((acc, item) => {
-        const itemPrice = typeof item.price === 'number' 
-          ? item.price 
-          : (Number((item.price as any)?.[currency]) || Number((item.price as any)?.['RON']) || Number(item.price) || 0);
-        return acc + itemPrice * item.quantity;
-      }, 0);
+      const totalAmount = cartItemsPayload.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
       await trackCheckoutSession({
         paymentIntentId,
         email: email.trim(),
         firstName: firstName?.trim() || "",
         lastName: lastName?.trim() || "",
-        phone: phone ? ((COUNTRY_DATA[phoneCountry]?.prefix || "") + phone.replace(/^0/, "")) : "",
+        phone: formatPhoneWithPrefix(phone, phoneCountry),
         line1: line1?.trim() || "",
         line2: line2 || "",
         city: city?.trim() || "",
@@ -1376,6 +1642,7 @@ export default function CheckoutForm({
       const isCityValid = city.trim().length >= 2;
       const isPhoneValid = phone.trim().replace(/\D/g, '').length >= 8;
       const isStateValid = country !== 'RO' || (!!state && state.trim().length > 0);
+      const isPostalCodeValid = country === 'RO' || postalCode.trim().length >= 3;
 
       const newErrors = {
         email: !isEmailValid,
@@ -1385,7 +1652,8 @@ export default function CheckoutForm({
         address: !isAddressValid,
         city: !isCityValid,
         phone: !isPhoneValid,
-        state: !isStateValid
+        state: !isStateValid,
+        postalCode: !isPostalCodeValid
       };
       setErrors(newErrors);
 
@@ -1399,7 +1667,12 @@ export default function CheckoutForm({
       // 🚀 GDPR COMPLIANT ABANDONED CART TRACKING
       trackCurrentSession().catch(() => {});
 
-      setCurrentStep(2);
+      if (digitalOnlyCart) {
+        setPaymentMethod('online');
+        setCurrentStep(4);
+      } else {
+        setCurrentStep(2);
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -1427,13 +1700,14 @@ export default function CheckoutForm({
               },
               body: JSON.stringify({
                 paymentIntentId,
+                clientSecret,
                 shipping_type: shippingType,
                 carrier_id: selectedServiceId,
                 branch_id: selectedBranches[selectedServiceId]?.id || "",
                 branch_name: selectedBranches[selectedServiceId]?.name || "",
-                payment_method: paymentMethod,
+                payment_method: "online",
                 firstName, lastName, email,
-                phone: (COUNTRY_DATA[phoneCountry]?.prefix || "") + phone.replace(/^0/, ""),
+                phone: formatPhoneWithPrefix(phone, phoneCountry),
                 line1, line2, city, state, postal_code: postalCode, country,
                 currency,
                 locale: locale || 'ro',
@@ -1441,7 +1715,7 @@ export default function CheckoutForm({
                 priority_processing: priorityProcessing,
                 gift_packaging: giftPackaging,
                 gift_message: giftMessage,
-                items: items.map(i => ({ id: i.id, name: i.name, quantity: i.quantity, price: i.price, image: i.image, selectedVariant: i.selectedVariant }))
+                items: items.map(i => ({ id: i.id, slug: i.slug, name: i.name, quantity: i.quantity, price: i.price, image: i.image, is_digital: Boolean(i.is_digital || (i as any)?.specs_summary?.is_digital), specs_summary: (i as any).specs_summary, selectedVariant: i.selectedVariant, stock_status: i.stock_status || i.selectedVariant?.stock_status }))
               }),
             });
 
@@ -1449,6 +1723,8 @@ export default function CheckoutForm({
               const errorData = await res.json().catch(() => ({}));
               console.error("❌ Background Update Failed:", errorData);
               setMessage(errorData.error || t('payment_update_error'));
+            } else {
+              setStripeSyncTrigger(prev => prev + 1);
             }
           } catch (err) {
             console.error("❌ Background Update Error:", err);
@@ -1469,53 +1745,81 @@ export default function CheckoutForm({
       return;
     }
 
-    setLoading(true);
+    if (submittingCodRef.current) return;
 
-    if (country === 'RO' && paymentMethod === 'cod') {
-      try {
-        const res = await fetch("/api/checkout/cod", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "x-csrf-token": csrfToken || "",
-          },
-          body: JSON.stringify({
-            email, firstName, lastName,
-            phone: (COUNTRY_DATA[phoneCountry]?.prefix || "") + phone.replace(/^0/, ""),
-            line1, line2, city, state, postal_code: postalCode, country,
-            shipping_type: shippingType,
-            carrier_id: selectedServiceId,
-            branch_id: selectedBranches[selectedServiceId]?.id || "",
-            branch_name: selectedBranches[selectedServiceId]?.name || "",
-            items: items.map(i => {
-              const isBundle = String(i.id).includes('-bundle-') || (i.name && String(i.name).toLowerCase().includes('pachet'));
-              const effectiveImage = isBundle 
-                ? '/images/products/x10_elbow_wraps_purple_1.webp' 
-                : (i.selectedVariant?.image || (typeof i.image === 'string' && !i.image.includes('bundle') ? i.image : getSingleFlavorImage(i.selectedVariant?.name || i.name)));
-              return { id: i.id, name: i.name, quantity: i.quantity, price: i.price, image: effectiveImage, selectedVariant: i.selectedVariant };
-            }),
-            currency: 'RON', locale,
-            couponCode: appliedCoupon?.code?.trim()?.toUpperCase(),
-            priority_processing: priorityProcessing,
-            gift_packaging: giftPackaging,
-            gift_message: giftMessage
-          })
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          sessionStorage.removeItem("campion_checkout_form");
-          router.push(`/checkout/success?type=cod&order_id=${data.orderId}`);
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          setMessage(`${locale === 'ro' ? 'Eroare Backend' : 'Backend Error'}: ${errData.error || t('error_processing')}`);
-        }
-      } catch (err) {
-        setMessage(`${locale === 'ro' ? 'Eroare Sistem' : 'System Error'}: ${err instanceof Error ? err.message : t('error_processing')}`);
-      }
-      setLoading(false);
+    if (hasDigitalItems) {
+      setMessage(locale === 'ro'
+        ? 'Comenzile care includ programe digitale se achită exclusiv online cu cardul.'
+        : 'Orders containing digital programs require online card payment.');
+      setPaymentMethod('online');
       return;
     }
+
+    if (country !== 'RO') {
+      setMessage(locale === 'ro'
+        ? 'Plata ramburs la livrare este disponibilă exclusiv în România.'
+        : 'Cash on delivery is only available in Romania.');
+      return;
+    }
+
+    if (shippingType === 'pudo' && !selectedBranches[selectedServiceId]?.id) {
+      setMessage(t('choose_pickup'));
+      setCurrentStep(2);
+      return;
+    }
+
+    submittingCodRef.current = true;
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/checkout/cod", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken || "",
+        },
+        body: JSON.stringify({
+          email, firstName, lastName,
+          phone: formatPhoneWithPrefix(phone, phoneCountry),
+          line1, line2, city, state, postal_code: postalCode, country,
+          shipping_type: shippingType,
+          carrier_id: selectedServiceId,
+          branch_id: selectedBranches[selectedServiceId]?.id || "",
+          branch_name: selectedBranches[selectedServiceId]?.name || "",
+          items: items.map(i => {
+            const isDigital = isDigitalProgramItem(i);
+            const isBundle = !isDigital && (String(i.id).includes('-bundle-') || (i.name && String(i.name).toLowerCase().includes('pachet')));
+            const effectiveImage = isDigital
+              ? (i.image || i.selectedVariant?.image || '/images/products/program_complete_trio_v2.webp')
+              : isBundle
+                ? '/images/products/x10_elbow_wraps_purple.webp'
+                : (i.selectedVariant?.image || (typeof i.image === 'string' && !i.image.includes('bundle') ? i.image : getSingleFlavorImage(i.selectedVariant?.name || i.name)));
+            return { id: i.id, slug: i.slug, name: i.name, quantity: i.quantity, price: i.price, image: effectiveImage, is_digital: isDigital, specs_summary: (i as any).specs_summary, selectedVariant: i.selectedVariant, stock_status: i.stock_status || i.selectedVariant?.stock_status };
+          }),
+          currency: 'RON', locale,
+          couponCode: appliedCoupon?.code?.trim()?.toUpperCase(),
+          priority_processing: priorityProcessing,
+          gift_packaging: giftPackaging,
+          gift_message: giftMessage
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/checkout/success?type=cod&order_id=${data.orderId}`);
+        return;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setMessage(errData.error || t('error_processing'));
+        submittingCodRef.current = false;
+        setLoading(false);
+      }
+    } catch (err) {
+      setMessage(`${locale === 'ro' ? 'Eroare Sistem' : 'System Error'}: ${err instanceof Error ? err.message : t('error_processing')}`);
+      submittingCodRef.current = false;
+      setLoading(false);
+    }
+    return;
   };
 
   const stepVariants = {
@@ -1544,7 +1848,7 @@ export default function CheckoutForm({
               type="button"
               onClick={() => {
                 useCartStore.setState({
-                  items: items.filter(i => isPreorder(i, i.selectedVariant))
+                  items: items.filter(i => isDigitalProgramItem(i) || isPreorder(i, i.selectedVariant))
                 });
               }}
               className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-colors"
@@ -1578,7 +1882,7 @@ export default function CheckoutForm({
           >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg md:text-xl font-black uppercase tracking-tight text-black">{t('shipping_title')}</h3>
-              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-[#e32f8c] italic">{t('step_label', { current: 1, total: 3 })}</span>
+              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-[#e32f8c] italic">{t('step_label', { current: 1, total: 4 })}</span>
             </div>
 
             {/* Real Express Checkout (Only when Stripe Elements provider is active) */}
@@ -1606,7 +1910,7 @@ export default function CheckoutForm({
                   onBlur={() => {
                     trackCurrentSession().catch(() => {});
                   }}
-                  placeholder="alex@exemplu.ro"
+                  placeholder={locale === 'en' ? 'alex@example.com' : 'alex@exemplu.ro'}
                   className={cn(
                     "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300 border-zinc-100 focus:bg-white",
                     errors.email && "!border-red-500 !ring-2 !ring-red-100"
@@ -1625,7 +1929,7 @@ export default function CheckoutForm({
                   <Input 
                     value={firstName} 
                     onChange={(e) => setFirstName(e.target.value)} 
-                    placeholder="Eduard" 
+                    placeholder={locale === 'en' ? 'Alex' : 'Eduard'} 
                     className={cn(
                       "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
                       errors.firstName && "!border-red-500 !ring-2 !ring-red-100"
@@ -1639,7 +1943,7 @@ export default function CheckoutForm({
                   <Input 
                     value={lastName} 
                     onChange={(e) => setLastName(e.target.value)} 
-                    placeholder="Donea" 
+                    placeholder={locale === 'en' ? 'Smith' : 'Donea'} 
                     className={cn(
                       "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
                       errors.lastName && "!border-red-500 !ring-2 !ring-red-100"
@@ -1744,7 +2048,7 @@ export default function CheckoutForm({
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 ml-1">
-                    {t('postal_code_label')} <span className="text-zinc-400 font-normal text-[9px] lowercase">({locale === 'ro' ? 'opțional' : 'optional'})</span>
+                    {t('postal_code_label')} {country === 'RO' ? <span className="text-zinc-400 font-normal text-[9px] lowercase">({locale === 'ro' ? 'opțional' : 'optional'})</span> : <span className="text-red-500 font-black">*</span>}
                   </Label>
                   <Input 
                     value={postalCode} 
@@ -1758,7 +2062,10 @@ export default function CheckoutForm({
                     maxLength={country === 'RO' ? 6 : undefined}
                     inputMode={country === 'RO' ? 'numeric' : 'text'}
                     placeholder={country === 'RO' ? "Ex: 012345" : "Ex: 100000"} 
-                    className="rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300" 
+                    className={cn(
+                      "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
+                      errors.postalCode && "!border-red-500 !ring-2 !ring-red-100"
+                    )} 
                   />
                 </div>
               </div>
@@ -1780,7 +2087,7 @@ export default function CheckoutForm({
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder={COUNTRY_DATA[phoneCountry].placeholder}
+                    placeholder={COUNTRY_DATA[phoneCountry]?.placeholder || COUNTRY_DATA.RO.placeholder}
                     className="flex-1 px-4 bg-transparent text-xs font-bold outline-none rounded-r-2xl"
                   />
                 </div>
@@ -1812,27 +2119,28 @@ export default function CheckoutForm({
 
             <div className="space-y-4">
               {(() => {
-                const totalWeight = items.reduce((acc, item) => acc + (item.weight || 0.2) * item.quantity, 0);
-                const maxL = Math.max(100, ...items.map(i => i.length_mm || 150));
-                const maxW = Math.max(70, ...items.map(i => i.width_mm || 100));
+                const physicalItems = items.filter(i => !isDigitalProgramItem(i));
+                const parcelSource = physicalItems.length > 0 ? physicalItems : items;
+                const totalWeight = parcelSource.reduce((acc, item) => acc + getEffectiveItemWeight(item), 0);
+                const maxL = Math.max(100, ...parcelSource.map(i => i.length_mm || 150));
+                const maxW = Math.max(70, ...parcelSource.map(i => i.width_mm || 100));
 
                 // Smart Stacking: Max height of largest item + 25% height of others (assuming nesting)
-                const tallestItem = Math.max(20, ...items.map(i => i.height_mm || 50));
-                const otherHeights = items.reduce((acc, i) => acc + (i.height_mm || 50) * i.quantity, 0) - tallestItem;
+                const tallestItem = Math.max(20, ...parcelSource.map(i => i.height_mm || 50));
+                const otherHeights = parcelSource.reduce((acc, i) => acc + (i.height_mm || 50) * i.quantity, 0) - tallestItem;
                 const sumH = Math.max(20, tallestItem + (otherHeights * 0.25));
 
                 const sumLWH = maxL + maxW + sumH;
                 const maxSide = Math.max(maxL, maxW, sumH);
 
                 // Threshold logic (must match cart-calculations.ts & OrderSummary)
-                const { subtotal, discount, couponDiscount } = getTotals(currency);
-                const isRo = country.toUpperCase() === 'RO';
-                const roThreshold = getProductPrice(300, currency);
-                const intlThreshold = currency === 'EUR' ? 100 : getProductPrice(530, currency);
-                
-                const thresholdBase = subtotal - discount - couponDiscount;
-                const thresholdReached = isRo ? thresholdBase >= roThreshold : thresholdBase >= intlThreshold;
-                const isFreeShipping = appliedCoupon?.type === 'free_shipping' || thresholdReached;
+                const step2Currency = (paymentMethod === 'cod' || isStripeDisabled) ? 'RON' : currency;
+                const { subtotal, discount, couponDiscount, shippingDiscount } = getTotals(step2Currency);
+                const freeShippingThreshold = getFreeShippingThreshold(country, step2Currency, shippingConfig);
+
+                const thresholdBase = Number((subtotal - discount - couponDiscount).toFixed(2));
+                const thresholdReached = thresholdBase >= freeShippingThreshold;
+                const isFreeShipping = shippingDiscount || thresholdReached;
 
                 const metrics: ParcelMetrics = {
                   weight: totalWeight,
@@ -1844,9 +2152,9 @@ export default function CheckoutForm({
                 };
 
                 const hdServices = getShippingServices(country, 'hd').filter(s => isServiceAvailable(s, country, metrics));
-                // Sameday Locker (Easybox) este activat exclusiv pentru România (în afară nu livrăm în lockere)
-                const pudoServices = country === 'RO'
-                  ? getShippingServices(country, 'pudo').filter(s => isServiceAvailable(s, country, metrics))
+                // Lockerele (Easybox / PUDO) sunt controlate din admin (/admin/shipping) și sunt dezactivate implicit în toate țările
+                const pudoServices = lockersAllowed
+                  ? getShippingServices(country, 'pudo', { lockersEnabled: true }).filter(s => isServiceAvailable(s, country, metrics))
                   : [];
 
                 if (hdServices.length === 0 && pudoServices.length === 0) {
@@ -1880,9 +2188,9 @@ export default function CheckoutForm({
                             <p className="text-sm font-black uppercase">{getLocalizedServiceName(service, locale, t)}</p>
                           </div>
                           <span className="font-black text-sm">
-                            {isFreeShipping || getShippingCost(country, 'hd', totalWeight, currency, service.id) === 0
+                            {isFreeShipping || getShippingCost(country, 'hd', totalWeight, step2Currency, service.id) === 0
                               ? <span className="text-green-600">{t('free')}</span>
-                              : formatPrice(getShippingCost(country, 'hd', totalWeight, currency, service.id), currency)}
+                              : formatPrice(getShippingCost(country, 'hd', totalWeight, step2Currency, service.id), step2Currency)}
                           </span>
                         </div>
                       </div>
@@ -1937,9 +2245,9 @@ export default function CheckoutForm({
                             </div>
                           </div>
                           <span className="font-black text-sm">
-                            {isFreeShipping || getShippingCost(country, 'pudo', totalWeight, currency, service.id) === 0
+                            {isFreeShipping || getShippingCost(country, 'pudo', totalWeight, step2Currency, service.id) === 0
                               ? <span className="text-green-600">{t('free')}</span>
-                              : formatPrice(getShippingCost(country, 'pudo', totalWeight, currency, service.id), currency)}
+                              : formatPrice(getShippingCost(country, 'pudo', totalWeight, step2Currency, service.id), step2Currency)}
                           </span>
                         </div>
                       </div>
@@ -2035,13 +2343,186 @@ export default function CheckoutForm({
                   </div>
                 </div>
               </label>
+
+              {/* Optional Digital Programs Add-on Card in Step 3 */}
+              {(() => {
+                const foodProg =
+                  liveCatalog.find(
+                    (p) => p.slug === PROGRAM_SLUGS.FOOD_PLAN || p.id === PROGRAM_UUIDS.FOOD_PLAN
+                  ) ||
+                  DIGITAL_PROGRAM_PRODUCTS.find((p) => p.slug === PROGRAM_SLUGS.FOOD_PLAN)!;
+                const trainingProg =
+                  liveCatalog.find(
+                    (p) =>
+                      p.slug === PROGRAM_SLUGS.TRAINING_PROGRAM ||
+                      p.id === PROGRAM_UUIDS.TRAINING_PROGRAM
+                  ) ||
+                  DIGITAL_PROGRAM_PRODUCTS.find((p) => p.slug === PROGRAM_SLUGS.TRAINING_PROGRAM)!;
+                const benchProg =
+                  liveCatalog.find(
+                    (p) =>
+                      p.slug === PROGRAM_SLUGS.BENCH_PROGRAM || p.id === PROGRAM_UUIDS.BENCH_PROGRAM
+                  ) ||
+                  DIGITAL_PROGRAM_PRODUCTS.find((p) => p.slug === PROGRAM_SLUGS.BENCH_PROGRAM)!;
+                const bundleProg =
+                  liveCatalog.find(
+                    (p) => p.slug === PROGRAM_SLUGS.BUNDLE || p.id === PROGRAM_UUIDS.BUNDLE
+                  ) ||
+                  DIGITAL_PROGRAM_PRODUCTS.find((p) => p.slug === PROGRAM_SLUGS.BUNDLE)!;
+
+                const foodItemInCart = items.find(
+                  (i) => i.id === PROGRAM_UUIDS.FOOD_PLAN || i.slug === PROGRAM_SLUGS.FOOD_PLAN
+                );
+                const trainingItemInCart = items.find(
+                  (i) =>
+                    i.id === PROGRAM_UUIDS.TRAINING_PROGRAM ||
+                    i.slug === PROGRAM_SLUGS.TRAINING_PROGRAM
+                );
+                const benchItemInCart = items.find(
+                  (i) =>
+                    i.id === PROGRAM_UUIDS.BENCH_PROGRAM || i.slug === PROGRAM_SLUGS.BENCH_PROGRAM
+                );
+                const bundleItemInCart = items.find(
+                  (i) => i.id === PROGRAM_UUIDS.BUNDLE || i.slug === PROGRAM_SLUGS.BUNDLE
+                );
+
+                const dispCur = paymentMethod === 'cod' ? 'RON' : currency;
+                const toggleProg = (prog: typeof foodProg, existingItem: typeof foodItemInCart) => {
+                  if (existingItem) {
+                    removeItem(existingItem.id, existingItem.selectedVariant?.name);
+                    return;
+                  }
+                  const variantName =
+                    step3ProgLang === "en" ? "English" : "Română";
+                  addItem(
+                    prog,
+                    {
+                      name: variantName,
+                      image: prog.image,
+                      imageIndex: 0,
+                      stock_status: "in_stock",
+                    },
+                    1,
+                    { openCart: false }
+                  );
+                };
+
+                return (
+                  <div className="p-5 sm:p-6 rounded-3xl border-2 border-zinc-100 bg-white transition-all">
+                    <div className="flex items-center justify-between gap-3 mb-3.5">
+                      <div>
+                        <span className="text-sm font-black uppercase tracking-widest text-black block">
+                          {locale === 'ro' ? 'Programe Digitale' : 'Digital Programs'}
+                        </span>
+                        <p className="text-xs text-zinc-500 font-medium mt-0.5">
+                          {locale === 'ro'
+                            ? 'Livrare instantă pe email · Reducere automată la pachetul de 3 (-27%)'
+                            : 'Instant email delivery · Automatic 3-book bundle discount (-27%)'}
+                        </p>
+                      </div>
+
+                      {/* Clean Separate SVG Flag Options */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setStep3ProgLang("en")}
+                          title="English"
+                          className={cn(
+                            "px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center cursor-pointer",
+                            step3ProgLang === "en"
+                              ? "bg-white border-[#e32f8c] ring-1 ring-[#e32f8c]/50 shadow-2xs scale-105"
+                              : "bg-zinc-50 border-zinc-200 opacity-60 hover:opacity-100 hover:border-zinc-300"
+                          )}
+                        >
+                          <LanguageFlagSvg isEnglish={true} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStep3ProgLang("ro")}
+                          title="Română"
+                          className={cn(
+                            "px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center cursor-pointer",
+                            step3ProgLang === "ro"
+                              ? "bg-white border-[#e32f8c] ring-1 ring-[#e32f8c]/50 shadow-2xs scale-105"
+                              : "bg-zinc-50 border-zinc-200 opacity-60 hover:opacity-100 hover:border-zinc-300"
+                          )}
+                        >
+                          <LanguageFlagSvg isEnglish={false} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {[
+                        { prog: foodProg, inCart: foodItemInCart, label: "Food Plan" },
+                        { prog: trainingProg, inCart: trainingItemInCart, label: "Training Program" },
+                        { prog: benchProg, inCart: benchItemInCart, label: "Bench Program" },
+                        {
+                          prog: bundleProg,
+                          inCart: bundleItemInCart,
+                          label: locale === "ro" ? "Pachet Toate 3 (-27%)" : "All 3 Bundle (-27%)",
+                        },
+                      ].map(({ prog, inCart, label }) => {
+                        const isAdded = Boolean(inCart);
+                        const priceVal = getProductPrice(prog.price, dispCur);
+                        return (
+                          <button
+                            key={prog.id}
+                            type="button"
+                            onClick={() => toggleProg(prog, inCart)}
+                            className={cn(
+                              "flex items-center gap-3 p-2.5 rounded-2xl border-2 text-left transition-all cursor-pointer",
+                              isAdded
+                                ? "border-[#e32f8c] bg-[#e32f8c]/5"
+                                : "border-zinc-100 bg-zinc-50/60 hover:border-zinc-200 hover:bg-zinc-50"
+                            )}
+                          >
+                            <div className="relative w-11 h-14 rounded-lg overflow-hidden bg-zinc-950 shrink-0 border border-black/10">
+                              <Image
+                                src={prog.image}
+                                alt={label}
+                                fill
+                                sizes="48px"
+                                className="object-cover"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-black uppercase tracking-tight text-black truncate">
+                                {label}
+                              </div>
+                              <div className="text-xs font-extrabold text-zinc-700 mt-0.5">
+                                +{formatPrice(priceVal, dispCur)}
+                              </div>
+                              <div
+                                className={cn(
+                                  "mt-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider",
+                                  isAdded ? "text-[#e32f8c]" : "text-zinc-500"
+                                )}
+                              >
+                                {isAdded ? (
+                                  <>
+                                    <Check className="w-3 h-3 stroke-[3]" />
+                                    <span>{locale === "ro" ? "Adăugat" : "Added"}</span>
+                                  </>
+                                ) : (
+                                  <span>{locale === "ro" ? "Adaugă" : "Add"}</span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex gap-4 pt-4">
               <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px]">{t('back')}</Button>
-              <Button type="button" onClick={async () => {
-                // Sync Stripe with online payment method + all options before entering Step 4
-                await syncStripePaymentMethod('online');
+              <Button type="button" onClick={() => {
+                // Ensure online payment method is selected (or COD if Stripe disabled in RO) before Step 4
+                setPaymentMethod(country === 'RO' && isStripeDisabled ? 'cod' : 'online');
                 setCurrentStep(4);
               }} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98]">{t('continue_to_payment')}</Button>
             </div>
@@ -2085,23 +2566,25 @@ export default function CheckoutForm({
                 <div className="relative h-full">
                   <button
                     type="button"
-                    disabled={hasPreorderItems}
+                    disabled={hasPreorderItems || hasDigitalItems}
                     onClick={async () => {
-                      if (hasPreorderItems) return;
+                      if (hasPreorderItems || hasDigitalItems) return;
                       setPaymentMethod('cod');
-                      // Sync Stripe so it removes the -5 lei card discount when switching to COD
-                      await syncStripePaymentMethod('cod');
                     }}
-                    className={`h-full w-full flex flex-col items-center justify-center gap-3 p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'cod' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'} ${hasPreorderItems ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`h-full w-full flex flex-col items-center justify-center gap-3 p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'cod' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'} ${(hasPreorderItems || hasDigitalItems) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${paymentMethod === 'cod' ? 'bg-[#e32f8c] text-white' : 'bg-white text-zinc-400'}`}>
                       <Truck className="w-5 h-5" />
                     </div>
                     <span className="text-[10px] font-black uppercase tracking-widest">{t('cod_payment')}</span>
                   </button>
-                  {hasPreorderItems && (
+                  {(hasPreorderItems || hasDigitalItems) && (
                     <div className="absolute -bottom-6 left-0 w-full text-center">
-                      <span className="text-[8px] font-bold text-red-500">{locale === 'ro' ? '*Indisponibil pentru precomandă' : '*Unavailable for preorder'}</span>
+                      <span className="text-[8px] font-bold text-red-500">
+                        {hasDigitalItems
+                          ? (locale === 'ro' ? '*Programele digitale se achită online' : '*Online payment required for digital programs')
+                          : (locale === 'ro' ? '*Indisponibil pentru precomandă' : '*Unavailable for preorder')}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -2250,7 +2733,7 @@ export default function CheckoutForm({
         )}
       </AnimatePresence>
       <SamedayLockerSelector 
-        isOpen={isSamedayLockerOpen}
+        isOpen={lockersAllowed && isSamedayLockerOpen}
         onClose={() => setIsSamedayLockerOpen(false)}
         selectedLockerId={selectedBranches[selectedServiceId]?.id ? Number(selectedBranches[selectedServiceId].id) : null}
         onSelect={(locker) => {

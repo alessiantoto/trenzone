@@ -17,6 +17,7 @@ import { DeferredOverlay } from "@/components/performance/DeferredOverlay";
 import { cookies } from 'next/headers';
 import { MaintenanceView } from '@/components/layout/MaintenanceView';
 import { getGlobalSettings, hasValidMaintenanceBypass } from '@/app/actions/admin-settings';
+import { getSiteUrl } from '@/lib/site-config';
 
 const inter = Inter({
   variable: "--font-inter",
@@ -30,7 +31,7 @@ const oswald = Oswald({
   display: "swap",
 });
 
-const BASE_URL = "https://www.trenzone.fit";
+const BASE_URL = getSiteUrl();
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: rawLocale } = await params;
@@ -46,7 +47,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     },
     description: isEn
       ? "Built for Strength. Designed for Performance. Professional heavy-duty elbow wraps for bench press and extreme powerlifting. Up to +20 kg force transfer."
-      : "Built for Strength. Designed for Performance. Benzi de cot profesionale pentru împins la piept și powerlifting extrem. Până la +20 kg transfer de forță.",
+      : "Construit pentru forță. Proiectat pentru performanță. Benzi de cot profesionale pentru împins la piept și powerlifting extrem. Până la +20 kg transfer de forță.",
     keywords: [
       "benzi de cot", "elbow wraps", "trenzone", "x10 elbow wraps", "x5 elbow wraps",
       "powerlifting gear", "bench press wraps", "suport coate sala", "protectie articulatii",
@@ -63,7 +64,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       telephone: false,
     },
     alternates: {
-      canonical: BASE_URL,
+      canonical: `${BASE_URL}/${rawLocale}`,
       languages: {
         "ro": `${BASE_URL}/ro`,
         "ro-RO": `${BASE_URL}/ro`,
@@ -116,7 +117,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
         : "TREN WRAPS by Vlad Tren | Benzi de Cot Heavy-Duty TrenZone®",
       description: isEn
         ? "Built for Strength. Designed for Performance. Professional elbow wraps for powerlifting and heavy lifting. Rigid compression, total stability, and up to +20 kg on bench press."
-        : "Built for Strength. Designed for Performance. Benzi de cot profesionale pentru powerlifting și greutăți mari. Compresie rigidă, stabilitate totală sub bară și până la +20 kg pe bench press.",
+        : "Construit pentru forță. Proiectat pentru performanță. Benzi de cot profesionale pentru powerlifting și greutăți mari. Compresie rigidă, stabilitate totală sub bară și până la +20 kg pe împins la piept.",
       images: [
         {
           url: "/og-image.png",
@@ -272,14 +273,14 @@ export default async function LocaleLayout({
               "@type": "Organization",
               "name": "TrenZone",
               "alternateName": "TrenZone®",
-              "url": "https://www.trenzone.fit",
+              "url": BASE_URL,
               "logo": {
                 "@type": "ImageObject",
-                "url": "https://www.trenzone.fit/images/logos/trenzone_logo.webp",
+                "url": `${BASE_URL}/images/logos/trenzone_logo.webp`,
                 "width": 512,
                 "height": 512
               },
-              "image": "https://www.trenzone.fit/og-image.png",
+              "image": `${BASE_URL}/og-image.png`,
               "description": locale === 'ro'
                 ? "TrenZone este brandul oficial de echipamente de forță și benzi de cot heavy-duty fondat de Vlad Tren. Echipament de elită pentru powerlifting și culturism."
                 : "TrenZone is the official heavy-duty strength equipment and elbow wraps brand founded by Vlad Tren. Elite gear for powerlifting and bodybuilding.",
@@ -287,7 +288,7 @@ export default async function LocaleLayout({
               "areaServed": [
                 "RO","HU","BG","CZ","SK","PL","DE","AT","IT","FR",
                 "GR","BE","NL","HR","SI","ES","PT","GB","SE","FI",
-                "EE","LV","LT","LU","CY"
+                "EE","LV","LT","LU"
               ],
               "sameAs": [
                 "https://www.instagram.com/trenzone",
@@ -312,13 +313,13 @@ export default async function LocaleLayout({
               "@type": "WebSite",
               "name": "TrenZone",
               "alternateName": "TrenZone® | Benzi de Cot Heavy-Duty",
-              "url": "https://www.trenzone.fit",
+              "url": BASE_URL,
               "inLanguage": ["ro", "en"],
               "potentialAction": {
                 "@type": "SearchAction",
                 "target": {
                   "@type": "EntryPoint",
-                  "urlTemplate": `https://www.trenzone.fit/${locale}/shop?q={search_term_string}`
+                  "urlTemplate": `${BASE_URL}/${locale}/shop?q={search_term_string}`
                 },
                 "query-input": "required name=search_term_string"
               }

@@ -6,6 +6,25 @@ import { getStoreWebAnalytics } from '@/lib/analytics';
 import { getVercelOfficialAnalytics, isVercelApiConfigured } from '@/lib/vercel-analytics-api';
 import { getServerExchangeRates, FALLBACK_RATES } from '@/utils/pricing';
 import { normalizeCityName, normalizeFlavor, normalizeCountry, getBucharestIsoBounds } from '@/utils/admin-helpers';
+import { hasAnyDigitalProgram, isDigitalOnlyCart } from '@/lib/programs';
+
+function computeDeltaPct(current: number, previous: number): number | null {
+  if (previous <= 0 && current <= 0) return null;
+  if (previous <= 0 && current > 0) return 100;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+function getPreviousDateRange(startDay: string, endDay: string): { prevStart: string; prevEnd: string } {
+  const s = new Date(`${startDay}T12:00:00Z`);
+  const e = new Date(`${endDay}T12:00:00Z`);
+  const spanDays = Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1);
+  const prevEndDate = new Date(s.getTime() - 86400000);
+  const prevStartDate = new Date(prevEndDate.getTime() - (spanDays - 1) * 86400000);
+  return {
+    prevStart: prevStartDate.toISOString().split('T')[0],
+    prevEnd: prevEndDate.toISOString().split('T')[0],
+  };
+}
 
 function convertToRon(amount: number, currency: string, rates: Record<string, number>): number {
   const curr = (currency || 'RON').toUpperCase();
@@ -99,12 +118,27 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
     query = query.lte('created_at', endIso);
   }
 
-  const [{ data: allOrders }, { data: allHistoricalOrdersRaw }] = await Promise.all([
+  const startDateStr = startDate ? startDate.split('T')[0] : new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
+  const endDateStr = endDate ? endDate.split('T')[0] : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
+  const { prevStart, prevEnd } = getPreviousDateRange(startDateStr, endDateStr);
+  const prevBounds = getBucharestIsoBounds(prevStart, prevEnd);
+
+  let prevQuery = supabase
+    .from('orders')
+    .select('created_at, total_amount, currency, status');
+  if (prevBounds.startIso) prevQuery = prevQuery.gte('created_at', prevBounds.startIso);
+  if (prevBounds.endIso) prevQuery = prevQuery.lte('created_at', prevBounds.endIso);
+
+  const [{ data: allOrders }, { data: allHistoricalOrdersRaw }, { data: prevOrdersRaw }] = await Promise.all([
     query,
     supabase
       .from('orders')
-      .select('created_at, total_amount, currency, status, addr_city, addr_country')
+      .select('id, created_at, total_amount, currency, status, addr_city, addr_country, tracking_number, items, carrier_metadata'),
+    prevQuery,
   ]);
+  const prevSuccessfulOrders = (prevOrdersRaw || []).filter(
+    (o: any) => !['cancelled', 'refunded', 'failed', 'returned'].includes(o.status)
+  );
   const allHistoricalOrders = (allHistoricalOrdersRaw || []).filter(
     (o: any) => !['cancelled', 'refunded', 'failed', 'returned'].includes(o.status)
   );
@@ -188,40 +222,100 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
     return sum + convertToRon(Number(order.total_amount) || 0, order.currency || 'RON', rates);
   }, 0).toFixed(2));
 
-  // Time Series for charts (grouped by day in Romanian local time, filling all days in interval)
-  const timeseriesMap = new Map<string, { date: string; revenue: number; orders: number }>();
-  
-  // Fill all calendar dates in selected range with 0 so charts don't show a flat line between 2 isolated points
-  const startDay = startDate ? startDate.split('T')[0] : new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
-  const endDay = endDate ? endDate.split('T')[0] : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
-  
-  const iterDate = new Date(`${startDay}T12:00:00Z`);
-  const stopDate = new Date(`${endDay}T12:00:00Z`);
-  let daysLimit = 0;
-  while (iterDate <= stopDate && daysLimit < 100) {
-    const dStr = iterDate.toISOString().split('T')[0];
-    timeseriesMap.set(dStr, { date: dStr, revenue: 0, orders: 0 });
-    iterDate.setUTCDate(iterDate.getUTCDate() + 1);
-    daysLimit++;
-  }
+  // Time Series for charts (hourly when viewing a single day, daily otherwise + previous period comparison)
+  const isSingleDay = startDateStr === endDateStr;
+  const granularity: 'hourly' | 'daily' = isSingleDay ? 'hourly' : 'daily';
 
-  // Timeseries calculation (grouped by Europe/Bucharest calendar day)
-  successfulOrders.forEach(order => {
-    const orderCurr = (order.currency || 'RON').toUpperCase();
-    const orderAmtRaw = Number(order.total_amount) || 0;
-    const orderAmt = convertToRon(orderAmtRaw, orderCurr, rates);
+  let timeseries: Array<{ date: string; label: string; revenue: number; orders: number; prevRevenue: number; prevOrders: number }> = [];
 
-    const dateStr = new Date(order.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' }); // YYYY-MM-DD
-    if (timeseriesMap.has(dateStr)) {
-      const dayData = timeseriesMap.get(dateStr)!;
-      dayData.revenue = Number((dayData.revenue + orderAmt).toFixed(2));
-      dayData.orders += 1;
-    } else {
-      timeseriesMap.set(dateStr, { date: dateStr, revenue: Number(orderAmt.toFixed(2)), orders: 1 });
+  if (isSingleDay) {
+    const hourBuckets = Array.from({ length: 24 }, (_, h) => {
+      const hh = String(h).padStart(2, '0');
+      return {
+        date: `${startDateStr}T${hh}:00`,
+        label: `${hh}:00`,
+        revenue: 0,
+        orders: 0,
+        prevRevenue: 0,
+        prevOrders: 0,
+      };
+    });
+
+    const getBucharestHour = (iso: string) => {
+      const hStr = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Bucharest',
+        hour: '2-digit',
+        hour12: false,
+      }).format(new Date(iso));
+      const h = parseInt(hStr, 10);
+      return Number.isFinite(h) ? Math.min(23, Math.max(0, h === 24 ? 0 : h)) : 0;
+    };
+
+    successfulOrders.forEach((order) => {
+      const amt = convertToRon(Number(order.total_amount) || 0, (order.currency || 'RON').toUpperCase(), rates);
+      const h = getBucharestHour(order.created_at);
+      hourBuckets[h].revenue = Number((hourBuckets[h].revenue + amt).toFixed(2));
+      hourBuckets[h].orders += 1;
+    });
+
+    prevSuccessfulOrders.forEach((order) => {
+      const amt = convertToRon(Number(order.total_amount) || 0, (order.currency || 'RON').toUpperCase(), rates);
+      const h = getBucharestHour(order.created_at);
+      hourBuckets[h].prevRevenue = Number((hourBuckets[h].prevRevenue + amt).toFixed(2));
+      hourBuckets[h].prevOrders += 1;
+    });
+
+    timeseries = hourBuckets;
+  } else {
+    const timeseriesMap = new Map<string, { date: string; label: string; revenue: number; orders: number; prevRevenue: number; prevOrders: number }>();
+    const dayKeys: string[] = [];
+
+    const iterDate = new Date(`${startDateStr}T12:00:00Z`);
+    const stopDate = new Date(`${endDateStr}T12:00:00Z`);
+    let daysLimit = 0;
+    while (iterDate <= stopDate && daysLimit < 120) {
+      const dStr = iterDate.toISOString().split('T')[0];
+      dayKeys.push(dStr);
+      timeseriesMap.set(dStr, {
+        date: dStr,
+        label: `${iterDate.getUTCDate()} ${iterDate.toLocaleString('ro', { month: 'short', timeZone: 'UTC' })}`,
+        revenue: 0,
+        orders: 0,
+        prevRevenue: 0,
+        prevOrders: 0,
+      });
+      iterDate.setUTCDate(iterDate.getUTCDate() + 1);
+      daysLimit++;
     }
-  });
 
-  const timeseries = Array.from(timeseriesMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    successfulOrders.forEach((order) => {
+      const orderCurr = (order.currency || 'RON').toUpperCase();
+      const orderAmt = convertToRon(Number(order.total_amount) || 0, orderCurr, rates);
+      const dateStr = new Date(order.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
+      const existing = timeseriesMap.get(dateStr);
+      if (existing) {
+        existing.revenue = Number((existing.revenue + orderAmt).toFixed(2));
+        existing.orders += 1;
+      }
+    });
+
+    const prevStartMs = new Date(`${prevStart}T12:00:00Z`).getTime();
+    prevSuccessfulOrders.forEach((order) => {
+      const orderCurr = (order.currency || 'RON').toUpperCase();
+      const orderAmt = convertToRon(Number(order.total_amount) || 0, orderCurr, rates);
+      const pDateStr = new Date(order.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
+      const offsetDays = Math.round((new Date(`${pDateStr}T12:00:00Z`).getTime() - prevStartMs) / 86400000);
+      if (offsetDays >= 0 && offsetDays < dayKeys.length) {
+        const target = timeseriesMap.get(dayKeys[offsetDays]);
+        if (target) {
+          target.prevRevenue = Number((target.prevRevenue + orderAmt).toFixed(2));
+          target.prevOrders += 1;
+        }
+      }
+    });
+
+    timeseries = Array.from(timeseriesMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }
 
   // Geographic data for drilldown (Filtered by selected period to match dashboard metrics)
   const isDateFiltered = !!(startDate || endDate);
@@ -320,12 +414,10 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
   );
   const totalCustomers = uniqueCustomerEmails.size;
 
-  // Real Shopify-style visitor and conversion rate tracking
-  const startDateStr = startDate ? startDate.split('T')[0] : new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
-  const endDateStr = endDate ? endDate.split('T')[0] : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
-
-  const [webTelemetry, vercelOfficial] = await Promise.all([
+  // Real Shopify-style visitor and conversion rate tracking (current + previous comparison period)
+  const [webTelemetry, prevWebTelemetry, vercelOfficial] = await Promise.all([
     getStoreWebAnalytics(startDateStr, endDateStr),
+    getStoreWebAnalytics(prevStart, prevEnd).catch(() => null),
     getVercelOfficialAnalytics(startDateStr, endDateStr),
   ]);
   const { totalVisitors, totalSessions, totalPageviews, cartSessions, checkoutSessions } = webTelemetry;
@@ -386,8 +478,68 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
     }));
   }
 
+  const prevRevenue = Number(
+    prevSuccessfulOrders
+      .reduce((sum, o) => sum + convertToRon(Number(o.total_amount) || 0, (o.currency || 'RON').toUpperCase(), rates), 0)
+      .toFixed(2)
+  );
+  const prevOrdersCount = prevSuccessfulOrders.length;
+  const prevSessionsCount = prevWebTelemetry?.totalSessions || 0;
+  const prevConversion = prevSessionsCount > 0 ? (prevOrdersCount / prevSessionsCount) * 100 : 0;
+  const currentConvNum = Number(conversionRate) || 0;
+  const prevAov = prevOrdersCount > 0 ? prevRevenue / prevOrdersCount : 0;
+  const currentAovNum = Number(aov) || 0;
+
+  const pendingFulfillmentCount = allHistoricalOrders.filter((o: any) => {
+    const items = Array.isArray(o.items) ? o.items : [];
+    const digitalOnly = items.length > 0 && isDigitalOnlyCart(items);
+    const alreadyDone = o.status === 'delivered' || o.status === 'shipped';
+    return !digitalOnly && !o.tracking_number && !alreadyDone;
+  }).length;
+
+  const pendingProgramsCount = allHistoricalOrders.filter((o: any) => {
+    const items = Array.isArray(o.items) ? o.items : [];
+    const hasDigital = hasAnyDigitalProgram(items) || o.carrier_metadata?.is_digital_only === true;
+    if (!hasDigital) return false;
+    return o.carrier_metadata?.program_delivery?.status !== 'delivered';
+  }).length;
+
+  const prevReferrersMap = new Map<string, number>();
+  (prevWebTelemetry?.referrers || []).forEach((r: any) => {
+    prevReferrersMap.set(String(r.name || ''), Number(r.count) || 0);
+  });
+  const topReferrer = (webTelemetry.referrers || [])[0];
+  let channelInsight: { channel: string; currentCount: number; prevCount: number; deltaPct: number | null } | null = null;
+  if (topReferrer) {
+    const prevCount = prevReferrersMap.get(String(topReferrer.name || '')) || 0;
+    channelInsight = {
+      channel: topReferrer.name,
+      currentCount: Number(topReferrer.count) || 0,
+      prevCount,
+      deltaPct: computeDeltaPct(Number(topReferrer.count) || 0, prevCount),
+    };
+  }
+
   return {
     revenue: totalRevenue,
+    prevRevenue,
+    prevOrders: prevOrdersCount,
+    prevSessions: prevSessionsCount,
+    granularity,
+    deltas: {
+      revenuePct: computeDeltaPct(totalRevenue, prevRevenue),
+      ordersPct: computeDeltaPct(totalOrders, prevOrdersCount),
+      sessionsPct: computeDeltaPct(funnelSessions, prevSessionsCount),
+      conversionPct: computeDeltaPct(currentConvNum, prevConversion),
+      aovPct: computeDeltaPct(currentAovNum, prevAov),
+    },
+    actionCenter: {
+      pendingFulfillmentCount,
+      pendingProgramsCount,
+      abandonedCartsCount: abandonedCarts,
+      abandonedCartsValue: potentialLostRevenue,
+      channelInsight,
+    },
     cardRevenue,
     cardCount: cardOrders.length,
     rambursRevenue,

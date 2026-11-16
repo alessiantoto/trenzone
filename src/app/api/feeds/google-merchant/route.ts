@@ -4,8 +4,10 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { SHIPPING_COUNTRIES, COUNTRY_SHIPPING_INFO } from '@/lib/schema';
 import { getCdnUrl } from '@/lib/utils/cdn';
 import { getProductPrice, getServerExchangeRates } from '@/utils/pricing';
+import { getSiteUrl } from '@/lib/site-config';
+import { getProductsServer } from '@/app/actions/products';
 
-const BASE_URL = 'https://www.trenzone.fit';
+const BASE_URL = getSiteUrl();
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -57,16 +59,16 @@ export async function GET(request: NextRequest) {
     const currency = (searchParams.get('currency') || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase();
     const targetCountry = searchParams.get('country')?.toUpperCase() || (locale === 'ro' ? 'RO' : null);
 
-    // Fetch active products
-    const { data: products, error } = await supabaseAdmin
+    // Fetch active products (with automatic fallback to storefront catalog so feed is never empty)
+    const { data: dbProducts, error } = await supabaseAdmin
       .from('products')
       .select('*')
       .eq('is_active', true)
       .order('created_at', { ascending: true });
 
-    if (error) {
-      console.error('Error fetching products for Google Merchant feed:', error);
-      return new NextResponse('Error generating feed', { status: 500 });
+    let products: any[] = dbProducts && dbProducts.length > 0 ? dbProducts : [];
+    if (error || products.length === 0) {
+      products = await getProductsServer();
     }
 
     const itemsXml: string[] = [];
@@ -97,7 +99,7 @@ export async function GET(request: NextRequest) {
       const mainImageRaw = product.main_image || product.image || (Array.isArray(product.images) ? product.images[0] : null);
       const mainImageUrl = mainImageRaw
         ? getCdnUrl(mainImageRaw.startsWith('http') ? mainImageRaw : `${BASE_URL}${mainImageRaw}`)
-        : `${BASE_URL}/images/products/x10_elbow_wraps_purple_1.webp`;
+        : `${BASE_URL}/images/products/x10_elbow_wraps_purple.webp`;
 
       const additionalImages = (Array.isArray(product.images) ? product.images : [])
         .filter((img: string) => img && img !== mainImageRaw)
@@ -116,19 +118,39 @@ export async function GET(request: NextRequest) {
 
       // If non-RON currency requested and price is in RON, convert using storefront pricing helper
       await getServerExchangeRates();
-      const convertedPrice = currency === 'RON' ? priceVal : getProductPrice(priceVal, currency);
-      let formattedPrice = `${convertedPrice.toFixed(2)} ${currency}`;
+      const convertedSalePrice = currency === 'RON' ? priceVal : getProductPrice(priceVal, currency);
+
+      // Compare-at / original price for Google Shopping <g:sale_price> "Price Drop" badge
+      const origPriceRon = Number(product.original_price_numeric || product.originalPrice || 0);
+      const convertedOriginalPrice = origPriceRon > priceVal
+        ? (currency === 'RON' ? origPriceRon : getProductPrice(origPriceRon, currency))
+        : convertedSalePrice;
+
+      const formattedRegularPrice = `${convertedOriginalPrice.toFixed(2)} ${currency}`;
+      const formattedSalePrice = origPriceRon > priceVal ? `${convertedSalePrice.toFixed(2)} ${currency}` : null;
 
       const sku = product.sku || `TZ-${product.slug?.toUpperCase() || 'PRODUCT'}`;
       // Removed invalid dummy GTIN. If they don't have a real barcode, it's better to omit it and set identifier_exists=no
       const gtin = product.gtin || null;
       const brand = product.brand || 'TrenZone';
 
-      // Google Product Category & Product Type
-      const googleCategory = 'Sporting Goods > Exercise & Fitness > Weight Lifting';
-      const productType = isRo
-        ? 'Echipamente Sportive > Powerlifting > Benzi de Cot'
-        : 'Sporting Goods > Powerlifting > Elbow Wraps';
+      // Google Product Category & Product Type per SKU
+      const slugLower = String(product.slug || '').toLowerCase();
+      const isApparel = slugLower.includes('tricou') || slugLower.includes('tee') || slugLower.includes('shirt');
+      const isBelt = slugLower.includes('centura') || slugLower.includes('belt');
+      const isWrist = slugLower.includes('wrist');
+
+      const googleCategory = isApparel
+        ? 'Apparel & Accessories > Clothing > Shirts & Tops'
+        : 'Sporting Goods > Exercise & Fitness > Weight Lifting';
+
+      const productType = isApparel
+        ? (isRo ? 'Îmbrăcăminte Fitness > Tricouri Oversized Sala' : 'Fitness Apparel > Oversized Gym T-Shirts')
+        : isBelt
+          ? (isRo ? 'Echipamente Sportive > Powerlifting > Centuri Lever' : 'Sporting Goods > Powerlifting > Lever Belts')
+          : isWrist
+            ? (isRo ? 'Echipamente Sportive > Powerlifting > Benzi Încheieturi' : 'Sporting Goods > Powerlifting > Wrist Wraps')
+            : (isRo ? 'Echipamente Sportive > Powerlifting > Benzi de Cot' : 'Sporting Goods > Powerlifting > Elbow Wraps');
 
       // Shipping tags for all 25 countries (or filtered if targetCountry specified)
       const shippingXml: string[] = [];
@@ -137,11 +159,11 @@ export async function GET(request: NextRequest) {
       for (const cCode of countriesToInclude) {
         const info = COUNTRY_SHIPPING_INFO[cCode] || { minDays: 5, maxDays: 10, currency: 'EUR', carrier: 'Packeta' };
         // Ensure shipping currency strictly matches the product currency
-        const shipCost = cCode === 'RO' 
-          ? (currency === 'EUR' ? '3.00 EUR' : '14.99 RON') 
+        const shipCost = cCode === 'RO'
+          ? (currency === 'EUR' ? '3.00 EUR' : '14.99 RON')
           : (currency === 'RON' ? '89.00 RON' : '18.00 EUR');
-          
-        const shipService = cCode === 'RO' ? 'Sameday Curier / Easybox (1-3 zile)' : `${info.carrier} Express (3-5 zile)`;
+
+        const shipService = cCode === 'RO' ? 'Sameday Curier Rapid (1-2 zile)' : `${info.carrier} Express (3-5 zile)`;
 
         shippingXml.push(`
         <g:shipping>
@@ -160,8 +182,9 @@ export async function GET(request: NextRequest) {
       <g:link>${escapeXml(productUrl)}</g:link>
       <g:image_link>${escapeXml(mainImageUrl)}</g:image_link>
       ${additionalImages.map((img: string) => `<g:additional_image_link>${escapeXml(img)}</g:additional_image_link>`).join('\n      ')}
-      <g:availability>${(product.stock_quantity ?? 1) > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>
-      <g:price>${formattedPrice}</g:price>
+      <g:availability>${Boolean(product.metadata?.soft_stock_tracking) || (product.stock_quantity ?? 1) > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>
+      <g:price>${formattedRegularPrice}</g:price>
+      ${formattedSalePrice ? `<g:sale_price>${formattedSalePrice}</g:sale_price>` : ''}
       <g:brand><![CDATA[${brand}]]></g:brand>
       <g:condition>new</g:condition>
       ${gtin ? `<g:gtin>${gtin}</g:gtin>\n      <g:identifier_exists>yes</g:identifier_exists>` : '<g:identifier_exists>no</g:identifier_exists>'}

@@ -2,6 +2,7 @@ import { getAffiliateSession } from '@/app/actions/affiliate-auth';
 import { redirect } from '@/i18n/routing';
 import DashboardClient from './DashboardClient';
 import { getAffiliateDashboardData } from '@/app/actions/affiliate-dashboard';
+import { getServerExchangeRates } from '@/utils/pricing';
 
 export default async function AffiliateDashboardPage({ 
   params 
@@ -18,11 +19,14 @@ export default async function AffiliateDashboardPage({
     redirect({ href: '/affiliate/login', locale });
   }
 
-  // Fetch stats
-  const res = await getAffiliateDashboardData();
+  // Fetch stats & exchange rates
+  const [res, exchangeRates] = await Promise.all([
+    getAffiliateDashboardData(),
+    getServerExchangeRates(),
+  ]);
   if (!res.success || !res.data) {
     redirect({ href: '/affiliate/login', locale });
   }
 
-  return <DashboardClient data={res.data as any} locale={locale} />;
+  return <DashboardClient data={res.data as any} locale={locale} exchangeRates={exchangeRates} />;
 }

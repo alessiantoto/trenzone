@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { isAdminAuthorized } from "@/app/actions/admin-auth";
+import { getStripeClient } from "@/lib/stripe-order-sync";
 
 export const dynamic = 'force-dynamic';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy_key', {
-  apiVersion: "2024-12-18.acacia" as any,
-});
 
 export async function GET(req: Request) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const stripe = getStripeClient();
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe is not configured" }, { status: 500 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -22,7 +23,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge"],
+    });
     return NextResponse.json(paymentIntent);
   } catch (error: any) {
     console.error("Stripe Retrieve Error:", error);

@@ -6,6 +6,14 @@ import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, ChevronRight, Send, ArrowUpRight, Plus, X, Calculator, Info, TrendingUp, AlertCircle, Check } from "lucide-react";
 import { submitAffiliateApplication } from "@/app/actions/affiliate";
+import { LanguageFlagSvg } from "@/components/programs/LanguageFlagSvg";
+import { useRegionStore } from "@/store/useRegionStore";
+import { convertFromRon, FALLBACK_RATES, getProductPrice } from "@/utils/pricing";
+import { isDigitalProgramItem } from "@/lib/programs";
+import {
+  formatMoneyInCurrency,
+  normalizeDisplayCurrency,
+} from "@/lib/affiliate-stats";
 
 export default function AffiliatePage() {
   const t = useTranslations("Affiliate");
@@ -94,9 +102,21 @@ export default function AffiliatePage() {
             <h1 className="text-2xl md:text-6xl font-heading font-black uppercase tracking-tighter text-black leading-tight mb-4">
               {t('hero_title')}
             </h1>
-            <p className="text-zinc-500 text-base md:text-xl font-medium max-w-2xl leading-relaxed">
+            <p className="text-zinc-500 text-base md:text-xl font-medium max-w-2xl leading-relaxed mb-6">
               {t('hero_desc')}
             </p>
+            <div className="inline-flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs sm:text-sm">
+              <span className="font-semibold text-zinc-600">
+                {isRo ? 'Ești deja partener aprobat?' : 'Already an approved partner?'}
+              </span>
+              <Link
+                href="/affiliate/login"
+                className="inline-flex items-center gap-1.5 font-black uppercase tracking-wider text-xs text-[#e32f8c] hover:text-black transition-colors"
+              >
+                <span>{isRo ? 'Autentifică-te în Dashboard' : 'Sign in to Dashboard'}</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </Link>
+            </div>
           </motion.div>
         </div>
       </section>
@@ -244,141 +264,74 @@ export default function AffiliatePage() {
                     </div>
                   </div>
 
-                  {/* 🌐 Limbă Preferată / Preferred Language - Checkbox / Selector Modern */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between ml-1">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-700">
-                        {t('form_preferred_language')}
-                      </label>
-                      <span className="text-[10px] font-bold text-zinc-400">
-                        {t('form_language_hint')}
-                      </span>
-                    </div>
+                  {/* 🌐 Limbă Preferată / Preferred Language */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">
+                      {t('form_preferred_language')}
+                    </label>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label={t('form_preferred_language')}>
-                      {/* Option: Română */}
-                      <div
-                        role="radio"
-                        aria-checked={preferredLocale === 'ro'}
-                        tabIndex={0}
-                        onClick={() => setPreferredLocale('ro')}
-                        onKeyDown={(e) => {
-                          if (e.key === ' ' || e.key === 'Enter') {
-                            e.preventDefault();
-                            setPreferredLocale('ro');
-                          }
-                        }}
-                        className={`relative flex items-center gap-3.5 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 select-none group active:scale-[0.99] ${
-                          preferredLocale === 'ro'
-                            ? 'border-[#e32f8c] bg-[#e32f8c]/5 shadow-[0_0_20px_rgba(227,47,140,0.12)]'
-                            : 'border-zinc-200 bg-zinc-50/70 hover:border-zinc-300 hover:bg-zinc-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="preferredLocale"
-                          value="ro"
-                          checked={preferredLocale === 'ro'}
-                          onChange={() => setPreferredLocale('ro')}
-                          className="sr-only"
-                          aria-hidden="true"
-                          tabIndex={-1}
-                        />
-                        {/* Modern Custom Radio Dot */}
-                        <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 ${
-                            preferredLocale === 'ro'
-                              ? 'border-[#e32f8c] bg-white shadow-xs'
-                              : 'border-zinc-300 group-hover:border-zinc-400 bg-white'
-                          }`}
-                        >
+                    <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label={t('form_preferred_language')}>
+                      {([
+                        { code: 'ro' as const, label: t('form_lang_ro'), isEnglish: false },
+                        { code: 'en' as const, label: t('form_lang_en'), isEnglish: true },
+                      ]).map((opt) => {
+                        const selected = preferredLocale === opt.code;
+                        return (
                           <div
-                            className={`w-2.5 h-2.5 rounded-full bg-[#e32f8c] transition-transform duration-200 ${
-                              preferredLocale === 'ro' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+                            key={opt.code}
+                            role="radio"
+                            aria-checked={selected}
+                            tabIndex={0}
+                            onClick={() => setPreferredLocale(opt.code)}
+                            onKeyDown={(e) => {
+                              if (e.key === ' ' || e.key === 'Enter') {
+                                e.preventDefault();
+                                setPreferredLocale(opt.code);
+                              }
+                            }}
+                            className={`relative flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 cursor-pointer transition-all duration-200 select-none group active:scale-[0.99] ${
+                              selected
+                                ? 'border-[#e32f8c] bg-[#e32f8c]/5 shadow-[0_0_20px_rgba(227,47,140,0.12)]'
+                                : 'border-zinc-200 bg-zinc-50/70 hover:border-zinc-300 hover:bg-zinc-50'
                             }`}
-                          />
-                        </div>
+                          >
+                            <input
+                              type="radio"
+                              name="preferredLocale"
+                              value={opt.code}
+                              checked={selected}
+                              onChange={() => setPreferredLocale(opt.code)}
+                              className="sr-only"
+                              aria-hidden="true"
+                              tabIndex={-1}
+                            />
+                            <div
+                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 bg-white ${
+                                selected
+                                  ? 'border-[#e32f8c] shadow-xs'
+                                  : 'border-zinc-300 group-hover:border-zinc-400'
+                              }`}
+                            >
+                              <div
+                                className={`w-2.5 h-2.5 rounded-full bg-[#e32f8c] transition-transform duration-200 ${
+                                  selected ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+                                }`}
+                              />
+                            </div>
 
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <span className="text-xl select-none shrink-0" aria-hidden="true">🇷🇴</span>
-                          <div className="flex flex-col min-w-0">
-                            <span className={`text-sm tracking-tight leading-tight transition-colors ${
-                              preferredLocale === 'ro' ? 'font-black text-black' : 'font-bold text-zinc-700 group-hover:text-black'
-                            }`}>
-                              {t('form_lang_ro')}
-                            </span>
-                            <span className="text-[10px] text-zinc-400 font-medium leading-none mt-1 truncate">
-                              {t('form_lang_ro_desc')}
-                            </span>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <LanguageFlagSvg isEnglish={opt.isEnglish} className="w-6 h-4" />
+                              <span
+                                className={`text-sm tracking-tight leading-none transition-colors truncate ${
+                                  selected ? 'font-black text-black' : 'font-bold text-zinc-700 group-hover:text-black'
+                                }`}
+                              >
+                                {opt.label}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                        
-                        {preferredLocale === 'ro' && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#e32f8c] shrink-0" />
-                        )}
-                      </div>
-
-                      {/* Option: English */}
-                      <div
-                        role="radio"
-                        aria-checked={preferredLocale === 'en'}
-                        tabIndex={0}
-                        onClick={() => setPreferredLocale('en')}
-                        onKeyDown={(e) => {
-                          if (e.key === ' ' || e.key === 'Enter') {
-                            e.preventDefault();
-                            setPreferredLocale('en');
-                          }
-                        }}
-                        className={`relative flex items-center gap-3.5 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 select-none group active:scale-[0.99] ${
-                          preferredLocale === 'en'
-                            ? 'border-[#e32f8c] bg-[#e32f8c]/5 shadow-[0_0_20px_rgba(227,47,140,0.12)]'
-                            : 'border-zinc-200 bg-zinc-50/70 hover:border-zinc-300 hover:bg-zinc-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="preferredLocale"
-                          value="en"
-                          checked={preferredLocale === 'en'}
-                          onChange={() => setPreferredLocale('en')}
-                          className="sr-only"
-                          aria-hidden="true"
-                          tabIndex={-1}
-                        />
-                        {/* Modern Custom Radio Dot */}
-                        <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 ${
-                            preferredLocale === 'en'
-                              ? 'border-[#e32f8c] bg-white shadow-xs'
-                              : 'border-zinc-300 group-hover:border-zinc-400 bg-white'
-                          }`}
-                        >
-                          <div
-                            className={`w-2.5 h-2.5 rounded-full bg-[#e32f8c] transition-transform duration-200 ${
-                              preferredLocale === 'en' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
-                            }`}
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <span className="text-xl select-none shrink-0" aria-hidden="true">🇬🇧</span>
-                          <div className="flex flex-col min-w-0">
-                            <span className={`text-sm tracking-tight leading-tight transition-colors ${
-                              preferredLocale === 'en' ? 'font-black text-black' : 'font-bold text-zinc-700 group-hover:text-black'
-                            }`}>
-                              {t('form_lang_en')}
-                            </span>
-                            <span className="text-[10px] text-zinc-400 font-medium leading-none mt-1 truncate">
-                              {t('form_lang_en_desc')}
-                            </span>
-                          </div>
-                        </div>
-
-                        {preferredLocale === 'en' && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#e32f8c] shrink-0" />
-                        )}
-                      </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -443,18 +396,77 @@ export default function AffiliatePage() {
 function EarningsCalculator() {
   const locale = useLocale();
   const isRo = locale === "ro";
+  const uiLocale: 'ro' | 'en' = isRo ? 'ro' : 'en';
+
+  const { currency: storeCurrency, exchangeRates, fetchExchangeRates } = useRegionStore();
+  const [mounted, setMounted] = useState(false);
+  const [averageOrderValueRon, setAverageOrderValueRon] = useState<number>(420);
+
+  useEffect(() => {
+    setMounted(true);
+    fetchExchangeRates();
+
+    let cancelled = false;
+    fetch('/api/products')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (cancelled || !json?.products?.length) return;
+        const activeProducts = json.products.filter((p: any) => p.is_active !== false);
+        const physicalPrices = activeProducts
+          .filter((p: any) => !isDigitalProgramItem(p))
+          .map((p: any) => Number(p.price_numeric) || getProductPrice(p.price, 'RON'))
+          .filter((n: number) => n > 0);
+        const digitalPrices = activeProducts
+          .filter((p: any) => isDigitalProgramItem(p))
+          .map((p: any) => Number(p.price_numeric) || getProductPrice(p.price, 'RON'))
+          .filter((n: number) => n > 0);
+
+        const avgPhys =
+          physicalPrices.length > 0
+            ? physicalPrices.reduce((a: number, b: number) => a + b, 0) / physicalPrices.length
+            : 430;
+        const avgDig =
+          digitalPrices.length > 0
+            ? digitalPrices.reduce((a: number, b: number) => a + b, 0) / digitalPrices.length
+            : 147;
+
+        // Weighted AOV reflecting ~80% physical gear (with occasional 2-item/combo uplift) & ~20% digital programs
+        const computedAov = Math.round((avgPhys * 1.1 * 0.8 + avgDig * 0.2) / 5) * 5;
+        if (computedAov > 0) {
+          setAverageOrderValueRon(computedAov);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchExchangeRates]);
+
+  const displayCurrency = normalizeDisplayCurrency(
+    mounted ? storeCurrency : (isRo ? 'RON' : 'EUR'),
+    isRo ? 'RON' : 'EUR'
+  );
+  const effectiveRates = useMemo(
+    () => ({ ...FALLBACK_RATES, ...(exchangeRates || {}) }),
+    [exchangeRates]
+  );
 
   const [salesPerMonth, setSalesPerMonth] = useState<number>(35);
   const [commissionRate, setCommissionRate] = useState<number>(0.10);
-  const averageOrderValue = 320; // TrenZone average order value in RON
 
-  const estimatedEarnings = useMemo(() => {
-    return Math.round(salesPerMonth * averageOrderValue * commissionRate);
-  }, [salesPerMonth, commissionRate]);
+  const averageOrderDisplay = useMemo(() => {
+    if (displayCurrency === 'RON') return Math.round(averageOrderValueRon);
+    return Math.round(convertFromRon(averageOrderValueRon, displayCurrency, effectiveRates));
+  }, [averageOrderValueRon, displayCurrency, effectiveRates]);
 
   const earningsPerOrder = useMemo(() => {
-    return Math.round(averageOrderValue * commissionRate);
-  }, [commissionRate]);
+    return Math.round(averageOrderDisplay * commissionRate * 100) / 100;
+  }, [averageOrderDisplay, commissionRate]);
+
+  const estimatedEarnings = useMemo(() => {
+    return Math.round(salesPerMonth * earningsPerOrder);
+  }, [salesPerMonth, earningsPerOrder]);
 
   const audienceLabel = useMemo(() => {
     if (salesPerMonth <= 20) {
@@ -503,7 +515,7 @@ function EarningsCalculator() {
         <div className="relative z-10">
           
           {/* Header */}
-          <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/10">
+          <div className="flex flex-wrap items-start sm:items-center justify-between gap-2.5 mb-5 pb-4 border-b border-white/10">
             <div>
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e32f8c] block mb-1">
                 {isRo ? "SIMULATOR PARTENERI" : "PARTNER SIMULATOR"}
@@ -512,9 +524,12 @@ function EarningsCalculator() {
                 {isRo ? "POTENȚIAL DE CÂȘTIG TRENZONE®" : "TRENZONE® REVENUE SIMULATOR"}
               </h3>
             </div>
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-zinc-400">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-zinc-300 shrink-0">
               <TrendingUp className="w-3.5 h-3.5 text-[#e32f8c]" />
-              <span>{isRo ? "Valoare medie: 320 RON / comandă" : "Avg order: 320 RON"}</span>
+              <span>
+                {isRo ? "Valoare medie:" : "Avg order:"}{" "}
+                {formatMoneyInCurrency(averageOrderDisplay, displayCurrency, uiLocale, 0)}
+              </span>
             </div>
           </div>
 
@@ -620,17 +635,16 @@ function EarningsCalculator() {
             </span>
             <div className="flex items-baseline justify-center gap-2 mb-2.5">
               <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
-                {estimatedEarnings.toLocaleString(isRo ? 'ro-RO' : 'en-US')}
-              </span>
-              <span className="text-lg font-black text-[#e32f8c]">
-                RON
+                {formatMoneyInCurrency(estimatedEarnings, displayCurrency, uiLocale, 0)}
               </span>
             </div>
 
-            {/* Micro breakdown pill (Plată automată lunară removed) */}
+            {/* Micro breakdown pill */}
             <div className="flex justify-center">
               <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-bold text-zinc-300">
-                {isRo ? `~${earningsPerOrder} RON profit / comandă` : `~${earningsPerOrder} RON / order`}
+                {isRo
+                  ? `~${formatMoneyInCurrency(earningsPerOrder, displayCurrency, uiLocale, Number.isInteger(earningsPerOrder) ? 0 : 2)} profit / comandă`
+                  : `~${formatMoneyInCurrency(earningsPerOrder, displayCurrency, uiLocale, Number.isInteger(earningsPerOrder) ? 0 : 2)} commission / order`}
               </span>
             </div>
           </div>

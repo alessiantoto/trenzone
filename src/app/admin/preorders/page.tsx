@@ -35,36 +35,18 @@ import { getAdminOrders } from '@/app/actions/admin-orders';
 import { getAdminProductsServer } from '@/app/actions/products';
 import { updateOrderShippingAction } from '@/app/actions/orders';
 import { emitOblioInvoiceAction } from '@/app/actions/invoices';
+import {
+  classifyOrderHistoricalOrActivePreorder,
+  isItemSnapshotPreorder,
+  matchesAdminOrderSearch,
+} from '@/utils/order-search';
 
 export function hasOrderPreorderItems(o: any): boolean {
-  if (!o) return false;
-  if (o.status === 'preorder' || o.is_preorder || o.isPreorder || o.carrierMetadata?.is_preorder) return true;
-  if (!o.items || !Array.isArray(o.items)) return false;
-  return o.items.some((item: any) => isItemPreorder(item));
+  return classifyOrderHistoricalOrActivePreorder(o);
 }
 
 export function isItemPreorder(item: any): boolean {
-  if (!item) return false;
-  if (item.stock_status === 'preorder' || item.is_preorder === true) return true;
-  if (item.selectedVariant?.stock_status === 'preorder') return true;
-
-  const vName = typeof item.selectedVariant?.name === 'object' 
-    ? (item.selectedVariant.name.ro || item.selectedVariant.name.en || '')
-    : String(item.selectedVariant?.name || item.variant || '');
-
-  if (vName.toLowerCase().includes('precomand') || vName.toLowerCase().includes('pre-order')) return true;
-
-  if (item.variants?.options) {
-    const selectedOpt = item.variants.options.find((opt: any) => {
-      const optNameRo = typeof opt.name === 'object' ? opt.name.ro : opt.name;
-      const optNameEn = typeof opt.name === 'object' ? opt.name.en : opt.name;
-      const selNameRo = typeof item.selectedVariant?.name === 'object' ? (item.selectedVariant.name as any).ro : item.selectedVariant?.name;
-      const selNameEn = typeof item.selectedVariant?.name === 'object' ? (item.selectedVariant.name as any).en : item.selectedVariant?.name;
-      return optNameRo === selNameRo || optNameEn === selNameEn || optNameRo === selNameEn || optNameEn === selNameRo;
-    });
-    if (selectedOpt?.stock_status === 'preorder') return true;
-  }
-  return false;
+  return isItemSnapshotPreorder(item);
 }
 
 const FALLBACK_CATALOG_PRODUCTS = [
@@ -73,7 +55,7 @@ const FALLBACK_CATALOG_PRODUCTS = [
     name: 'X10 Elbow Wraps',
     badge: 'PR CHASER · +20 KG',
     price: 529.99,
-    image: 'https://walfsewxhsjnfjfvxymi.supabase.co/storage/v1/object/public/products/x10_elbow_wraps_white_3.webp',
+    image: 'https://walfsewxhsjnfjfvxymi.supabase.co/storage/v1/object/public/products/x10_elbow_wraps_white.webp',
     variants: {
       type: 'flavor',
       label: { ro: 'Culoare', en: 'Color' },
@@ -409,17 +391,7 @@ export default function AdminPreordersPage() {
 
       // 3. Search filter
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const idMatch = (order.id || '').toLowerCase().includes(q);
-        const nameMatch = (order.customer || '').toLowerCase().includes(q);
-        const emailMatch = (order.customerEmail || '').toLowerCase().includes(q);
-        const phoneMatch = (order.phone || '').toLowerCase().includes(q);
-        const cityMatch = (order.addrCity || order.address || '').toLowerCase().includes(q);
-        const itemMatch = (order.items || []).some((it: any) => 
-          (it.name || '').toLowerCase().includes(q) ||
-          JSON.stringify(it.selectedVariant || '').toLowerCase().includes(q)
-        );
-        return idMatch || nameMatch || emailMatch || phoneMatch || cityMatch || itemMatch;
+        return matchesAdminOrderSearch(order, searchQuery);
       }
 
       return true;

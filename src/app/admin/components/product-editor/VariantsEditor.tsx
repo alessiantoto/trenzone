@@ -3,6 +3,7 @@
 import { Product } from "@/lib/api";
 import { Plus, Trash2, Tag, ChevronDown, Check, Sparkles, Palette } from "lucide-react";
 import { useState } from "react";
+import { TeeStockMatrixCard } from "@/components/admin/TeeStockMatrixCard";
 
 interface VariantsEditorProps {
   product: Partial<Product>;
@@ -302,6 +303,26 @@ export function VariantsEditor({ product, onChange }: VariantsEditorProps) {
           </div>
         )}
       </div>
+
+      {/* 📊 INVENTAR PER MODEL & MĂRIME (pentru Tricouri / produse cu tracking intern) */}
+      {(product.slug === 'tricou-trenzone' || Boolean((product as any).metadata?.variant_stock)) && (
+        <TeeStockMatrixCard
+          productName={typeof product.name === 'object' ? (product.name.ro || product.name.en) : product.name}
+          initialMatrix={(product as any).metadata?.variant_stock}
+          initialSold={(product as any).metadata?.variant_sold}
+          models={rawVariants.options
+            .map((o: any) => (typeof o.name === 'object' ? (o.name.ro || o.name.en) : String(o.name || '')))
+            .filter(Boolean)}
+          onLiveChange={(nextMatrix, nextTotal) => {
+            onChange('metadata', {
+              ...((product as any).metadata || {}),
+              soft_stock_tracking: true,
+              variant_stock: nextMatrix,
+            });
+            onChange('stock_quantity', nextTotal);
+          }}
+        />
+      )}
     </div>
   );
 }

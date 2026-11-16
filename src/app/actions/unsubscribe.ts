@@ -24,9 +24,17 @@ export async function unsubscribeEmail(email: string, locale: string = 'ro'): Pr
       return { success: false, error: isEn ? 'Invalid email address.' : 'Adresă de email invalidă.' };
     }
 
+    const { error: subErr } = await supabaseAdmin
+      .from('subscribers')
+      .update({ is_active: false })
+      .eq('email', cleanEmail);
+    if (subErr) {
+      console.warn('Warning updating subscribers on unsubscribe:', subErr);
+    }
+
     const { error } = await supabaseAdmin
       .from('unsubscribed_emails')
-      .upsert({ email: cleanEmail, marketing: false });
+      .upsert({ email: cleanEmail, marketing: false, created_at: new Date().toISOString() }, { onConflict: 'email' });
 
     if (error) throw error;
     return { success: true };

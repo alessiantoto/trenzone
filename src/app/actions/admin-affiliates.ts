@@ -4,6 +4,15 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { isAdminAuthorized } from "./admin-auth";
 import { createClient } from "@/utils/supabase/server";
 import { convertToRon, getServerExchangeRates } from "@/utils/pricing";
+import {
+  computeAffiliateOrderMetrics,
+  computeAffiliateFinancialSummary,
+  convertAffiliateItemPriceToRon,
+  formatRon,
+  normalizeAffiliatePayouts,
+  roundCurrency,
+} from "@/lib/affiliate-stats";
+import { getSiteUrl } from "@/lib/site-config";
 
 export async function getAdminAffiliates() {
   const supabase = await createClient();
@@ -23,7 +32,19 @@ export async function getAdminAffiliates() {
 
   if (error) {
     console.error("❌ [ADMIN AFFILIATES] Fetch Error:", error);
-    return { affiliates: [], stats: { totalSales: 0, totalCommissions: 0, activeCount: 0 } };
+    return {
+      affiliates: [],
+      stats: {
+        totalSales: 0,
+        totalNetSales: 0,
+        totalCommissions: 0,
+        totalPaid: 0,
+        totalPending: 0,
+        totalOrders: 0,
+        activeCount: 0,
+        pendingCount: 0,
+      },
+    };
   }
 
   // Fetch coupons to map affiliate codes to coupon IDs (excluding scratch coupons to avoid 1000 row limit truncation)
@@ -44,8 +65,10 @@ export async function getAdminAffiliates() {
   // Fetch all orders with coupon or discount, including customer details
   const { data: ordersData } = await supabaseAdmin
     .from('orders')
-    .select('id, payment_intent_id, receipt_url, coupon_id, total_amount, subtotal, discount_total, currency, status, items, created_at, carrier_metadata, customer_firstname, customer_lastname, customer_email, customer_phone, addr_city')
+    .select('id, payment_intent_id, receipt_url, coupon_id, total_amount, subtotal, discount_total, shipping_amount, currency, status, payment_method, items, created_at, carrier_metadata, customer_firstname, customer_lastname, customer_email, customer_phone, addr_city')
     .order('created_at', { ascending: false });
+
+  const toRon = (amount: number, currency: string) => convertToRon(amount, currency, liveRates);
 
   const mappedAffiliates = (affiliatesData || []).map(affiliate => {
     const commissionPercent = Number(affiliate.commission_percent) || 10;
@@ -65,29 +88,8 @@ export async function getAdminAffiliates() {
       );
     });
 
-    let calculatedSales = 0;
-    let calculatedCommissions = 0;
-    let validOrdersCount = 0;
-
     const mappedOrders = matchingOrders.map((o: any) => {
-      const rawOrderTotal = Number(o.total_amount) || 0;
-      const rawDiscount = Number(o.discount_total) || 0;
-      const rawShipping = Number(o.shipping_amount) || 0;
-      const rawBaseSubtotal = Number(o.subtotal) > 0 ? Number(o.subtotal) : Math.max(0, rawOrderTotal - rawShipping);
-      const netOrderSubtotal = Math.max(0, rawBaseSubtotal - rawDiscount);
-      const orderCurrency = (o.currency || 'RON').toUpperCase();
-      const orderTotal = convertToRon(rawOrderTotal, orderCurrency, liveRates);
-      const orderSubtotal = convertToRon(netOrderSubtotal, orderCurrency, liveRates);
-
-      // Filter out canceled, returned, refunded, or failed orders from commission tally
-      const isNonCountable = ['cancelled', 'anulat', 'anulata', 'returned', 'returnat', 'returnata', 'refunded', 'rambursat', 'failed', 'refused', 'neridicat'].includes(String(o.status || '').toLowerCase().trim());
-      const commission = isNonCountable ? 0 : Math.round((orderSubtotal * (commissionPercent / 100)) * 100) / 100;
-
-      if (!isNonCountable) {
-        calculatedSales += orderTotal;
-        calculatedCommissions += commission;
-        validOrdersCount += 1;
-      }
+      const metrics = computeAffiliateOrderMetrics(o, commissionPercent, toRon);
 
       const odinId = o.receipt_url?.match(/(?:TZ|ODIN)-[A-Za-z0-9-]+/)?.[0] 
         || (o.payment_intent_id?.startsWith('TZ-') ? o.payment_intent_id : null)
@@ -101,6 +103,10 @@ export async function getAdminAffiliates() {
       const customerCity = o.addr_city || '';
 
       const rawItems = Array.isArray(o.items) ? o.items : [];
+      const rawItemsSum = rawItems.reduce(
+        (sum: number, it: any) => sum + (Number(it.price) || 0) * Math.max(1, Number(it.quantity) || 1),
+        0
+      );
       const items = rawItems.map((item: any) => {
         let itemName = typeof item.name === 'object' && item.name !== null
           ? item.name.ro || item.name.en || Object.values(item.name)[0] || 'Produs'
@@ -114,7 +120,7 @@ export async function getAdminAffiliates() {
         return {
           name: itemName,
           quantity: Math.max(1, Number(item.quantity) || 1),
-          price: Number(item.price) || 0,
+          price: convertAffiliateItemPriceToRon(Number(item.price) || 0, rawItemsSum, o, toRon),
           variant: variantStr,
           image: item.image || item.main_image || ''
         };
@@ -136,31 +142,33 @@ export async function getAdminAffiliates() {
           minute: '2-digit'
         }),
         status: o.status || 'processing',
-        isCountable: !isNonCountable,
-        currency: (o.currency || 'RON').toUpperCase(),
-        totalAmount: orderTotal,
-        subtotal: orderSubtotal,
-        commissionAmount: commission,
+        paymentMethod: o.payment_method || null,
+        isCountable: metrics.isCountable,
+        nonCountableReason: metrics.nonCountableReason,
+        nonCountableLabel: metrics.nonCountableLabel,
+        // Converted amounts are always expressed in RON
+        currency: 'RON',
+        originalCurrency: metrics.originalCurrency,
+        originalTotalAmount: metrics.originalTotalAmount,
+        totalAmount: metrics.totalAmount,
+        subtotal: metrics.subtotal,
+        shippingAmount: metrics.shippingAmount,
+        commissionAmount: metrics.commissionAmount,
         items
       };
     });
 
-    // Authoritative totals: when real orders exist, calculatedSales reflects non-cancelled orders accurately
-    const totalSales = mappedOrders.length > 0
-      ? Math.round(calculatedSales * 100) / 100
-      : (Number(affiliate.total_earnings_ron) || 0);
-
-    const totalCommissions = mappedOrders.length > 0
-      ? Math.round(calculatedCommissions * 100) / 100
-      : Math.round((totalSales * (commissionPercent / 100)) * 100) / 100;
-
     const paymentDetails = affiliate.payment_details || {};
-    const paidPayout = Number(paymentDetails.paid_amount) || 0;
-    const pendingPayout = Math.max(0, Math.round((totalCommissions - paidPayout) * 100) / 100);
-    const usagesCount = mappedOrders.length > 0 ? validOrdersCount : (Number(affiliate.usage_count) || 0);
-    const aov = usagesCount > 0 ? Math.round((totalSales / usagesCount) * 100) / 100 : 0;
+    const summary = computeAffiliateFinancialSummary(
+      mappedOrders,
+      commissionPercent,
+      paymentDetails,
+      Number(affiliate.total_earnings_ron) || 0,
+      Number(affiliate.usage_count) || 0
+    );
 
-    const referralLink = `https://www.trenzone.fit/ro?ref=${encodeURIComponent(affiliate.code || '')}`;
+    const affLocale = (affiliate.locale || affiliate.social_links?.locale) === 'en' ? 'en' : 'ro';
+    const referralLink = `${getCanonicalBaseUrl()}/${affLocale}?ref=${encodeURIComponent(affiliate.code || '')}`;
 
     return {
       id: affiliate.id,
@@ -170,17 +178,24 @@ export async function getAdminAffiliates() {
       referralLink,
       commission: `${commissionPercent}%`,
       commissionRaw: commissionPercent,
-      totalSales: `${totalSales} RON`,
-      totalSalesRaw: totalSales,
-      totalCommissions: `${totalCommissions} RON`,
-      totalCommissionsRaw: totalCommissions,
-      pendingPayout: `${pendingPayout} RON`,
-      pendingPayoutRaw: pendingPayout,
-      paidPayout: `${paidPayout} RON`,
-      paidPayoutRaw: paidPayout,
-      aov: `${aov} RON`,
-      aovRaw: aov,
-      usages: usagesCount,
+      totalSales: formatRon(summary.totalSales),
+      totalSalesRaw: summary.totalSales,
+      totalNetSales: formatRon(summary.totalNetSales),
+      totalNetSalesRaw: summary.totalNetSales,
+      totalCommissions: formatRon(summary.totalCommissions),
+      totalCommissionsRaw: summary.totalCommissions,
+      pendingPayout: formatRon(summary.pendingPayout),
+      pendingPayoutRaw: summary.pendingPayout,
+      paidPayout: formatRon(summary.paidPayout),
+      paidPayoutRaw: summary.paidPayout,
+      overpaidAmountRaw: summary.overpaidAmount,
+      payoutProgressPercent: summary.payoutProgressPercent,
+      aov: formatRon(summary.aov),
+      aovRaw: summary.aov,
+      usages: summary.validOrdersCount,
+      cancelledOrdersCount: summary.cancelledOrdersCount,
+      totalOrdersMatched: mappedOrders.length,
+      lastPayoutAt: summary.lastPayoutAt,
       status: affiliate.status || 'pending',
       requestedAt: affiliate.requested_at ? new Date(affiliate.requested_at).toLocaleDateString('ro-RO') : null,
       activatedAt: affiliate.activated_at ? new Date(affiliate.activated_at).toLocaleDateString('ro-RO') : null,
@@ -189,7 +204,9 @@ export async function getAdminAffiliates() {
         iban: paymentDetails.iban || '',
         bankName: paymentDetails.bank_name || paymentDetails.bank || '',
         accountHolder: paymentDetails.account_holder || affiliate.name,
-        paidAmount: paidPayout
+        paidAmount: summary.paidPayout,
+        lastPayoutAt: summary.lastPayoutAt,
+        payouts: summary.payouts,
       },
       orders: mappedOrders,
       history: []
@@ -197,24 +214,35 @@ export async function getAdminAffiliates() {
   });
 
   const activeCount = mappedAffiliates.filter(a => a.status === 'active').length;
-  const totalSales = mappedAffiliates.reduce((sum, a) => sum + (a.totalSalesRaw || 0), 0);
-  const totalCommissions = mappedAffiliates.reduce((sum, a) => sum + (a.totalCommissionsRaw || 0), 0);
+  const pendingCount = mappedAffiliates.filter(a => a.status === 'pending').length;
+  const totalSales = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.totalSalesRaw || 0), 0));
+  const totalNetSales = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.totalNetSalesRaw || 0), 0));
+  const totalCommissions = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.totalCommissionsRaw || 0), 0));
+  const totalPaid = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.paidPayoutRaw || 0), 0));
+  const totalPending = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.pendingPayoutRaw || 0), 0));
+  const totalOrders = mappedAffiliates.reduce((sum, a) => sum + (a.usages || 0), 0);
 
   return {
     affiliates: mappedAffiliates,
     stats: {
-      totalSales: Math.round(totalSales * 100) / 100,
-      totalCommissions: Math.round(totalCommissions * 100) / 100,
-      activeCount
+      totalSales,
+      totalNetSales,
+      totalCommissions,
+      totalPaid,
+      totalPending,
+      totalOrders,
+      activeCount,
+      pendingCount,
     }
   };
 }
 
-export async function recordAffiliatePayoutAction(affiliateId: string, amount: number) {
+export async function recordAffiliatePayoutAction(affiliateId: string, amount: number, note?: string) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error("Neautorizat");
 
-  if (!amount || isNaN(amount) || amount <= 0) {
+  const roundedAmount = roundCurrency(amount);
+  if (!Number.isFinite(roundedAmount) || roundedAmount <= 0) {
     return { success: false, error: 'Te rugăm să introduci o sumă validă.' };
   }
 
@@ -227,8 +255,24 @@ export async function recordAffiliatePayoutAction(affiliateId: string, amount: n
   if (fetchErr || !aff) return { success: false, error: 'Afiliat negăsit.' };
 
   const currentDetails = aff.payment_details || {};
-  const currentPaid = Number(currentDetails.paid_amount || 0);
-  const newPaid = Math.round((currentPaid + amount) * 100) / 100;
+  const { payouts: existingPayouts, paidAmount: currentPaid } = normalizeAffiliatePayouts(currentDetails);
+
+  const now = new Date().toISOString();
+  const cleanNote = typeof note === 'string' ? note.trim().slice(0, 200) : '';
+  const payoutId = globalThis.crypto?.randomUUID?.() || `payout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const newEntry = {
+    id: payoutId,
+    amount: roundedAmount,
+    paidAt: now,
+    ...(cleanNote ? { note: cleanNote } : {}),
+    ...(currentDetails.iban ? { ibanSnapshot: String(currentDetails.iban) } : {}),
+  };
+
+  // Persist sanitized list (preserving any migrated legacy payout record)
+  const sanitizedExisting = existingPayouts.map(({ isLegacy: _legacy, ...rest }) => rest);
+  const updatedPayouts = [newEntry, ...sanitizedExisting];
+  const newPaid = roundCurrency(currentPaid + roundedAmount);
 
   const { error: updateErr } = await supabaseAdmin
     .from('affiliates')
@@ -236,18 +280,192 @@ export async function recordAffiliatePayoutAction(affiliateId: string, amount: n
       payment_details: {
         ...currentDetails,
         paid_amount: newPaid,
-        last_payout_at: new Date().toISOString()
+        last_payout_at: now,
+        payouts: updatedPayouts,
       },
-      updated_at: new Date().toISOString()
+      updated_at: now,
     })
     .eq('id', affiliateId);
 
   if (updateErr) return { success: false, error: 'Eroare la actualizarea plății.' };
 
-  return { success: true, newPaid };
+  return { success: true, newPaid, payout: newEntry, payouts: updatedPayouts };
+}
+
+export async function deleteAffiliatePayoutAction(affiliateId: string, payoutId: string) {
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) throw new Error("Neautorizat");
+
+  if (!payoutId || !payoutId.trim()) {
+    return { success: false, error: 'ID plată invalid.' };
+  }
+
+  const { data: aff, error: fetchErr } = await supabaseAdmin
+    .from('affiliates')
+    .select('payment_details')
+    .eq('id', affiliateId)
+    .single();
+
+  if (fetchErr || !aff) return { success: false, error: 'Afiliat negăsit.' };
+
+  const currentDetails = aff.payment_details || {};
+  const { payouts: existingPayouts } = normalizeAffiliatePayouts(currentDetails);
+
+  const targetExists = existingPayouts.some((p) => p.id === payoutId);
+  if (!targetExists) {
+    return { success: false, error: 'Înregistrarea plății nu a fost găsită.' };
+  }
+
+  const remainingPayouts = existingPayouts
+    .filter((p) => p.id !== payoutId)
+    .map(({ isLegacy: _legacy, ...rest }) => rest);
+
+  const newPaid = roundCurrency(remainingPayouts.reduce((sum, p) => sum + p.amount, 0));
+  const now = new Date().toISOString();
+  const nextLastPayoutAt = remainingPayouts[0]?.paidAt || null;
+
+  const { error: updateErr } = await supabaseAdmin
+    .from('affiliates')
+    .update({
+      payment_details: {
+        ...currentDetails,
+        paid_amount: newPaid,
+        last_payout_at: nextLastPayoutAt,
+        payouts: remainingPayouts,
+      },
+      updated_at: now,
+    })
+    .eq('id', affiliateId);
+
+  if (updateErr) return { success: false, error: 'Eroare la ștergerea înregistrării.' };
+
+  return { success: true, newPaid, payouts: remainingPayouts };
 }
 
 import { sendAffiliateApprovalEmail } from '@/lib/resend-service';
+
+function escapeLike(val: string): string {
+  return val.replace(/[\\%_]/g, '\\$&');
+}
+
+function getCanonicalBaseUrl(): string {
+  return getSiteUrl();
+}
+
+async function checkCodeConflict(cleanCode: string, excludeAffiliateId?: string): Promise<string | null> {
+  let query = supabaseAdmin
+    .from('affiliates')
+    .select('id, name, email, status')
+    .ilike('code', escapeLike(cleanCode));
+
+  if (excludeAffiliateId) {
+    query = query.neq('id', excludeAffiliateId);
+  }
+
+  const { data: conflicts, error } = await query.limit(1);
+  if (error) {
+    console.error('Code conflict check error:', error);
+    return 'Eroare la verificarea unicității codului de afiliat.';
+  }
+
+  const conflict = conflicts?.[0];
+  if (conflict && conflict.status !== 'rejected') {
+    return `Codul "${cleanCode}" este deja atribuit afiliatului ${conflict.name} (${conflict.email}). Alege un cod unic.`;
+  }
+
+  // Prevent silently overwriting an existing standalone store promo coupon
+  const { data: existingCoupon, error: couponErr } = await supabaseAdmin
+    .from('coupons')
+    .select('id, code')
+    .ilike('code', escapeLike(cleanCode))
+    .limit(1)
+    .maybeSingle();
+
+  if (couponErr) {
+    console.error('Coupon conflict check error:', couponErr);
+    return 'Eroare la verificarea codului de cupon în baza de date.';
+  }
+
+  if (existingCoupon) {
+    let ownedByCurrentActiveAffiliate = false;
+    if (excludeAffiliateId) {
+      const { data: currentAff } = await supabaseAdmin
+        .from('affiliates')
+        .select('code, status')
+        .eq('id', excludeAffiliateId)
+        .maybeSingle();
+      if (
+        currentAff &&
+        currentAff.status === 'active' &&
+        String(currentAff.code || '').toUpperCase() === cleanCode.toUpperCase()
+      ) {
+        ownedByCurrentActiveAffiliate = true;
+      }
+    }
+    if (!ownedByCurrentActiveAffiliate) {
+      return `Codul "${cleanCode}" există deja ca și cupon promoțional în magazin. Alege un cod unic pentru afiliat.`;
+    }
+  }
+  return null;
+}
+
+async function ensureActiveAffiliateCoupon(cleanCode: string, commission: number): Promise<string | null> {
+  const { data: existingCoupon, error: lookupErr } = await supabaseAdmin
+    .from('coupons')
+    .select('id, code, is_active')
+    .ilike('code', escapeLike(cleanCode))
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupErr) {
+    console.error('Coupon lookup error:', lookupErr);
+    return `Eroare la verificarea cuponului în baza de date: ${lookupErr.message}`;
+  }
+
+  if (existingCoupon) {
+    const { error: updateErr } = await supabaseAdmin
+      .from('coupons')
+      .update({ code: cleanCode, is_active: true, value: commission })
+      .eq('id', existingCoupon.id);
+
+    if (updateErr) {
+      console.error('Coupon update error:', updateErr);
+      return `Eroare la activarea cuponului "${cleanCode}": ${updateErr.message}`;
+    }
+  } else {
+    const { error: insertErr } = await supabaseAdmin
+      .from('coupons')
+      .insert({
+        code: cleanCode,
+        type: 'percentage',
+        value: commission,
+        usage_limit: null,
+        expires_at: null,
+        is_active: true,
+        used_count: 0,
+        created_at: new Date().toISOString()
+      });
+
+    if (insertErr) {
+      console.error('Coupon insert error:', insertErr);
+      return `Eroare la crearea cuponului "${cleanCode}": ${insertErr.message}`;
+    }
+  }
+
+  return null;
+}
+
+async function setCouponActiveState(code: string | null | undefined, isActive: boolean): Promise<void> {
+  const cleanCode = (code || '').trim().toUpperCase();
+  if (!cleanCode || !/^[A-Z0-9_-]{2,30}$/.test(cleanCode)) return;
+  const { error } = await supabaseAdmin
+    .from('coupons')
+    .update({ is_active: isActive })
+    .ilike('code', escapeLike(cleanCode));
+  if (error) {
+    console.warn(`Could not set coupon ${cleanCode} is_active=${isActive}:`, error);
+  }
+}
 
 export async function approveAffiliate(id: string, code: string, commission: number) {
   const isAuthorized = await isAdminAuthorized();
@@ -265,38 +483,25 @@ export async function approveAffiliate(id: string, code: string, commission: num
     return { success: false, error: 'Nu am putut prelua datele afiliatului.' };
   }
 
-  const cleanCode = code.trim().toUpperCase();
+  const cleanCode = (code || '').replace(/\s+/g, '').trim().toUpperCase();
   if (!/^[A-Z0-9_-]{2,30}$/.test(cleanCode)) {
     return { success: false, error: 'Codul de afiliat poate conține doar litere, cifre, liniuță și underscore (2-30 caractere).' };
   }
 
-  // 1. Ensure coupon exists in `coupons` table
-  const { data: existingCoupon } = await supabaseAdmin
-    .from('coupons')
-    .select('id, code, is_active')
-    .eq('code', cleanCode)
-    .maybeSingle();
+  const validCommission = Number(commission);
+  if (!Number.isFinite(validCommission) || validCommission < 1 || validCommission > 50) {
+    return { success: false, error: 'Comisionul trebuie să fie între 1% și 50%.' };
+  }
 
-  if (existingCoupon) {
-    // If coupon already exists (e.g. created manually), just ensure it's active and has correct value
-    await supabaseAdmin
-      .from('coupons')
-      .update({ is_active: true, value: commission })
-      .eq('id', existingCoupon.id);
-  } else {
-    // Create the new coupon automatically
-    await supabaseAdmin
-      .from('coupons')
-      .insert({
-        code: cleanCode,
-        type: 'percentage',
-        value: commission, // Set coupon value to match commission (or 10)
-        usage_limit: null,
-        expires_at: null,
-        is_active: true,
-        used_count: 0,
-        created_at: new Date().toISOString()
-      });
+  const conflictErr = await checkCodeConflict(cleanCode, id);
+  if (conflictErr) {
+    return { success: false, error: conflictErr };
+  }
+
+  // 1. Ensure coupon exists & is active in `coupons` table
+  const couponErr = await ensureActiveAffiliateCoupon(cleanCode, validCommission);
+  if (couponErr) {
+    return { success: false, error: couponErr };
   }
 
   // 2. Update affiliate status to active
@@ -305,31 +510,35 @@ export async function approveAffiliate(id: string, code: string, commission: num
     .update({ 
       status: 'active', 
       code: cleanCode,
-      commission_percent: commission,
+      commission_percent: validCommission,
       activated_at: new Date().toISOString()
     })
     .eq('id', id);
 
   if (error) {
     console.error("Failed to approve affiliate:", error);
-    return { success: false, error: 'A apărut o eroare la aprobarea afiliatului.' };
+    return { success: false, error: `A apărut o eroare la aprobarea afiliatului: ${error.message}` };
   }
 
   // 3. Determine locale from social_links JSON
   const locale = affiliate.social_links?.locale === 'en' ? 'en' : 'ro';
   
   // Construct login URL
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.trenzone.fit'; 
+  const baseUrl = getCanonicalBaseUrl(); 
   const loginUrl = `${baseUrl}/${locale}/affiliate/login`;
 
-  // 4. Send the approval email
+  // 4. Send the approval email and surface delivery result honestly to Admin UI
+  let emailSent = true;
+  let emailError: string | undefined;
   try {
-    await sendAffiliateApprovalEmail(affiliate.email, affiliate.name, cleanCode, locale, loginUrl, commission);
-  } catch (emailError) {
+    await sendAffiliateApprovalEmail(affiliate.email, affiliate.name, cleanCode, locale, loginUrl, validCommission);
+  } catch (err: any) {
+    emailSent = false;
+    emailError = err?.message || String(err);
     console.error("Failed to send approval email, but affiliate was approved:", emailError);
   }
 
-  return { success: true };
+  return { success: true, emailSent, emailError };
 }
 
 export async function updateAffiliate(id: string, code: string, commission: number) {
@@ -346,29 +555,41 @@ export async function updateAffiliate(id: string, code: string, commission: numb
     return { success: false, error: 'Nu am putut prelua datele afiliatului.' };
   }
 
-  const cleanCode = code.trim().toUpperCase();
+  const cleanCode = (code || '').replace(/\s+/g, '').trim().toUpperCase();
   if (!/^[A-Z0-9_-]{2,30}$/.test(cleanCode)) {
     return { success: false, error: 'Codul de afiliat poate conține doar litere, cifre, liniuță și underscore (2-30 caractere).' };
   }
 
+  const validCommission = Number(commission);
+  if (!Number.isFinite(validCommission) || validCommission < 1 || validCommission > 50) {
+    return { success: false, error: 'Comisionul trebuie să fie între 1% și 50%.' };
+  }
+
+  const conflictErr = await checkCodeConflict(cleanCode, id);
+  if (conflictErr) {
+    return { success: false, error: conflictErr };
+  }
+
   // If code is changed, preserve historical orders linked via coupon_id
-  if (cleanCode !== affiliate.code) {
+  if (cleanCode !== (affiliate.code || '').trim().toUpperCase()) {
     const { data: existingNewCoupon } = await supabaseAdmin
       .from('coupons')
       .select('id')
-      .eq('code', cleanCode)
+      .ilike('code', escapeLike(cleanCode))
+      .limit(1)
       .maybeSingle();
 
     const { data: oldCoupon } = affiliate.code
-      ? await supabaseAdmin.from('coupons').select('id').eq('code', affiliate.code).maybeSingle()
+      ? await supabaseAdmin.from('coupons').select('id').ilike('code', escapeLike(affiliate.code)).limit(1).maybeSingle()
       : { data: null };
 
     if (existingNewCoupon) {
       // Target coupon already exists: activate it & update value
-      await supabaseAdmin
+      const { error: updErr } = await supabaseAdmin
         .from('coupons')
-        .update({ is_active: true, value: commission })
+        .update({ code: cleanCode, is_active: true, value: validCommission })
         .eq('id', existingNewCoupon.id);
+      if (updErr) return { success: false, error: `Eroare la actualizarea cuponului: ${updErr.message}` };
 
       // Re-link historical orders from oldCoupon.id to existingNewCoupon.id and deactivate old coupon
       if (oldCoupon && oldCoupon.id !== existingNewCoupon.id) {
@@ -383,28 +604,19 @@ export async function updateAffiliate(id: string, code: string, commission: numb
       }
     } else if (oldCoupon) {
       // Rename the existing coupon in place so its UUID (and all historical orders.coupon_id links) stay intact
-      await supabaseAdmin
+      const { error: renameErr } = await supabaseAdmin
         .from('coupons')
-        .update({ code: cleanCode, value: commission, is_active: true })
+        .update({ code: cleanCode, value: validCommission, is_active: true })
         .eq('id', oldCoupon.id);
+      if (renameErr) return { success: false, error: `Eroare la redenumirea cuponului: ${renameErr.message}` };
     } else {
-      // No old coupon existed: create the new coupon
-      await supabaseAdmin
-        .from('coupons')
-        .insert({
-          code: cleanCode,
-          type: 'percentage',
-          value: commission,
-          usage_limit: null,
-          expires_at: null,
-          is_active: true,
-          used_count: 0,
-          created_at: new Date().toISOString()
-        });
+      const couponErr = await ensureActiveAffiliateCoupon(cleanCode, validCommission);
+      if (couponErr) return { success: false, error: couponErr };
     }
-  } else if (commission !== affiliate.commission_percent) {
-    // If only commission changed, also update the coupon value
-    await supabaseAdmin.from('coupons').update({ value: commission }).eq('code', cleanCode);
+  } else {
+    // Ensure existing coupon is synced cleanly
+    const couponErr = await ensureActiveAffiliateCoupon(cleanCode, validCommission);
+    if (couponErr) return { success: false, error: couponErr };
   }
 
   // Update affiliate
@@ -412,30 +624,35 @@ export async function updateAffiliate(id: string, code: string, commission: numb
     .from('affiliates')
     .update({ 
       code: cleanCode,
-      commission_percent: commission,
+      commission_percent: validCommission,
+      updated_at: new Date().toISOString()
     })
     .eq('id', id);
 
   if (error) {
-    return { success: false, error: 'A apărut o eroare la salvarea datelor.' };
+    return { success: false, error: `A apărut o eroare la salvarea datelor: ${error.message}` };
   }
 
   // Determine locale from social_links JSON
   const locale = affiliate.social_links?.locale === 'en' ? 'en' : 'ro';
   
   // Construct login URL
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.trenzone.fit'; 
+  const baseUrl = getCanonicalBaseUrl(); 
   const loginUrl = `${baseUrl}/${locale}/affiliate/login`;
 
   // Send update email
+  let emailSent = true;
+  let emailError: string | undefined;
   try {
     const { sendAffiliateUpdateEmail } = await import('@/lib/resend-service');
-    await sendAffiliateUpdateEmail(affiliate.email, affiliate.name, cleanCode, locale, loginUrl, commission);
-  } catch (emailError) {
+    await sendAffiliateUpdateEmail(affiliate.email, affiliate.name, cleanCode, locale, loginUrl, validCommission);
+  } catch (err: any) {
+    emailSent = false;
+    emailError = err?.message || String(err);
     console.error("Failed to send update email:", emailError);
   }
 
-  return { success: true };
+  return { success: true, emailSent, emailError };
 }
 
 export async function createAdminAffiliate(data: {
@@ -444,62 +661,53 @@ export async function createAdminAffiliate(data: {
   code: string;
   commission: number;
   sendEmail?: boolean;
+  locale?: 'ro' | 'en';
 }) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error("Neautorizat");
 
-  const cleanEmail = data.email.trim().toLowerCase();
-  const cleanCode = data.code.trim().toUpperCase();
-  const cleanName = data.name.trim();
+  const cleanEmail = (data.email || '').trim().toLowerCase();
+  const cleanCode = (data.code || '').replace(/\s+/g, '').trim().toUpperCase();
+  const cleanName = (data.name || '').trim();
   const commission = Number(data.commission) || 10;
 
   if (!cleanEmail || !cleanCode || !cleanName) {
     return { success: false, error: "Numele, email-ul și codul de reducere sunt obligatorii." };
   }
 
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return { success: false, error: "Adresa de email introdusă nu este validă." };
+  }
+
   if (!/^[A-Z0-9_-]{2,30}$/.test(cleanCode)) {
     return { success: false, error: 'Codul de reducere poate conține doar litere, cifre, liniuță și underscore (2-30 caractere).' };
   }
 
-  // 1. Ensure coupon exists in `coupons` table
-  const { data: existingCoupon } = await supabaseAdmin
-    .from('coupons')
-    .select('id, code, is_active')
-    .eq('code', cleanCode)
+  const { data: existingAffiliate } = await supabaseAdmin
+    .from('affiliates')
+    .select('id, social_links')
+    .ilike('email', escapeLike(cleanEmail))
+    .limit(1)
     .maybeSingle();
 
-  if (!existingCoupon) {
-    await supabaseAdmin
-      .from('coupons')
-      .insert({
-        code: cleanCode,
-        type: 'percentage',
-        value: commission,
-        usage_limit: null,
-        expires_at: null,
-        is_active: true,
-        used_count: 0,
-        created_at: new Date().toISOString()
-      });
-  } else {
-    await supabaseAdmin
-      .from('coupons')
-      .update({ is_active: true, value: commission })
-      .eq('id', existingCoupon.id);
+  const conflictErr = await checkCodeConflict(cleanCode, existingAffiliate?.id);
+  if (conflictErr) {
+    return { success: false, error: conflictErr };
+  }
+
+  // 1. Ensure coupon exists & is active in `coupons` table
+  const couponErr = await ensureActiveAffiliateCoupon(cleanCode, commission);
+  if (couponErr) {
+    return { success: false, error: couponErr };
   }
 
   // 2. Insert or update in `affiliates`
-  const { data: existingAffiliate } = await supabaseAdmin
-    .from('affiliates')
-    .select('id')
-    .eq('email', cleanEmail)
-    .maybeSingle();
-
   if (existingAffiliate) {
     const { error: updateErr } = await supabaseAdmin
       .from('affiliates')
       .update({
         name: cleanName,
+        email: cleanEmail,
         code: cleanCode,
         commission_percent: commission,
         status: 'active',
@@ -517,6 +725,7 @@ export async function createAdminAffiliate(data: {
         code: cleanCode,
         commission_percent: commission,
         status: 'active',
+        social_links: data.locale ? { locale: data.locale, links: [], motivation: '' } : undefined,
         requested_at: new Date().toISOString(),
         activated_at: new Date().toISOString()
       });
@@ -525,17 +734,22 @@ export async function createAdminAffiliate(data: {
   }
 
   // 3. Send welcome / approval email if requested
+  let emailSent = true;
+  let emailError: string | undefined;
   if (data.sendEmail !== false) {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.trenzone.fit'; 
-      const loginUrl = `${baseUrl}/ro/affiliate/login`;
-      await sendAffiliateApprovalEmail(cleanEmail, cleanName, cleanCode, 'ro', loginUrl, commission);
-    } catch (emailErr) {
-      console.warn("Could not send approval email to newly created affiliate:", emailErr);
+      const targetLocale: 'ro' | 'en' = (data.locale || existingAffiliate?.social_links?.locale) === 'en' ? 'en' : 'ro';
+      const baseUrl = getCanonicalBaseUrl(); 
+      const loginUrl = `${baseUrl}/${targetLocale}/affiliate/login`;
+      await sendAffiliateApprovalEmail(cleanEmail, cleanName, cleanCode, targetLocale, loginUrl, commission);
+    } catch (err: any) {
+      emailSent = false;
+      emailError = err?.message || String(err);
+      console.warn("Could not send approval email to newly created affiliate:", emailError);
     }
   }
 
-  return { success: true };
+  return { success: true, emailSent, emailError };
 }
 
 export async function linkAffiliateCoupon(affiliateId: string, couponCode: string) {
@@ -564,14 +778,24 @@ export async function rejectAffiliate(id: string) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error("Neautorizat");
 
+  const { data: aff } = await supabaseAdmin
+    .from('affiliates')
+    .select('code, status')
+    .eq('id', id)
+    .maybeSingle();
+
   const { error } = await supabaseAdmin
     .from('affiliates')
-    .update({ status: 'rejected' })
+    .update({ status: 'rejected', updated_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) {
     console.error("Failed to reject affiliate:", error);
     return { success: false, error: 'A apărut o eroare la respingerea afiliatului.' };
+  }
+
+  if (aff?.code && aff.status === 'active') {
+    await setCouponActiveState(aff.code, false);
   }
   return { success: true };
 }
@@ -580,15 +804,23 @@ export async function suspendAffiliate(id: string) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error("Neautorizat");
 
+  const { data: aff } = await supabaseAdmin
+    .from('affiliates')
+    .select('code')
+    .eq('id', id)
+    .maybeSingle();
+
   const { error } = await supabaseAdmin
     .from('affiliates')
-    .update({ status: 'suspended' })
+    .update({ status: 'suspended', updated_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) {
     console.error("Failed to suspend affiliate:", error);
     return { success: false, error: 'A apărut o eroare la suspendarea afiliatului.' };
   }
+
+  await setCouponActiveState(aff?.code, false);
   return { success: true };
 }
 
@@ -596,14 +828,28 @@ export async function activateAffiliate(id: string) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error("Neautorizat");
 
+  const { data: aff } = await supabaseAdmin
+    .from('affiliates')
+    .select('code, commission_percent, activated_at')
+    .eq('id', id)
+    .maybeSingle();
+
   const { error } = await supabaseAdmin
     .from('affiliates')
-    .update({ status: 'active' })
+    .update({
+      status: 'active',
+      activated_at: aff?.activated_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
     .eq('id', id);
 
   if (error) {
     console.error("Failed to activate affiliate:", error);
     return { success: false, error: 'A apărut o eroare la activarea afiliatului.' };
+  }
+
+  if (aff?.code) {
+    await ensureActiveAffiliateCoupon(aff.code.trim().toUpperCase(), Number(aff.commission_percent) || 10);
   }
   return { success: true };
 }
@@ -611,6 +857,12 @@ export async function activateAffiliate(id: string) {
 export async function deleteAffiliate(id: string) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error("Neautorizat");
+
+  const { data: aff } = await supabaseAdmin
+    .from('affiliates')
+    .select('code, status')
+    .eq('id', id)
+    .maybeSingle();
 
   const { error } = await supabaseAdmin
     .from('affiliates')
@@ -620,6 +872,10 @@ export async function deleteAffiliate(id: string) {
   if (error) {
     console.error("Failed to delete affiliate:", error);
     return { success: false, error: 'A apărut o eroare la ștergerea afiliatului.' };
+  }
+
+  if (aff?.code && aff.status !== 'pending' && aff.status !== 'rejected') {
+    await setCouponActiveState(aff.code, false);
   }
   return { success: true };
 }

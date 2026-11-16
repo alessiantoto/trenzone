@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { Html, Head, Body, Preview } from '@react-email/components';
 import { FulfillmentOrderSummary } from '@/types/fulfillment';
+import { getSiteUrl } from '@/lib/site-config';
 
 interface FulfillmentDispatchEmailProps {
   orders: FulfillmentOrderSummary[];
@@ -17,7 +18,7 @@ export const FulfillmentDispatchEmail: React.FC<Readonly<FulfillmentDispatchEmai
   orders = [],
   sentAt,
   trigger = 'manual',
-  baseUrl = 'https://www.trenzone.fit',
+  baseUrl = getSiteUrl(),
   notes,
   csvAttached = true,
   secondaryEmail

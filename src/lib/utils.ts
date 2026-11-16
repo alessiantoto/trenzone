@@ -26,6 +26,9 @@ const BADGE_EN_MAP: Record<string, string> = {
   "CONFORT & VOLUM": "COMFORT & VOLUME",
   "SUPORT MAXIM · PR-URI": "MAX SUPPORT · PRs",
   "STOC EPUIZAT": "SOLD OUT",
+  "PACHET 3 ÎN 1": "3-IN-1 BUNDLE",
+  "PACHET COMPLET": "COMPLETE BUNDLE",
+  "TOATE 3 PROGRAMELE": "ALL 3 PROGRAMS",
 };
 
 const BADGE_RO_MAP: Record<string, string> = {

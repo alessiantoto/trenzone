@@ -11,8 +11,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { getLocalized, cn } from "@/lib/utils";
 import { isWideProductImage } from "@/lib/product-images";
-import { getShippingCost } from "@/lib/shipping-config";
+import { getShippingCost, isEuCustomsCountry } from "@/lib/shipping-config";
+import { getEffectiveItemWeight, getFreeShippingThreshold } from "@/lib/cart-calculations";
+import { useShippingConfig } from "@/lib/use-shipping-config";
 import { getProductPrice } from "@/utils/pricing";
+import { isDigitalOnlyCart } from "@/lib/programs";
 import { Link } from "@/i18n/routing";
 
 import { CouponInput } from "@/components/cart/CouponInput";
@@ -24,8 +27,9 @@ interface OrderSummaryProps {
 
 export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSummaryProps) {
   const { items, getTotals, appliedCoupon } = useCartStore();
-  const { priorityProcessing, giftPackaging } = useCheckoutStore();
+  const { priorityProcessing, giftPackaging, country: storedCountry, shippingType: storedShippingType, selectedServiceId: storedServiceId } = useCheckoutStore();
   const { currency } = useRegionStore();
+  const shippingConfig = useShippingConfig();
   const locale = useLocale();
   const t = useTranslations("Checkout");
 
@@ -34,19 +38,13 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
   const displayCurrency = paymentMethod === 'cod' ? 'RON' : currency;
 
   // Calculate total weight for shipping estimation (including multi-box bundle quantities)
-  const totalWeight = items.reduce((acc, item) => {
-    const bundleMatch = String(item.id || '').match(/^(.+)-bundle-(\d+)$/);
-    const bundleQty = bundleMatch ? parseInt(bundleMatch[2], 10) : 1;
-    let itemWeight = Number(item.weight) || 0;
-    if (itemWeight <= 0) {
-      itemWeight = 0.2 * bundleQty;
-    } else if (bundleQty > 1 && itemWeight <= 0.25) {
-      itemWeight = itemWeight * bundleQty;
-    }
-    return acc + itemWeight * item.quantity;
-  }, 0);
+  const totalWeight = items.reduce((acc, item) => acc + getEffectiveItemWeight(item), 0);
 
-  const [shippingParams, setShippingParams] = useState<{country: string, type: 'hd' | 'pudo', serviceId?: string} | null>(null);
+  const [shippingParams, setShippingParams] = useState<{country: string, type: 'hd' | 'pudo', serviceId?: string} | null>({
+    country: storedCountry || 'RO',
+    type: storedShippingType === 'pudo' ? 'hd' : (storedShippingType || 'hd'),
+    serviceId: storedShippingType === 'pudo' ? undefined : (storedServiceId || undefined),
+  });
   const [shippingCost, setShippingCost] = useState(0);
   const [currentStep, setCurrentStep] = useState(propStep || 1);
 
@@ -75,36 +73,41 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
     }
   }, [displayCurrency, shippingParams, totalWeight]);
 
-  const isShippingPending = currentStep === 1;
-  const rawShippingCost = isShippingPending ? 0 : shippingCost;
+  const digitalOnly = isDigitalOnlyCart(items);
+  const isShippingPending = !digitalOnly && currentStep === 1;
+  const rawShippingCost = digitalOnly || isShippingPending ? 0 : shippingCost;
   
   // 🚀 RE-CALCULATE EVERYTHING WITH NEW SHIPPING CONTEXT
   // We call getTotals with the shipping cost so percentage coupons affect the shipping too
   const totals = getTotals(displayCurrency, rawShippingCost);
-  const { subtotal, discount, bundlePercent, itemCount, couponDiscount, shippingDiscount } = totals;
+  const { subtotal, discount, comboDiscount, tieredDiscount, bundlePercent, itemCount, couponDiscount, shippingDiscount } = totals;
   
   // Threshold logic (must match cart-calculations.ts)
-  const isRo = shippingParams?.country?.toUpperCase() === 'RO' || (!shippingParams && displayCurrency === 'RON');
-  const roThreshold = getProductPrice(300, displayCurrency);
-  const intlThreshold = displayCurrency === 'EUR' ? 100 : getProductPrice(530, displayCurrency);
+  const resolvedCountry = shippingParams?.country || (displayCurrency === 'RON' ? 'RO' : 'INTL');
+  const freeShippingThreshold = getFreeShippingThreshold(resolvedCountry, displayCurrency, shippingConfig);
+
+  const thresholdBase = Number((subtotal - discount - couponDiscount).toFixed(2));
+  const thresholdReached = thresholdBase >= freeShippingThreshold;
   
-  const thresholdBase = subtotal - discount - couponDiscount;
-  const thresholdReached = isRo ? thresholdBase >= roThreshold : thresholdBase >= intlThreshold;
-  
-  const isFreeShipping = appliedCoupon?.type === 'free_shipping' || shippingDiscount || thresholdReached;
+  const isFreeShipping = digitalOnly || shippingDiscount || thresholdReached;
   
   const finalShippingCost = isFreeShipping ? 0 : rawShippingCost;
   
   // Extra options costs (Fixed in RON, converted dynamically via getProductPrice)
   const priorityCost = getProductPrice(6.90, displayCurrency);
   const giftCost = getProductPrice(14.90, displayCurrency);
-  const extraCosts = (priorityProcessing ? priorityCost : 0) + (giftPackaging ? giftCost : 0);
+  const extraCosts = digitalOnly ? 0 : ((priorityProcessing ? priorityCost : 0) + (giftPackaging ? giftCost : 0));
 
   // Online Payment Discount (5 RON base converted dynamically to display currency)
   const cardDiscount = paymentMethod === 'online' ? getProductPrice(5, displayCurrency) : 0;
 
   // If it's a percentage coupon, the store already applied it to the shipping inside 'total'
-  const finalDisplayTotal = Math.max(0, totals.subtotal - totals.discount - totals.couponDiscount + finalShippingCost + extraCosts - cardDiscount);
+  const rawDisplayTotal = Math.max(0, totals.subtotal - totals.discount - totals.couponDiscount + finalShippingCost + extraCosts - cardDiscount);
+  const minStripeMajor = ['HUF', 'JPY'].includes(String(displayCurrency).toUpperCase()) ? 100 : 2;
+  const finalDisplayTotal = items.length > 0 && paymentMethod !== 'cod'
+    ? Math.max(minStripeMajor, rawDisplayTotal)
+    : rawDisplayTotal;
+  const totalQuantityBadge = items.reduce((acc, i) => acc + Math.max(1, i.quantity || 1), 0);
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -132,7 +135,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
           <div className="relative">
             <ShoppingBag className="w-5 h-5 text-black" />
             <span className="absolute -top-2 -right-2 w-4 h-4 bg-[#e32f8c] text-black text-[8px] font-black rounded-full flex items-center justify-center">
-              {items.length}
+              {totalQuantityBadge}
             </span>
           </div>
           <span className="text-sm font-black uppercase tracking-tight text-black flex items-center gap-2">
@@ -236,9 +239,17 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 {discount > 0 && (
                   <div className="flex justify-between items-center text-sm bg-pink-500/10 p-2.5 rounded-xl border border-pink-500/20">
                     <span className="font-bold uppercase tracking-widest text-[10px] text-[#e32f8c] flex items-center gap-1.5">
-                      {locale === 'ro' 
-                        ? `Reducere Pachet ${itemCount} Produse (-${bundlePercent}%)` 
-                        : `${itemCount} Items Bundle Discount (-${bundlePercent}%)`}
+                      {comboDiscount > 0 && tieredDiscount === 0
+                        ? locale === 'ro'
+                          ? 'Reducere Pachet 3 Programe'
+                          : '3-Programs Bundle Discount'
+                        : bundlePercent > 0
+                          ? locale === 'ro'
+                            ? `Reducere Pachet ${itemCount} Produse (-${bundlePercent}%)`
+                            : `${itemCount} Items Bundle Discount (-${bundlePercent}%)`
+                          : locale === 'ro'
+                            ? 'Reducere Pachet Programe'
+                            : 'Programs Combo Discount'}
                     </span>
                     <span className="font-black text-[#e32f8c]">-{formatPrice(discount, displayCurrency)}</span>
                   </div>
@@ -249,7 +260,8 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                   <div className="flex justify-between items-center text-sm bg-green-50/50 p-2 rounded-xl border border-green-100">
                     <span className="font-bold uppercase tracking-widest text-[10px] text-green-600 flex items-center gap-1.5">
                       <Ticket className="w-3 h-3" />
-                      {appliedCoupon?.code} ({appliedCoupon?.type === 'percentage' ? `-${appliedCoupon.value}%` : ''})
+                      {appliedCoupon?.code}
+                      {appliedCoupon?.type === 'percentage' ? ` (-${appliedCoupon.value}%)` : ''}
                     </span>
                     <span className="font-black text-[#00e676] drop-shadow-[0_0_8px_rgba(0,230,118,0.4)]">-{formatPrice(couponDiscount, displayCurrency)}</span>
                   </div>
@@ -265,7 +277,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                     </div>
                   ) : (isFreeShipping || shippingCost === 0) ? (
                     <div className="flex flex-col items-end">
-                      {isFreeShipping && (
+                      {isFreeShipping && !digitalOnly && rawShippingCost > 0 && (
                         <span className="text-[10px] text-zinc-400 line-through">
                           {formatPrice(rawShippingCost, displayCurrency)}
                         </span>
@@ -278,7 +290,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 </div>
 
                 {/* 5. Procesare Prioritară */}
-                {priorityProcessing && (
+                {!digitalOnly && priorityProcessing && (
                   <div className="flex justify-between text-sm">
                     <span className="text-zinc-600">{locale === 'en' ? 'Priority Processing' : 'Procesare Prioritară'}</span>
                     <span className="font-semibold text-black">+{formatPrice(priorityCost, displayCurrency)}</span>
@@ -286,7 +298,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 )}
 
                 {/* 6. Împachetare Cadou */}
-                {giftPackaging && (
+                {!digitalOnly && giftPackaging && (
                   <div className="flex justify-between text-sm">
                     <span className="text-zinc-600">{locale === 'en' ? 'Gift Packaging' : 'Împachetare Cadou'}</span>
                     <span className="font-semibold text-black">+{formatPrice(giftCost, displayCurrency)}</span>
@@ -310,6 +322,15 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                     <span className="text-2xl font-bold text-black leading-none">{formatPrice(finalDisplayTotal, displayCurrency)}</span>
                   </div>
                 </div>
+
+                {/* Non-EU Customs & Import Tax Disclosure */}
+                {!digitalOnly && !isEuCustomsCountry(shippingParams?.country || storedCountry) && (
+                  <div className="mt-3 p-3 rounded-xl bg-amber-50/90 border border-amber-200/80 text-[11px] text-amber-900 leading-relaxed font-medium">
+                    {locale === 'ro'
+                      ? 'Notă vamală (Non-UE): Eventualele taxe vamale, TVA/GST local de import sau comisioane de vămuire din țara de destinație sunt suportate de destinatar la livrare.'
+                      : 'Non-EU Customs Notice: Orders outside the EU may be subject to local import VAT/GST, customs duties, or courier clearance fees upon delivery, payable by the recipient.'}
+                  </div>
+                )}
 
                 {/* Secure Payment — Stripe */}
                 <div className="pt-6 flex flex-col items-center gap-2">

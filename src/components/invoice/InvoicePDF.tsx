@@ -256,6 +256,7 @@ interface InvoiceProps {
     giftPackaging?: boolean;
     giftMessage?: string | null;
     cardDiscount?: number;
+    itemsAlreadyInCurrency?: boolean;
   };
 }
 
@@ -312,7 +313,7 @@ export const InvoicePDF: React.FC<InvoiceProps> = ({ orderData }) => {
     (sum: number, it: any) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 1),
     0
   );
-  const isAlreadyConverted = Math.abs(rawItemsSum - (orderData.subtotal || 0)) < 0.5;
+  const isAlreadyConverted = orderData.itemsAlreadyInCurrency === true || Math.abs(rawItemsSum - (orderData.subtotal || 0)) < 0.5;
 
   const getItemUnitPrice = (item: any) => {
     const rawPrice = Number(item.price) || 0;
@@ -335,7 +336,7 @@ export const InvoicePDF: React.FC<InvoiceProps> = ({ orderData }) => {
             <Text style={styles.invoiceTitle}>{lang.factura}</Text>
             <Text style={styles.invoiceNumber}>{orderData.id}</Text>
             <Text style={styles.dateLabel}>{lang.data}: {orderData.date}</Text>
-            <Text style={styles.dateLabel}>{orderData.locale === 'ro' ? 'Metoda plată' : 'Payment'}: {(orderData.paymentMethod === 'card' || orderData.paymentMethod === 'online' || orderData.paymentMethod === 'stripe' || (orderData.paymentMethod !== 'cod' && orderData.paymentMethod !== 'ramburs')) ? (orderData.locale === 'ro' ? 'Online cu Cardul' : 'Credit Card') : (orderData.locale === 'ro' ? 'Ramburs' : 'Cash on Delivery')}</Text>
+            <Text style={styles.dateLabel}>{orderData.locale === 'ro' ? 'Metoda plata' : 'Payment'}: {(orderData.paymentMethod === 'card' || orderData.paymentMethod === 'online' || orderData.paymentMethod === 'stripe' || (orderData.paymentMethod !== 'cod' && orderData.paymentMethod !== 'ramburs')) ? (orderData.locale === 'ro' ? 'Online cu Cardul' : 'Credit Card') : (orderData.locale === 'ro' ? 'Ramburs' : 'Cash on Delivery')}</Text>
           </View>
         </View>
 
@@ -447,7 +448,7 @@ export const InvoicePDF: React.FC<InvoiceProps> = ({ orderData }) => {
         {/* \u2550\u2550\u2550 Footer \u2550\u2550\u2550 */}
         <View style={styles.footer} fixed>
           <Text style={styles.legalNotice}>
-            {lang.legal}
+            {removeDiacritics(lang.legal)}
           </Text>
         </View>
 

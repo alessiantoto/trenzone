@@ -25,8 +25,11 @@ export interface FulfillmentOrderSummary {
   customerPhone: string;
   address: string;
   city: string;
+  county?: string;
   zip: string;
   country: string;
+  branchId?: string;
+  branchName?: string;
   total: string;
   totalAmount: number;
   currency: string;

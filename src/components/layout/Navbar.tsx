@@ -29,7 +29,9 @@ export function Navbar() {
 
   const detectInitialRegion = useRegionStore(state => state.detectInitialRegion);
   const initializeFromIP = useRegionStore(state => state.initializeFromIP);
+  const ensureCountryDetected = useRegionStore(state => state.ensureCountryDetected);
   const hasDetectedIP = useRegionStore(state => state.hasDetectedIP);
+  const hasDetectedCountry = useRegionStore(state => state.hasDetectedCountry);
   const fetchExchangeRates = useRegionStore(state => state.fetchExchangeRates);
 
   // Get the unlocalized pathname (e.g., "/" for "/ro/" or "/en/")
@@ -47,6 +49,9 @@ export function Navbar() {
       initializeFromIP();
     } else {
       detectInitialRegion(locale);
+      if (!hasDetectedCountry) {
+        ensureCountryDetected();
+      }
     }
 
     const handleScroll = () => {
@@ -126,7 +131,7 @@ export function Navbar() {
                 scrolled: { height: "80px", y: 12 }
               }}
               transition={transition}
-              className="container mx-auto px-4 md:px-10 grid grid-cols-3 items-center pointer-events-auto"
+              className="container mx-auto px-4 md:px-10 grid grid-cols-[1fr_auto_1fr] items-center pointer-events-auto"
             >
 
               {/* Column 1: Hamburger (sm) / Logo (lg) */}
@@ -170,33 +175,65 @@ export function Navbar() {
                 </Link>
 
                 {/* Desktop Centered Nav */}
-                <nav className="hidden lg:flex items-center gap-10 font-sans text-[11px] font-black uppercase tracking-[0.3em] whitespace-nowrap">
+                <nav className="hidden lg:flex items-center gap-5 xl:gap-7 font-sans text-[11px] font-black uppercase tracking-[0.2em] xl:tracking-[0.24em] whitespace-nowrap">
                   {[
-                    { href: "/", label: t('home') },
-                    { href: "/shop", label: t('shop') },
-                    { href: "/affiliate", label: t('affiliate') },
-                    { href: "/about", label: t('about') },
-                    { href: "/contact", label: t('contact') },
+                    { href: "/", label: t('home'), variant: 'default' as const },
+                    { href: "/shop", label: t('shop'), variant: 'shop' as const },
+                    { href: "/programs", label: t('programs'), variant: 'programs' as const },
+                    { href: "/affiliate", label: t('affiliate'), variant: 'default' as const },
+                    { href: "/about", label: t('about'), variant: 'default' as const },
+                    { href: "/contact", label: t('contact'), variant: 'default' as const },
                   ].map((item) => {
-                    const isActive = pathname === item.href;
+                    const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+
+                    if (item.variant === 'shop') {
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href as any}
+                          className={`px-4 py-2 rounded-full bg-[#e32f8c] hover:bg-[#ff3b9e] text-white transition-all duration-300 shadow-[0_0_20px_rgba(227,47,140,0.45)] hover:shadow-[0_0_26px_rgba(227,47,140,0.65)] active:scale-95 ${
+                            isActive ? "ring-2 ring-white/90" : ""
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    }
+
+                    if (item.variant === 'programs') {
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href as any}
+                          className={`px-3.5 py-2 rounded-full border transition-all duration-300 flex items-center gap-2 active:scale-95 ${
+                            isActive
+                              ? "bg-white/15 border-[#e32f8c] text-white ring-1 ring-[#e32f8c]/50 shadow-[0_0_16px_rgba(227,47,140,0.28)]"
+                              : "bg-white/5 border-white/20 text-white hover:bg-white/10 hover:border-[#e32f8c]/60"
+                          }`}
+                        >
+                          <span>{item.label}</span>
+                          <span className="bg-white text-black text-[9px] font-black px-1.5 py-0.5 rounded-full tracking-normal leading-none">
+                            -27%
+                          </span>
+                        </Link>
+                      );
+                    }
+
                     return (
                       <Link
                         key={item.href}
                         href={item.href as any}
-                        className="group relative py-2 flex items-center gap-2"
+                        className="group relative py-2 flex items-center gap-1.5"
                       >
-                        <div className="relative">
-                          {(item as any).accent && (
-                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 flex items-center gap-1 opacity-90 whitespace-nowrap">
-                              <span className="w-1 h-1 bg-[#e32f8c] rounded-full animate-pulse" />
-                              <span className="text-[9px] font-black text-[#e32f8c] tracking-[0.1em]">-10%</span>
-                            </div>
-                          )}
-                          <span className={`transition-colors duration-300 ${isActive ? "text-[#e32f8c]" : "text-white/70 hover:text-white"
-                            }`}>
-                            {item.label}
-                          </span>
-                        </div>
+                        <span
+                          className={`transition-colors duration-300 ${
+                            isActive
+                              ? "text-white"
+                              : "text-white/65 hover:text-white"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
 
                         <div className={`absolute bottom-0 left-0 h-[1.5px] bg-[#e32f8c] transition-all duration-500 ${isActive ? "w-full" : "w-0 group-hover:w-full"
                           }`} />

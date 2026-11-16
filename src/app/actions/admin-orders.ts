@@ -5,6 +5,22 @@ import { isAdminAuthorized } from "./admin-auth";
 import { createClient } from "@/utils/supabase/server";
 import { getSingleFlavorImage } from "@/lib/product-images";
 import { getCanonicalOrderNumber } from "@/utils/admin-helpers";
+import { reconcileRecentStripeOrders } from "@/lib/stripe-order-sync";
+
+export async function syncRecentStripeOrdersAction() {
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) {
+    return { success: false, error: 'Neautorizat' };
+  }
+
+  try {
+    const result = await reconcileRecentStripeOrders({ daysBack: 14, limit: 100 });
+    return { success: true, result };
+  } catch (err: any) {
+    console.error('❌ [ADMIN STRIPE SYNC] Error:', err);
+    return { success: false, error: err?.message || 'Eroare la sincronizarea cu Stripe' };
+  }
+}
 
 export async function getAdminOrders() {
   const supabase = await createClient();
@@ -103,7 +119,7 @@ export async function getAdminOrders() {
 
         if (isBundle) {
           if (!image || String(image).includes('bundle')) {
-            image = '/images/products/x10_elbow_wraps_purple_1.webp';
+            image = '/images/products/x10_elbow_wraps_purple.webp';
           }
         } else {
           // If NOT a bundle, NEVER use bundle image; resolve to individual flavor image
@@ -136,15 +152,27 @@ export async function getAdminOrders() {
       trackingNumber: order.tracking_number || null,
       paymentMethod: order.payment_method || 'stripe',
       paymentIntentId: cleanPaymentIntentId,
+      rawPaymentIntentId: order.payment_intent_id || null,
+      stripeReceiptNumber: order.carrier_metadata?.stripe_receipt_number || null,
+      stripeChargeId: order.carrier_metadata?.stripe_charge_id || null,
+      lastCommError: order.carrier_metadata?.last_comm_error || null,
+      isPreorderSnapshot:
+        typeof order.carrier_metadata?.is_preorder === 'boolean'
+          ? order.carrier_metadata.is_preorder
+          : undefined,
       phone: order.customer_phone || 'N/A',
-      address: `${order.addr_line1 || ''} ${order.addr_line2 || ''}, ${order.addr_city || ''}, ${order.addr_zip || ''}, ${order.addr_country || ''}`.replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim() || 'N/A',
+      address: `${order.addr_line1 || ''} ${order.addr_line2 || ''}, ${order.addr_city || ''}, ${order.addr_county || ''}, ${order.addr_zip || ''}, ${order.addr_country || ''}`.replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim() || 'N/A',
       customerFirstName: order.customer_firstname || '',
       customerLastName: order.customer_lastname || '',
       addrLine1: order.addr_line1 || '',
       addrLine2: order.addr_line2 || '',
       addrCity: order.addr_city || '',
+      addrState: order.addr_county || '',
       addrZip: order.addr_zip || '',
       addrCountry: order.addr_country || 'RO',
+      branchId: order.branch_id || null,
+      branchName: order.branch_name || null,
+      carrierId: order.carrier_id || null,
       shippingType: order.shipping_type || 'hd',
       priorityProcessing: order.priority_processing || false,
       giftPackaging: order.gift_packaging || false,

@@ -12,10 +12,10 @@ import { getCdnUrl } from '@/lib/utils/cdn';
 const emptySubscribe = () => () => {};
 
 export const DEFAULT_TEST_VIDEOS: InfluencerVideo[] = [
-  { id: 'trenwraps-1', influencer_name: 'Vlad Tren', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_1.mp4', display_order: 1, is_active: true },
-  { id: 'trenwraps-2', influencer_name: 'Logan Dishman', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_2.mp4', display_order: 2, is_active: true },
-  { id: 'trenwraps-3', influencer_name: 'Honza Jeruse', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_3.mp4', display_order: 3, is_active: true },
-  { id: 'trenwraps-4', influencer_name: 'Cipi Raw', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_4.mp4', display_order: 4, is_active: true },
+  { id: 'trenwraps-1', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_1.mp4', display_order: 1, is_active: true },
+  { id: 'trenwraps-2', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_2.mp4', display_order: 2, is_active: true },
+  { id: 'trenwraps-3', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_3.mp4', display_order: 3, is_active: true },
+  { id: 'trenwraps-4', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_4.mp4', display_order: 4, is_active: true },
   { id: 'trenwraps-5', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_5.mp4', display_order: 5, is_active: true },
   { id: 'trenwraps-6', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_6.mp4', display_order: 6, is_active: true },
   { id: 'trenwraps-7', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_7.mp4', display_order: 7, is_active: true },
@@ -26,7 +26,17 @@ export const DEFAULT_TEST_VIDEOS: InfluencerVideo[] = [
   { id: 'trenwraps-12', influencer_name: '', video_url: 'https://pub-a0354123ab7743d48270daf444febc26.r2.dev/trenwraps_12.mp4', display_order: 12, is_active: true },
 ];
 
-export function InfluencerCarousel({ influencers = [], dark = false }: { influencers?: InfluencerVideo[], dark?: boolean }) {
+export function InfluencerCarousel({
+  influencers = [],
+  dark = false,
+  title,
+  subtitle,
+}: {
+  influencers?: InfluencerVideo[];
+  dark?: boolean;
+  title?: string;
+  subtitle?: string;
+}) {
   const locale = useLocale();
   const rawList = influencers && influencers.length > 0 ? influencers : DEFAULT_TEST_VIDEOS;
   const safeInfluencers = rawList.filter((influencer) => Boolean(influencer.video_url));
@@ -102,8 +112,12 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
     return () => clearInterval(interval);
   }, [slideCount, isPaused, selectedVideo]);
 
-  // Pointer Drag-to-scroll support
+  // Pointer Drag-to-scroll support (mouse only — let native touch handle 120Hz mobile scroll without interference)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse") {
+      setIsPaused(true);
+      return;
+    }
     isPointerDownRef.current = true;
     startXRef.current = e.clientX;
     startScrollLeftRef.current = sliderRef.current?.scrollLeft || 0;
@@ -112,7 +126,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isPointerDownRef.current || !sliderRef.current) return;
+    if (e.pointerType !== "mouse" || !isPointerDownRef.current || !sliderRef.current) return;
     const deltaX = e.clientX - startXRef.current;
     if (Math.abs(deltaX) > 8) {
       isDraggingRef.current = true;
@@ -122,7 +136,11 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
     }
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse") {
+      setTimeout(() => setIsPaused(false), 1500);
+      return;
+    }
     if (!isPointerDownRef.current) return;
     isPointerDownRef.current = false;
     const el = sliderRef.current;
@@ -136,22 +154,12 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
     }, 120);
   };
 
-  // Touch Swipe gestures for snappy mobile flicking
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    touchStartXRef.current = e.touches[0].clientX;
+  // Pause auto-advance cleanly without hijacking native vertical/horizontal touch scroll
+  const handleTouchStart = () => {
     setIsPaused(true);
   };
 
-  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-    const touchEndX = e.changedTouches[0].clientX;
-    const diffX = touchEndX - touchStartXRef.current;
-    if (Math.abs(diffX) > 45) {
-      if (diffX < 0) {
-        scrollToSlide(activeSlide + 1);
-      } else {
-        scrollToSlide(activeSlide - 1);
-      }
-    }
+  const handleTouchEnd = () => {
     setTimeout(() => setIsPaused(false), 2000);
   };
 
@@ -176,7 +184,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
 
   return (
     <>
-      <section className="w-full bg-transparent py-4 md:py-8 overflow-hidden relative">
+      <section className="w-full bg-transparent py-4 md:py-8 overflow-x-clip relative">
         <div className="mx-auto w-full max-w-6xl px-4 md:px-8">
           
           {/* Header Section */}
@@ -187,7 +195,7 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
               viewport={{ once: true }}
               className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white font-[family-name:var(--font-oswald)]"
             >
-              {locale === 'ro' ? 'TESTATE PE GREUTĂȚI MARI' : 'TESTED ON HEAVY WEIGHTS'}
+              {title || (locale === 'ro' ? 'TESTATE PE GREUTĂȚI MARI' : 'TESTED ON HEAVY WEIGHTS')}
             </motion.h2>
             <motion.div 
               initial={{ opacity: 0 }}
@@ -196,12 +204,12 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
               transition={{ delay: 0.15 }}
             >
               <p className="text-xs sm:text-sm md:text-base font-bold uppercase tracking-widest text-zinc-400">
-                {locale === 'ro' ? 'Echipament testat de cei mai puternici atleți' : 'Tested and trusted by elite strength athletes'}
+                {subtitle || (locale === 'ro' ? 'Echipament testat de cei mai puternici atleți' : 'Tested and trusted by elite strength athletes')}
               </p>
             </motion.div>
           </div>
 
-          {/* Mobile Native 120Hz Snap Slider with Drag & Touch Support (2x2 Grid per Slide) */}
+          {/* Mobile Native 120Hz Snap Slider (2x2 Grid per Slide, vertical scroll chains natively to page) */}
           <div 
             ref={sliderRef}
             onScroll={handleScroll}
@@ -213,8 +221,16 @@ export function InfluencerCarousel({ influencers = [], dark = false }: { influen
             onTouchEnd={handleTouchEnd}
             onMouseEnter={() => setIsPaused(true)}
             onMouseLeave={() => setIsPaused(false)}
-            className="md:hidden w-full flex overflow-x-auto overflow-y-hidden overscroll-y-none snap-x snap-mandatory scrollbar-hide overscroll-x-contain py-1 cursor-grab active:cursor-grabbing select-none touch-pan-y"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            className={
+              slideCount > 1
+                ? "md:hidden w-full flex overflow-x-auto snap-x snap-mandatory scrollbar-hide overscroll-x-contain py-1 md:cursor-grab md:active:cursor-grabbing select-none"
+                : "md:hidden w-full py-1 select-none"
+            }
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              touchAction: slideCount > 1 ? 'pan-x pan-y' : 'pan-y',
+            }}
           >
             {slides.map((slide, sIdx) => (
               <div 

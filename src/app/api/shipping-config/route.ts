@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getShippingConfig } from '@/app/actions/shipping';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const config = await getShippingConfig();
@@ -8,9 +10,7 @@ export async function GET() {
       { success: true, config },
       {
         headers: {
-          // Cache at Vercel Edge for 1 hour — shipping config rarely changes, and admin actions
-          // trigger revalidation. This prevents every CartSheet open from hitting the function.
-          'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
+          'Cache-Control': 'no-store, max-age=0',
         },
       }
     );

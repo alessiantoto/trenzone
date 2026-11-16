@@ -3,15 +3,20 @@ import { persist } from "zustand/middleware";
 import { Product } from "@/lib/api";
 import { Coupon } from "@/types/coupon";
 import { getProductPrice } from "@/utils/pricing";
-import { getBundleSummary } from "@/lib/cart-calculations";
+import { computeCartDiscountBreakdown, computeCouponDiscountBreakdown } from "@/lib/cart-calculations";
+import {
+  isDigitalProgramItem,
+} from "@/lib/programs";
 import toast from "react-hot-toast";
 
 export interface CartItem extends Product {
   quantity: number;
+  stock_status?: string;
   selectedVariant?: {
     name: string;
     image?: string;
     imageIndex?: number;
+    stock_status?: string;
   };
 }
 
@@ -20,6 +25,8 @@ export interface PreorderConflictData {
   incomingIsPreorder: boolean;
   incomingProduct: any;
   incomingVariant?: any;
+  incomingQuantity?: number;
+  incomingItems?: Array<{ product: any; variant?: any; quantity?: number }>;
   currentHasPreorder?: boolean;
 }
 
@@ -27,7 +34,8 @@ interface CartState {
   items: CartItem[];
   appliedCoupon: Coupon | null;
   preorderConflict: PreorderConflictData | null;
-  addItem: (product: Product, variant?: { name: string; image?: string; imageIndex?: number }) => boolean;
+  addItem: (product: Product, variant?: { name: string; image?: string; imageIndex?: number; stock_status?: string }, quantity?: number, options?: { openCart?: boolean }) => boolean;
+  addItemsBatch: (entries: Array<{ product: Product; variant?: { name: string; image?: string; imageIndex?: number; stock_status?: string }; quantity?: number }>, options?: { openCart?: boolean }) => boolean;
   removeItem: (productId: string, variantName?: string) => void;
   updateQuantity: (productId: string, quantity: number, variantName?: string) => void;
   clearCart: () => void;
@@ -39,6 +47,8 @@ interface CartState {
   getTotals: (currency?: string, shippingCost?: number) => { 
     subtotal: number; 
     discount: number; 
+    comboDiscount: number;
+    tieredDiscount: number;
     bundlePercent: 0 | 5 | 10;
     itemCount: number;
     couponDiscount: number; 
@@ -56,12 +66,31 @@ const getStoreLocale = (): "ro" | "en" => {
   return "ro";
 };
 
+const normalizeLanguageVariantToken = (val: string): string => {
+  const clean = val.trim().toLowerCase();
+  if (clean === "română" || clean === "romana" || clean === "romanian" || clean === "ro") {
+    return "__lang_ro__";
+  }
+  if (clean === "english" || clean === "engleză" || clean === "engleza" || clean === "en") {
+    return "__lang_en__";
+  }
+  return clean;
+};
+
 const areVariantNamesEqual = (name1: any, name2: any) => {
   if (name1 === name2) return true;
   if (!name1 || !name2) return false;
-  const getRo = (n: any) => typeof n === 'object' ? n.ro : n;
-  const getEn = (n: any) => typeof n === 'object' ? n.en : n;
-  return getRo(name1) === getRo(name2) || getEn(name1) === getEn(name2);
+  const getRo = (n: any) => (typeof n === 'object' ? n.ro : n);
+  const getEn = (n: any) => (typeof n === 'object' ? n.en : n);
+  const ro1 = getRo(name1);
+  const ro2 = getRo(name2);
+  if (ro1 && ro2 && normalizeLanguageVariantToken(String(ro1)) === normalizeLanguageVariantToken(String(ro2))) return true;
+  const en1 = getEn(name1);
+  const en2 = getEn(name2);
+  if (en1 && en2 && normalizeLanguageVariantToken(String(en1)) === normalizeLanguageVariantToken(String(en2))) return true;
+  const s1 = String(ro1 || en1 || '').trim();
+  const s2 = String(ro2 || en2 || '').trim();
+  return Boolean(s1 && s2 && normalizeLanguageVariantToken(s1) === normalizeLanguageVariantToken(s2));
 };
 
 export const isPreorder = (product: any, variant?: any): boolean => {
@@ -72,17 +101,27 @@ export const isPreorder = (product: any, variant?: any): boolean => {
   const v = variant || product.selectedVariant || product.variant;
   if (v) {
     const vName = typeof v === 'object' ? (v.name?.ro || v.name?.en || v.name || '') : String(v);
+    const baseName = String(vName).split(' · ')[0].trim();
     const vLower = String(vName).toLowerCase();
+    const baseLower = baseName.toLowerCase();
+
+    if (vLower.includes('precomand') || vLower.includes('pre-order') || vLower.includes('preorder')) {
+      return true;
+    }
 
     if (product.variants?.options) {
       const selectedOpt = product.variants.options.find((opt: any) => {
         const optRo = typeof opt.name === 'object' ? opt.name.ro : opt.name;
         const optEn = typeof opt.name === 'object' ? opt.name.en : opt.name;
+        const optRoLow = String(optRo || '').trim().toLowerCase();
+        const optEnLow = String(optEn || '').trim().toLowerCase();
         return (
           optRo === vName ||
           optEn === vName ||
-          String(optRo).toLowerCase() === vLower ||
-          String(optEn).toLowerCase() === vLower ||
+          optRo === baseName ||
+          optEn === baseName ||
+          (optRoLow && (optRoLow === vLower || optRoLow === baseLower)) ||
+          (optEnLow && (optEnLow === vLower || optEnLow === baseLower)) ||
           (opt.id && v.id && opt.id === v.id)
         );
       });
@@ -140,14 +179,22 @@ export const useCartStore = create<CartState>()(
       closePreorderConflict: () => set({ preorderConflict: null }),
       resolvePreorderConflictWithReplace: () => {
         const conflict = get().preorderConflict;
-        if (!conflict || !conflict.incomingProduct) {
+        if (!conflict || (!conflict.incomingProduct && !conflict.incomingItems?.length)) {
           set({ preorderConflict: null });
           return;
         }
 
-        const { incomingProduct, incomingVariant, incomingIsPreorder } = conflict;
+        const { incomingProduct, incomingVariant, incomingQuantity, incomingItems, incomingIsPreorder } = conflict;
+        const nextItems: CartItem[] = incomingItems?.length
+          ? incomingItems.map((entry) => ({
+              ...entry.product,
+              quantity: Math.max(1, Math.floor(entry.quantity || 1)),
+              selectedVariant: entry.variant,
+            }))
+          : [{ ...incomingProduct, quantity: Math.max(1, Math.floor(incomingQuantity || 1)), selectedVariant: incomingVariant }];
+
         set({
-          items: [{ ...incomingProduct, quantity: 1, selectedVariant: incomingVariant }],
+          items: nextItems,
           preorderConflict: null,
           isCartOpen: true
         });
@@ -160,70 +207,98 @@ export const useCartStore = create<CartState>()(
           { icon: '📦' }
         );
       },
-      addItem: (product, variant) => {
+      addItemsBatch: (entries, options) => {
         const state = get();
-        
-        // Prevent mixing preorder and normal inside the same bundle item
-        if (isMixedBundle(product, variant)) {
-          const isRo = getStoreLocale() === 'ro';
-          toast.error(
-            isRo
-              ? "Nu poți amesteca variante aflate pe precomandă cu variante normale în același pachet."
-              : "You cannot mix pre-order variants with in-stock variants in the same bundle.",
-            {
-              duration: 5000,
-              style: { border: '1px solid #ef4444', padding: '16px', color: '#7f1d1d', fontWeight: 'bold' }
-            }
-          );
-          return false;
-        }
+        if (!entries || entries.length === 0) return false;
+        const shouldOpenCart = options?.openCart !== false;
+        const isRo = getStoreLocale() === 'ro';
 
-        // Strict Separation: Pre-orders and in-stock items cannot be ordered together
-        const incomingIsPreorder = isPreorder(product, variant);
-        const currentHasPreorder = state.items.some(item => isPreorder(item, item.selectedVariant));
-        const currentHasInStock = state.items.some(item => !isPreorder(item, item.selectedVariant));
-
-        if (state.items.length > 0) {
-          if ((incomingIsPreorder && currentHasInStock) || (!incomingIsPreorder && currentHasPreorder)) {
-            set({
-              preorderConflict: {
-                isOpen: true,
-                currentHasPreorder,
-                incomingIsPreorder,
-                incomingProduct: product,
-                incomingVariant: variant
-              },
-              isCartOpen: true
-            });
+        for (const entry of entries) {
+          if (isMixedBundle(entry.product, entry.variant)) {
+            toast.error(
+              isRo
+                ? "Nu poți amesteca variante aflate pe precomandă cu variante normale în același pachet."
+                : "You cannot mix pre-order variants with in-stock variants in the same bundle.",
+              {
+                duration: 5000,
+                style: { border: '1px solid #ef4444', padding: '16px', color: '#7f1d1d', fontWeight: 'bold' }
+              }
+            );
             return false;
           }
         }
 
+        const anyIncomingPreorder = entries.some(
+          (e) => !isDigitalProgramItem(e.product) && isPreorder(e.product, e.variant || (e.product as any)?.selectedVariant)
+        );
+        const anyIncomingInStock = entries.some(
+          (e) => !isDigitalProgramItem(e.product) && !isPreorder(e.product, e.variant || (e.product as any)?.selectedVariant)
+        );
+        if (anyIncomingPreorder && anyIncomingInStock) {
+          toast.error(
+            isRo
+              ? "Nu poți combina produse aflate pe precomandă cu produse din stoc în același pachet."
+              : "You cannot combine pre-order items with in-stock items in the same bundle.",
+            { duration: 5000 }
+          );
+          return false;
+        }
+
+        const currentHasPreorder = state.items.some(
+          (item) => !isDigitalProgramItem(item) && isPreorder(item, item.selectedVariant)
+        );
+        const currentHasInStock = state.items.some(
+          (item) => !isDigitalProgramItem(item) && !isPreorder(item, item.selectedVariant)
+        );
+
+        const incomingHasPhysical = entries.some((e) => !isDigitalProgramItem(e.product));
+
+        if (
+          incomingHasPhysical &&
+          state.items.length > 0 &&
+          ((anyIncomingPreorder && currentHasInStock) || (!anyIncomingPreorder && currentHasPreorder))
+        ) {
+          set({
+            preorderConflict: {
+              isOpen: true,
+              currentHasPreorder,
+              incomingIsPreorder: anyIncomingPreorder,
+              incomingProduct: entries[0].product,
+              incomingVariant: entries[0].variant || (entries[0].product as any)?.selectedVariant,
+              incomingQuantity: Math.max(1, Math.floor(entries[0].quantity || 1)),
+              incomingItems: entries,
+            },
+            isCartOpen: true,
+          });
+          return false;
+        }
+
+        set((prev) => {
+          let updated = [...prev.items];
+          for (const entry of entries) {
+            const resolvedVariant = entry.variant || (entry.product as any)?.selectedVariant;
+            const qty = Math.max(1, Math.floor(entry.quantity || 1));
+            const idx = updated.findIndex(
+              (item) => item.id === entry.product.id && areVariantNamesEqual(item.selectedVariant?.name, resolvedVariant?.name)
+            );
+            if (idx >= 0) {
+              updated[idx] = { ...updated[idx], quantity: updated[idx].quantity + qty };
+            } else {
+              updated.push({ ...entry.product, quantity: qty, selectedVariant: resolvedVariant });
+            }
+          }
+          return { items: updated, isCartOpen: shouldOpenCart ? true : prev.isCartOpen };
+        });
+
         if (typeof window !== 'undefined') {
           try {
-            window.dispatchEvent(new CustomEvent('tz:cart_add', { detail: { productId: product.id } }));
+            window.dispatchEvent(new CustomEvent('tz:cart_add', { detail: { productId: entries[0].product.id } }));
           } catch (e) {}
         }
-        set((state) => {
-          const existing = state.items.find(
-            (item) => item.id === product.id && areVariantNamesEqual(item.selectedVariant?.name, variant?.name)
-          );
-          if (existing) {
-            return {
-              items: state.items.map((item) =>
-                item.id === product.id && areVariantNamesEqual(item.selectedVariant?.name, variant?.name)
-                  ? { ...item, quantity: item.quantity + 1 }
-                  : item
-              ),
-              isCartOpen: true,
-            };
-          }
-          return { 
-            items: [...state.items, { ...product, quantity: 1, selectedVariant: variant }], 
-            isCartOpen: true 
-          };
-        });
         return true;
+      },
+      addItem: (product, variant, quantity = 1, options) => {
+        return get().addItemsBatch([{ product, variant, quantity }], options);
       },
       removeItem: (productId, variantName) => {
         set((state) => ({
@@ -246,51 +321,39 @@ export const useCartStore = create<CartState>()(
       clearCart: () => set({ items: [], appliedCoupon: null }),
       getTotals: (currency: string = 'RON', shippingCost: number = 0) => {
         const state = get();
-        const subtotalSubunits = state.items.reduce(
-          (acc, item) => acc + Math.round(getProductPrice(item.price, currency) * 100) * Math.max(0, Math.floor(item.quantity)),
-          0
-        );
+        const {
+          subtotalSubunits,
+          bundleDiscountSubunits,
+          comboDiscountSubunits,
+          tieredDiscountSubunits,
+          bundlePercent,
+          itemCount,
+          hasBundle,
+        } = computeCartDiscountBreakdown(state.items, currency, 100);
         const subtotal = subtotalSubunits / 100;
-
-        // 1. Tiered Bundle Discount (2 items -> 5%, 3+ items -> 10%)
-        const { itemCount, bundlePercent, hasBundle } = getBundleSummary(state.items);
-        const bundleDiscountSubunits = bundlePercent > 0
-          ? Math.round(subtotalSubunits * (bundlePercent / 100))
-          : 0;
         const discount = bundleDiscountSubunits / 100;
+        const comboDiscount = comboDiscountSubunits / 100;
+        const tieredDiscount = tieredDiscountSubunits / 100;
 
-        // 2. Coupon logic — always stacks cleanly on top of the bundle discount
-        let couponDiscountSubunits = 0;
-        let shippingDiscount = false;
-        const coupon = state.appliedCoupon;
-
-        const effectiveSubtotalSubunits = Math.max(0, subtotalSubunits - bundleDiscountSubunits);
-
-        if (coupon) {
-          if (coupon.type === 'percentage') {
-            couponDiscountSubunits = Math.round(effectiveSubtotalSubunits * (coupon.value / 100));
-
-            if (coupon.max_discount && coupon.max_discount > 0) {
-              const maxDisc = (currency === 'RON') ? coupon.max_discount : getProductPrice(coupon.max_discount, currency);
-              const maxSubunits = Math.round(maxDisc * 100);
-              if (couponDiscountSubunits > maxSubunits) {
-                couponDiscountSubunits = maxSubunits;
-              }
-            }
-          } else if (coupon.type === 'fixed_amount') {
-            const fixedVal = (currency === 'RON') ? coupon.value : getProductPrice(coupon.value, currency);
-            couponDiscountSubunits = Math.round(fixedVal * 100);
-          } else if (coupon.type === 'free_shipping') {
-            shippingDiscount = true;
-          }
-          couponDiscountSubunits = Math.min(effectiveSubtotalSubunits, couponDiscountSubunits);
-        }
+        // 2. Coupon logic — shared parity helper with backend calculateOrderTotal
+        const {
+          couponDiscountSubunits,
+          shippingDiscount,
+        } = computeCouponDiscountBreakdown(
+          subtotalSubunits,
+          bundleDiscountSubunits,
+          state.appliedCoupon,
+          currency,
+          100
+        );
 
         const couponDiscount = couponDiscountSubunits / 100;
 
         return {
           subtotal: Number(subtotal.toFixed(2)),
           discount: Number(discount.toFixed(2)),
+          comboDiscount: Number(comboDiscount.toFixed(2)),
+          tieredDiscount: Number(tieredDiscount.toFixed(2)),
           bundlePercent,
           itemCount,
           couponDiscount: Number(couponDiscount.toFixed(2)),
@@ -306,4 +369,12 @@ export const useCartStore = create<CartState>()(
     }
   )
 );
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === "campion-cart") {
+      useCartStore.persist.rehydrate();
+    }
+  });
+}
 

@@ -14,6 +14,7 @@ import {
   Check,
   Truck,
   ArrowRight,
+  Mail,
 } from "lucide-react";
 import Image from "next/image";
 import { useCartStore, isPreorder } from "@/store/useCartStore";
@@ -23,16 +24,55 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
 import { useLocale } from "next-intl";
 import { useRegionStore } from "@/store/useRegionStore";
+import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { formatPrice } from "@/utils/currency";
 import { getProductPrice } from "@/utils/pricing";
-import { getBundleSummary } from "@/lib/cart-calculations";
+import { getBundleSummary, getFreeShippingThreshold } from "@/lib/cart-calculations";
+import { useShippingConfig } from "@/lib/use-shipping-config";
 import { CouponInput } from "@/components/cart/CouponInput";
 import { Link, useRouter } from "@/i18n/routing";
-import { cn, getLocalized, getVariantColorClass, localizeBadge } from "@/lib/utils";
+import { cn, getLocalized, getVariantColorClass } from "@/lib/utils";
 import { isWideProductImage } from "@/lib/product-images";
 import { Product } from "@/lib/api";
+import {
+  DIGITAL_PROGRAM_PRODUCTS,
+  PROGRAM_UUIDS,
+  PROGRAM_SLUGS,
+  isDigitalProgramItem,
+  isDigitalBundleItem,
+  isDigitalOnlyCart,
+} from "@/lib/programs";
 
 type VariantOption = NonNullable<Product["variants"]>["options"][number];
+
+function LanguageFlagSvg({ isEnglish }: { isEnglish: boolean }) {
+  if (isEnglish) {
+    return (
+      <svg
+        viewBox="0 0 60 40"
+        className="w-5 h-3.5 rounded-[3px] shadow-2xs border border-black/15 shrink-0"
+        aria-hidden="true"
+      >
+        <rect width="60" height="40" fill="#012169" />
+        <path d="M0,0 L60,40 M60,0 L0,40" stroke="#FFFFFF" strokeWidth="7" />
+        <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="3.5" />
+        <path d="M30,0 V40 M0,20 H60" stroke="#FFFFFF" strokeWidth="11" />
+        <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      viewBox="0 0 24 16"
+      className="w-5 h-3.5 rounded-[3px] shadow-2xs border border-black/15 shrink-0"
+      aria-hidden="true"
+    >
+      <rect width="8" height="16" x="0" fill="#002B7F" />
+      <rect width="8" height="16" x="8" fill="#FCD116" />
+      <rect width="8" height="16" x="16" fill="#CE1126" />
+    </svg>
+  );
+}
 
 function PaymentTrustMarks({ isEn }: { isEn: boolean }) {
   return (
@@ -86,40 +126,29 @@ function PaymentTrustMarks({ isEn }: { isEn: boolean }) {
   );
 }
 
-export function CartSheet() {
-  const {
-    items,
-    isCartOpen,
-    setCartOpen,
-    addItem,
-    removeItem,
-    updateQuantity,
-    getTotals,
-    appliedCoupon,
-    setCoupon,
-    preorderConflict,
-    closePreorderConflict,
-    resolvePreorderConflictWithReplace,
-  } = useCartStore();
-  const { currency } = useRegionStore();
-  const { subtotal, discount, bundlePercent, couponDiscount, total } = getTotals(currency);
+interface CartUpsellCarouselProps {
+  title: string;
+  products: Product[];
+  locale: string;
+  isEn: boolean;
+  currency: string;
+  isCartOpen: boolean;
+  onSelectProduct: (product: Product) => void;
+  onDirectAdd: (product: Product) => void;
+  onNavigate: (slug: string) => void;
+}
 
-  const [selectingProduct, setSelectingProduct] = useState<Product | null>(null);
-  const [modalModelIdx, setModalModelIdx] = useState(0);
-  const [modalSize, setModalSize] = useState("L");
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-
-  const openSelectingModal = (product: Product) => {
-    setModalModelIdx(0);
-    const sizeOpts = product.bundleVariants?.size?.options || [];
-    setModalSize(sizeOpts.includes("L") ? "L" : (sizeOpts[0] || ""));
-    setSelectingProduct(product);
-  };
-
-  const locale = useLocale();
-  const isEn = locale === "en";
-  const router = useRouter();
-
+function CartUpsellCarousel({
+  title,
+  products,
+  locale,
+  isEn,
+  currency,
+  isCartOpen,
+  onSelectProduct,
+  onDirectAdd,
+  onNavigate,
+}: CartUpsellCarouselProps) {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -135,12 +164,210 @@ export function CartSheet() {
     setScrollProgress(maxScroll > 0 ? (scrollLeft / maxScroll) * 100 : 0);
   };
 
-  const scrollLeft = () => {
-    carouselRef.current?.scrollBy({ left: -160, behavior: "smooth" });
-  };
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
 
-  const scrollRight = () => {
-    carouselRef.current?.scrollBy({ left: 160, behavior: "smooth" });
+    const t = setTimeout(checkScroll, 120);
+    el.addEventListener("scroll", checkScroll, { passive: true });
+    window.addEventListener("resize", checkScroll);
+
+    return () => {
+      clearTimeout(t);
+      el.removeEventListener("scroll", checkScroll);
+      window.removeEventListener("resize", checkScroll);
+    };
+  }, [products.length, isCartOpen]);
+
+  if (products.length === 0) return null;
+
+  return (
+    <div className="pt-3.5 pb-4">
+      <div className="px-4 sm:px-5 mb-2.5 flex items-center justify-between gap-2">
+        <h3 className="text-[12px] font-black uppercase tracking-[0.06em] text-[#111111] leading-tight">
+          {title}
+        </h3>
+
+        {(canScrollLeft || canScrollRight) && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => carouselRef.current?.scrollBy({ left: -160, behavior: "smooth" })}
+              disabled={!canScrollLeft}
+              aria-label={isEn ? "Previous items" : "Produse anterioare"}
+              className={cn(
+                "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
+                canScrollLeft
+                  ? "border-zinc-200 text-[#111111] hover:border-[#111111] cursor-pointer"
+                  : "border-zinc-200 text-zinc-300 opacity-50 pointer-events-none"
+              )}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => carouselRef.current?.scrollBy({ left: 160, behavior: "smooth" })}
+              disabled={!canScrollRight}
+              aria-label={isEn ? "Next items" : "Produse următoare"}
+              className={cn(
+                "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
+                canScrollRight
+                  ? "border-zinc-200 text-[#111111] hover:border-[#111111] cursor-pointer"
+                  : "border-zinc-200 text-zinc-300 opacity-50 pointer-events-none"
+              )}
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div
+        ref={carouselRef}
+        className="flex gap-2.5 overflow-x-auto scrollbar-hide px-4 sm:px-5 scroll-pl-4 sm:scroll-pl-5 pb-1 snap-x snap-mandatory scroll-smooth"
+        style={{ touchAction: "pan-x pan-y" }}
+      >
+        {products.map((p) => {
+          const price = getProductPrice(p.price, currency);
+
+          return (
+            <div
+              key={p.id}
+              className="w-[146px] sm:w-[158px] shrink-0 snap-start bg-white rounded-xl p-2 border border-zinc-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:border-purple-300/80 hover:shadow-[0_4px_14px_rgba(147,51,234,0.08)] transition-all flex flex-col group select-none"
+            >
+              <Link
+                href={`/product/${p.slug}`}
+                onClick={() => onNavigate(p.slug)}
+                className={cn(
+                  "relative w-full aspect-[4/5] rounded-lg overflow-hidden block",
+                  isWideProductImage(p.image) ? "bg-black" : "bg-zinc-950"
+                )}
+              >
+                <Image
+                  src={p.image}
+                  alt={getLocalized(p.name, locale)}
+                  fill
+                  sizes="160px"
+                  className={cn(
+                    "group-hover:scale-[1.03] transition-transform duration-500",
+                    isWideProductImage(p.image) ? "object-contain p-1.5" : "object-cover object-center"
+                  )}
+                />
+              </Link>
+
+              <div className="flex-1 flex flex-col justify-between pt-2.5 px-0.5 min-w-0">
+                <Link
+                  href={`/product/${p.slug}`}
+                  onClick={() => onNavigate(p.slug)}
+                  className="block min-w-0"
+                >
+                  <h4 className="text-[11.5px] font-bold text-[#111111] group-hover:text-[#9333ea] transition-colors leading-snug line-clamp-2 min-h-[2rem]">
+                    {getLocalized(p.name, locale)}
+                  </h4>
+                  <p className="text-[13px] font-black text-[#111111] tabular-nums whitespace-nowrap mt-1">
+                    {formatPrice(price, currency)}
+                  </p>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (p.variants?.options && p.variants.options.length > 0) {
+                      onSelectProduct(p);
+                    } else if (p.bundleVariants) {
+                      onNavigate(p.slug);
+                    } else {
+                      onDirectAdd(p);
+                    }
+                  }}
+                  aria-label={`${isEn ? "Add" : "Adaugă"} ${getLocalized(p.name, locale)} ${isEn ? "to cart" : "în coș"}`}
+                  className="mt-2.5 h-8 w-full rounded-lg bg-[#f4f4f6] hover:bg-[#111111] text-[#111111] hover:text-white border border-zinc-200/90 hover:border-[#111111] active:scale-[0.98] text-[10.5px] font-extrabold uppercase tracking-wider flex items-center justify-center transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <span>{isEn ? "Add" : "Adaugă"}</span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {(canScrollLeft || canScrollRight) && (
+        <div className="mx-4 sm:mx-5 mt-2.5 flex items-center">
+          <div className="flex-1 h-[3px] bg-purple-950/[0.08] rounded-full overflow-hidden relative">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#7c3aed] via-[#9333ea] to-[#c026d3] transition-all duration-150 ease-out"
+              style={{
+                width: "35%",
+                transform: `translateX(${scrollProgress * 1.85}%)`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function CartSheet() {
+  const {
+    items,
+    isCartOpen,
+    setCartOpen,
+    addItem,
+    removeItem,
+    updateQuantity,
+    getTotals,
+    appliedCoupon,
+    setCoupon,
+    preorderConflict,
+    closePreorderConflict,
+    resolvePreorderConflictWithReplace,
+  } = useCartStore();
+  const { currency, countryCode: regionCountryCode, hasDetectedCountry } = useRegionStore();
+  const storedCheckoutCountry = useCheckoutStore((s) => s.country);
+  const hasManualCountry = useCheckoutStore((s) => s.hasManualCountry);
+  const shippingConfig = useShippingConfig();
+  const checkoutCountry = (
+    hasManualCountry
+      ? storedCheckoutCountry
+      : currency === "RON"
+        ? "RO"
+        : hasDetectedCountry && regionCountryCode !== "RO"
+          ? regionCountryCode
+          : "INTL"
+  ) || "RO";
+  const { subtotal, discount, comboDiscount, tieredDiscount, bundlePercent, couponDiscount, shippingDiscount, total } = getTotals(currency);
+
+  const [selectingProduct, setSelectingProduct] = useState<Product | null>(null);
+  const [modalModelIdx, setModalModelIdx] = useState(0);
+  const [modalSize, setModalSize] = useState("L");
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+
+  const locale = useLocale();
+  const isEn = locale === "en";
+  const router = useRouter();
+
+  const openSelectingModal = (product: Product) => {
+    const rawOpts = product.variants?.options || [];
+    const opts = [...rawOpts].sort(
+      (a: VariantOption, b: VariantOption) =>
+        (a.stock_status === "sold_out" ? 1 : 0) -
+        (b.stock_status === "sold_out" ? 1 : 0)
+    );
+    let defaultIdx = 0;
+    if (isDigitalProgramItem(product) && opts.length > 0) {
+      const matchedIdx = opts.findIndex((o) => {
+        const label = getLocalized(o.name, locale).toLowerCase();
+        return isEn ? label.includes("english") : label.includes("rom");
+      });
+      if (matchedIdx >= 0) defaultIdx = matchedIdx;
+    }
+    setModalModelIdx(defaultIdx);
+    const sizeOpts = product.bundleVariants?.size?.options || [];
+    setModalSize(sizeOpts.includes("L") ? "L" : (sizeOpts[0] || ""));
+    setSelectingProduct(product);
   };
 
   useEffect(() => {
@@ -160,64 +387,88 @@ export function CartSheet() {
   }, [isCartOpen, allProducts.length]);
 
   const { itemCount: totalItemsCount } = getBundleSummary(items);
+  const cartBadgeCount = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
+  const digitalOnlyCart = isDigitalOnlyCart(items);
 
   const totalSaved = Number((discount + couponDiscount).toFixed(2));
   const effectiveSubtotal = Math.max(0, Number((subtotal - totalSaved).toFixed(2)));
-  const freeShippingThreshold =
-    currency === "RON"
-      ? getProductPrice(300, currency)
-      : currency === "EUR"
-        ? 100
-        : getProductPrice(530, currency);
+  const freeShippingThreshold = getFreeShippingThreshold(checkoutCountry, currency, shippingConfig);
+  const isRoDelivery = checkoutCountry.toUpperCase() === "RO";
+  const formatCompactThreshold = (amount: number, curr: string): string => {
+    const upper = String(curr || "RON").toUpperCase();
+    const num = Number(amount) || 0;
+    const isWhole = Math.abs(num - Math.round(num)) < 0.01;
+    const valStr = isWhole ? String(Math.round(num)) : num.toFixed(2);
+    if (upper === "RON") return `${valStr}+ ${isEn ? "Lei" : "lei"}`;
+    const symMap: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
+    if (symMap[upper]) return `${symMap[upper]}${valStr}+`;
+    return `${valStr}+ ${upper}`;
+  };
+  const compactThresholdLabel = formatCompactThreshold(freeShippingThreshold, currency);
   const isFreeShippingUnlocked =
     items.length > 0 &&
-    (appliedCoupon?.type === "free_shipping" || effectiveSubtotal >= freeShippingThreshold);
+    (digitalOnlyCart || shippingDiscount || effectiveSubtotal >= freeShippingThreshold);
   const amountToFreeShipping = Math.max(
     0,
     Number((freeShippingThreshold - effectiveSubtotal).toFixed(2))
   );
-  const stepTrackPercent =
-    bundlePercent >= 10
-      ? 100
-      : bundlePercent >= 5
-        ? 50
-        : isFreeShippingUnlocked
-          ? 25
-          : items.length > 0
-            ? 12
-            : 0;
+  const shippingProgressPercent =
+    items.length === 0
+      ? 0
+      : isFreeShippingUnlocked
+        ? 100
+        : Math.min(96, Math.max(8, Math.round((effectiveSubtotal / Math.max(1, freeShippingThreshold)) * 100)));
 
-  // Preorder & mixed cart fulfillment detection
-  const hasPreorderInCart = items.some((item) => isPreorder(item, item.selectedVariant));
-  const hasInStockInCart = items.some((item) => !isPreorder(item, item.selectedVariant));
+  // Preorder & mixed cart fulfillment detection (digital programs never conflict with preorder)
+  const hasPreorderInCart = items.some(
+    (item) => !isDigitalProgramItem(item) && isPreorder(item, item.selectedVariant)
+  );
+  const hasInStockInCart = items.some(
+    (item) => !isDigitalProgramItem(item) && !isPreorder(item, item.selectedVariant)
+  );
   const hasMixedOrder = hasPreorderInCart && hasInStockInCart;
 
-  // Recommendations: prioritize products not yet in cart, then backfill with popular models
+  // Recommendations: strictly separated into Physical Equipment & Digital Programs
   const inCartBaseIds = new Set(
     items.map((item) => String(item.id || "").replace(/^(.+)-bundle-\d+$/, "$1"))
   );
-  const notInCart = allProducts
+  const physicalCatalog = allProducts.filter(
+    (product) => product.is_active !== false && !isDigitalProgramItem(product)
+  );
+  const notInCartGear = physicalCatalog
     .filter((product) => !inCartBaseIds.has(product.id))
     .sort((a, b) => getProductPrice(a.price, currency) - getProductPrice(b.price, currency));
-  const inCartOthers = allProducts
+  const inCartOtherGear = physicalCatalog
     .filter((product) => inCartBaseIds.has(product.id))
     .sort((a, b) => getProductPrice(a.price, currency) - getProductPrice(b.price, currency));
-  const availableUpsells = [...notInCart, ...(notInCart.length < 3 ? inCartOthers : [])].slice(0, 8);
+  const equipmentUpsells = [
+    ...notInCartGear,
+    ...(notInCartGear.length < 3 ? inCartOtherGear : []),
+  ].slice(0, 6);
 
-  useEffect(() => {
-    const el = carouselRef.current;
-    if (!el) return;
-
-    const t = setTimeout(checkScroll, 120);
-    el.addEventListener("scroll", checkScroll, { passive: true });
-    window.addEventListener("resize", checkScroll);
-
-    return () => {
-      clearTimeout(t);
-      el.removeEventListener("scroll", checkScroll);
-      window.removeEventListener("resize", checkScroll);
-    };
-  }, [availableUpsells.length, isCartOpen]);
+  const hasDigitalBundleInCart = items.some((item) => isDigitalBundleItem(item));
+  const includedInBundleSlugs = new Set<string>([
+    PROGRAM_UUIDS.FOOD_PLAN,
+    PROGRAM_UUIDS.TRAINING_PROGRAM,
+    PROGRAM_UUIDS.BENCH_PROGRAM,
+    PROGRAM_SLUGS.FOOD_PLAN,
+    PROGRAM_SLUGS.TRAINING_PROGRAM,
+    PROGRAM_SLUGS.BENCH_PROGRAM,
+  ]);
+  const programUpsells = allProducts
+    .filter((product) => {
+      if (product.is_active === false || !isDigitalProgramItem(product)) return false;
+      if (inCartBaseIds.has(product.id)) return false;
+      if (
+        hasDigitalBundleInCart &&
+        (includedInBundleSlugs.has(product.id) || includedInBundleSlugs.has(product.slug))
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => getProductPrice(b.price, currency) - getProductPrice(a.price, currency))
+    .slice(0, 6);
 
   return (
     <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
@@ -234,7 +485,7 @@ export function CartSheet() {
                 {isEn ? "Your Cart" : "Coșul tău"}
               </h2>
               <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#111111] text-white text-[11px] font-extrabold tabular-nums">
-                {totalItemsCount}
+                {cartBadgeCount}
               </span>
             </div>
 
@@ -248,172 +499,183 @@ export function CartSheet() {
             </button>
           </div>
 
-          {/* Light 3-Step Visual Progress Tracker */}
-          <div className="rounded-xl bg-[#f4f4f6] border border-zinc-200/90 text-[#111111] px-3.5 pt-3 pb-3">
-            {/* Concise Single-Line Headline */}
-            <p className="text-[12px] font-semibold text-zinc-600 leading-snug text-center mb-3">
-              {totalItemsCount === 0 &&
-                (isEn
-                  ? "Unlock free shipping and up to 10% off"
-                  : "Deblochează livrare gratuită și până la -10%")}
-              {totalItemsCount === 1 && !isFreeShippingUnlocked &&
-                (isEn ? (
-                  <>
-                    Add <strong className="font-bold text-[#111111]">{formatPrice(amountToFreeShipping, currency)}</strong> for{" "}
-                    <strong className="font-bold text-emerald-700">free shipping</strong>
-                  </>
-                ) : (
-                  <>
-                    Mai adaugă{" "}
-                    <strong className="font-bold text-[#111111]">{formatPrice(amountToFreeShipping, currency)}</strong>{" "}
-                    pentru <strong className="font-bold text-emerald-700">livrare gratuită</strong>
-                  </>
-                ))}
-              {totalItemsCount === 1 && isFreeShippingUnlocked &&
-                (isEn ? (
-                  <>
-                    Free shipping unlocked, add{" "}
-                    <strong className="font-bold text-[#e32f8c]">1 more item for 5% off</strong>
-                  </>
-                ) : (
-                  <>
-                    Ai livrare gratuită — mai adaugă{" "}
-                    <strong className="font-bold text-[#e32f8c]">1 produs pentru -5%</strong>
-                  </>
-                ))}
-              {totalItemsCount === 2 &&
-                (isEn ? (
-                  <>
-                    Add <strong className="font-bold text-[#111111]">1 more item</strong> for{" "}
-                    <strong className="font-bold text-[#e32f8c]">10% off</strong>
-                  </>
-                ) : (
-                  <>
-                    Mai adaugă <strong className="font-bold text-[#111111]">1 produs</strong> pentru{" "}
-                    <strong className="font-bold text-[#e32f8c]">-10% reducere</strong>
-                  </>
-                ))}
-              {totalItemsCount >= 3 &&
-                (isEn ? (
-                  <>
-                    <strong className="font-bold text-emerald-700">All 3 rewards unlocked</strong> (−
-                    {formatPrice(discount, currency)})
-                  </>
-                ) : (
-                  <>
-                    <strong className="font-bold text-emerald-700">Toate beneficiile activate</strong> (−
-                    {formatPrice(discount, currency)})
-                  </>
-                ))}
-            </p>
+          {/* Independent Shipping Progress Bar + 3 Independent Milestone Cards (Varianta A) */}
+          <div className="rounded-xl bg-[#f4f4f6] border border-zinc-200/90 text-[#111111] px-3.5 py-3 space-y-2.5">
+            {/* Free Shipping Amount Bar */}
+            <div>
+              <div className="flex items-center justify-between gap-2 text-[11.5px] leading-snug mb-1.5">
+                <span className="font-semibold text-zinc-700 min-w-0">
+                  {items.length === 0 ? (
+                    isEn ? (
+                      <>
+                        Free shipping over{" "}
+                        <strong className="font-bold text-[#111111]">
+                          {compactThresholdLabel}
+                        </strong>
+                      </>
+                    ) : (
+                      <>
+                        Livrare gratuită de la{" "}
+                        <strong className="font-bold text-[#111111]">
+                          {compactThresholdLabel}
+                        </strong>
+                      </>
+                    )
+                  ) : isFreeShippingUnlocked ? (
+                    <strong className="font-bold text-emerald-700 inline-flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 stroke-[2.75]" />
+                      {digitalOnlyCart
+                        ? isEn
+                          ? "Free instant email delivery"
+                          : "Livrare instantă gratuită"
+                        : isEn
+                          ? "Free shipping unlocked"
+                          : "Livrare gratuită deblocată"}
+                    </strong>
+                  ) : isEn ? (
+                    <>
+                      Add{" "}
+                      <strong className="font-bold text-[#111111]">
+                        {formatPrice(amountToFreeShipping, currency)}
+                      </strong>{" "}
+                      for <strong className="font-bold text-[#e32f8c]">free shipping</strong>
+                    </>
+                  ) : (
+                    <>
+                      Mai adaugă{" "}
+                      <strong className="font-bold text-[#111111]">
+                        {formatPrice(amountToFreeShipping, currency)}
+                      </strong>{" "}
+                      pentru <strong className="font-bold text-[#e32f8c]">livrare gratuită</strong>
+                    </>
+                  )}
+                </span>
+                {items.length > 0 && !isFreeShippingUnlocked && (
+                  <span className="text-[10.5px] font-black tabular-nums text-zinc-500 shrink-0">
+                    {shippingProgressPercent}%
+                  </span>
+                )}
+              </div>
 
-            {/* 3-Step Connected Milestone Track */}
-            <div className="grid grid-cols-3 relative">
-              {/* Background Line & Unified Fill connecting Node 1 → Node 2 → Node 3 */}
-              <div className="absolute top-[16.5px] left-[16.66%] right-[16.66%] h-[3px] bg-zinc-200 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-zinc-200/90 rounded-full overflow-hidden">
                 <div
                   className={cn(
                     "h-full rounded-full transition-all duration-500 ease-out",
-                    bundlePercent >= 10
-                      ? "bg-emerald-600"
-                      : bundlePercent >= 5
-                        ? "bg-[#e32f8c]"
-                        : isFreeShippingUnlocked
-                          ? "bg-emerald-600"
-                          : "bg-[#111111]"
+                    isFreeShippingUnlocked ? "bg-emerald-600" : "bg-[#e32f8c]"
                   )}
-                  style={{ width: `${stepTrackPercent}%` }}
+                  style={{ width: `${shippingProgressPercent}%` }}
                 />
               </div>
+            </div>
 
-              {/* Step 1: Free Shipping */}
-              <div className="flex flex-col items-center text-center relative z-10">
-                <div
-                  className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-300",
-                    isFreeShippingUnlocked
-                      ? bundlePercent >= 10
-                        ? "bg-emerald-600 text-white"
-                        : bundlePercent >= 5
-                          ? "bg-[#e32f8c] text-white"
-                          : "bg-emerald-600 text-white"
-                      : "bg-white border border-zinc-300 text-zinc-400"
-                  )}
-                >
-                  {isFreeShippingUnlocked ? (
-                    <Check className="w-4 h-4 stroke-[2.75]" />
-                  ) : (
-                    <Truck className="w-4 h-4" />
-                  )}
+            {/* 3 Independent Milestone Cards */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {/* Card 1: Free Shipping */}
+              <div
+                className={cn(
+                  "rounded-lg border px-2 py-1.5 flex items-center justify-center gap-1.5 text-center transition-colors",
+                  isFreeShippingUnlocked
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-white border-zinc-200/90 text-zinc-600"
+                )}
+              >
+                {isFreeShippingUnlocked ? (
+                  <Check className="w-3.5 h-3.5 stroke-[2.75] shrink-0" />
+                ) : (
+                  <Truck className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
+                )}
+                <div className="min-w-0 text-left">
+                  <div className="text-[10px] font-black leading-tight truncate">
+                    {isEn ? "Free ship" : "Gratuit"}
+                    {!digitalOnlyCart && isRoDelivery && currency !== "RON" ? " · RO" : ""}
+                  </div>
+                  <div className="text-[9px] font-semibold opacity-80 leading-tight tabular-nums truncate">
+                    {digitalOnlyCart ? "Digital" : compactThresholdLabel}
+                  </div>
                 </div>
-                <span
-                  className={cn(
-                    "mt-1.5 text-[10.5px] leading-tight",
-                    isFreeShippingUnlocked
-                      ? bundlePercent >= 5 && bundlePercent < 10
-                        ? "font-bold text-[#111111]"
-                        : "font-bold text-emerald-700"
-                      : "font-medium text-zinc-600"
-                  )}
-                >
-                  {isEn ? "Free shipping" : "Livrare gratuită"}
-                </span>
               </div>
 
-              {/* Step 2: 2 Items (-5% -> Check once -10% is reached) */}
-              <div className="flex flex-col items-center text-center relative z-10">
-                <div
-                  className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center text-[10.5px] font-black tracking-tight tabular-nums transition-colors duration-300",
-                    bundlePercent >= 10
-                      ? "bg-emerald-600 text-white"
-                      : bundlePercent >= 5
-                        ? "bg-[#e32f8c] text-white"
-                        : "bg-white border border-zinc-200 text-zinc-400"
-                  )}
-                >
-                  {bundlePercent >= 10 ? (
-                    <Check className="w-4 h-4 stroke-[2.75]" />
-                  ) : (
-                    "-5%"
-                  )}
+              {/* Card 2: -5% (2 items) */}
+              <div
+                className={cn(
+                  "rounded-lg border px-2 py-1.5 flex items-center justify-center gap-1.5 text-center transition-colors",
+                  bundlePercent >= 5
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-white border-zinc-200/90 text-zinc-500"
+                )}
+              >
+                {bundlePercent >= 5 && (
+                  <Check className="w-3.5 h-3.5 stroke-[2.75] shrink-0" />
+                )}
+                <div className="min-w-0 text-center">
+                  <div className="text-[10.5px] font-black leading-tight tabular-nums">-5%</div>
+                  <div className="text-[9px] font-semibold opacity-80 leading-tight truncate">
+                    {isEn ? "2 items" : "2 produse"}
+                  </div>
                 </div>
-                <span
-                  className={cn(
-                    "mt-1.5 text-[10.5px] leading-tight",
-                    bundlePercent >= 10
-                      ? "font-bold text-emerald-700"
-                      : bundlePercent >= 5
-                        ? "font-bold text-[#111111]"
-                        : "font-medium text-zinc-500"
-                  )}
-                >
-                  {isEn ? "2 items" : "2 produse"}
-                </span>
               </div>
 
-              {/* Step 3: 3+ Items (-10%) */}
-              <div className="flex flex-col items-center text-center relative z-10">
-                <div
-                  className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-black tracking-tighter tabular-nums transition-colors duration-300",
-                    bundlePercent >= 10
-                      ? "bg-emerald-600 text-white"
-                      : "bg-white border border-zinc-200 text-zinc-400"
-                  )}
-                >
-                  -10%
+              {/* Card 3: -10% (3+ items) */}
+              <div
+                className={cn(
+                  "rounded-lg border px-2 py-1.5 flex items-center justify-center gap-1.5 text-center transition-colors",
+                  bundlePercent >= 10
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-white border-zinc-200/90 text-zinc-500"
+                )}
+              >
+                {bundlePercent >= 10 && (
+                  <Check className="w-3.5 h-3.5 stroke-[2.75] shrink-0" />
+                )}
+                <div className="min-w-0 text-center">
+                  <div className="text-[10.5px] font-black leading-tight tabular-nums">-10%</div>
+                  <div className="text-[9px] font-semibold opacity-80 leading-tight truncate">
+                    {isEn ? "3+ items" : "3+ produse"}
+                  </div>
                 </div>
-                <span
-                  className={cn(
-                    "mt-1.5 text-[10.5px] leading-tight",
-                    bundlePercent >= 10 ? "font-bold text-emerald-700" : "font-medium text-zinc-400"
-                  )}
-                >
-                  {isEn ? "3+ items" : "3+ produse"}
-                </span>
               </div>
             </div>
+
+            {/* Secondary Bundle Prompt */}
+            {items.length > 0 && (
+              <p className="text-[11px] font-semibold text-zinc-600 text-center leading-tight">
+                {totalItemsCount === 1 ? (
+                  isEn ? (
+                    <>
+                      Add <strong className="font-bold text-[#e32f8c]">1 more item</strong> for{" "}
+                      <strong className="font-bold text-[#111111]">5% off</strong>
+                    </>
+                  ) : (
+                    <>
+                      Mai adaugă <strong className="font-bold text-[#e32f8c]">1 produs</strong> pentru{" "}
+                      <strong className="font-bold text-[#111111]">-5%</strong>
+                    </>
+                  )
+                ) : totalItemsCount === 2 ? (
+                  isEn ? (
+                    <>
+                      5% off active · Add <strong className="font-bold text-[#e32f8c]">1 more</strong> for{" "}
+                      <strong className="font-bold text-[#111111]">10% off</strong>
+                    </>
+                  ) : (
+                    <>
+                      -5% activ · Mai adaugă <strong className="font-bold text-[#e32f8c]">1 produs</strong> pentru{" "}
+                      <strong className="font-bold text-[#111111]">-10%</strong>
+                    </>
+                  )
+                ) : (
+                  <strong className="font-bold text-emerald-700">
+                    {comboDiscount > 0 && tieredDiscount === 0
+                      ? isEn
+                        ? `3-programs bundle unlocked (−${formatPrice(discount, currency)})`
+                        : `Pachet 3 programe activat (−${formatPrice(discount, currency)})`
+                      : isEn
+                        ? `10% bundle discount unlocked (−${formatPrice(discount, currency)})`
+                        : `Reducere pachet -10% activată (−${formatPrice(discount, currency)})`}
+                  </strong>
+                )}
+              </p>
+            )}
           </div>
         </div>
 
@@ -501,7 +763,7 @@ export function CartSheet() {
                     type="button"
                     onClick={() => {
                       useCartStore.setState({
-                        items: items.filter((item) => isPreorder(item, item.selectedVariant)),
+                        items: items.filter((item) => isDigitalProgramItem(item) || isPreorder(item, item.selectedVariant)),
                       });
                     }}
                     className="flex-1 py-2 bg-zinc-100 text-[#111111] font-bold text-xs rounded-lg hover:bg-zinc-200 transition-colors cursor-pointer"
@@ -519,7 +781,10 @@ export function CartSheet() {
                   {items.map((item) => {
                     const variantName = item.selectedVariant
                       ? typeof item.selectedVariant.name === "object"
-                        ? (item.selectedVariant.name as Record<string, string>).ro
+                        ? ((item.selectedVariant.name as Record<string, string>).ro ||
+                           (item.selectedVariant.name as Record<string, string>).en ||
+                           Object.values(item.selectedVariant.name as Record<string, string>)[0] ||
+                           "variant")
                         : item.selectedVariant.name
                       : "default";
                     const itemKey = `${item.id}-${variantName}`;
@@ -582,11 +847,24 @@ export function CartSheet() {
 
                             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                               {item.selectedVariant && (
-                                <span className="inline-block px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 text-[10px] font-bold uppercase tracking-wider">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 text-[10px] font-bold uppercase tracking-wider">
+                                  {isDigitalProgramItem(item) && (
+                                    <LanguageFlagSvg
+                                      isEnglish={getLocalized(item.selectedVariant.name, locale)
+                                        .toLowerCase()
+                                        .includes("eng")}
+                                    />
+                                  )}
                                   {getLocalized(item.selectedVariant.name, locale)}
                                 </span>
                               )}
-                              {isPreorder(item, item.selectedVariant) && (
+                              {isDigitalProgramItem(item) && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-bold tracking-wide">
+                                  <Mail size={10} />
+                                  {isEn ? "Digital program" : "Program digital"}
+                                </span>
+                              )}
+                              {!isDigitalProgramItem(item) && isPreorder(item, item.selectedVariant) && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
                                   <Clock size={10} />
                                   {isEn ? "Pre-order" : "Precomandă"}
@@ -664,146 +942,45 @@ export function CartSheet() {
               </div>
             )}
 
-            {/* ═══ PRODUCT RECOMMENDATIONS CAROUSEL ═══ */}
-            {availableUpsells.length > 0 && (
-              <div className="pt-3.5 pb-4">
-                <div className="px-4 sm:px-5 mb-2.5 flex items-center justify-between gap-2">
-                  <h3 className="text-[12px] font-black uppercase tracking-[0.06em] text-[#111111] leading-tight">
-                    {bundlePercent === 5
-                      ? isEn
-                        ? "Add 1 more item for 10% off"
-                        : "Mai adaugă un produs pentru -10%"
-                      : bundlePercent === 0 && totalItemsCount === 1
-                        ? isEn
-                          ? "Add 1 more item for 5% off"
-                          : "Mai adaugă un produs pentru -5%"
-                        : isEn
-                          ? "Complete your setup"
-                          : "Completează echipamentul"}
-                  </h3>
+            {/* ═══ PRODUCT RECOMMENDATIONS (2 SEPARATE ROWS: GEAR & DIGITAL PROGRAMS) ═══ */}
+            {(() => {
+              const gearSection = {
+                key: "gear",
+                title: isEn ? "Recommended Equipment" : "Echipamente Recomandate",
+                products: equipmentUpsells,
+              };
+              const programsSection = {
+                key: "programs",
+                title: isEn ? "Recommended Programs" : "Programe Recomandate",
+                products: programUpsells,
+              };
+              const sections = (digitalOnlyCart
+                ? [programsSection, gearSection]
+                : [gearSection, programsSection]
+              ).filter((s) => s.products.length > 0);
 
-                  {(canScrollLeft || canScrollRight) && (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={scrollLeft}
-                        disabled={!canScrollLeft}
-                        aria-label={isEn ? "Previous items" : "Produse anterioare"}
-                        className={cn(
-                          "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
-                          canScrollLeft
-                            ? "border-zinc-200 text-[#111111] hover:border-[#111111] cursor-pointer"
-                            : "border-zinc-200 text-zinc-300 opacity-50 pointer-events-none"
-                        )}
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={scrollRight}
-                        disabled={!canScrollRight}
-                        aria-label={isEn ? "Next items" : "Produse următoare"}
-                        className={cn(
-                          "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
-                          canScrollRight
-                            ? "border-zinc-200 text-[#111111] hover:border-[#111111] cursor-pointer"
-                            : "border-zinc-200 text-zinc-300 opacity-50 pointer-events-none"
-                        )}
-                      >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
+              return sections.map((sec, idx) => (
                 <div
-                  ref={carouselRef}
-                  className="flex gap-2.5 overflow-x-auto overflow-y-hidden overscroll-y-none scrollbar-hide px-4 sm:px-5 scroll-pl-4 sm:scroll-pl-5 pb-1 snap-x snap-mandatory scroll-smooth"
+                  key={sec.key}
+                  className={idx > 0 ? "border-t border-zinc-200/70" : undefined}
                 >
-                  {availableUpsells.map((p) => {
-                    const price = getProductPrice(p.price, currency);
-
-                    return (
-                      <div
-                        key={p.id}
-                        className="w-[146px] sm:w-[158px] shrink-0 snap-start bg-white rounded-xl p-2 border border-zinc-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:border-purple-300/80 hover:shadow-[0_4px_14px_rgba(147,51,234,0.08)] transition-all flex flex-col group select-none"
-                      >
-                        <Link
-                          href={`/product/${p.slug}`}
-                          onClick={() => setCartOpen(false)}
-                          className={cn(
-                            "relative w-full aspect-[4/5] rounded-lg overflow-hidden block",
-                            isWideProductImage(p.image) ? "bg-black" : "bg-zinc-950"
-                          )}
-                        >
-                          <Image
-                            src={p.image}
-                            alt={getLocalized(p.name, locale)}
-                            fill
-                            sizes="160px"
-                            className={cn(
-                              "group-hover:scale-[1.03] transition-transform duration-500",
-                              isWideProductImage(p.image) ? "object-contain p-1.5" : "object-cover object-center"
-                            )}
-                          />
-                        </Link>
-
-                        <div className="flex-1 flex flex-col justify-between pt-2.5 px-0.5 min-w-0">
-                          <Link
-                            href={`/product/${p.slug}`}
-                            onClick={() => setCartOpen(false)}
-                            className="block min-w-0"
-                          >
-                            <h4 className="text-[11.5px] font-bold text-[#111111] group-hover:text-[#9333ea] transition-colors leading-snug line-clamp-2 min-h-[2rem]">
-                              {getLocalized(p.name, locale)}
-                            </h4>
-                            <p className="text-[13px] font-black text-[#111111] tabular-nums whitespace-nowrap mt-1">
-                              {formatPrice(price, currency)}
-                            </p>
-                          </Link>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (p.variants?.options && p.variants.options.length > 0) {
-                                openSelectingModal(p);
-                              } else if (p.bundleVariants) {
-                                setCartOpen(false);
-                                router.push(`/product/${p.slug}`);
-                              } else {
-                                addItem(p);
-                              }
-                            }}
-                            aria-label={`${isEn ? "Add" : "Adaugă"} ${getLocalized(p.name, locale)} ${isEn ? "to cart" : "în coș"}`}
-                            className="mt-2.5 h-8 w-full rounded-lg bg-[#f4f4f6] hover:bg-[#111111] text-[#111111] hover:text-white border border-zinc-200/90 hover:border-[#111111] active:scale-[0.98] text-[10.5px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
-                          >
-                            <Plus className="w-3 h-3 stroke-[2.5] shrink-0" />
-                            <span>{isEn ? "Add" : "Adaugă"}</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <CartUpsellCarousel
+                    title={sec.title}
+                    products={sec.products}
+                    locale={locale}
+                    isEn={isEn}
+                    currency={currency}
+                    isCartOpen={isCartOpen}
+                    onSelectProduct={openSelectingModal}
+                    onDirectAdd={(prod) => addItem(prod)}
+                    onNavigate={(slug) => {
+                      setCartOpen(false);
+                      router.push(`/product/${slug}`);
+                    }}
+                  />
                 </div>
-
-                {/* Carousel Progress Indicator */}
-                {(canScrollLeft || canScrollRight) && (
-                  <div className="mx-4 sm:mx-5 mt-2.5 flex items-center">
-                    <div className="flex-1 h-[3px] bg-purple-950/[0.08] rounded-full overflow-hidden relative">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#7c3aed] via-[#9333ea] to-[#c026d3] transition-all duration-150 ease-out"
-                        style={{
-                          width: "35%",
-                          transform: `translateX(${scrollProgress * 1.85}%)`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              ));
+            })()}
 
             {/* ═══ PROMO CODE & ORDER SUMMARY CARD ═══ */}
             {items.length > 0 && (
@@ -817,27 +994,64 @@ export function CartSheet() {
                     {!appliedCoupon ? (
                       <CouponInput variant="cart" />
                     ) : (
-                      <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
-                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                          <Ticket className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                          <span className="uppercase tracking-wider font-black text-[#111111]">
-                            {appliedCoupon.code}
-                          </span>
-                          <span className="text-emerald-700 font-bold">
-                            {appliedCoupon.type === "percentage"
-                              ? `(-${appliedCoupon.value}%)`
-                              : appliedCoupon.type === "free_shipping"
-                                ? isEn
-                                  ? "Free shipping"
-                                  : "Livrare gratuită"
-                                : `(-${formatPrice(couponDiscount, currency)})`}
-                          </span>
-                        </div>
+                      (() => {
+                        const isCouponActiveNow =
+                          couponDiscount > 0 ||
+                          (appliedCoupon.type === "free_shipping" && shippingDiscount);
+                        const isBlockedByBundle =
+                          !isCouponActiveNow &&
+                          appliedCoupon.is_stackable === false &&
+                          discount > 0 &&
+                          appliedCoupon.type !== "free_shipping";
+
+                        return (
+                          <div
+                            className={cn(
+                              "flex items-center justify-between px-3 py-2.5 rounded-lg border text-xs",
+                              isCouponActiveNow
+                                ? "bg-emerald-50 border-emerald-200"
+                                : "bg-amber-50 border-amber-200"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                              <Ticket
+                                className={cn(
+                                  "w-3.5 h-3.5 shrink-0",
+                                  isCouponActiveNow ? "text-emerald-700" : "text-amber-700"
+                                )}
+                              />
+                              <span className="uppercase tracking-wider font-black text-[#111111]">
+                                {appliedCoupon.code}
+                              </span>
+                              <span
+                                className={cn(
+                                  "font-bold",
+                                  isCouponActiveNow ? "text-emerald-700" : "text-amber-700"
+                                )}
+                              >
+                                {isCouponActiveNow
+                                  ? appliedCoupon.type === "percentage"
+                                    ? `(-${appliedCoupon.value}%)`
+                                    : appliedCoupon.type === "free_shipping"
+                                      ? isEn
+                                        ? "Free shipping"
+                                        : "Livrare gratuită"
+                                      : `(-${formatPrice(couponDiscount, currency)})`
+                                  : isBlockedByBundle
+                                    ? isEn
+                                      ? "Bundle discount applied (higher)"
+                                      : "Se aplică reducerea de pachet (mai mare)"
+                                    : isEn
+                                      ? "Min. order not met"
+                                      : "Valoare minimă neîndeplinită"}
+                              </span>
+                            </div>
                         <button
                           type="button"
                           onClick={() => {
                             setCoupon(null);
                             if (typeof window !== "undefined") {
+                              sessionStorage.setItem("tz_manual_coupon_override", "1");
                               localStorage.removeItem("tz_referral_code");
                             }
                           }}
@@ -847,6 +1061,8 @@ export function CartSheet() {
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                        );
+                      })()
                     )}
                   </div>
 
@@ -862,9 +1078,17 @@ export function CartSheet() {
                     {discount > 0 && (
                       <div className="flex justify-between items-center gap-3 text-[#111111]">
                         <span className="font-semibold text-zinc-700">
-                          {isEn
-                            ? `Bundle discount (-${bundlePercent}%)`
-                            : `Reducere pachet (-${bundlePercent}%)`}
+                          {comboDiscount > 0 && tieredDiscount === 0
+                            ? isEn
+                              ? "3-programs bundle"
+                              : "Pachet 3 programe"
+                            : bundlePercent > 0
+                              ? isEn
+                                ? `Bundle discount (-${bundlePercent}%)`
+                                : `Reducere pachet (-${bundlePercent}%)`
+                              : isEn
+                                ? "Programs combo discount"
+                                : "Reducere pachet programe"}
                         </span>
                         <span className="font-extrabold text-[#e32f8c] whitespace-nowrap shrink-0">
                           -{formatPrice(discount, currency)}
@@ -991,19 +1215,22 @@ export function CartSheet() {
                     );
                     const modalSizeOptions = selectingProduct.bundleVariants?.size?.options || [];
                     const hasModalSizes = modalSizeOptions.length > 0;
+                    const isDigitalModal = isDigitalProgramItem(selectingProduct);
                     const isDesign = selectingProduct.variants?.type === "design";
-                    const isSize = options.some((opt: VariantOption) => {
-                      const n = (
-                        typeof opt.name === "object"
-                          ? opt.name[locale] || opt.name["ro"]
-                          : opt.name
-                      ).toLowerCase();
-                      return (
-                        ["s", "m", "l", "xl", "xxl"].includes(n) ||
-                        n.includes("marime") ||
-                        n.includes("size")
-                      );
-                    });
+                    const isSize =
+                      selectingProduct.variants?.type === "size" ||
+                      options.some((opt: VariantOption) => {
+                        const n = (
+                          typeof opt.name === "object"
+                            ? opt.name[locale] || opt.name["ro"]
+                            : opt.name
+                        ).toLowerCase();
+                        return (
+                          ["s", "m", "l", "xl", "xxl", "2xl", "xs"].includes(n) ||
+                          n.includes("marime") ||
+                          n.includes("size")
+                        );
+                      });
                     const prodName = getLocalized(selectingProduct.name, locale);
                     const activeOpt = options[modalModelIdx] || options[0];
                     const modalPreviewImg = activeOpt?.image || selectingProduct.image;
@@ -1030,21 +1257,25 @@ export function CartSheet() {
                               {prodName}
                             </h2>
                             <h3 className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">
-                              {hasModalSizes
+                              {isDigitalModal
                                 ? isEn
-                                  ? "Select design & size"
-                                  : "Alege modelul și mărimea"
-                                : isSize
+                                  ? "Select language"
+                                  : "Alege limba"
+                                : hasModalSizes
                                   ? isEn
-                                    ? "Select size"
-                                    : "Alege mărimea"
-                                  : isDesign
+                                    ? "Select design & size"
+                                    : "Alege modelul și mărimea"
+                                  : isSize
                                     ? isEn
-                                      ? "Select design"
-                                      : "Alege modelul"
-                                    : isEn
-                                      ? "Select color"
-                                      : "Alege culoarea"}
+                                      ? "Select size"
+                                      : "Alege mărimea"
+                                    : isDesign
+                                      ? isEn
+                                        ? "Select design"
+                                        : "Alege modelul"
+                                      : isEn
+                                        ? "Select color"
+                                        : "Alege culoarea"}
                             </h3>
                           </div>
                         </div>
@@ -1077,6 +1308,7 @@ export function CartSheet() {
                                           : selectingProduct.images?.findIndex(
                                               (img: string) => img === opt.image
                                             ) ?? 0,
+                                      stock_status: opt.stock_status,
                                     });
                                     setSelectingProduct(null);
                                   }
@@ -1091,7 +1323,11 @@ export function CartSheet() {
                                 )}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
-                                  {isDesign && opt.image ? (
+                                  {isDigitalModal ? (
+                                    <LanguageFlagSvg
+                                      isEnglish={localizedName.toLowerCase().includes("eng")}
+                                    />
+                                  ) : isDesign && opt.image ? (
                                     <div className="relative w-10 h-7 rounded-md bg-black border border-zinc-200 overflow-hidden shrink-0">
                                       <Image src={opt.image} alt={localizedName} fill sizes="40px" className="object-contain p-0.5" />
                                     </div>
@@ -1115,14 +1351,16 @@ export function CartSheet() {
                                     >
                                       {localizedName}
                                     </span>
-                                    {(opt.badge || isSoldOut) && (
+                                    {(isSoldOut || opt.stock_status === "preorder") && (
                                       <span
                                         className={cn(
                                           "text-[9.5px] font-bold uppercase tracking-wider mt-0.5",
-                                          isSoldOut ? "text-red-500" : "text-[#e32f8c]"
+                                          isSoldOut ? "text-red-500" : "text-amber-600"
                                         )}
                                       >
-                                        {isSoldOut ? (isEn ? "SOLD OUT" : "STOC EPUIZAT") : localizeBadge(opt.badge, locale)}
+                                        {isSoldOut
+                                          ? (isEn ? "SOLD OUT" : "STOC EPUIZAT")
+                                          : (isEn ? "PRE-ORDER" : "PRECOMANDĂ")}
                                       </span>
                                     )}
                                   </div>
@@ -1181,12 +1419,12 @@ export function CartSheet() {
                                       : selectingProduct.images?.findIndex(
                                           (img: string) => img === activeOpt.image
                                         ) ?? 0,
+                                  stock_status: activeOpt.stock_status,
                                 });
                                 setSelectingProduct(null);
                               }}
                               className="mt-3.5 w-full h-11 rounded-xl bg-[#111111] hover:bg-[#e32f8c] text-white font-black uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
                             >
-                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                               <span>{isEn ? "Add to Cart" : "Adaugă în coș"}</span>
                             </button>
                           </div>

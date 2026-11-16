@@ -65,10 +65,10 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
       price: 529.99,
       originalPrice: 599.99,
       badge: isRo ? "SUPORT MAXIM · PR-URI" : "MAX SUPPORT · PRs",
-      image: "/images/products/x10_elbow_wraps_purple_1.webp",
+      image: "/images/products/x10_elbow_wraps_purple.webp",
       images: [
-        "/images/products/x10_elbow_wraps_purple_1.webp",
-        "/images/products/x10_elbow_wraps_purple_2.webp"
+        "/images/products/x10_elbow_wraps_purple.webp",
+        "/images/products/x10_elbow_wraps_white.webp"
       ],
       description: {
         ro: "Ediția Purple X10. Rigiditate extremă de competiție, densitate multi-strat de 1.2 kg și până la +20 kg asistență mecanică la ieșirea din piept.",
@@ -388,7 +388,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
                 {/* Square Product Image */}
                 <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-black/50 border border-white/5 my-1.5">
                   <Image
-                    src="/images/products/x10_elbow_wraps_purple_square.webp"
+                    src="/images/products/x10_elbow_wraps_purple.webp"
                     alt="TrenZone X10 Elbow Wraps"
                     fill
                     sizes="(max-width: 640px) 45vw, 300px"

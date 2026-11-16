@@ -42,8 +42,37 @@ const R2_IMAGE_PREFIXES = [
   '/images/vladtren-logo.png',
 ];
 
+const LEGACY_PRODUCT_FILE_MAP: Record<string, string> = {
+  'x10_elbow_wraps_purple_1.webp': 'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_purple_2.webp': 'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_purple_square.webp': 'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_purple.png': 'x10_elbow_wraps_purple.webp',
+  'x10_elbow_wraps_white_1.webp': 'x10_elbow_wraps_white.webp',
+  'x10_elbow_wraps_white_2.webp': 'x10_elbow_wraps_white.webp',
+  'x10_elbow_wraps_white_3.webp': 'x10_elbow_wraps_white.webp',
+  'x10_elbow_wraps_white.PNG': 'x10_elbow_wraps_white.webp',
+  'x10_elbow_wraps_white.png': 'x10_elbow_wraps_white.webp',
+  'trenzone_belt_default.webp': 'heavy_lifting_belt.webp',
+  'heavy_lifting_belt.PNG': 'heavy_lifting_belt.webp',
+  'heavy_lifting_belt.png': 'heavy_lifting_belt.webp',
+  'trenzone_wristwraps_default.webp': 'x10_wrist_wraps_purple.webp',
+  'x10_wrist_wraps_purple.PNG': 'x10_wrist_wraps_purple.webp',
+  'x10_wrist_wraps_purple.png': 'x10_wrist_wraps_purple.webp',
+  'x10_wrist_wraps_white.PNG': 'x10_wrist_wraps_white.webp',
+  'x10_wrist_wraps_white.png': 'x10_wrist_wraps_white.webp',
+  'trenzone_tshirt_default.webp': 'shirt_stay_hard.webp',
+  'program_complete_bundle.webp': 'program_complete_trio_v2.webp',
+  'program_complete_3_bundle.webp': 'program_complete_trio_v2.webp',
+};
+
 export function getCdnUrl(url: string | null | undefined): string {
   if (!url) return '';
+
+  // Normalize any legacy product image filename to its new WebP filename
+  const rawFile = url.split('/').pop()?.split('?')[0]?.split('#')[0] || '';
+  if (rawFile && LEGACY_PRODUCT_FILE_MAP[rawFile]) {
+    url = url.replace(rawFile, LEGACY_PRODUCT_FILE_MAP[rawFile]);
+  }
 
   // 1. If local video path (/videos/influencers/trenwraps1.mp4) and R2 bucket is configured, route directly to R2 root
   if (R2_VIDEO_BASE && url.startsWith('/videos/')) {

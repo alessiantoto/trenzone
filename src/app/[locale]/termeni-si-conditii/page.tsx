@@ -51,7 +51,8 @@ export default function TermsPage() {
 
         <h2>4. Products and Prices</h2>
         <ul>
-          <li>Prices are final and expressed in <strong>RON</strong>. Please note the seller is a non-VAT payer (VAT not applicable).</li>
+          <li>Prices are displayed in the selected store currency (RON, EUR, USD, or GBP). Please note the seller is a non-VAT payer (VAT not applicable).</li>
+          <li>For shipments outside the European Union Customs Union, listed product and shipping prices do not include destination import VAT/GST, customs duties, or local courier clearance fees.</li>
           <li>Prices may undergo strategic changes without notice, reflecting the quality of materials.</li>
           <li>We reserve the right to correct any technical display errors.</li>
           <li>Product offers are valid strictly within the limit of available stock.</li>
@@ -79,16 +80,20 @@ export default function TermsPage() {
           <li>Secure Online Payment (Credit/Debit Card via Stripe)</li>
         </ul>
 
-        <h2>8. Delivery</h2>
+        <h2>8. Delivery & International Customs Notice</h2>
         <p>
-          Shipping is carried out through elite logistics partners. The estimated delivery time is:
+          Physical shipments are dispatched from our logistics hub in Romania through international courier partners. Estimated delivery times:
         </p>
         <ul>
-          <li><strong>Romania:</strong> 1–5 business days.</li>
-          <li><strong>International:</strong> 3–10 business days (depending on the geographical area and local operator).</li>
+          <li><strong>Romania:</strong> 1–3 business days.</li>
+          <li><strong>European Union & Europe:</strong> 3–8 business days.</li>
+          <li><strong>Worldwide (USA, Canada, UK, Switzerland, Norway, Latin America, Middle East, Asia, Australia, New Zealand, South Africa):</strong> 7–17 business days, depending on destination and customs processing.</li>
         </ul>
         <p>
-          <strong>Note for non-EU deliveries:</strong> For orders delivered to countries outside the European Union (e.g., UK), the customer is solely responsible for paying any customs duties or import taxes applicable under local law in the destination country.
+          <strong>Customs Duties, Import VAT/GST & Clearance Fees (Non-EU Destinations — DAP):</strong> All international physical orders outside the EU Customs Union (including the United Kingdom, Switzerland, Norway, Iceland, Turkey, Ukraine, USA, Canada, Mexico, South America, Israel, UAE, Asia, Australia, New Zealand, South Africa, as well as special tax/customs territories such as the Canary Islands) are shipped under <strong>DAP (Delivered At Place)</strong> terms. Any customs duties, local import VAT/GST, or courier clearance/brokerage fees imposed by destination authorities are the sole responsibility of the recipient upon delivery.
+        </p>
+        <p>
+          TrenZone® has no control over these charges and cannot predict their exact amount. If a parcel is refused or left unclaimed due to unpaid customs or import charges, any return shipping fees, return customs fees, or carrier abandonment charges will be deducted from any eligible refund, and initial shipping costs are non-refundable.
         </p>
 
         <h2>9. Return Policy</h2>
@@ -187,7 +192,8 @@ export default function TermsPage() {
 
       <h2>4. Produse și prețuri</h2>
       <ul>
-        <li>Prețurile sunt finale și sunt exprimate în <strong>RON</strong>. Menționăm că vânzătorul este neplătitor de TVA (TVA neaplicabil).</li>
+        <li>Prețurile sunt afișate în moneda selectată pe site (RON, EUR, USD sau GBP). Menționăm că vânzătorul este neplătitor de TVA (TVA neaplicabil).</li>
+        <li>Pentru comenzile expediate în afara Uniunii Vamale Europene, prețurile afișate și tariful de transport nu includ taxele vamale, TVA/GST local de import sau comisioanele de vămuire din țara de destinație.</li>
         <li>Prețurile pot suferi modificări strategice fără notificare, reflectând calitatea materialelor.</li>
         <li>Ne rezervăm dreptul de a corecta eventualele erori tehnice de afișare.</li>
         <li>Oferta produselor este valabilă strict în limita stocului disponibil.</li>
@@ -215,16 +221,20 @@ export default function TermsPage() {
         <li>Plata Online Securizată (Card Bancar prin Stripe)</li>
       </ul>
 
-      <h2>8. Livrarea Produselor</h2>
+      <h2>8. Livrarea Produselor & Taxe Vamale Internaționale</h2>
       <p>
-        Expediția se realizează prin parteneri logisticieni de elită. Termenul estimat de livrare este de:
+        Coletele fizice sunt expediate din hub-ul nostru logistic din România prin parteneri de curierat internațional. Termenul estimat de livrare este de:
       </p>
       <ul>
-        <li><strong>România:</strong> 1–5 zile lucrătoare.</li>
-        <li><strong>Internațional:</strong> 3–10 zile lucrătoare (în funcție de zona geografică și de operatorul local).</li>
+        <li><strong>România:</strong> 1–3 zile lucrătoare.</li>
+        <li><strong>Uniunea Europeană & Europa:</strong> 3–8 zile lucrătoare.</li>
+        <li><strong>Internațional (SUA, Canada, Marea Britanie, Elveția, Norvegia, America Latină, Orientul Mijlociu, Asia, Australia, Noua Zeelandă, Africa de Sud):</strong> 7–17 zile lucrătoare, în funcție de destinație și procedurile vamale locale.</li>
       </ul>
       <p>
-        <strong>Notă pentru livrări non-UE:</strong> În cazul comenzilor livrate în țări din afara Uniunii Europene (ex: Marea Britanie), clientul este unicul responsabil pentru achitarea eventualelor taxe vamale sau de import aplicabile conform legislației locale din țara de destinație.
+        <strong>Notă privind taxele vamale și de import (Livrări Non-UE — regim DAP):</strong> Comenzile livrate în țări sau teritorii din afara Uniunii Vamale a Uniunii Europene (inclusiv Marea Britanie, Elveția, Norvegia, Islanda, Turcia, Ucraina, SUA, Canada, Mexic, America de Sud, Israel, Emiratele Arabe Unite, Asia, Australia, Noua Zeelandă, Africa de Sud, precum și teritorii cu regim vamal/TVA special precum Insulele Canare) sunt expediate în regim <strong>DAP (Delivered At Place)</strong>. Eventualele taxe vamale, TVA/GST de import local și comisioane de vămuire/brokeraj percepute de autoritățile sau curierii din țara de destinație sunt exclusiv în sarcina destinatarului la momentul livrării.
+      </p>
+      <p>
+        TrenZone® nu controlează și nu poate estima exact cuantumul acestor taxe locale. În cazul în care coletul este refuzat sau neridicat din cauza neachitării taxelor vamale/de import, costurile de retur internațional, eventualele taxe vamale de retur sau distrugere percepute de curier se deduc din suma rambursabilă, iar taxa inițială de transport nu este rambursabilă.
       </p>
       <p>
         Toate detaliile logistice specifice sunt afișate transparent în Sumar-ul de Comandă înainte de plată.

@@ -5,7 +5,7 @@ import { getAdminProductsServer } from '@/app/actions/products';
 import { getAdminProductBySlug, updateProductAdmin } from '@/app/actions/admin-products';
 import { getCoupons } from '@/app/actions/coupons';
 import { getAllAdminReviews } from '@/app/actions/admin-reviews';
-import { getInfluencersAdmin, getAdminSubscribersList, getMarketingAudienceStats } from '@/app/actions/admin-marketing';
+import { getInfluencersAdmin, getDigitalVideoConfigAdmin, saveDigitalVideoConfigAdmin, getAdminSubscribersList, getMarketingAudienceStats } from '@/app/actions/admin-marketing';
 import { getAdminLeads, getAdminBroadcasts, getAllEmails } from '@/app/actions/admin-data';
 import { getAdminOrders } from '@/app/actions/admin-orders';
 import { getAdminAffiliates } from '@/app/actions/admin-affiliates';
@@ -61,6 +61,9 @@ export async function GET(request: Request) {
         break;
       case 'influencers':
         data = await getInfluencersAdmin();
+        break;
+      case 'digital-video-config':
+        data = await getDigitalVideoConfigAdmin();
         break;
       case 'leads':
         data = await getAdminLeads();
@@ -157,6 +160,11 @@ export async function POST(request: Request) {
     if (action === 'update-product') {
       const res = await updateProductAdmin(body);
       return NextResponse.json({ success: true, data: res });
+    }
+
+    if (action === 'save-digital-video-config') {
+      const res = await saveDigitalVideoConfigAdmin(body);
+      return NextResponse.json({ success: true, data: res.data });
     }
 
     return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });

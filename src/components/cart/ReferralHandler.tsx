@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCartStore } from "@/store/useCartStore";
+import { useRegionStore } from "@/store/useRegionStore";
 import { validateCoupon } from "@/app/actions/coupons";
 import { useLocale } from "next-intl";
 import toast from "react-hot-toast";
@@ -13,58 +14,72 @@ import toast from "react-hot-toast";
  * Automatically captures affiliate referral codes from URLs:
  * e.g., trenzone.fit/?ref=ALE or /ro/?ref=ALE or ?coupon=ALE
  * 
- * 1. Validates the coupon with the database.
- * 2. If valid, automatically applies it to useCartStore.appliedCoupon.
- * 3. Persists the referral code in localStorage ('tz_referral_code').
- * 4. Ensures the referral discount persists across navigation & reloads.
- * 5. Can only be replaced if the user explicitly removes it (clicks 'X').
+ * 1. Persists URL referral codes immediately so empty-cart visitors don't lose them.
+ * 2. Validates the coupon with the database (and retries automatically when cart value changes if min_purchase wasn't met yet).
+ * 3. Applies valid coupons to useCartStore.appliedCoupon.
+ * 4. Clears invalid/inactive/expired codes from localStorage.
  */
 export function ReferralHandler() {
   const searchParams = useSearchParams();
   const locale = useLocale();
   const isRo = locale === 'ro';
-  const hasCheckedRef = useRef(false);
+  const items = useCartStore((s) => s.items);
+  const appliedCoupon = useCartStore((s) => s.appliedCoupon);
+  const currency = useRegionStore((s) => s.currency);
+  const lastAttemptKeyRef = useRef<string>("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 1. Check for query parameter (?ref=... or ?coupon=...)
     const urlRef = searchParams.get("ref") || searchParams.get("coupon") || searchParams.get("r");
+    if (urlRef && urlRef.trim()) {
+      const normalizedUrlRef = urlRef.trim().toUpperCase();
+      const prevUrlCaptured = sessionStorage.getItem("tz_url_ref_captured");
+      if (prevUrlCaptured !== normalizedUrlRef) {
+        sessionStorage.removeItem("tz_manual_coupon_override");
+        sessionStorage.setItem("tz_url_ref_captured", normalizedUrlRef);
+      }
+      localStorage.setItem("tz_referral_code", normalizedUrlRef);
+    }
+
+    if (sessionStorage.getItem("tz_manual_coupon_override") === "1") {
+      return;
+    }
+
     const storedRef = localStorage.getItem("tz_referral_code");
     const targetCode = (urlRef || storedRef || "").trim().toUpperCase();
-
     if (!targetCode) return;
 
-    // Avoid duplicate validation calls in the same component cycle
-    if (hasCheckedRef.current && !urlRef) return;
-    hasCheckedRef.current = true;
+    if (appliedCoupon?.code?.toUpperCase() === targetCode) {
+      return;
+    }
+
+    const { subtotal } = useCartStore.getState().getTotals(currency || "RON");
+    const attemptKey = `${targetCode}|${subtotal}|${currency}`;
+    if (lastAttemptKeyRef.current === attemptKey && !urlRef) return;
+    lastAttemptKeyRef.current = attemptKey;
 
     const applyReferralDiscount = async () => {
       try {
-        const { appliedCoupon, setCoupon, getTotals } = useCartStore.getState();
-
-        // If this exact coupon is already applied, just make sure localStorage has it
-        if (appliedCoupon?.code?.toUpperCase() === targetCode) {
-          localStorage.setItem("tz_referral_code", targetCode);
-          return;
-        }
-
-        // Validate coupon with database
-        const { subtotal } = getTotals();
-        const res = await validateCoupon(targetCode, subtotal, "RON", isRo ? "ro" : "en");
+        const res = await validateCoupon(targetCode, subtotal, currency || "RON", isRo ? "ro" : "en");
 
         if (res.isValid && res.coupon) {
-          setCoupon(res.coupon);
+          useCartStore.getState().setCoupon(res.coupon);
           localStorage.setItem("tz_referral_code", targetCode);
 
-          // Only show notification if it was entered via URL query param
-          if (urlRef) {
+          if (urlRef || items.length > 0) {
             toast.success(
               isRo
                 ? `Codul partener ${res.coupon.code} a fost aplicat în coș!`
                 : `Partner code ${res.coupon.code} applied to your cart!`,
               { id: `ref-applied-${targetCode}`, duration: 4000 }
             );
+          }
+        } else {
+          const msg = String(res?.message || "").toLowerCase();
+          const isMinPurchasePending = msg.includes("minim") || msg.includes("minimum");
+          if (!isMinPurchasePending && !urlRef) {
+            localStorage.removeItem("tz_referral_code");
           }
         }
       } catch (e) {
@@ -73,7 +88,7 @@ export function ReferralHandler() {
     };
 
     applyReferralDiscount();
-  }, [searchParams, isRo]);
+  }, [searchParams, isRo, items, currency, appliedCoupon]);
 
   return null;
 }

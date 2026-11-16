@@ -64,6 +64,8 @@ export async function GET(
       .from('orders')
       .select('*')
       .eq('payment_intent_id', orderId)
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle();
 
     // FALLBACK 1: If not found and it looks like a UUID, search by internal ID
@@ -72,6 +74,7 @@ export async function GET(
         .from('orders')
         .select('*')
         .eq('id', orderId)
+        .limit(1)
         .maybeSingle();
       
       order = uuidOrder;
@@ -110,16 +113,18 @@ export async function GET(
 
     // 2. Format data for the PDF generator
     const displayId = getCanonicalOrderNumber(order);
+    const orderLocale = order.locale === 'en' ? 'en' : 'ro';
     const pdfData = {
       id: displayId,
-      date: new Date(order.created_at).toLocaleDateString('ro-RO'),
+      date: new Date(order.created_at).toLocaleDateString(orderLocale === 'en' ? 'en-US' : 'ro-RO'),
       currency: order.currency,
       total: order.total_amount,
       subtotal: order.subtotal,
       shipping: order.shipping_amount ?? (order.carrier_metadata as any)?.shipping_cost ?? 0,
       discount: order.discount_total || 0,
       discountCode: (order.carrier_metadata as any)?.coupon_code || null,
-      locale: order.locale || 'ro',
+      locale: orderLocale,
+      itemsAlreadyInCurrency: true,
       paymentMethod: order.payment_method,
       priorityProcessing: order.priority_processing || false,
       giftPackaging: order.gift_packaging || false,
@@ -148,7 +153,7 @@ export async function GET(
       
       const variantRaw = item.selectedVariant?.name || item.variant || null;
       const variantStr = typeof variantRaw === 'object' && variantRaw !== null
-        ? (variantRaw['ro'] || variantRaw['en'] || Object.values(variantRaw as any)[0] || '')
+        ? (variantRaw[orderLocale] || variantRaw['ro'] || variantRaw['en'] || Object.values(variantRaw as any)[0] || '')
         : (variantRaw || '');
       
       const hasVariantInName = variantStr && (

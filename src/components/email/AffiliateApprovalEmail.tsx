@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { BaseEmailLayout } from './BaseEmailLayout';
+import { getSiteUrl } from '@/lib/site-config';
 import {
   Section,
   Text,
@@ -14,6 +15,7 @@ interface AffiliateApprovalEmailProps {
   loginUrl: string;
   commission?: number;
   isUpdate?: boolean;
+  isApplicationReceived?: boolean;
 }
 
 export const AffiliateApprovalEmail = ({
@@ -23,61 +25,107 @@ export const AffiliateApprovalEmail = ({
   loginUrl,
   commission = 10,
   isUpdate = false,
+  isApplicationReceived = false,
 }: AffiliateApprovalEmailProps) => {
   const isRo = locale === 'ro';
 
-  const previewText = isRo 
-    ? (isUpdate ? 'Profilul tău de afiliat a fost actualizat!' : 'Aplicația ta de afiliat a fost aprobată!')
-    : (isUpdate ? 'Your affiliate profile has been updated!' : 'Your affiliate application has been approved!');
+  const previewText = isApplicationReceived
+    ? (isRo ? 'Am primit cererea ta de parteneriat TrenZone!' : 'We received your TrenZone partner application!')
+    : isRo
+      ? (isUpdate ? 'Profilul tău de afiliat a fost actualizat!' : 'Aplicația ta de afiliat a fost aprobată!')
+      : (isUpdate ? 'Your affiliate profile has been updated!' : 'Your affiliate application has been approved!');
 
-  // Assuming NEXT_PUBLIC_SITE_URL is available during email rendering or default
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.trenzone.fit';
+  const baseUrl = getSiteUrl();
+  const referralLink = code ? `${baseUrl}/${locale}?ref=${encodeURIComponent(code)}` : `${baseUrl}/${locale}`;
 
   return (
     <BaseEmailLayout locale={locale} baseUrl={baseUrl} previewText={previewText}>
       {/* Main Content */}
       <Section style={content}>
         <Heading style={heading}>
-          {isRo 
-            ? (isUpdate ? 'Actualizare Profil' : 'Bine ai venit în echipă!') 
-            : (isUpdate ? 'Profile Update' : 'Welcome to the team!')}
+          {isApplicationReceived
+            ? (isRo ? 'Cerere Înregistrată' : 'Application Received')
+            : isRo
+              ? (isUpdate ? 'Actualizare Profil' : 'Bine ai venit în echipă!')
+              : (isUpdate ? 'Profile Update' : 'Welcome to the team!')}
         </Heading>
 
         <Text style={paragraph}>
           {isRo ? `Salut, ${name},` : `Hi ${name},`}
         </Text>
 
-        <Text style={paragraph}>
-          {isRo 
-            ? (isUpdate 
-              ? 'Datele tale de afiliat au fost actualizate de echipa noastră. Mai jos este noul tău cod de reducere pe care îl poți oferi urmăritorilor tăi:'
-              : 'Ne bucurăm să te anunțăm că cererea ta de afiliere a fost aprobată cu succes! Mai jos este codul tău unic de reducere pe care îl poți oferi urmăritorilor tăi:')
-            : (isUpdate
-              ? 'Your affiliate details have been updated by our team. Below is your new unique discount code that you can share with your audience:'
-              : 'We are excited to let you know that your affiliate application has been approved! Below is your unique discount code that you can share with your audience:')}
-        </Text>
+        {isApplicationReceived ? (
+          <>
+            <Text style={paragraph}>
+              {isRo
+                ? 'Îți mulțumim că ai aplicat în Programul de Afiliere TrenZone! Cererea ta a fost înregistrată și se află acum în curs de verificare.'
+                : 'Thank you for applying to the TrenZone Affiliate Program! Your application has been received and is currently under review.'}
+            </Text>
+            {code ? (
+              <Text style={paragraph}>
+                {isRo
+                  ? `Cod preferat solicitat: ${code}. Imediat ce un administrator aprobă contul tău, vei primi un email de confirmare cu codul activ și accesul în Dashboard-ul de partener.`
+                  : `Requested code: ${code}. As soon as an administrator approves your account, you will receive a confirmation email with your active code and Partner Dashboard access.`}
+              </Text>
+            ) : (
+              <Text style={paragraph}>
+                {isRo
+                  ? 'Imediat ce un administrator aprobă cererea ta, vei primi un email cu codul tău unic de reducere și linkul de conectare în Dashboard-ul de partener.'
+                  : 'As soon as an administrator approves your application, you will receive an email with your unique discount code and Partner Dashboard login link.'}
+              </Text>
+            )}
+            <Text style={paragraph}>
+              {isRo
+                ? `După aprobare, te vei putea conecta aici cu adresa ta de email și codul primit: `
+                : `Once approved, you will be able to sign in here using your email address and received code: `}
+              <Link href={loginUrl} style={{ color: '#e32f8c', fontWeight: 'bold' }}>{loginUrl}</Link>
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={paragraph}>
+              {isRo 
+                ? (isUpdate 
+                  ? 'Datele tale de afiliat au fost actualizate de echipa noastră. Mai jos este noul tău cod de reducere pe care îl poți oferi urmăritorilor tăi:'
+                  : 'Ne bucurăm să te anunțăm că cererea ta de afiliere a fost aprobată cu succes! Mai jos este codul tău unic de reducere pe care îl poți oferi urmăritorilor tăi:')
+                : (isUpdate
+                  ? 'Your affiliate details have been updated by our team. Below is your new unique discount code that you can share with your audience:'
+                  : 'We are excited to let you know that your affiliate application has been approved! Below is your unique discount code that you can share with your audience:')}
+            </Text>
 
-        <Section style={codeBox}>
-          <Text style={codeText}>{code}</Text>
-        </Section>
-        
-        <Text style={{...paragraph, fontWeight: 'bold', color: '#000000'}}>
-          {isRo
-            ? `Comisionul tău actual: ${commission}%`
-            : `Your current commission: ${commission}%`}
-        </Text>
+            <Section style={codeBox}>
+              <Text style={codeText}>{code}</Text>
+            </Section>
+            
+            <Text style={{...paragraph, fontWeight: 'bold', color: '#000000'}}>
+              {isRo
+                ? `Comisionul tău actual: ${commission}%`
+                : `Your current commission: ${commission}%`}
+            </Text>
 
-        <Text style={paragraph}>
-          {isRo
-            ? 'Am creat un panou special (Dashboard) unde îți poți urmări în timp real vânzările și comisioanele generate. Pentru a te conecta, vei avea nevoie doar de această adresă de email și de codul tău de afiliat de mai sus.'
-            : 'We created a special Dashboard where you can track your sales and generated commissions in real time. To log in, you will only need this email address and your affiliate code from above.'}
-        </Text>
+            <Text style={paragraph}>
+              {isRo ? 'Linkul tău de afiliere (cu codul pre-aplicat în coș): ' : 'Your referral link (auto-applies discount in cart): '}
+              <Link href={referralLink} style={{ color: '#e32f8c', fontWeight: 'bold' }}>{referralLink}</Link>
+            </Text>
 
-        <Section style={buttonContainer}>
-          <Link href={loginUrl} style={button}>
-            {isRo ? 'Accesează Dashboard-ul Tău' : 'Access Your Dashboard'}
-          </Link>
-        </Section>
+            <Text style={paragraph}>
+              {isRo
+                ? 'Am creat un panou special (Dashboard) unde îți poți urmări în timp real vânzările, comisioanele generate și unde îți poți salva contul IBAN pentru încasări. Pentru conectare folosește această adresă de email și codul tău de afiliat de mai sus.'
+                : 'We created a dedicated Dashboard where you can track your sales and generated commissions in real time and save your bank details for payouts. To log in, use this email address and your affiliate code above.'}
+            </Text>
+
+            <Section style={buttonContainer}>
+              <Link href={loginUrl} style={button}>
+                {isRo ? 'Accesează Dashboard-ul Tău' : 'Access Your Dashboard'}
+              </Link>
+            </Section>
+
+            <Text style={{ ...paragraph, fontSize: '12px', color: '#71717a', textAlign: 'center' as const }}>
+              {isRo ? 'Link direct conectare: ' : 'Direct login URL: '}
+              <Link href={loginUrl} style={{ color: '#52525b' }}>{loginUrl}</Link>
+            </Text>
+          </>
+        )}
       </Section>
     </BaseEmailLayout>
   );

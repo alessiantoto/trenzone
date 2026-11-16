@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { validateCoupon } from "@/app/actions/coupons";
-import { calculateOrderTotal, CartItem } from "@/lib/cart-calculations";
+import { calculateOrderTotal } from "@/lib/cart-calculations";
 import { verifyCsrfToken } from "@/lib/csrf";
 import { rateLimiters, getClientIp, checkRateLimit } from "@/lib/ratelimit";
 import { processOrder } from "@/lib/orders";
@@ -10,6 +9,15 @@ import { getNextOrderNumber } from "@/lib/sequences";
 import { completeCheckoutSession } from "@/app/actions/checkout-tracking";
 import { getSingleFlavorImage } from "@/lib/product-images";
 import { getServerExchangeRates, FALLBACK_RATES } from "@/utils/pricing";
+import { getShippingConfig } from "@/app/actions/shipping";
+import {
+  buildServerCalculationItems,
+  fetchServerProductsForItems,
+  parseAndStripBundleIds,
+  resolveServerCoupon,
+  validateShippingSelection,
+} from "@/lib/checkout-helpers";
+import { hasAnyDigitalProgram, isDigitalOnlyCart, isDigitalProgramItem } from "@/lib/programs";
 
 export async function GET(req: Request) {
   try {
@@ -52,7 +60,12 @@ export async function POST(req: Request) {
     }
 
     // 2. Parsare conținut comandă
-    const body = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
+    }
     const {
       email, firstName, lastName, phone,
       line1, line2, city, state, postal_code, country,
@@ -60,46 +73,87 @@ export async function POST(req: Request) {
       items, couponCode, locale = 'ro',
       priority_processing, gift_packaging, gift_message
     } = body;
+    const safeLocale: 'ro' | 'en' = locale === 'en' ? 'en' : 'ro';
 
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: locale === 'en' ? "Cart is empty." : "Coșul este gol." }, { status: 400 });
+      return NextResponse.json({ error: safeLocale === 'en' ? "Cart is empty." : "Coșul este gol." }, { status: 400 });
     }
 
-    // Strict business rule: No mixed orders (preorder + in-stock) & Preorders require online payment
-    const hasPreorder = items.some((item: any) => {
-      const vName = typeof item.selectedVariant?.name === 'object'
-        ? JSON.stringify(item.selectedVariant?.name)
-        : String(item.selectedVariant?.name || '');
-      const vLower = vName.toLowerCase();
-      return (
-        item.stock_status === 'preorder' ||
-        item.is_preorder === true ||
-        item.selectedVariant?.stock_status === 'preorder' ||
-        vLower.includes('precomand') ||
-        vLower.includes('pre-order') ||
-        vLower.includes('preorder')
+    // Validate required customer & address fields
+    const emailTrimmed = String(email || "").trim().toLowerCase();
+    if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      return NextResponse.json(
+        { error: safeLocale === 'en' ? "Please enter a valid email address." : "Te rugăm să introduci o adresă de email validă." },
+        { status: 400 }
       );
-    });
-    const hasInStock = items.some((item: any) => {
-      const vName = typeof item.selectedVariant?.name === 'object'
-        ? JSON.stringify(item.selectedVariant?.name)
-        : String(item.selectedVariant?.name || '');
-      const vLower = vName.toLowerCase();
-      const isPre = (
-        item.stock_status === 'preorder' ||
-        item.is_preorder === true ||
-        item.selectedVariant?.stock_status === 'preorder' ||
-        vLower.includes('precomand') ||
-        vLower.includes('pre-order') ||
-        vLower.includes('preorder')
+    }
+    if (!String(firstName || "").trim() || !String(lastName || "").trim() || !String(phone || "").trim()) {
+      return NextResponse.json(
+        { error: safeLocale === 'en' ? "First name, last name and phone number are required." : "Numele, prenumele și numărul de telefon sunt obligatorii." },
+        { status: 400 }
       );
-      return !isPre;
+    }
+    if (!String(line1 || "").trim() || !String(city || "").trim()) {
+      return NextResponse.json(
+        { error: safeLocale === 'en' ? "Street address and city are required." : "Adresa și orașul sunt obligatorii." },
+        { status: 400 }
+      );
+    }
+
+    // Strict business rule: COD is available exclusively for Romania ('RO')
+    const normalizedCountry = String(country || "").trim().toUpperCase();
+    if (normalizedCountry !== 'RO') {
+      return NextResponse.json(
+        {
+          error: safeLocale === 'en'
+            ? "Cash on delivery is only available in Romania. Please choose online card payment."
+            : "Plata ramburs la livrare este disponibilă exclusiv în România. Te rugăm să alegi plata cu cardul."
+        },
+        { status: 400 }
+      );
+    }
+
+    const shippingConfig = await getShippingConfig();
+    const lockersEnabled = Boolean(shippingConfig?.lockers_enabled);
+
+    const shippingCheck = validateShippingSelection({
+      country: normalizedCountry,
+      shippingType: shipping_type,
+      carrierId: carrier_id ? String(carrier_id) : undefined,
+      branchId: branch_id ? String(branch_id) : undefined,
+      locale: safeLocale,
+      lockersEnabled,
     });
+    if (!shippingCheck.ok) {
+      return NextResponse.json({ error: shippingCheck.error }, { status: 400 });
+    }
+
+    // 3. Extragere și validare completă produse & variante din baza de date (sold_out + preorder)
+    await getServerExchangeRates();
+    const parsedItems = parseAndStripBundleIds(items);
+    const dbProducts = await fetchServerProductsForItems(parsedItems);
+    const built = buildServerCalculationItems(parsedItems, dbProducts, safeLocale);
+    if (!built.ok) {
+      return NextResponse.json({ error: built.error }, { status: built.status });
+    }
+
+    const { calculationItems, resolvedPerItem, hasPreorder, hasInStock } = built;
+
+    if (isDigitalOnlyCart(calculationItems) || hasAnyDigitalProgram(calculationItems)) {
+      return NextResponse.json(
+        {
+          error: safeLocale === 'en'
+            ? "Orders including digital programs are delivered instantly via email and require online card / Apple Pay / Google Pay payment."
+            : "Comenzile care includ programe digitale se livrează instant pe email și se achită exclusiv online cu cardul / Apple Pay / Google Pay."
+        },
+        { status: 400 }
+      );
+    }
 
     if (hasPreorder && hasInStock) {
       return NextResponse.json(
         {
-          error: locale === 'en'
+          error: safeLocale === 'en'
             ? "Mixed orders (pre-order + in-stock) are not allowed. Please place pre-orders separately."
             : "Comenzile mixte (precomandă + stoc) nu sunt permise. Te rugăm să plasezi precomanda separat."
         },
@@ -110,7 +164,7 @@ export async function POST(req: Request) {
     if (hasPreorder) {
       return NextResponse.json(
         {
-          error: locale === 'en'
+          error: safeLocale === 'en'
             ? "Pre-orders require online card payment."
             : "Precomenzile necesită plată online cu cardul."
         },
@@ -118,79 +172,66 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. Extragere prețuri REALE din baza de date (previne fraudarea prețului din frontend)
-    // Handle bundle IDs: format is `<real-uuid>-bundle-<qty>` — strip suffix
-    const BUNDLE_REGEX = /^(.+)-bundle-(\d+)$/;
-    const processedItems = items.map((item: any) => {
-      const match = item.id?.match(BUNDLE_REGEX);
-      if (match) {
-        return { ...item, _realId: match[1], _bundleQty: parseInt(match[2]), _isBundle: true };
-      }
-      return { ...item, _realId: item.id, _isBundle: false };
-    });
-
-    const itemIds = Array.from(new Set(processedItems.map((i: any) => i._realId)));
-    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const uuids = itemIds.filter(id => UUID_REGEX.test(String(id)));
-    const slugs = itemIds.filter(id => !UUID_REGEX.test(String(id)));
-
-    let dbProducts: any[] = [];
-    if (uuids.length > 0) {
-      const { data } = await supabaseAdmin.from("products").select("id, price_numeric, weight, slug").in("id", uuids);
-      if (data) dbProducts = [...dbProducts, ...data];
+    // 4. Verificare și validare strictă cupon de reducere
+    const couponResolution = await resolveServerCoupon(
+      couponCode,
+      calculationItems,
+      'RON',
+      100,
+      safeLocale,
+      true
+    );
+    if (!couponResolution.ok) {
+      return NextResponse.json({ error: couponResolution.error }, { status: 400 });
     }
-    if (slugs.length > 0) {
-      const { data } = await supabaseAdmin.from("products").select("id, price_numeric, weight, slug").in("slug", slugs);
-      if (data) dbProducts = [...dbProducts, ...data];
-    }
+    const couponData = couponResolution.couponData;
 
-    if (dbProducts.length === 0) {
-      throw new Error("Eroare la validarea produselor din baza de date.");
-    }
+    // 5. Calcularea Finală a sumelor (produse + transport - reduceri)
+    const options = {
+      priority_processing,
+      gift_packaging,
+      payment_method: 'cod',
+      free_shipping_ro_ron: shippingConfig.free_shipping_ro_ron,
+      free_shipping_intl_eur: shippingConfig.free_shipping_intl_eur,
+    };
+    const result = calculateOrderTotal(
+      calculationItems,
+      'RON',
+      shippingCheck.country,
+      shippingCheck.shippingType,
+      couponData,
+      shippingCheck.carrierId,
+      options
+    );
+    const appliedCouponData = result.couponApplied ? couponData : null;
 
-    // 4. Generare matrice securizată pentru calcul total
-    const calculationItems: CartItem[] = processedItems.map((clientItem: any) => {
-      const dbProduct = dbProducts.find((p) => p.id === clientItem._realId || p.slug === clientItem._realId);
-      if (!dbProduct) throw new Error(`Produs invalid: ${clientItem._realId}`);
+    // Guard împotriva dublu-click / re-submit rapid (ultimele 20 secunde pentru același email & total)
+    const cutoffIso = new Date(Date.now() - 20_000).toISOString();
+    const { data: recentDuplicate } = await supabaseAdmin
+      .from('orders')
+      .select('payment_intent_id, total_amount')
+      .eq('customer_email', emailTrimmed)
+      .eq('payment_method', 'cod')
+      .gte('created_at', cutoffIso)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      let price = Number(dbProduct.price_numeric);
-      // Compute bundle discount strictly on the server (never trust client item.price)
-      if (clientItem._isBundle && clientItem._bundleQty > 1) {
-        const qty = Math.min(Math.max(1, Number(clientItem._bundleQty) || 1), 10);
-        const bundleDiscountRon = Math.max(0, (Math.min(qty, 4) - 1) * 15);
-        price = Math.max(price, (price * qty) - bundleDiscountRon);
-      }
-
-      return {
-        id: clientItem.id, // Preserve original cart ID (e.g., UUID-bundle-X or just UUID) to allow finding it correctly later
-        quantity: Math.max(1, Number(clientItem.quantity) || 1),
-        weight: dbProduct.weight || 0.2,
-        price
-      };
-    });
-
-    // 5. Verificare și validare cupon de reducere (dacă e cazul)
-    let couponData = null;
-    if (couponCode) {
-      const preResult = calculateOrderTotal(calculationItems, 'RON');
-      try {
-        const couponResult = await validateCoupon(couponCode, preResult.subtotal / 100, 'RON', locale);
-        if (couponResult?.isValid && couponResult?.coupon) {
-          couponData = couponResult.coupon;
-        }
-      } catch (e) {
-        console.warn("Avertisment validare cupon COD:", e);
-      }
+    if (
+      recentDuplicate?.payment_intent_id &&
+      Math.abs(Number(recentDuplicate.total_amount) - result.total / 100) < 0.05
+    ) {
+      return NextResponse.json({
+        success: true,
+        orderId: recentDuplicate.payment_intent_id,
+        duplicateGuard: true,
+      });
     }
 
-    // 6. Calcularea Finală a sumelor (produse + transport - reduceri)
-    const options = { priority_processing, gift_packaging };
-    const result = calculateOrderTotal(calculationItems, 'RON', country, shipping_type, couponData, carrier_id, options);
-
-    // 7. Generare ID Unic Comandă Ramburs (Sequential: CHAMP-0017)
+    // 6. Generare ID Unic Comandă Ramburs (Sequential: CHAMP-0017)
     const uniqueOrderId = await getNextOrderNumber();
     
-    // 8. Creare obiect comandă pentru baza de date
+    // 7. Creare obiect comandă pentru baza de date
     const orderPayload = {
       payment_intent_id: uniqueOrderId, // Salvăm ID-ul unic COD aici
       status: 'processing',
@@ -199,37 +240,45 @@ export async function POST(req: Request) {
       discount_total: (result.bundleDiscount + result.couponDiscount) / 100,
       total_amount: result.total / 100,
       shipping_amount: result.shippingCost / 100,
-      coupon_id: couponData?.id || null,
+      coupon_id: appliedCouponData?.id || null,
       currency: 'RON',
-      customer_email: email,
-      customer_firstname: firstName,
-      customer_lastname: lastName,
-      customer_phone: phone,
+      customer_email: emailTrimmed,
+      customer_firstname: String(firstName).trim(),
+      customer_lastname: String(lastName).trim(),
+      customer_phone: String(phone).trim(),
       addr_line1: String(line1 || "").substring(0, 500),
       addr_line2: String(line2 || "").substring(0, 500),
       addr_city: String(city || "").substring(0, 500),
       addr_county: String(state || "").substring(0, 100),
       addr_zip: String(postal_code || "").substring(0, 100),
-      addr_country: String(country || "").substring(0, 100),
-      shipping_type: shipping_type,
-      carrier_id,
-      branch_id,
-      branch_name,
-      items: processedItems.map((clientItem: any) => {
-        const secureCalcItem = calculationItems.find(c => c.id === clientItem.id);
+      addr_country: shippingCheck.country,
+      shipping_type: shippingCheck.shippingType,
+      carrier_id: shippingCheck.carrierId,
+      branch_id: shippingCheck.shippingType === 'pudo' ? branch_id : null,
+      branch_name: shippingCheck.shippingType === 'pudo' ? branch_name : null,
+      items: resolvedPerItem.map(({ parsed, dbProduct, price }) => {
+        const clientItem = parsed.raw;
         const variantName = typeof clientItem.selectedVariant?.name === 'object'
-          ? (locale === 'en'
+          ? (safeLocale === 'en'
               ? (clientItem.selectedVariant.name.en || clientItem.selectedVariant.name.ro || Object.values(clientItem.selectedVariant.name)[0])
               : (clientItem.selectedVariant.name.ro || clientItem.selectedVariant.name.en || Object.values(clientItem.selectedVariant.name)[0]))
           : clientItem.selectedVariant?.name;
-        const isBundle = String(clientItem.id).includes('-bundle-') || (clientItem.name && String(clientItem.name).toLowerCase().includes('pachet'));
-        const effectiveImage = isBundle 
-          ? '/images/products/x10_elbow_wraps_purple_1.webp' 
-          : (clientItem.selectedVariant?.image || (typeof clientItem.image === 'string' && !clientItem.image.includes('bundle') ? clientItem.image : getSingleFlavorImage(variantName || clientItem.name)));
+        const isDigital = isDigitalProgramItem(dbProduct || clientItem);
+        const isBundle = !isDigital && (parsed._isBundle || (clientItem.name && String(clientItem.name).toLowerCase().includes('pachet')));
+        const effectiveImage = isDigital
+          ? (clientItem.image || clientItem.selectedVariant?.image || '/images/products/program_complete_trio_v2.webp')
+          : isBundle
+            ? '/images/products/x10_elbow_wraps_purple.webp'
+            : (clientItem.selectedVariant?.image || (typeof clientItem.image === 'string' && !clientItem.image.includes('bundle') ? clientItem.image : getSingleFlavorImage(variantName || clientItem.name)));
         return {
           ...clientItem,
-          id: clientItem._realId, // Always use real UUID for DB
-          price: secureCalcItem ? secureCalcItem.price : clientItem.price,
+          id: parsed._realId, // Always use real UUID for DB
+          bundleId: parsed._isBundle ? clientItem.id : undefined,
+          quantity: Math.max(1, Math.floor(Number(clientItem.quantity) || 1)),
+          slug: clientItem.slug || dbProduct?.slug,
+          price,
+          is_digital: isDigital,
+          specs_summary: dbProduct?.specs_summary || clientItem.specs_summary,
           variant: variantName || null,
           image: effectiveImage,
         };
@@ -240,19 +289,22 @@ export async function POST(req: Request) {
       receipt_url: `/api/admin/orders/${uniqueOrderId}/invoice`,
       carrier_metadata: {
         shipping_cost: result.shippingCost / 100,
-        locale: locale === 'en' ? 'en' : 'ro',
-        ...(shipping_type === 'pudo' && branch_id ? { locker_id: String(branch_id) } : {}),
-        ...(couponData?.code ? { coupon_code: couponData.code } : {})
+        locale: safeLocale,
+        order_number: uniqueOrderId,
+        is_preorder: false,
+        coupon_usage_incremented: false,
+        ...(shippingCheck.shippingType === 'pudo' && branch_id ? { locker_id: String(branch_id) } : {}),
+        ...(appliedCouponData?.code ? { coupon_code: appliedCouponData.code } : {})
       }
     };
 
     // 9. Salvare în Supabase
     const { error: insertError } = await supabaseAdmin.from('orders').insert(orderPayload);
-    if (insertError) throw new Error(locale === 'en' ? `Database save failed: ${insertError.message}` : `Salvarea în baza de date a eșuat: ${insertError.message}`);
+    if (insertError) throw new Error(safeLocale === 'en' ? `Database save failed: ${insertError.message}` : `Salvarea în baza de date a eșuat: ${insertError.message}`);
 
     // Mark checkout session as completed
     try {
-      await completeCheckoutSession(null, email);
+      await completeCheckoutSession(null, emailTrimmed);
     } catch (trackErr) {
       console.warn("⚠️ [GDPR Abandoned Cart] Failed to mark COD session completed:", trackErr);
     }
@@ -261,50 +313,55 @@ export async function POST(req: Request) {
     try {
       const orderDataForProcessing: OrderData = {
         id: uniqueOrderId,
-        date: new Date().toLocaleDateString(locale === 'en' ? 'en-US' : 'ro-RO'),
+        date: new Date().toLocaleDateString(safeLocale === 'en' ? 'en-US' : 'ro-RO'),
         currency: 'RON',
-        locale: locale as 'ro' | 'en',
+        locale: safeLocale,
         total: result.total / 100,
         subtotal: result.subtotal / 100,
         discount: (result.bundleDiscount + result.couponDiscount) / 100,
-        coupon_id: couponData?.id || null,
+        coupon_id: appliedCouponData?.id || null,
+        couponCode: appliedCouponData?.code || undefined,
         paymentMethod: 'cod',
-        shippingType: shipping_type as 'hd' | 'pudo',
-        carrierId: String(carrier_id),
+        shippingType: shippingCheck.shippingType,
+        carrierId: shippingCheck.carrierId,
         shipping: result.shippingCost / 100,
-        branchId: branch_id ? String(branch_id) : undefined,
-        branchName: branch_name,
+        branchId: shippingCheck.shippingType === 'pudo' && branch_id ? String(branch_id) : undefined,
+        branchName: shippingCheck.shippingType === 'pudo' ? branch_name : undefined,
         customer: {
-          firstName,
-          lastName,
-          email,
-          phone,
-          addr_line1: line1,
-          addr_line2: line2,
-          addr_city: city,
-          addr_county: state,
-          addr_zip: postal_code,
-          addr_country: country,
+          firstName: String(firstName).trim(),
+          lastName: String(lastName).trim(),
+          email: emailTrimmed,
+          phone: String(phone).trim(),
+          addr_line1: String(line1 || ''),
+          addr_line2: String(line2 || ''),
+          addr_city: String(city || ''),
+          addr_county: String(state || ''),
+          addr_zip: String(postal_code || ''),
+          addr_country: shippingCheck.country,
         },
         itemsAlreadyInCurrency: true,
-        items: items.map((item: any) => {
-          // calculationItems use item.id as key (bundle id stays as-is: uuid-bundle-N)
-          const secureCalcItem = calculationItems.find(c => c.id === item.id);
+        items: resolvedPerItem.map(({ parsed, dbProduct, price }) => {
+          const item = parsed.raw;
           const variantName = typeof item.selectedVariant?.name === 'object'
-            ? item.selectedVariant.name.ro || Object.values(item.selectedVariant.name)[0]
+            ? item.selectedVariant.name[safeLocale] || item.selectedVariant.name.ro || item.selectedVariant.name.en || Object.values(item.selectedVariant.name)[0]
             : item.selectedVariant?.name;
-          const isBundle = String(item.id).includes('-bundle-') || (item.name && String(item.name).toLowerCase().includes('pachet'));
-          const effectiveImage = isBundle 
-            ? '/images/products/x10_elbow_wraps_purple_1.webp' 
-            : (item.selectedVariant?.image || (typeof item.image === 'string' && !item.image.includes('bundle') ? item.image : getSingleFlavorImage(variantName || item.name)));
-          const realId = String(item.id).includes('-bundle-') ? item.id.split('-bundle-')[0] : item.id;
+          const isDigital = isDigitalProgramItem(dbProduct || item);
+          const isBundle = !isDigital && (parsed._isBundle || (item.name && String(item.name).toLowerCase().includes('pachet')));
+          const effectiveImage = isDigital
+            ? (item.image || item.selectedVariant?.image || '/images/products/program_complete_trio_v2.webp')
+            : isBundle
+              ? '/images/products/x10_elbow_wraps_purple.webp'
+              : (item.selectedVariant?.image || (typeof item.image === 'string' && !item.image.includes('bundle') ? item.image : getSingleFlavorImage(variantName || item.name)));
           return {
-            id: realId,
-            bundleId: isBundle ? item.id : undefined,
+            id: parsed._realId,
+            slug: item.slug || dbProduct?.slug,
+            bundleId: parsed._isBundle ? item.id : undefined,
             name: item.name,
-            quantity: item.quantity,
-            price: secureCalcItem ? secureCalcItem.price : (item.price || 0),
+            quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+            price,
             image: effectiveImage,
+            is_digital: isDigital,
+            specs_summary: dbProduct?.specs_summary || item.specs_summary,
             selectedVariant: item.selectedVariant || (variantName ? { name: variantName } : null),
           };
         }),

@@ -27,6 +27,7 @@ import {
   Star,
   Clock,
   ShoppingCart,
+  BookOpen,
   X
 } from 'lucide-react';
 
@@ -43,6 +44,7 @@ export function EliteFrame() {
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
     { name: 'Web Analytics', icon: <Activity size={20} />, path: '/admin?tab=web-analytics' },
     { name: 'Comenzi', icon: <ShoppingBag size={20} />, path: '/admin/orders' },
+    { name: 'Programe Vândute', icon: <BookOpen size={20} />, path: '/admin/programs' },
     { name: 'Precomenzi', icon: <Clock size={20} />, path: '/admin/preorders' },
     { name: 'Retururi', icon: <RefreshCw size={20} />, path: '/admin/returns' },
     { name: 'Coșuri Abandonate', icon: <ShoppingCart size={20} />, path: '/admin/abandoned-carts' },

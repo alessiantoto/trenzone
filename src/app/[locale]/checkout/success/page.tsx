@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2, ShoppingBag, ArrowRight, Home, AlertCircle } from "lucide-react";
 import { useEffect, useState, Suspense } from "react";
 import { useCartStore } from "@/store/useCartStore";
+import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { useSearchParams } from "next/navigation";
 
 function OrderSuccessContent() {
@@ -13,170 +14,129 @@ function OrderSuccessContent() {
   const locale = useLocale();
   const isEn = locale === 'en';
   const clearCart = useCartStore((state) => state.clearCart);
+  const resetOrderAddons = useCheckoutStore((state) => state.resetOrderAddons);
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'processing' | 'success' | 'error'>('loading');
   const [paymentIntentId, setPaymentIntentId] = useState<string>('');
+  const [digitalDownloads, setDigitalDownloads] = useState<
+    Array<{ programKey: string; lang: string; title: string; downloadUrl: string }>
+  >([]);
 
   useEffect(() => {
+    const isExpressCheckout = searchParams.get('express') === '1';
+
+    const finishSuccess = (resolvedId?: string) => {
+      if (resolvedId) setPaymentIntentId(resolvedId);
+      setStatus('success');
+      if (!isExpressCheckout) {
+        clearCart();
+        resetOrderAddons();
+      }
+    };
+
     // --- COD (Cash on Delivery) Payment Handler ---
     const type = searchParams.get('type');
     const orderId = searchParams.get('order_id');
     
     if (type === 'cod' && orderId) {
-      setStatus('success');
-      clearCart();
+      finishSuccess(orderId);
       return;
     }
     // -----------------------------------------------
 
     const verifyPayment = async () => {
       try {
-        // Check for multiple redirect parameters (Apple Pay, Google Pay, etc.)
-        let clientSecret = searchParams.get('payment_intent_client_secret');
-        const redirectStatus = searchParams.get('redirect_status');
-        const paymentIntentParam = searchParams.get('payment_intent');
-        
-        // Handle redirect_status=succeeded from wallet payments (Apple Pay, Google Pay, etc.)
-        if ((redirectStatus === 'succeeded' || !clientSecret) && paymentIntentParam) {
-          setPaymentIntentId(paymentIntentParam);
-          
-          // For wallet payments, retry verification multiple times
-          let isConfirmed = false;
-          let paymentSucceeded = false;
-          let attempts = 0;
-          const maxAttempts = 20; // 20 * 2 seconds = 40 seconds max
-          let failureCount = 0;
-          const maxFailuresBeforeGiveUp = 3; // Need 3 consecutive failures to show error
-          
-          while (attempts < maxAttempts && !isConfirmed) {
-            try {
-              const res = await fetch('/api/checkout/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ clientSecret: clientSecret || `${paymentIntentParam}_secret_` })
-              });
+        const rawClientSecret = searchParams.get('payment_intent_client_secret') || '';
+        const paymentIntentParam = searchParams.get('payment_intent') || '';
 
-              const data = await res.json();
-              
-              if (data.paymentIntent?.status === 'succeeded') {
-                setStatus('success');
-                if (data.paymentIntent?.id && !data.paymentIntent.id.startsWith('pi_')) {
-                   setPaymentIntentId(data.paymentIntent.id);
-                }
-                clearCart();
-                paymentSucceeded = true;
-                isConfirmed = true;
-                return;
-              } else if (data.paymentIntent?.status === 'processing') {
-                // Still processing, keep trying
-                failureCount = 0; // Reset failure count, as it's still processing (not failed)
-                attempts++;
-                if (attempts < maxAttempts) {
-                  await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-                } else {
-                  // Timeout reached but payment is processing, assume webhook will handle it
-                  setStatus('success');
-                  clearCart();
-                  paymentSucceeded = true;
-                  isConfirmed = true;
-                }
-              } else {
-                // Payment failed or invalid status
-                failureCount++;
-                if (failureCount >= maxFailuresBeforeGiveUp) {
-                  setStatus('error');
-                  isConfirmed = true;
-                } else {
-                  // Retry even if failed, maybe next check will succeed
-                  attempts++;
-                  if (attempts < maxAttempts) {
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-                  } else {
-                    setStatus('error');
-                    isConfirmed = true;
-                  }
-                }
-              }
-            } catch (err) {
-              // Network error, don't count as failure yet
-              console.warn('Verification request failed, retrying...', err);
-              attempts++;
-              if (attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds and retry
-              } else {
-                // Timeout on retries, assume webhook will process it
-                setStatus('success');
-                clearCart();
-                paymentSucceeded = true;
-                isConfirmed = true;
-              }
-            }
-          }
-          return;
-        }
-        
-        // Handle normal redirect with client_secret
-        if (!clientSecret) {
-          // No payment params at all — redirect back to checkout silently
-          console.warn('No payment params found on success page, redirecting to checkout');
+        const secretPi = rawClientSecret.includes('_secret_')
+          ? rawClientSecret.split('_secret_')[0]
+          : '';
+        const effectivePiId = paymentIntentParam.startsWith('pi_')
+          ? paymentIntentParam
+          : secretPi.startsWith('pi_')
+            ? secretPi
+            : '';
+
+        if (!effectivePiId) {
+          console.warn('No valid payment_intent found on success page, redirecting to checkout');
           router.replace('/checkout');
           return;
         }
 
-        // Extract payment intent ID
-        const intentId = clientSecret.split('_secret_')[0];
-        setPaymentIntentId(intentId);
+        setPaymentIntentId(effectivePiId);
 
-        // Verify payment status with backend - retry 3 times for stability
-        let lastError: any = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
+        let attempts = 0;
+        const maxAttempts = 15; // Up to ~30 seconds polling /api/checkout/verify
+        let consecutiveFailures = 0;
+        const maxConsecutiveFailures = 4;
+
+        while (attempts < maxAttempts) {
           try {
             const res = await fetch('/api/checkout/verify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ clientSecret })
+              body: JSON.stringify({
+                paymentIntentId: effectivePiId,
+                ...(rawClientSecret ? { clientSecret: rawClientSecret } : {}),
+              }),
             });
 
-            if (!res.ok) {
-              lastError = `HTTP ${res.status}`;
-              if (attempt < 2) {
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
-              }
-              continue;
-            }
+            if (res.ok) {
+              const data = await res.json();
+              const piStatus = data.paymentIntent?.status;
 
-            const data = await res.json();
-            
-            // Only consider payment successful if Stripe confirms it
-            if (data.paymentIntent?.status === 'succeeded') {
-              setStatus('success');
-              if (data.paymentIntent?.id && !data.paymentIntent.id.startsWith('pi_')) {
-                 setPaymentIntentId(data.paymentIntent.id);
+              if (piStatus === 'succeeded') {
+                if (Array.isArray(data.paymentIntent?.digitalDownloads)) {
+                  setDigitalDownloads(data.paymentIntent.digitalDownloads);
+                }
+                finishSuccess(data.paymentIntent?.orderId || data.paymentIntent?.id || effectivePiId);
+                return;
               }
-              clearCart();
-              return;
-            } else if (data.paymentIntent?.status === 'processing') {
-              // Payment is processing, assume webhook will handle confirmation
-              setStatus('success');
-              clearCart();
-              return;
+
+              if (piStatus === 'processing' || piStatus === 'requires_capture') {
+                consecutiveFailures = 0;
+                attempts++;
+                if (attempts < maxAttempts) {
+                  await new Promise((resolve) => setTimeout(resolve, 2000));
+                  continue;
+                }
+                setPaymentIntentId(effectivePiId);
+                setStatus('processing');
+                return;
+              }
+
+              // Payment returned a non-succeeded status (e.g. requires_payment_method / canceled)
+              consecutiveFailures++;
+              if (piStatus === 'requires_payment_method' || piStatus === 'canceled') {
+                if (consecutiveFailures >= 2) {
+                  setStatus('error');
+                  return;
+                }
+              } else if (consecutiveFailures >= maxConsecutiveFailures) {
+                setStatus('error');
+                return;
+              }
             } else {
-              lastError = `Payment status: ${data.paymentIntent?.status}`;
-              if (attempt < 2) {
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+              // HTTP error (e.g. 500 during temporary DB sync retry) — do not mark failed immediately
+              consecutiveFailures++;
+              if (consecutiveFailures >= maxConsecutiveFailures) {
+                setStatus('error');
+                return;
               }
             }
           } catch (err) {
-            lastError = err;
-            if (attempt < 2) {
-              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
-            }
+            console.warn('Verification request failed, retrying...', err);
+          }
+
+          attempts++;
+          if (attempts < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         }
 
-        // Only show error after 3 failed attempts
-        console.error('Payment verification failed after 3 attempts:', lastError);
+        // Timed out without any confirmed status — do NOT clear cart or show false success
         setStatus('error');
       } catch (err) {
         console.error('Payment verification error:', err);
@@ -185,7 +145,7 @@ function OrderSuccessContent() {
     };
 
     verifyPayment();
-  }, [searchParams, clearCart]);
+  }, [searchParams, clearCart, resetOrderAddons, router]);
 
   return (
     <div className="min-h-screen bg-[#fafafc] flex items-center justify-center p-6">
@@ -270,10 +230,39 @@ function OrderSuccessContent() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}
-                className="text-zinc-400 text-xs font-mono mb-10"
+                className="text-zinc-400 text-xs font-mono mb-6"
               >
                 ID: {paymentIntentId}
               </motion.p>
+            )}
+
+            {digitalDownloads.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.55 }}
+                className="mb-8 p-5 rounded-3xl bg-purple-50 border-2 border-purple-200 text-left space-y-3"
+              >
+                <div className="text-xs font-black uppercase tracking-wider text-purple-900">
+                  {isEn
+                    ? "📚 Your Digital Programs (Also sent to your email):"
+                    : "📚 Programele Tale Digitale (Trimise și pe email):"}
+                </div>
+                <div className="space-y-2">
+                  {digitalDownloads.map((dl, idx) => (
+                    <a
+                      key={idx}
+                      href={dl.downloadUrl}
+                      className="w-full py-3 px-4 rounded-2xl bg-[#111111] hover:bg-[#e32f8c] text-white font-black text-xs uppercase tracking-wider flex items-center justify-between transition-colors"
+                    >
+                      <span>⬇️ {dl.title}</span>
+                      <span className="text-[10px] underline">
+                        {isEn ? "Download PDF" : "Descarcă PDF"}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </motion.div>
             )}
 
             <motion.div
@@ -301,6 +290,48 @@ function OrderSuccessContent() {
             </motion.div>
             
             {/* Status verification */}
+          </motion.div>
+        )}
+
+        {status === 'processing' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-[3rem] p-8 md:p-12 shadow-sm border border-amber-200 text-center relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-full h-2 bg-amber-400" />
+            <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-black mb-4">
+              {isEn ? 'Payment Confirmation Pending' : 'Plata este în curs de confirmare'}
+            </h1>
+            <p className="text-zinc-600 font-medium text-sm md:text-base leading-relaxed mb-6">
+              {isEn
+                ? 'Your bank is still finalizing the authorization. Once confirmed (usually within 1–2 minutes), your order confirmation and any digital programs will be sent automatically to your email.'
+                : 'Banca finalizează autorizarea plății. Imediat ce confirmarea ajunge (de obicei în 1–2 minute), vei primi automat confirmarea comenzii și programele digitale pe email.'}
+            </p>
+            {paymentIntentId && (
+              <div className="bg-zinc-50 rounded-2xl p-4 mb-6 inline-block border border-zinc-200">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block mb-1">
+                  {isEn ? 'Reference ID' : 'Referință Plată'}
+                </span>
+                <span className="text-xs font-mono font-bold text-zinc-800">{paymentIntentId}</span>
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="flex items-center justify-center gap-3 bg-primary text-black px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary/80 transition-all cursor-pointer"
+              >
+                {isEn ? 'Check Status Again' : 'Verifică din nou statusul'}
+              </button>
+              <Link
+                href="/"
+                className="flex items-center justify-center gap-3 bg-zinc-50 text-zinc-600 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-zinc-100 hover:text-black transition-all"
+              >
+                <Home className="w-4 h-4" />
+                <span>{t('go_home')}</span>
+              </Link>
+            </div>
           </motion.div>
         )}
 

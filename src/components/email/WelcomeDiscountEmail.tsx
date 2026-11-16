@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { BaseEmailLayout } from './BaseEmailLayout';
+import { getSiteUrl } from '@/lib/site-config';
 
 interface WelcomeDiscountEmailProps {
   customerName: string;
@@ -18,30 +19,48 @@ interface WelcomeDiscountEmailProps {
   baseUrl?: string;
   couponCode?: string;
   couponValue?: number;
+  isReviewDiscount?: boolean;
 }
 
 export const WelcomeDiscountEmail: React.FC<Readonly<WelcomeDiscountEmailProps>> = ({
-  customerName,
+  customerName = '',
   locale = 'ro',
   templateData,
   userEmail,
-  baseUrl = "https://www.trenzone.fit",
+  baseUrl = getSiteUrl(),
   couponCode = "TRENZONE10",
-  couponValue = 10
+  couponValue = 10,
+  isReviewDiscount = false
 }) => {
   const isEn = locale === 'en';
   const welcomeText = isEn ? templateData?.heading_en : templateData?.heading_ro;
   const bodyText = isEn ? templateData?.body_en : templateData?.body_ro;
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
+  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
+  const replaceVars = (text: string) =>
+    text
+      .replaceAll('{{name}}', firstCustomerName)
+      .replaceAll('{{coupon}}', couponCode || '')
+      .replaceAll('{{value}}', String(couponValue ?? ''));
   
   // Fallbacks in case templateData is missing
-  const safeWelcome = welcomeText || (isEn ? "Welcome to TrenZone!" : "Bun venit la TrenZone!");
-  const safeBody = bodyText || (isEn
-    ? "We are thrilled to have you in our community. At TrenZone, we don't just engineer heavy-duty strength gear; we back every lift, PR, and training session built without compromises."
-    : "Ne bucurăm că te-ai alăturat comunității noastre. La TrenZone, nu creăm doar echipamente de forță construite pentru sarcini extreme, ci susținem fiecare PR și fiecare antrenament dus la limită.");
+  const safeWelcome = replaceVars(
+    welcomeText ||
+      (isReviewDiscount
+        ? (isEn ? "Thank you for your review!" : "Mulțumim pentru recenzie!")
+        : (isEn ? "Welcome to TrenZone!" : "Bun venit la TrenZone!"))
+  );
+  const safeBody = replaceVars(
+    bodyText ||
+      (isEn
+        ? "We are thrilled to have you in our community. At TrenZone, we don't just engineer heavy-duty strength gear; we back every lift, PR, and training session built without compromises."
+        : "Ne bucurăm că te-ai alăturat comunității noastre. La TrenZone, nu creăm doar echipamente de forță construite pentru sarcini extreme, ci susținem fiecare PR și fiecare antrenament dus la limită.")
+  );
   const safeCta = ctaText || (isEn ? "VIEW THE STORE" : "VEZI MAGAZINUL");
   const discountTitle = isEn ? "YOUR DISCOUNT CODE" : "CODUL TĂU DE REDUCERE";
-  const discountDesc = isEn ? `Use the code below on your first order to get ${couponValue}% off any item in our store.` : `Folosește codul de mai jos la prima ta comandă pentru o reducere de ${couponValue}% la orice articol.`;
+  const discountDesc = isReviewDiscount
+    ? (isEn ? `Use the code below on your next order to get ${couponValue}% off any item in our store.` : `Folosește codul de mai jos la următoarea ta comandă pentru o reducere de ${couponValue}% la orice articol.`)
+    : (isEn ? `Use the code below on your first order to get ${couponValue}% off any item in our store.` : `Folosește codul de mai jos la prima ta comandă pentru o reducere de ${couponValue}% la orice articol.`);
 
   
   return (

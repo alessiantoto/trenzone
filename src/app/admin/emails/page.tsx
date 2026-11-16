@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, Save, RefreshCw, Eye, Code, Languages, ChevronDown } from 'lucide-react';
+import { Mail, Save, RefreshCw, Eye, Code, Languages, ChevronDown, Paperclip, CheckCircle2, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { updateEmailTemplate, EmailTemplate as DBEmailTemplate } from '@/app/actions/email-templates';
+import { getProgramFilesAction, uploadProgramPdfAction, type AdminProgramPdfSlot } from '@/app/actions/programs';
+import type { ProgramFileSlot, StoredProgramFiles } from '@/lib/program-pdf-generator';
 import { updateSiteSetting } from '@/app/actions/settings';
 import toast from 'react-hot-toast';
 
@@ -13,6 +15,8 @@ import { ReviewEmailTemplate } from '@/components/email/ReviewEmailTemplate';
 import { EmailTemplate } from '@/components/email/EmailTemplate';
 import { AwbEmailTemplate } from '@/components/email/AwbEmailTemplate';
 import { AbandonedCartEmail } from '@/components/email/AbandonedCartEmail';
+import { ProgramDeliveryEmail } from '@/components/email/ProgramDeliveryEmail';
+import { getProductPrice } from '@/utils/pricing';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 function CustomSelect({ value, onChange, options, placeholder }: { value: string, onChange: (val: string) => void, options: {value: string, label: string}[], placeholder: string }) {
@@ -67,6 +71,7 @@ export default function AdminEmailsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lang, setLang] = useState<'ro' | 'en'>('ro');
+  const [previewCurrency, setPreviewCurrency] = useState<'RON' | 'EUR' | 'USD' | 'GBP'>('RON');
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   const [previewItemCount, setPreviewItemCount] = useState<1 | 2>(1);
   const [editedTemplate, setEditedTemplate] = useState<Partial<DBEmailTemplate>>({});
@@ -74,10 +79,50 @@ export default function AdminEmailsPage() {
   const [activeCoupons, setActiveCoupons] = useState<any[]>([]);
   const [selectedWelcomeCoupon, setSelectedWelcomeCoupon] = useState<string>('');
   const [selectedAbandoned72hCoupon, setSelectedAbandoned72hCoupon] = useState<string>('');
+  const [programFiles, setProgramFiles] = useState<StoredProgramFiles>({});
+  const [programSlots, setProgramSlots] = useState<AdminProgramPdfSlot[]>([
+    { slot: 'food-plan-en', label: '🥗 Food Plan — 🇬🇧 English (PDF)', programTitle: 'Food Plan', lang: 'en' },
+    { slot: 'food-plan-ro', label: '🥗 Food Plan — 🇷🇴 Română (PDF)', programTitle: 'Food Plan', lang: 'ro' },
+    { slot: 'training-program-en', label: '📘 Training Program — 🇬🇧 English (PDF)', programTitle: 'Training Program', lang: 'en' },
+    { slot: 'training-program-ro', label: '📘 Training Program — 🇷🇴 Română (PDF)', programTitle: 'Training Program', lang: 'ro' },
+    { slot: 'bench-program-en', label: '🏋️ Bench Program — 🇬🇧 English (PDF)', programTitle: 'Bench Program', lang: 'en' },
+    { slot: 'bench-program-ro', label: '🏋️ Bench Program — 🇷🇴 Română (PDF)', programTitle: 'Bench Program', lang: 'ro' },
+  ]);
+  const [uploadingSlot, setUploadingSlot] = useState<ProgramFileSlot | null>(null);
 
   useEffect(() => {
     fetchTemplates();
+    getProgramFilesAction()
+      .then((res) => {
+        if (res.success && res.files) setProgramFiles(res.files);
+        if (res.success && Array.isArray(res.slots) && res.slots.length > 0) {
+          setProgramSlots(res.slots);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const handleUploadProgramPdf = async (slot: ProgramFileSlot, file: File | null) => {
+    if (!file) return;
+    setUploadingSlot(slot);
+    try {
+      const fd = new FormData();
+      fd.append('slot', slot);
+      fd.append('file', file);
+      const res = await uploadProgramPdfAction(fd);
+      const uploadedUrl = res.url;
+      if (res.success && uploadedUrl) {
+        setProgramFiles((prev) => ({ ...prev, [slot]: uploadedUrl }));
+        toast.success('Fișierul PDF a fost atașat cu succes!');
+      } else {
+        toast.error(res.error || 'Eroare la încărcarea PDF-ului.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la încărcarea PDF-ului.');
+    } finally {
+      setUploadingSlot(null);
+    }
+  };
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -145,31 +190,33 @@ export default function AdminEmailsPage() {
 
     const localOrigin = typeof window !== 'undefined' ? window.location.origin : "https://www.trenzone.fit";
     
-    // Mock items: 1 produs sau produse multiple
+    // Mock items: 1 produs sau produse multiple (converted to selected previewCurrency)
+    const item1Price = getProductPrice(124.50, previewCurrency);
+    const item2Price = getProductPrice(129.00, previewCurrency);
     const mockItems = previewItemCount === 1 
       ? [
           { 
             name: 'X10 Elbow Wraps — Purple', 
-            image: `${localOrigin}/images/products/x10_elbow_wraps_purple_1.webp`, 
+            image: `${localOrigin}/images/products/x10_elbow_wraps_purple.webp`, 
             slug: 'x10-elbow-wraps',
             quantity: 1,
-            price: '124.50'
+            price: item1Price.toFixed(2)
           }
         ]
       : [
           { 
             name: 'X10 Elbow Wraps — Purple', 
-            image: `${localOrigin}/images/products/x10_elbow_wraps_purple_1.webp`, 
+            image: `${localOrigin}/images/products/x10_elbow_wraps_purple.webp`, 
             slug: 'x10-elbow-wraps',
             quantity: 1,
-            price: '124.50'
+            price: item1Price.toFixed(2)
           },
           { 
             name: 'X5 Elbow Wraps — Red', 
             image: `${localOrigin}/images/products/x5_elbow_wraps_red_1.webp`, 
             slug: 'x5-elbow-wraps',
             quantity: 1,
-            price: '129.00'
+            price: item2Price.toFixed(2)
           }
         ];
 
@@ -177,7 +224,7 @@ export default function AdminEmailsPage() {
       id: 'TZ-123',
       customerName: 'Alexandru',
       items: mockItems,
-      totalAmount: previewItemCount === 2 ? '253.50' : '124.50'
+      totalAmount: (previewItemCount === 2 ? item1Price + item2Price : item1Price).toFixed(2)
     };
     
     const mockUpsell = [
@@ -185,7 +232,7 @@ export default function AdminEmailsPage() {
         name: { ro: 'X10 Wrist Wraps', en: 'X10 Wrist Wraps' },
         price: 299.99,
         slug: 'x10-wrist-wraps',
-        image: '/images/products/trenzone_wristwraps_default.webp'
+        image: '/images/products/x10_wrist_wraps_purple.webp'
       },
       {
         name: { ro: 'TREN Oversized Tee', en: 'TREN Oversized Tee' },
@@ -221,6 +268,7 @@ export default function AdminEmailsPage() {
           baseUrl={previewBaseUrl} 
           couponCode="REVIEW10" 
           couponValue={10} 
+          isReviewDiscount={true}
         />
       );
     } else if (selectedId === 'review-request') {
@@ -242,6 +290,7 @@ export default function AdminEmailsPage() {
           totalAmount={mockOrder.totalAmount} 
           items={mockOrder.items} 
           locale={lang} 
+          currency={previewCurrency}
           templateData={editedTemplate as any} 
           baseUrl={previewBaseUrl} 
           upsellProducts={mockUpsell} 
@@ -249,22 +298,26 @@ export default function AdminEmailsPage() {
         />
       );
     } else if (selectedId === 'preorder-confirmation') {
+      const pre1 = getProductPrice(249.00, previewCurrency);
+      const pre2 = getProductPrice(219.00, previewCurrency);
+      const preorderLabel = lang === 'en' ? 'Pre-order' : 'Precomandă';
       const preorderItems = previewItemCount === 2 
         ? [
-            { name: 'X10 Elbow Wraps — White (Precomandă)', price: '249.00', quantity: 1, image: `${localOrigin}/images/products/x10_elbow_wraps_white_1.webp`, slug: 'x10-elbow-wraps' },
-            { name: 'X5 Elbow Wraps — Red (Precomandă)', price: '219.00', quantity: 1, image: `${localOrigin}/images/products/x5_elbow_wraps_red_1.webp`, slug: 'x5-elbow-wraps' }
+            { name: `X10 Elbow Wraps — White (${preorderLabel})`, price: pre1.toFixed(2), quantity: 1, image: `${localOrigin}/images/products/x10_elbow_wraps_white.webp`, slug: 'x10-elbow-wraps' },
+            { name: `X5 Elbow Wraps — Red (${preorderLabel})`, price: pre2.toFixed(2), quantity: 1, image: `${localOrigin}/images/products/x5_elbow_wraps_red_1.webp`, slug: 'x5-elbow-wraps' }
           ] 
         : [
-            { name: 'X10 Elbow Wraps — White (Precomandă)', price: '249.00', quantity: 1, image: `${localOrigin}/images/products/x10_elbow_wraps_white_1.webp`, slug: 'x10-elbow-wraps' }
+            { name: `X10 Elbow Wraps — White (${preorderLabel})`, price: pre1.toFixed(2), quantity: 1, image: `${localOrigin}/images/products/x10_elbow_wraps_white.webp`, slug: 'x10-elbow-wraps' }
           ];
 
       contentToRender = (
         <EmailTemplate 
           orderId="TZ-2026-PRE" 
           customerName={mockOrder.customerName} 
-          totalAmount={previewItemCount === 2 ? '468.00' : '249.00'} 
+          totalAmount={(previewItemCount === 2 ? pre1 + pre2 : pre1).toFixed(2)} 
           items={preorderItems} 
           locale={lang} 
+          currency={previewCurrency}
           templateData={editedTemplate as any} 
           baseUrl={previewBaseUrl} 
           upsellProducts={mockUpsell} 
@@ -292,12 +345,28 @@ export default function AdminEmailsPage() {
           customerName={mockOrder.customerName} 
           items={mockOrder.items} 
           locale={lang} 
+          currency={previewCurrency}
           cartUrl={`${localOrigin}/${lang}/checkout`} 
           templateData={editedTemplate as any} 
           baseUrl={previewBaseUrl} 
           userEmail="test@exemplu.ro" 
           couponCode={cCode} 
           couponValue={cValue} 
+        />
+      );
+    } else if (selectedId === 'program-delivery' || selectedId === 'program-pending' || selectedId === 'program-marketing') {
+      contentToRender = (
+        <ProgramDeliveryEmail
+          customerName={mockOrder.customerName}
+          orderId={mockOrder.id}
+          locale={lang}
+          mode={selectedId === 'program-marketing' ? 'marketing' : selectedId === 'program-pending' ? 'pending' : 'delivery'}
+          programsPageUrl={`${localOrigin}/${lang}/programs`}
+          customContent={{
+            heading: lang === 'en' ? editedTemplate.heading_en : editedTemplate.heading_ro,
+            body_intro: lang === 'en' ? editedTemplate.body_en : editedTemplate.body_ro,
+            cta_text: lang === 'en' ? editedTemplate.cta_en : editedTemplate.cta_ro,
+          }}
         />
       );
     }
@@ -356,9 +425,82 @@ export default function AdminEmailsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
             <Mail className="text-[#e32f8c]" size={28} />
-            E-mailuri Automate
+            E-mailuri Automate & Programe PDF
           </h1>
-          <p className="text-slate-500 mt-1.5 text-sm font-medium">Gestionează textele și traducerile pentru notificările trimise clienților TrenZone.</p>
+          <p className="text-slate-500 mt-1.5 text-sm font-medium">Gestionează textele emailurilor automate și atașează fișierele PDF pentru Food Plan și Bench Program.</p>
+        </div>
+      </div>
+
+      {/* Panou Atașare PDF-uri Programe Digitale (RO / EN) */}
+      <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200/80">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+              <Paperclip className="text-[#a855f7]" size={20} />
+              Atașează Fișierele PDF pentru Programele Digitale (EN & RO)
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Încarcă aici fișierele PDF pentru fiecare program și limbă (Engleză și Română). Clientul primește pe email exact PDF-ul limbii alese — iar la Pachetul 3 în 1 primește automat toate cele 3 programe incluse în limba aleasă.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {programSlots.map(({ slot, label }) => {
+            const attachedUrl = programFiles[slot];
+            const isUploading = uploadingSlot === slot;
+            return (
+              <div
+                key={slot}
+                className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3"
+              >
+                <div>
+                  <div className="text-xs font-black text-slate-800 mb-1">{label}</div>
+                  {attachedUrl ? (
+                    <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
+                      <CheckCircle2 size={13} />
+                      <span>PDF Atașat</span>
+                      <a
+                        href={attachedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 inline-flex items-center gap-0.5 text-slate-500 hover:text-slate-900 underline"
+                      >
+                        <span>Vezi</span>
+                        <ExternalLink size={11} />
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] font-semibold text-amber-600">
+                      Niciun PDF atașat încă
+                    </div>
+                  )}
+                </div>
+
+                <label className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-[#e32f8c] text-white text-xs font-bold text-center cursor-pointer transition-colors flex items-center justify-center gap-1.5">
+                  <Paperclip size={13} />
+                  <span>
+                    {isUploading
+                      ? 'Se încarcă...'
+                      : attachedUrl
+                      ? 'Schimbă PDF-ul'
+                      : 'Atașează PDF'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    disabled={isUploading}
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      if (f) handleUploadProgramPdf(slot, f);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -399,7 +541,7 @@ export default function AdminEmailsPage() {
                   {/* Language switch */}
                   <div className="flex bg-slate-100 p-1 rounded-xl">
                     <button 
-                      onClick={() => setLang('ro')} 
+                      onClick={() => { setLang('ro'); setPreviewCurrency('RON'); }} 
                       className={`px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
                         lang === 'ro' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                       }`}
@@ -407,7 +549,7 @@ export default function AdminEmailsPage() {
                       Română
                     </button>
                     <button 
-                      onClick={() => setLang('en')} 
+                      onClick={() => { setLang('en'); if (previewCurrency === 'RON') setPreviewCurrency('EUR'); }} 
                       className={`px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
                         lang === 'en' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                       }`}
@@ -415,6 +557,25 @@ export default function AdminEmailsPage() {
                       Engleză
                     </button>
                   </div>
+
+                  {/* Preview currency switch */}
+                  {viewMode === 'preview' && (
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                      <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider pl-2 pr-1">Monedă:</span>
+                      {(['RON', 'EUR', 'USD', 'GBP'] as const).map((curr) => (
+                        <button
+                          key={curr}
+                          type="button"
+                          onClick={() => setPreviewCurrency(curr)}
+                          className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                            previewCurrency === curr ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          {curr}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Multi-product simulator switcher (shown in Preview mode or review/order templates) */}
                   {viewMode === 'preview' && (

@@ -25,7 +25,10 @@ export async function sendReviewRequestAction(orderId: string) {
     } else {
       query = query.or(`payment_intent_id.eq.${safeOrderId},receipt_url.ilike.%${safeOrderId}%`);
     }
-    const { data: order, error } = await query.maybeSingle();
+    const { data: order, error } = await query
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
     if (error || !order) {
       console.error("Error fetching order:", error);

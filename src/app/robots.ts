@@ -1,6 +1,7 @@
 import { MetadataRoute } from 'next';
+import { getSiteUrl } from '@/lib/site-config';
 
-const BASE_URL = "https://www.trenzone.fit";
+const BASE_URL = getSiteUrl();
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -13,9 +14,11 @@ export default function robots(): MetadataRoute.Robots {
           '/admin',
           '/api/',
           '/*/checkout',
+          '/*/checkout/success',
           '/*/order-success',
           '/*/order-confirmation',
-          '/afiliati',
+          '/*/affiliate/dashboard',
+          '/*/affiliate/login',
         ],
       },
     ],

@@ -3,18 +3,22 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { FALLBACK_RATES, setClientRatesGetter, convertFromRon as convertFromRonHelper } from "@/utils/pricing";
+import { useCheckoutStore } from "@/store/useCheckoutStore";
 
-export type Currency = "RON" | "EUR" | "USD" | "GBP" | "PLN" | "CHF";
+export type Currency = "RON" | "EUR" | "USD" | "GBP";
 export type Locale = "ro" | "en";
 
 interface RegionState {
   currency: Currency;
+  countryCode: string;
   hasDetectedIP: boolean;
+  hasDetectedCountry: boolean;
   /** Admin-managed exchange rates fetched from /api/exchange-rates. 1 RON → X */
   exchangeRates: Record<string, number>;
   setCurrency: (currency: Currency) => void;
   setHasDetectedIP: (val: boolean) => void;
   initializeFromIP: () => Promise<{ currency: Currency; isRO: boolean }>;
+  ensureCountryDetected: () => Promise<void>;
   detectInitialRegion: (locale: string) => void;
   /** Fetches latest exchange rates from the server API (called once on app boot) */
   fetchExchangeRates: () => Promise<void>;
@@ -26,7 +30,9 @@ export const useRegionStore = create<RegionState>()(
   persist(
     (set, get) => ({
       currency: "RON",
+      countryCode: "RO",
       hasDetectedIP: false,
+      hasDetectedCountry: false,
       exchangeRates: FALLBACK_RATES,
       setCurrency: (currency) => {
         set({ currency });
@@ -38,9 +44,6 @@ export const useRegionStore = create<RegionState>()(
 
       fetchExchangeRates: async () => {
         try {
-          // Skip network request for RON visitors (99% of traffic) unless foreign currency is active
-          if (get().currency === "RON") return;
-
           // Avoid duplicate fetches in the same browser session
           if (typeof sessionStorage !== "undefined") {
             const lastFetch = Number(sessionStorage.getItem("tz_rates_ts") || 0);
@@ -69,18 +72,24 @@ export const useRegionStore = create<RegionState>()(
       },
 
       initializeFromIP: async () => {
+        const isEnLocale =
+          typeof window !== "undefined" &&
+          (document.documentElement.lang?.toLowerCase().startsWith("en") ||
+            window.location.pathname.startsWith("/en"));
         try {
           const res = await fetch("https://ipapi.co/json/");
+          if (!res.ok) throw new Error(`Geo HTTP ${res.status}`);
           const data = await res.json();
-          const countryCode = data.country_code;
-          const isRO = countryCode === "RO";
+          const detectedCountry = String(data?.country_code || "").trim().toUpperCase();
+          if (!detectedCountry) throw new Error("Missing country_code");
+          const isRO = detectedCountry === "RO";
 
           let detectedCurrency: Currency = "RON";
 
           if (!isRO) {
             const validCurrencies: Currency[] = ["EUR", "USD", "GBP"];
 
-            if (["PL", "CH", "HU", "CZ", "BG", "HR", "SK", "SI"].includes(countryCode)) {
+            if (["PL", "CH", "HU", "CZ", "BG", "HR", "SK", "SI"].includes(detectedCountry)) {
               detectedCurrency = "EUR";
             } else {
               // Map BGN directly to EUR fallback if present in data
@@ -89,11 +98,34 @@ export const useRegionStore = create<RegionState>()(
             }
           }
 
-          set({ currency: detectedCurrency, hasDetectedIP: true });
+          set({
+            currency: detectedCurrency,
+            countryCode: detectedCountry,
+            hasDetectedIP: true,
+            hasDetectedCountry: true,
+          });
+          useCheckoutStore.getState().setDetectedCountry(detectedCountry);
+          get().fetchExchangeRates().catch(() => {});
           return { currency: detectedCurrency, isRO };
-        } catch (e) {
-          console.error("Failed to detect region from IP. Falling back to RON.");
-          return { currency: "RON", isRO: true };
+        } catch {
+          const fallbackCurrency: Currency = isEnLocale ? "EUR" : "RON";
+          set({
+            currency: fallbackCurrency,
+            hasDetectedIP: true,
+          });
+          return { currency: fallbackCurrency, isRO: !isEnLocale };
+        }
+      },
+      ensureCountryDetected: async () => {
+        if (get().hasDetectedCountry) return;
+        try {
+          const res = await fetch("https://ipapi.co/json/");
+          const data = await res.json();
+          const detectedCountry = String(data?.country_code || "RO").trim().toUpperCase() || "RO";
+          set({ countryCode: detectedCountry, hasDetectedCountry: true });
+          useCheckoutStore.getState().setDetectedCountry(detectedCountry);
+        } catch {
+          // Keep default countryCode silently
         }
       },
       detectInitialRegion: (locale) => {
@@ -113,7 +145,9 @@ export const useRegionStore = create<RegionState>()(
       // Only persist currency, detection flag, and exchange rates
       partialize: (state) => ({
         currency: state.currency,
+        countryCode: state.countryCode,
         hasDetectedIP: state.hasDetectedIP,
+        hasDetectedCountry: state.hasDetectedCountry,
         exchangeRates: state.exchangeRates,
       }),
       onRehydrateStorage: () => (state) => {
@@ -125,7 +159,12 @@ export const useRegionStore = create<RegionState>()(
   )
 );
 
-// Register store's dynamic exchange rates with the pricing utility
+// Register store's dynamic exchange rates with the pricing utility & cross-tab sync
 if (typeof window !== "undefined") {
   setClientRatesGetter(() => useRegionStore.getState()?.exchangeRates);
+  window.addEventListener("storage", (e) => {
+    if (e.key === "campion-region-storage") {
+      useRegionStore.persist.rehydrate();
+    }
+  });
 }

@@ -176,9 +176,9 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
       const lower = `${name} ${variantStr}`.toLowerCase();
       if (lower.includes('x10')) {
         if (lower.includes('white') || lower.includes('alb')) {
-          image = '/images/products/x10_elbow_wraps_white_1.webp';
+          image = '/images/products/x10_elbow_wraps_white.webp';
         } else {
-          image = '/images/products/x10_elbow_wraps_purple_1.webp';
+          image = '/images/products/x10_elbow_wraps_purple.webp';
         }
       } else if (lower.includes('x5')) {
         if (lower.includes('red') || lower.includes('rosu')) {
@@ -189,7 +189,7 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
           image = '/images/products/x5_elbow_wraps_purple_1.webp';
         }
       } else if (isBundle) {
-        image = '/images/products/x10_elbow_wraps_purple_1.webp';
+        image = '/images/products/x10_elbow_wraps_purple.webp';
       } else {
         image = getSingleFlavorImage(variantStr || name);
       }
@@ -204,7 +204,15 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
     };
   });
 
-  const address = `${order.addr_line1 || ''} ${order.addr_line2 || ''}`.trim() || 'N/A';
+  const baseAddress = `${order.addr_line1 || ''} ${order.addr_line2 || ''}`.trim();
+  const countySuffix = order.addr_county ? `, ${order.addr_county}` : '';
+  const isPudo = order.shipping_type === 'pudo';
+  const lockerName = order.branch_name || '';
+  const lockerId = order.branch_id || (order.carrier_metadata as any)?.locker_id || '';
+  const lockerSuffix = isPudo && (lockerName || lockerId)
+    ? ` [Easybox: ${lockerName || 'Locker'}${lockerId ? ` #${lockerId}` : ''}]`
+    : '';
+  const address = `${baseAddress}${countySuffix}${lockerSuffix}`.trim() || 'N/A';
   const customerName = `${order.customer_firstname || ''} ${order.customer_lastname || ''}`.trim() || 'Client';
 
   return {
@@ -222,8 +230,11 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
     customerPhone: order.customer_phone || 'N/A',
     address,
     city: order.addr_city || 'N/A',
+    county: order.addr_county || '',
     zip: order.addr_zip || '',
     country: order.addr_country || 'RO',
+    branchId: lockerId || '',
+    branchName: lockerName || '',
     total: formattedTotal,
     totalAmount,
     currency: rawCurrency,
@@ -463,7 +474,7 @@ export async function getFulfillmentPreviewOrders(options?: { includeAlreadyDisp
           variant: 'Purple',
           quantity: 2,
           sku: 'X10-WRAP-PUR',
-          image: '/images/products/x10_elbow_wraps_purple_1.webp'
+          image: '/images/products/x10_elbow_wraps_purple.webp'
         },
         {
           name: 'X5 Elbow Wraps',
@@ -528,7 +539,7 @@ export async function getFulfillmentPreviewOrders(options?: { includeAlreadyDisp
           variant: 'White',
           quantity: 1,
           sku: 'X10-WRAP-WHT',
-          image: '/images/products/x10_elbow_wraps_white_1.webp'
+          image: '/images/products/x10_elbow_wraps_white.webp'
         }
       ]
     }

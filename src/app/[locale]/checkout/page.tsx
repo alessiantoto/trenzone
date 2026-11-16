@@ -2,7 +2,7 @@
 
 import { useCartStore, isPreorder } from "@/store/useCartStore";
 import { useTranslations } from "next-intl";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
@@ -16,9 +16,11 @@ import { useLocale } from "next-intl";
 import { useRegionStore } from "@/store/useRegionStore";
 import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { getProductPrice } from "@/utils/pricing";
+import { isDigitalProgramItem, isDigitalOnlyCart } from "@/lib/programs";
 
 // Initialize Stripe with the public key from env
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "pk_test_placeholder");
+const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim();
+const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
 
 const appearance = { 
   theme: 'stripe' as const,
@@ -59,9 +61,17 @@ const appearance = {
 export default function CheckoutPage() {
   const params = useParams();
   const locale = (params?.locale as string) || 'ro';
-  const { items, getTotals, appliedCoupon } = useCartStore();
+  const { items, getTotals, appliedCoupon, clearCart } = useCartStore();
   const { currency } = useRegionStore();
-  const { country: storedCountry, shippingType: storedShippingType } = useCheckoutStore();
+  const { country: storedCountry, shippingType: storedShippingType, priorityProcessing, giftPackaging } = useCheckoutStore();
+  const latestCountryRef = useRef(storedCountry);
+  const latestShippingTypeRef = useRef(storedShippingType);
+  const latestPriorityRef = useRef(priorityProcessing);
+  const latestGiftRef = useRef(giftPackaging);
+  latestCountryRef.current = storedCountry;
+  latestShippingTypeRef.current = storedShippingType;
+  latestPriorityRef.current = priorityProcessing;
+  latestGiftRef.current = giftPackaging;
   const [currentStep, setCurrentStep] = useState(1);
   const [isStep1Valid, setIsStep1Valid] = useState(false);
   const [isStep2Valid, setIsStep2Valid] = useState(false);
@@ -70,6 +80,7 @@ export default function CheckoutPage() {
   const [isStripeDisabled, setIsStripeDisabled] = useState(false);
   const [initError, setInitError] = useState("");
   const [csrfToken, setCsrfToken] = useState("");
+  const initializedCurrencyRef = useRef<string | null>(null);
   const { total } = getTotals(currency);
   const t = useTranslations("Checkout");
 
@@ -83,31 +94,49 @@ export default function CheckoutPage() {
         const data = await res.json();
         if (mounted && data.csrfToken) {
           setCsrfToken(data.csrfToken);
+        } else if (mounted) {
+          setInitError(locale === 'en' ? 'Failed to initialize secure checkout session. Please reload.' : 'Inițializarea sesiunii securizate a eșuat. Reîncarcă pagina.');
         }
       } catch (err) {
         console.error("CSRF initialization error:", err);
+        if (mounted) {
+          setInitError(locale === 'en' ? 'Failed to initialize secure checkout session. Please reload.' : 'Inițializarea sesiunii securizate a eșuat. Reîncarcă pagina.');
+        }
       }
     };
     fetchCsrf();
     return () => { mounted = false; };
   }, []);
 
-  // 2. Initialize checkout when items/currency/coupon change, but ONLY if we have CSRF and valid non-mixed cart
+  // 2. Initialize checkout once per currency (subsequent item/coupon/option changes update the existing PI via /api/checkout/update without remounting Elements)
   useEffect(() => {
     if (items.length === 0 || !csrfToken) return;
 
-    const hasPreorder = items.some(item => isPreorder(item, item.selectedVariant));
-    const hasInStock = items.some(item => !isPreorder(item, item.selectedVariant));
+    const hasPreorder = items.some(item => !isDigitalProgramItem(item) && isPreorder(item, item.selectedVariant));
+    const hasInStock = items.some(item => !isDigitalProgramItem(item) && !isPreorder(item, item.selectedVariant));
     if (hasPreorder && hasInStock) {
       // Mixed order — blocked until customer chooses which order to finalize
+      setInitError("");
       return;
     }
 
+    if (clientSecret && initializedCurrencyRef.current === currency) {
+      return;
+    }
+
+    if (clientSecret && initializedCurrencyRef.current && initializedCurrencyRef.current !== currency) {
+      setClientSecret("");
+    }
+
+    const controller = new AbortController();
+
     const initCheckout = async () => {
       try {
+        setInitError("");
         // Create PaymentIntent with existing CSRF token
         const checkoutRes = await fetch("/api/checkout", {
           method: "POST",
+          signal: controller.signal,
           headers: { 
             "Content-Type": "application/json",
             "x-csrf-token": csrfToken,
@@ -116,35 +145,42 @@ export default function CheckoutPage() {
             currency: currency, 
             items: items,
             couponCode: appliedCoupon?.code?.trim()?.toUpperCase() || null,
-            country: storedCountry || 'RO',
-            shippingType: storedShippingType || 'hd',
+            country: latestCountryRef.current || 'RO',
+            shippingType: latestShippingTypeRef.current === 'pudo' ? 'hd' : (latestShippingTypeRef.current || 'hd'),
+            priority_processing: latestPriorityRef.current,
+            gift_packaging: latestGiftRef.current,
             payment_method: 'online',
             locale: locale === 'en' ? 'en' : 'ro'
           }),
         });
 
         if (!checkoutRes.ok) {
-          const data = await checkoutRes.json();
+          const data = await checkoutRes.json().catch(() => ({}));
           throw new Error(data.error || 'API Error');
         }
 
         const data = await checkoutRes.json();
+        if (controller.signal.aborted) return;
         
         if (data.stripeDisabled) {
           setIsStripeDisabled(true);
           setPaymentMethod('cod');
           setClientSecret('disabled');
+          initializedCurrencyRef.current = currency;
         } else if (data.clientSecret) {
           setClientSecret(data.clientSecret);
+          initializedCurrencyRef.current = currency;
         }
       } catch (err: any) {
+        if (err?.name === 'AbortError') return;
         console.error("Checkout init error:", err);
         setInitError(err.message);
       }
     };
 
     initCheckout();
-  }, [items, total, currency, csrfToken, appliedCoupon?.code, storedCountry, storedShippingType, locale]);
+    return () => controller.abort();
+  }, [items, total, currency, csrfToken, appliedCoupon?.code, locale, clientSecret]);
 
   const options: any = useMemo(() => {
     const baseOptions = {
@@ -277,6 +313,7 @@ export default function CheckoutPage() {
                 setCurrentStep={setCurrentStep}
                 isStep1Valid={isStep1Valid}
                 isStep2Valid={isStep2Valid}
+                digitalOnlyCart={isDigitalOnlyCart(items)}
               />
               
               <div className="mt-4 lg:mt-8">
@@ -286,16 +323,24 @@ export default function CheckoutPage() {
                        <span className="text-red-500 font-bold">!</span>
                      </div>
                      <h3 className="text-sm font-black uppercase tracking-tight text-black mb-2">{t('init_error')}</h3>
-                     <p className="text-zinc-500 font-bold text-[10px] max-w-[200px] leading-relaxed mb-6">{initError}</p>
-                     <button onClick={() => window.location.reload()} className="text-[10px] font-black uppercase tracking-widest text-[#e32f8c] hover:underline">{t('retry')}</button>
+                     <p className="text-zinc-500 font-bold text-[10px] max-w-[260px] leading-relaxed mb-6">{initError}</p>
+                     <div className="flex items-center gap-4">
+                       <button onClick={() => window.location.reload()} className="text-[10px] font-black uppercase tracking-widest text-[#e32f8c] hover:underline">{t('retry')}</button>
+                       <button
+                         onClick={() => { clearCart(); setInitError(""); }}
+                         className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-black hover:underline"
+                       >
+                         {locale === 'en' ? 'Clear Cart' : 'Golește Coșul'}
+                       </button>
+                     </div>
                   </div>
-                ) : currentStep === 3 && !clientSecret ? (
+                ) : currentStep === 4 && !clientSecret ? (
                   <div className="h-[400px] flex flex-col items-center justify-center bg-white rounded-[2.5rem] border border-zinc-100 shadow-sm">
                      <div className="w-12 h-12 border-4 border-[#e32f8c] border-t-transparent rounded-full animate-spin mb-4" />
                      <p className="text-zinc-400 font-black uppercase tracking-widest text-[10px]">{t('initializing_payment')}</p>
                   </div>
                 ) : (
-                  options && !isStripeDisabled ? (
+                  options && stripePromise && !isStripeDisabled ? (
                     <Elements stripe={stripePromise} options={options} key={clientSecret || 'init'}>
                       <CheckoutForm 
                         currentStep={currentStep} 

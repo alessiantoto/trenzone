@@ -13,13 +13,13 @@ const DEFAULT_PRODUCTS = [
   {
     id: "2fd4ee73-6800-4f76-a74d-208fffea0fb6",
     name: { ro: "TRENZONE X10 Elbow Wraps — Purple", en: "TRENZONE X10 Elbow Wraps — Purple" },
-    image: "/images/products/x10_elbow_wraps_purple_1.webp",
+    image: "/images/products/x10_elbow_wraps_purple.webp",
     badge: "SUPORT MAXIM · PR-URI"
   },
   {
     id: "2fd4ee73-6800-4f76-a74d-208fffea0fb6",
     name: { ro: "TRENZONE X10 Elbow Wraps — White (Precomandă)", en: "TRENZONE X10 Elbow Wraps — White (Pre-Order)" },
-    image: "/images/products/x10_elbow_wraps_white_3.webp",
+    image: "/images/products/x10_elbow_wraps_white.webp",
     badge: "PRECOMANDĂ OFICIALĂ"
   },
   {

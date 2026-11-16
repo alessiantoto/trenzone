@@ -67,6 +67,26 @@ export async function GET(request: Request) {
     results.fulfillmentDispatch = { error: err.message };
   }
 
+  // 5. Stripe Reconciliation Sweep (recover any missed/failed orders & backfill receipt numbers)
+  try {
+    console.log('[CRON DAILY] Starting Stripe orders reconciliation...');
+    const { reconcileRecentStripeOrders } = await import('@/lib/stripe-order-sync');
+    results.stripeReconcile = await reconcileRecentStripeOrders({ daysBack: 14, limit: 100 });
+  } catch (err: any) {
+    console.error('[CRON DAILY] Stripe reconciliation error:', err);
+    results.stripeReconcile = { error: err.message };
+  }
+
+  // 6. Cleanup Expired Unused Scratch Coupons (24h TTL auto-cleanup)
+  try {
+    const { cleanupExpiredScratchCoupons } = await import('@/lib/scratch-coupons');
+    const deletedCount = await cleanupExpiredScratchCoupons();
+    results.scratchCleanup = { deletedCount };
+  } catch (err: any) {
+    console.error('[CRON DAILY] Scratch coupon cleanup error:', err);
+    results.scratchCleanup = { error: err.message };
+  }
+
   return NextResponse.json({ success: true, results });
 }
 

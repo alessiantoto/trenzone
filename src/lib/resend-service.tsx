@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { getSiteUrl, getResendFromEmail } from '@/lib/site-config';
 import { EmailTemplate } from '../components/email/EmailTemplate';
 import { ReviewEmailTemplate } from '../components/email/ReviewEmailTemplate';
 import { BroadcastEmailTemplate } from '../components/email/BroadcastEmailTemplate';
@@ -7,14 +8,28 @@ import { AwbEmailTemplate } from '../components/email/AwbEmailTemplate';
 import { ReturnConfirmationEmail } from '../components/email/ReturnConfirmationEmail';
 import { AffiliateApprovalEmail } from '../components/email/AffiliateApprovalEmail';
 import { FulfillmentDispatchEmail } from '../components/email/FulfillmentDispatchEmail';
+import { ProgramDeliveryEmail } from '../components/email/ProgramDeliveryEmail';
 import { FulfillmentOrderSummary } from '@/types/fulfillment';
+import {
+  getProgramPdfBuffer,
+  getProgramDownloadUrl,
+  getProgramAttachmentFilename,
+  type SingleProgramKey,
+} from './program-pdf-generator';
+import { isDigitalProgramItem, type DigitalProgramLanguage } from './programs';
 import * as React from 'react';
 import { supabaseAdmin } from './supabase-admin';
 import { getProductsServer } from '../app/actions/products';
-import { getProductPrice } from '@/utils/pricing';
+import { getProductPrice, getServerExchangeRates } from '@/utils/pricing';
 import { resolveItemImage } from './product-images';
 
 export const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_to_prevent_crash');
+
+function toResendError(err: any): Error {
+  if (err instanceof Error) return err;
+  const msg = err?.message ? String(err.message) : (typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err));
+  return new Error(msg || 'Resend API error');
+}
 
 async function logEmailToDb(
   recipient: string,
@@ -57,7 +72,7 @@ export async function sendBroadcastBatch(
   console.log(`📡 [MAIL SERVICE] Broadcasting to ${recipients.length} recipients...`);
   try {
     const result = await resend.emails.send({
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: recipients,
       subject: subject,
@@ -69,6 +84,7 @@ export async function sendBroadcastBatch(
           ctaLink={content.ctaLink}
           imageUrl={content.imageUrl}
           locale={content.locale}
+          baseUrl={getSiteUrl()}
           userEmail={recipients.join(', ')}
         />
       ),
@@ -77,7 +93,7 @@ export async function sendBroadcastBatch(
     if (result.error) {
       console.error('❌ [MAIL SERVICE] Broadcast Batch FAILED:', result.error);
       await logEmailToDb(recipients.join(','), subject, 'broadcast', 'failed', result.error.message, { content });
-      throw result.error;
+      throw toResendError(result.error);
     }
 
     await logEmailToDb(recipients.join(','), subject, 'broadcast', 'sent', null, { content });
@@ -97,11 +113,14 @@ export async function sendWelcomeEmail(
   try {
     const { data: template } = await supabaseAdmin.from('email_templates').select('*').eq('id', 'welcome-discount').single();
 
-    const { data: setting } = await supabaseAdmin.from('store_settings').select('value').eq('key', 'welcome_email_coupon').single();
-    const couponCode = setting?.value || 'TRENZONE10';
+    const { data: setting } = await supabaseAdmin.from('store_settings').select('value').eq('key', 'welcome_email_coupon').maybeSingle();
+    const { data: promoSetting } = !setting?.value
+      ? await supabaseAdmin.from('store_settings').select('value').eq('key', 'active_promotion').maybeSingle()
+      : { data: null };
+    const couponCode = (typeof setting?.value === 'string' && setting.value) || promoSetting?.value?.couponId || 'TREN5';
 
-    const { data: couponData } = await supabaseAdmin.from('coupons').select('value').eq('code', couponCode).single();
-    const couponValue = couponData?.value || 10;
+    const { data: couponData } = await supabaseAdmin.from('coupons').select('value').ilike('code', couponCode).maybeSingle();
+    const couponValue = couponData?.value ?? 5;
 
     const defaultSubject = locale === 'en' 
       ? `Welcome to the TrenZone Crew! Here's your gift...`
@@ -110,7 +129,7 @@ export async function sendWelcomeEmail(
     const subject = template ? (locale === 'en' ? template.subject_en : template.subject_ro) || defaultSubject : defaultSubject;
 
     const result = await resend.emails.send({
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: [to],
       subject: subject,
@@ -119,6 +138,7 @@ export async function sendWelcomeEmail(
           customerName={customerName}
           locale={locale}
           templateData={template}
+          baseUrl={getSiteUrl()}
           userEmail={to}
           couponCode={couponCode}
           couponValue={couponValue}
@@ -128,7 +148,7 @@ export async function sendWelcomeEmail(
 
     if (result.error) {
       await logEmailToDb(to, subject, 'welcome-discount', 'failed', result.error.message, { customerName, locale });
-      throw result.error;
+      throw toResendError(result.error);
     }
     
     await logEmailToDb(to, subject, 'welcome-discount', 'sent', null, { customerName, locale });
@@ -157,7 +177,7 @@ export async function sendReviewDiscountEmail(
     const subject = template ? (locale === 'en' ? template.subject_en : template.subject_ro) || defaultSubject : defaultSubject;
 
     const result = await resend.emails.send({
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: [to],
       subject: subject,
@@ -166,16 +186,18 @@ export async function sendReviewDiscountEmail(
           customerName={customerName}
           locale={locale}
           templateData={template}
+          baseUrl={getSiteUrl()}
           userEmail={to}
           couponCode={couponCode}
           couponValue={couponValue}
+          isReviewDiscount={true}
         />
       ),
     });
 
     if (result.error) {
       await logEmailToDb(to, subject, 'review-discount', 'failed', result.error.message, { customerName, locale });
-      throw result.error;
+      throw toResendError(result.error);
     }
     
     await logEmailToDb(to, subject, 'review-discount', 'sent', null, { customerName, locale });
@@ -198,7 +220,8 @@ export async function sendOrderConfirmationEmail(
   let emailType = 'order-confirmation';
 
   try {
-    const locale = orderData.locale || 'ro';
+    const locale: 'ro' | 'en' = String(orderData.locale || '').toLowerCase().startsWith('en') ? 'en' : 'ro';
+    const orderCurrency = String(orderData.currency || (locale === 'ro' ? 'RON' : 'EUR')).trim().toUpperCase();
     const isPreorderOrder = Boolean(orderData.isPreorder) || 
       orderData.status === 'preorder' || 
       Boolean(orderData.carrier_metadata?.is_preorder) || 
@@ -237,18 +260,44 @@ export async function sendOrderConfirmationEmail(
       
     const subject = template ? (locale === 'en' ? template.subject_en : template.subject_ro)?.replace('{{id}}', orderData.id) || defaultSubject : defaultSubject;
 
+    let liveRates: Record<string, number> | undefined;
+    try {
+      liveRates = await getServerExchangeRates();
+    } catch {
+      liveRates = undefined;
+    }
+
     let upsellProducts: any[] = [];
+    let programUpsellProducts: any[] = [];
     try {
       const allProducts = await getProductsServer();
       const orderedIds = new Set((orderData.items || []).map((i: any) => i.id).filter(Boolean));
-      const SUPABASE_BASE = 'https://www.trenzone.fit';
-      upsellProducts = allProducts
-        .filter((p: any) => !orderedIds.has(p.id))
-        .slice(0, 2)
-        .map((p: any) => ({
+      const orderedSlugs = new Set((orderData.items || []).map((i: any) => i.slug).filter(Boolean));
+      const siteBase = getSiteUrl();
+      const candidates = allProducts.filter(
+        (p: any) => p.is_active !== false && !orderedIds.has(p.id) && !orderedSlugs.has(p.slug)
+      );
+      const formatUpsell = (p: any) => {
+        const rawImg = p.image || '/images/products/x10_elbow_wraps_purple.webp';
+        return {
           ...p,
-          image: p.image?.startsWith('http') ? p.image : `${SUPABASE_BASE}${p.image}`
-        }));
+          image: rawImg.startsWith('http') ? rawImg : `${siteBase}${rawImg.startsWith('/') ? '' : '/'}${rawImg}`,
+          convertedPrice: getProductPrice(p.price, orderCurrency, liveRates)
+        };
+      };
+
+      const gearCandidates = candidates.filter((p: any) => !isDigitalProgramItem(p));
+      const inStockGear = gearCandidates.filter((p: any) => (p.stock_quantity ?? 1) > 0);
+      upsellProducts = (inStockGear.length >= 2 ? inStockGear : gearCandidates).slice(0, 2).map(formatUpsell);
+
+      const hasCompleteBundle = orderedSlugs.has('pachet-complet-vlad-tren') ||
+        (orderData.items || []).some((i: any) => String(i.name || '').toLowerCase().includes('pachet complet'));
+      const EXCLUDED_WHEN_BUNDLE = new Set(['food-plan-vlad-tren', 'training-program-vlad-tren', 'bench-program-vlad-tren']);
+
+      programUpsellProducts = candidates
+        .filter((p: any) => isDigitalProgramItem(p) && !(hasCompleteBundle && EXCLUDED_WHEN_BUNDLE.has(String(p.slug || ''))))
+        .slice(0, 2)
+        .map(formatUpsell);
     } catch (e) {
       console.warn("Failed to fetch upsell products for email", e);
     }
@@ -264,14 +313,14 @@ export async function sendOrderConfirmationEmail(
 
     const getItemUnitPrice = (it: any) => {
       const rawPrice = Number(it.price) || 0;
-      if (orderData.currency === 'RON' || isAlreadyConverted) {
+      if (orderData.itemsAlreadyInCurrency === true || orderCurrency === 'RON' || isAlreadyConverted) {
         return rawPrice;
       }
-      return getProductPrice(rawPrice, orderData.currency);
+      return getProductPrice(rawPrice, orderCurrency, liveRates);
     };
 
     const payload: any = {
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: [actualRecipient],
 
@@ -280,11 +329,13 @@ export async function sendOrderConfirmationEmail(
       subject: IS_DEV ? `[TEST → ${to}] ${subject}` : subject,
       react: (
         <EmailTemplate
-          orderId={orderData.id}
-          customerName={orderData.customer.name || `${orderData.customer.firstName || ''} ${orderData.customer.lastName || ''}`.trim() || 'TrenZone'}
+          orderId={String(orderData.id || '')}
+          baseUrl={getSiteUrl()}
+          customerName={orderData.customer?.name || `${orderData.customer?.firstName || ''} ${orderData.customer?.lastName || ''}`.trim() || 'TrenZone'}
           totalAmount={Number(orderData.total).toFixed(2)}
           locale={locale}
-          currency={orderData.currency}
+          currency={orderCurrency}
+          exchangeRates={liveRates}
           trackingNumber={orderData.trackingNumber}
           templateData={template}
           userEmail={to}
@@ -308,7 +359,7 @@ export async function sendOrderConfirmationEmail(
             }
 
             const itemImage = resolveItemImage({ ...i, name, variant: variantStr });
-            const finalImage = itemImage.startsWith('/') ? `https://www.trenzone.fit${itemImage}` : itemImage;
+            const finalImage = itemImage.startsWith('/') ? `${getSiteUrl()}${itemImage}` : itemImage;
             const unitPrice = getItemUnitPrice(i);
 
             return {
@@ -320,6 +371,7 @@ export async function sendOrderConfirmationEmail(
             };
           })}
           upsellProducts={upsellProducts}
+          programUpsellProducts={programUpsellProducts}
           subtotal={orderData.subtotal}
           discount={orderData.discount || orderData.discount_total}
           cardDiscount={orderData.cardDiscount || orderData.carrier_metadata?.card_discount || 0}
@@ -341,9 +393,9 @@ export async function sendOrderConfirmationEmail(
 
     if (invoiceBuffer && invoiceBuffer.length > 0) {
       console.log(`📎 [MAIL SERVICE] Attaching invoice PDF (${(invoiceBuffer.length / 1024).toFixed(2)} KB)...`);
-      const customerName = (orderData.customer.name || `${orderData.customer.firstName || ''} ${orderData.customer.lastName || ''}`).trim();
+      const customerName = (orderData.customer?.name || `${orderData.customer?.firstName || ''} ${orderData.customer?.lastName || ''}`).trim() || 'Client';
       const safeCustomerName = customerName.replace(/\s+/g, '_').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const safeOrderId = orderData.id.replace('-', '');
+      const safeOrderId = String(orderData.id || '').replace('-', '');
       
       payload.attachments = [
         {
@@ -372,7 +424,7 @@ export async function sendOrderConfirmationEmail(
         recipient: to
       });
       await logEmailToDb(actualRecipient, payload.subject, emailType, 'failed', result.error.message, { orderData });
-      throw result.error;
+      throw toResendError(result.error);
     }
 
     console.log('✅ [MAIL SERVICE] Resend ACCEPTED:', {
@@ -410,15 +462,16 @@ export async function sendReviewEmail(
     const subject = template ? (orderData.locale === 'en' ? template.subject_en : template.subject_ro) || defaultSubject : defaultSubject;
 
     const payload = {
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: [to],
       subject: subject,
       react: (
         <ReviewEmailTemplate
-          orderId={orderData.id}
+          orderId={String(orderData.id || '')}
           customerName={orderData.customer?.name || orderData.customer_name || 'Client'}
-          locale={orderData.locale || 'ro'}
+          locale={String(orderData.locale || '').toLowerCase().startsWith('en') ? 'en' : 'ro'}
+          baseUrl={getSiteUrl()}
           items={orderData.items}
           templateData={template}
           userEmail={to}
@@ -431,7 +484,7 @@ export async function sendReviewEmail(
     if (result.error) {
       console.error('❌ [MAIL SERVICE] Review Resend API Error:', result.error);
       await logEmailToDb(to, subject, 'review-request', 'failed', result.error.message, { orderData });
-      throw result.error;
+      throw toResendError(result.error);
     }
 
     await logEmailToDb(to, subject, 'review-request', 'sent', null, { orderData });
@@ -469,14 +522,15 @@ export async function sendAwbTrackingEmail(
     subject = subject.replace('{{id}}', String(orderData.id));
 
     const payload = {
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: [to],
       subject: subject,
       react: (
         <AwbEmailTemplate
-          orderId={orderData.id}
-          customerName={orderData.customer.name || `${orderData.customer.firstName || ''} ${orderData.customer.lastName || ''}`.trim() || 'TrenZone'}
+          orderId={String(orderData.id || '')}
+          baseUrl={getSiteUrl()}
+          customerName={orderData.customer?.name || `${orderData.customer?.firstName || ''} ${orderData.customer?.lastName || ''}`.trim() || 'TrenZone'}
           trackingNumber={trackingNumber}
           courier={courier}
           locale={locale}
@@ -491,7 +545,7 @@ export async function sendAwbTrackingEmail(
     if (result.error) {
       console.error('❌ [MAIL SERVICE] AWB Tracking Resend API Error:', result.error);
       await logEmailToDb(to, subject, 'awb-tracking', 'failed', result.error.message, { orderData, trackingNumber, courier });
-      throw result.error;
+      throw toResendError(result.error);
     }
 
     await logEmailToDb(to, subject, 'awb-tracking', 'sent', null, { orderData, trackingNumber, courier });
@@ -526,15 +580,16 @@ export async function sendReturnConfirmationEmail(
     subject = subject.replace('{{id}}', String(orderId));
 
     const payload = {
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: [to],
       subject: subject,
       react: (
         <ReturnConfirmationEmail
-          orderId={orderId}
+          orderId={String(orderId || '')}
           customerName={customerName}
           locale={locale}
+          baseUrl={getSiteUrl()}
           userEmail={to}
           templateData={templateData}
         />
@@ -546,7 +601,7 @@ export async function sendReturnConfirmationEmail(
     if (result.error) {
       console.error('❌ [MAIL SERVICE] Return Confirmation Resend API Error:', result.error);
       await logEmailToDb(to, subject, 'return-confirmation', 'failed', result.error.message, { orderId, customerName, locale });
-      throw result.error;
+      throw toResendError(result.error);
     }
 
     await logEmailToDb(to, subject, 'return-confirmation', 'sent', null, { orderId, customerName, locale });
@@ -555,6 +610,56 @@ export async function sendReturnConfirmationEmail(
     console.error('❌ [MAIL SERVICE] Return Confirmation Email FAILED:', err instanceof Error ? err.message : err);
     await logEmailToDb(to, 'Return Confirmation', 'return-confirmation', 'failed', err instanceof Error ? err.message : String(err), { orderId, customerName, locale });
     throw err;
+  }
+}
+
+/**
+ * SEND AFFILIATE APPLICATION RECEIVED EMAIL (to applicant)
+ */
+export async function sendAffiliateApplicationReceivedEmail(
+  email: string,
+  name: string,
+  preferredCode: string,
+  locale: 'ro' | 'en',
+  loginUrl: string
+) {
+  const subject = locale === 'ro'
+    ? 'Am primit cererea ta de parteneriat TrenZone!'
+    : 'We received your TrenZone partner application!';
+
+  console.log(`📡 [MAIL SERVICE] Sending affiliate application confirmation to ${email}`);
+
+  try {
+    const result = await resend.emails.send({
+      from: getResendFromEmail(),
+      reply_to: 'trenzone483@gmail.com',
+      to: email,
+      subject,
+      react: (
+        <AffiliateApprovalEmail
+          name={name}
+          code={preferredCode}
+          locale={locale}
+          loginUrl={loginUrl}
+          isApplicationReceived={true}
+        />
+      ),
+    });
+
+    if (result.error) {
+      const errMsg = result.error.message || JSON.stringify(result.error);
+      console.error('❌ [MAIL SERVICE] Affiliate Application Confirmation FAILED:', errMsg);
+      await logEmailToDb(email, subject, 'affiliate-application', 'failed', errMsg, { name, preferredCode, locale, loginUrl });
+      throw new Error(errMsg);
+    }
+
+    console.log(`✅ [MAIL SERVICE] Affiliate Application Confirmation sent to ${email}`);
+    await logEmailToDb(email, subject, 'affiliate-application', 'sent', null, { name, preferredCode, locale, loginUrl });
+    return { success: true, id: result.data?.id };
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ [MAIL SERVICE] Affiliate Application Confirmation Exception:', errMsg);
+    throw error instanceof Error ? error : new Error(errMsg);
   }
 }
 
@@ -577,7 +682,7 @@ export async function sendAffiliateApprovalEmail(
   
   try {
     const result = await resend.emails.send({
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: email,
       subject,
@@ -593,18 +698,20 @@ export async function sendAffiliateApprovalEmail(
     });
 
     if (result.error) {
-      console.error('❌ [MAIL SERVICE] Affiliate Approval FAILED:', result.error);
-      await logEmailToDb(email, subject, 'affiliate-approval', 'failed', result.error.message, { name, code, locale, loginUrl });
-      throw result.error;
+      const errMsg = result.error.message || JSON.stringify(result.error);
+      console.error('❌ [MAIL SERVICE] Affiliate Approval FAILED:', errMsg);
+      await logEmailToDb(email, subject, 'affiliate-approval', 'failed', errMsg, { name, code, locale, loginUrl });
+      throw new Error(errMsg);
     }
 
     console.log(`✅ [MAIL SERVICE] Affiliate Approval sent to ${email}`);
     await logEmailToDb(email, subject, 'affiliate-approval', 'sent', null, { name, code, locale, loginUrl });
     return { success: true, id: result.data?.id };
   } catch (error) {
-    console.error('❌ [MAIL SERVICE] Exception:', error);
-    await logEmailToDb(email, 'Affiliate Approval', 'affiliate-approval', 'failed', error instanceof Error ? error.message : String(error), { name, code, locale, loginUrl, commission });
-    throw error;
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ [MAIL SERVICE] Affiliate Approval Exception:', errMsg);
+    // Avoid double-logging when error originated from result.error above
+    throw error instanceof Error ? error : new Error(errMsg);
   }
 }
 
@@ -627,7 +734,7 @@ export async function sendAffiliateUpdateEmail(
   
   try {
     const result = await resend.emails.send({
-      from: 'TrenZone <contact@trenzone.fit>',
+      from: getResendFromEmail(),
       reply_to: 'trenzone483@gmail.com',
       to: email,
       subject,
@@ -644,18 +751,19 @@ export async function sendAffiliateUpdateEmail(
     });
 
     if (result.error) {
-      console.error('❌ [MAIL SERVICE] Affiliate Update FAILED:', result.error);
-      await logEmailToDb(email, subject, 'affiliate-update', 'failed', result.error.message, { name, code, locale, loginUrl, commission });
-      throw result.error;
+      const errMsg = result.error.message || JSON.stringify(result.error);
+      console.error('❌ [MAIL SERVICE] Affiliate Update FAILED:', errMsg);
+      await logEmailToDb(email, subject, 'affiliate-update', 'failed', errMsg, { name, code, locale, loginUrl, commission });
+      throw new Error(errMsg);
     }
 
     console.log(`✅ [MAIL SERVICE] Affiliate Update sent to ${email}`);
     await logEmailToDb(email, subject, 'affiliate-update', 'sent', null, { name, code, locale, loginUrl, commission });
     return { success: true, id: result.data?.id };
   } catch (error) {
-    console.error('❌ [MAIL SERVICE] Exception:', error);
-    await logEmailToDb(email, 'Affiliate Update', 'affiliate-update', 'failed', error instanceof Error ? error.message : String(error), { name, code, locale, loginUrl, commission });
-    throw error;
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ [MAIL SERVICE] Affiliate Update Exception:', errMsg);
+    throw error instanceof Error ? error : new Error(errMsg);
   }
 }
 
@@ -739,7 +847,7 @@ export async function sendFulfillmentDispatchEmail(
 
   try {
     const payload: any = {
-      from: 'TrenZone Fulfillment <contact@trenzone.fit>',
+      from: getResendFromEmail('TrenZone Fulfillment'),
       reply_to: 'trenzone483@gmail.com',
       to: toEmail,
       subject,
@@ -748,6 +856,7 @@ export async function sendFulfillmentDispatchEmail(
           orders={data.orders}
           sentAt={data.sentAt}
           trigger={data.trigger || 'manual'}
+          baseUrl={getSiteUrl()}
           notes={data.notes}
           csvAttached={Boolean(data.csvContent)}
           secondaryEmail={secondaryRecipient || undefined}
@@ -799,4 +908,269 @@ export async function sendFulfillmentDispatchEmail(
     return { success: false, error: error.message || 'Eroare la trimiterea emailului', subject };
   }
 }
+
+async function recordProgramDeliveryMetadata(
+  orderRef: { orderId: string; orderSupabaseId?: string },
+  deliveryMeta: {
+    status: 'delivered' | 'pending_pdf' | 'partial';
+    emailType: 'program-delivery' | 'program-pending';
+    lastSentAt: string;
+    trigger: 'auto' | 'manual';
+    deliveredCount: number;
+    pendingCount: number;
+    deliveredSlots: string[];
+    pendingSlots: string[];
+  }
+) {
+  try {
+    let targetOrder: { id: string; carrier_metadata: any } | null = null;
+
+    if (orderRef.orderSupabaseId) {
+      const { data } = await supabaseAdmin
+        .from('orders')
+        .select('id, carrier_metadata')
+        .eq('id', orderRef.orderSupabaseId)
+        .maybeSingle();
+      if (data) targetOrder = data;
+    }
+
+    if (!targetOrder && orderRef.orderId) {
+      const cleanId = String(orderRef.orderId).trim();
+      const { data: byPi } = await supabaseAdmin
+        .from('orders')
+        .select('id, carrier_metadata')
+        .eq('payment_intent_id', cleanId)
+        .limit(1)
+        .maybeSingle();
+      if (byPi) {
+        targetOrder = byPi;
+      } else {
+        const { data: byMetaNumber } = await supabaseAdmin
+          .from('orders')
+          .select('id, carrier_metadata')
+          .eq('carrier_metadata->>order_number', cleanId)
+          .limit(1)
+          .maybeSingle();
+        if (byMetaNumber) targetOrder = byMetaNumber;
+      }
+    }
+
+    if (!targetOrder) return;
+
+    const existingMeta =
+      targetOrder.carrier_metadata && typeof targetOrder.carrier_metadata === 'object'
+        ? targetOrder.carrier_metadata
+        : {};
+
+    await supabaseAdmin
+      .from('orders')
+      .update({
+        carrier_metadata: {
+          ...existingMeta,
+          program_delivery: deliveryMeta,
+        },
+      })
+      .eq('id', targetOrder.id);
+  } catch (err) {
+    console.warn('⚠️ [PROGRAM DELIVERY] Failed saving program_delivery metadata:', err);
+  }
+}
+
+export async function sendProgramDeliveryEmail(
+  to: string,
+  orderData: any,
+  orderedPrograms: Array<{ programKey: SingleProgramKey; lang: DigitalProgramLanguage; title?: string }>,
+  options?: { trigger?: 'auto' | 'manual'; forcePending?: boolean; orderSupabaseId?: string }
+) {
+  if (!orderedPrograms || orderedPrograms.length === 0) return null;
+
+  const locale: 'ro' | 'en' =
+    String(orderData.locale || '').toLowerCase().startsWith('en') ? 'en' : 'ro';
+  const customerName =
+    orderData.customer?.firstName ||
+    orderData.customer?.name ||
+    (locale === 'en' ? 'Champion' : 'Campionule');
+  const orderId = String(orderData.id || '');
+  const baseUrl = getSiteUrl();
+  const trigger: 'auto' | 'manual' = options?.trigger || 'auto';
+
+  let logType: 'program-delivery' | 'program-pending' = 'program-delivery';
+
+  try {
+    const attachments: Array<{ filename: string; content: Buffer }> = [];
+    const readyLinks: Array<{
+      title: string;
+      lang: 'ro' | 'en';
+      downloadUrl: string;
+    }> = [];
+    const pendingList: Array<{
+      title: string;
+      lang: 'ro' | 'en';
+    }> = [];
+    const deliveredSlots: string[] = [];
+    const pendingSlots: string[] = [];
+
+    for (const prog of orderedPrograms) {
+      const cleanCustomTitle = (prog.title || '')
+        .replace(/\s*\((Romanian|English|Română)\)\s*$/i, '')
+        .trim();
+      const title =
+        prog.programKey === 'food-plan'
+          ? 'Vlad Tren — Food Plan'
+          : prog.programKey === 'training-program'
+          ? 'Vlad Tren — Training Program'
+          : prog.programKey === 'bench-program'
+          ? 'Vlad Tren — Bench Program'
+          : cleanCustomTitle
+          ? (cleanCustomTitle.toLowerCase().includes('vlad tren') ? cleanCustomTitle : `Vlad Tren — ${cleanCustomTitle}`)
+          : `Vlad Tren — ${getProgramAttachmentFilename(prog.programKey, prog.lang).replace(/^Vlad-Tren-/, '').replace(/-(RO|EN)\.pdf$/i, '').replace(/-/g, ' ')}`;
+
+      const slot = `${prog.programKey}-${prog.lang}`;
+      const pdfResult = options?.forcePending
+        ? null
+        : await getProgramPdfBuffer(prog.programKey, prog.lang);
+
+      if (pdfResult && pdfResult.buffer) {
+        const downloadUrl = getProgramDownloadUrl(
+          baseUrl,
+          orderId,
+          prog.programKey,
+          prog.lang
+        );
+        readyLinks.push({
+          title,
+          lang: prog.lang,
+          downloadUrl,
+        });
+        attachments.push({
+          filename: pdfResult.filename,
+          content: pdfResult.buffer,
+        });
+        deliveredSlots.push(slot);
+      } else {
+        pendingList.push({
+          title,
+          lang: prog.lang,
+        });
+        pendingSlots.push(slot);
+        console.warn(`⏳ [PROGRAM EMAIL] No uploaded PDF found for slot ${slot} (Order #${orderId}) — routing to pending/coming-soon flow.`);
+      }
+    }
+
+    const effectiveMode: 'delivery' | 'pending' = readyLinks.length === 0 ? 'pending' : 'delivery';
+    logType = effectiveMode === 'pending' ? 'program-pending' : 'program-delivery';
+
+    const { data: template } = await supabaseAdmin
+      .from('email_templates')
+      .select('*')
+      .eq('id', logType)
+      .maybeSingle();
+
+    const defaultSubject =
+      effectiveMode === 'pending'
+        ? locale === 'en'
+          ? `⏳ Order #${orderId} confirmed — Your Digital Programs are coming soon!`
+          : `⏳ Comanda #${orderId} confirmată — Programele tale urmează curând!`
+        : locale === 'en'
+          ? `📚 Your Vlad Tren Digital Programs are ready! (Order #${orderId})`
+          : `📚 Programele tale digitale Vlad Tren sunt gata! (Comanda #${orderId})`;
+
+    const rawSubject = template
+      ? (locale === 'en' ? template.subject_en : template.subject_ro) || defaultSubject
+      : defaultSubject;
+    const subject = rawSubject
+      .replace(/\{\{order_id\}\}/g, orderId)
+      .replace(/\{\{id\}\}/g, orderId)
+      .replace(/\{\{name\}\}/g, customerName);
+
+    const result = await resend.emails.send({
+      from: getResendFromEmail(),
+      reply_to: 'trenzone483@gmail.com',
+      to: [to],
+      subject,
+      react: (
+        <ProgramDeliveryEmail
+          customerName={customerName}
+          orderId={orderId}
+          locale={locale}
+          mode={effectiveMode}
+          programs={readyLinks}
+          pendingPrograms={pendingList}
+          programsPageUrl={`${baseUrl}/${locale}/programs`}
+          customContent={
+            template
+              ? {
+                  heading: locale === 'en' ? template.heading_en : template.heading_ro,
+                  body_intro: locale === 'en' ? template.body_en : template.body_ro,
+                  cta_text: locale === 'en' ? template.cta_en : template.cta_ro,
+                }
+              : undefined
+          }
+        />
+      ),
+      ...(attachments.length > 0 ? { attachments } : {}),
+    });
+
+    if (result.error) {
+      await logEmailToDb(to, subject, logType, 'failed', result.error.message, {
+        orderId,
+        programs: orderedPrograms,
+        trigger,
+      });
+      throw toResendError(result.error);
+    }
+
+    const deliveryStatus: 'delivered' | 'pending_pdf' | 'partial' =
+      pendingSlots.length === 0
+        ? 'delivered'
+        : deliveredSlots.length === 0
+        ? 'pending_pdf'
+        : 'partial';
+
+    await logEmailToDb(to, subject, logType, 'sent', null, {
+      orderId,
+      programs: orderedPrograms,
+      attachedCount: attachments.length,
+      pendingCount: pendingList.length,
+      deliveryStatus,
+      trigger,
+    });
+
+    await recordProgramDeliveryMetadata(
+      { orderId, orderSupabaseId: options?.orderSupabaseId || orderData.supabaseId },
+      {
+        status: deliveryStatus,
+        emailType: logType,
+        lastSentAt: new Date().toISOString(),
+        trigger,
+        deliveredCount: deliveredSlots.length,
+        pendingCount: pendingSlots.length,
+        deliveredSlots,
+        pendingSlots,
+      }
+    );
+
+    return {
+      emailData: result.data,
+      mode: effectiveMode,
+      deliveryStatus,
+      attachedCount: attachments.length,
+      pendingCount: pendingList.length,
+      deliveredSlots,
+      pendingSlots,
+    };
+  } catch (err: any) {
+    console.error('❌ [MAIL SERVICE] Program Delivery Email FAILED:', err?.message || err);
+    await logEmailToDb(
+      to,
+      `Program Delivery #${orderId}`,
+      logType,
+      'failed',
+      err?.message || String(err),
+      { orderId, programs: orderedPrograms, trigger }
+    );
+    throw err;
+  }
+}
+
 

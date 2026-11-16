@@ -446,6 +446,7 @@ export async function addInfluencerAdmin(data: Partial<InfluencerVideo>) {
   if (error) throw error;
   revalidateTag('influencers', 'max');
   revalidatePath('/[locale]', 'page');
+  revalidatePath('/[locale]/product/[slug]', 'page');
   revalidatePath('/admin/influencers');
   return { success: true };
 }
@@ -470,6 +471,7 @@ export async function updateInfluencerAdmin(id: string, data: Partial<Influencer
   if (error) throw error;
   revalidateTag('influencers', 'max');
   revalidatePath('/[locale]', 'page');
+  revalidatePath('/[locale]/product/[slug]', 'page');
   revalidatePath('/admin/influencers');
   return { success: true };
 }
@@ -534,6 +536,7 @@ export async function deleteInfluencerAdmin(id: string, videoUrl?: string) {
   if (error) throw error;
   revalidateTag('influencers', 'max');
   revalidatePath('/[locale]', 'page');
+  revalidatePath('/[locale]/product/[slug]', 'page');
   revalidatePath('/admin/influencers');
   return { success: true };
 }
@@ -550,6 +553,97 @@ export async function reorderInfluencersAdmin(updates: { id: string; display_ord
   await Promise.all(promises);
   revalidateTag('influencers', 'max');
   revalidatePath('/[locale]', 'page');
+  revalidatePath('/[locale]/product/[slug]', 'page');
   revalidatePath('/admin/influencers');
   return { success: true };
+}
+
+export async function getDigitalVideoConfigAdmin() {
+  const { DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG } = await import('@/lib/product-features');
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) return DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'digital_programs_video_config')
+      .maybeSingle();
+
+    if (error || !data?.value || typeof data.value !== 'object') {
+      return DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG;
+    }
+
+    const raw = data.value as any;
+    return {
+      show_on_programs:
+        typeof raw.show_on_programs === 'boolean'
+          ? raw.show_on_programs
+          : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.show_on_programs,
+      influencer_ids: Array.isArray(raw.influencer_ids)
+        ? raw.influencer_ids.map(String)
+        : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.influencer_ids,
+      title_ro:
+        typeof raw.title_ro === 'string' && raw.title_ro.trim()
+          ? raw.title_ro.trim()
+          : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.title_ro,
+      title_en:
+        typeof raw.title_en === 'string' && raw.title_en.trim()
+          ? raw.title_en.trim()
+          : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.title_en,
+      subtitle_ro:
+        typeof raw.subtitle_ro === 'string' && raw.subtitle_ro.trim()
+          ? raw.subtitle_ro.trim()
+          : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.subtitle_ro,
+      subtitle_en:
+        typeof raw.subtitle_en === 'string' && raw.subtitle_en.trim()
+          ? raw.subtitle_en.trim()
+          : DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.subtitle_en,
+    };
+  } catch {
+    return DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG;
+  }
+}
+
+export async function saveDigitalVideoConfigAdmin(config: {
+  show_on_programs: boolean;
+  influencer_ids: string[];
+  title_ro?: string;
+  title_en?: string;
+  subtitle_ro?: string;
+  subtitle_en?: string;
+}) {
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) throw new Error("Neautorizat");
+
+  const { DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG } = await import('@/lib/product-features');
+  const payload = {
+    show_on_programs: Boolean(config.show_on_programs),
+    influencer_ids: Array.isArray(config.influencer_ids) ? config.influencer_ids.map(String) : [],
+    title_ro: (config.title_ro || '').trim() || DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.title_ro,
+    title_en: (config.title_en || '').trim() || DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.title_en,
+    subtitle_ro: (config.subtitle_ro || '').trim() || DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.subtitle_ro,
+    subtitle_en: (config.subtitle_en || '').trim() || DEFAULT_DIGITAL_PROGRAM_VIDEO_CONFIG.subtitle_en,
+  };
+
+  const { error } = await supabaseAdmin
+    .from('store_settings')
+    .upsert(
+      {
+        key: 'digital_programs_video_config',
+        value: payload,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' }
+    );
+
+  if (error) throw error;
+
+  revalidateTag('influencers', 'max');
+  revalidateTag('products', 'max');
+  revalidatePath('/[locale]', 'page');
+  revalidatePath('/[locale]/product/[slug]', 'page');
+  revalidatePath('/[locale]/programs', 'page');
+  revalidatePath('/admin/influencers');
+  return { success: true, data: payload };
 }

@@ -5,16 +5,70 @@ import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { ChevronDown, Plus, Minus, Check, ShoppingCart, Zap, ShieldCheck, Dumbbell, AlertCircle } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, Minus, Check, ShoppingCart, Zap, ShieldCheck, Dumbbell, AlertCircle, Ruler, X, Truck, Mail, Sparkles, Flame, Target } from "lucide-react";
 import { Link } from "@/i18n/routing";
 import { useLocale } from "next-intl";
 import { useCartStore } from "@/store/useCartStore";
 import { getProductPrice } from "@/utils/pricing";
 import { useRegionStore } from "@/store/useRegionStore";
-import { cn, localizeBadge } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { isWideProductImage } from "@/lib/product-images";
 import { StarRating } from "@/components/ui/StarRating";
 import { ProductExpressCheckout } from "@/components/checkout/ProductExpressCheckout";
+import { isDigitalProgramItem } from "@/lib/programs";
+import { getResolvedProductHighlights, getSizeGuideKind, type HighlightIconKey } from "@/lib/product-features";
+
+function renderHighlightIcon(key: HighlightIconKey) {
+  const cls = "w-4 h-4 text-[#e32f8c] mb-1.5";
+  switch (key) {
+    case "dumbbell":
+      return <Dumbbell className={cls} />;
+    case "zap":
+      return <Zap className={cls} />;
+    case "shield":
+      return <ShieldCheck className={cls} />;
+    case "mail":
+      return <Mail className={cls} />;
+    case "check":
+      return <Check className={cls} />;
+    case "flame":
+      return <Flame className={cls} />;
+    case "target":
+      return <Target className={cls} />;
+    case "sparkles":
+    default:
+      return <Sparkles className={cls} />;
+  }
+}
+
+function LanguageFlagSvg({ isEnglish }: { isEnglish: boolean }) {
+  if (isEnglish) {
+    return (
+      <svg
+        viewBox="0 0 60 40"
+        className="w-5 h-3.5 rounded-[3px] shadow-2xs border border-white/20 shrink-0"
+        aria-hidden="true"
+      >
+        <rect width="60" height="40" fill="#012169" />
+        <path d="M0,0 L60,40 M60,0 L0,40" stroke="#FFFFFF" strokeWidth="7" />
+        <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="3.5" />
+        <path d="M30,0 V40 M0,20 H60" stroke="#FFFFFF" strokeWidth="11" />
+        <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      viewBox="0 0 24 16"
+      className="w-5 h-3.5 rounded-[3px] shadow-2xs border border-white/20 shrink-0"
+      aria-hidden="true"
+    >
+      <rect width="8" height="16" x="0" fill="#002B7F" />
+      <rect width="8" height="16" x="8" fill="#FCD116" />
+      <rect width="8" height="16" x="16" fill="#CE1126" />
+    </svg>
+  );
+}
 
 interface ProductMainContainerProps {
   product: Product;
@@ -47,6 +101,15 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
     return sizeOptions.includes("L") ? "L" : sizeOptions[0];
   });
   const [openDropdownIndex, setOpenDropdownIndex] = useState<number | null>(null);
+  const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
+  const touchStartXRef = useRef<number | null>(null);
+
+  const allGalleryImages = Array.from(
+    new Set([
+      ...product.images,
+      ...((product.variants?.options?.map((opt) => opt.image).filter(Boolean) as string[]) || []),
+    ])
+  );
 
   const [isAdding, setIsAdding] = useState(false);
   const [hasExpressWallets, setHasExpressWallets] = useState<boolean | null>(null);
@@ -56,9 +119,50 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [isFooterVisible, setIsFooterVisible] = useState(false);
 
-  // Pre-select first available variant for immediate 1-click purchase on mobile
+  const prevLocaleForVariantRef = useRef<string | null>(null);
+  // Pre-select first available variant (or matching language for digital programs) and re-localize only on init or locale change
   useEffect(() => {
-    if (product.variants?.options?.length && !selectedVariant) {
+    if (!product.variants?.options?.length) return;
+    const localeChanged =
+      prevLocaleForVariantRef.current !== null &&
+      prevLocaleForVariantRef.current !== locale;
+    prevLocaleForVariantRef.current = locale;
+
+    if (isDigitalProgramItem(product)) {
+      if (!selectedVariant) {
+        const targetEng = locale === 'en';
+        const langOpt =
+          product.variants.options.find((o) => {
+            const raw = typeof o.name === 'object' ? `${o.name.en || ''} ${o.name.ro || ''}` : String(o.name || '');
+            const isEngOpt = raw.toLowerCase().includes('eng');
+            return targetEng ? isEngOpt : !isEngOpt;
+          }) || product.variants.options[0];
+        if (langOpt) {
+          const optName =
+            typeof langOpt.name === 'object'
+              ? langOpt.name[locale as 'ro' | 'en'] || langOpt.name['ro']
+              : langOpt.name;
+          if (optName) setSelectedVariant(optName as string);
+        }
+        return;
+      }
+      if (localeChanged) {
+        const matchedOpt = product.variants.options.find((o) => {
+          if (typeof o.name === 'object') {
+            return o.name.ro === selectedVariant || o.name.en === selectedVariant;
+          }
+          return o.name === selectedVariant;
+        });
+        if (matchedOpt && typeof matchedOpt.name === 'object') {
+          const localizedOptName = matchedOpt.name[locale as 'ro' | 'en'] || matchedOpt.name['ro'];
+          if (localizedOptName && localizedOptName !== selectedVariant) {
+            setSelectedVariant(localizedOptName as string);
+          }
+        }
+      }
+      return;
+    }
+    if (!selectedVariant) {
       const firstAvailable = product.variants.options.find(o => o.stock_status !== 'sold_out') || product.variants.options[0];
       if (firstAvailable) {
         const optName = typeof firstAvailable.name === 'object' ? firstAvailable.name[locale as 'ro' | 'en'] || firstAvailable.name['ro'] : firstAvailable.name;
@@ -66,6 +170,20 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
         if (firstAvailable.image) {
           setActiveImage(firstAvailable.image);
         }
+      }
+      return;
+    }
+
+    const matchedOpt = product.variants.options.find((o) => {
+      if (typeof o.name === 'object') {
+        return o.name.ro === selectedVariant || o.name.en === selectedVariant;
+      }
+      return o.name === selectedVariant;
+    });
+    if (matchedOpt && typeof matchedOpt.name === 'object') {
+      const localizedOptName = matchedOpt.name[locale as 'ro' | 'en'] || matchedOpt.name['ro'];
+      if (localizedOptName && localizedOptName !== selectedVariant) {
+        setSelectedVariant(localizedOptName as string);
       }
     }
   }, [product, locale, selectedVariant]);
@@ -158,14 +276,18 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
     ? (hasSizes && selectedSize ? `${selectedVariant} · ${selectedSize}` : selectedVariant)
     : null;
 
-  const currentVariantStatus = selectedVariant
+  const currentOpt = selectedVariant
     ? product.variants?.options.find(o => {
-        const optName = typeof o.name === 'object' ? o.name[locale] || o.name['ro'] : o.name;
-        return optName === selectedVariant;
-      })?.stock_status
+        const optName = typeof o.name === 'object' ? (o.name[locale] || o.name['ro'] || o.name['en']) : o.name;
+        const optRo = typeof o.name === 'object' ? o.name.ro : o.name;
+        const optEn = typeof o.name === 'object' ? o.name.en : o.name;
+        return optName === selectedVariant || optRo === selectedVariant || optEn === selectedVariant;
+      })
     : undefined;
-
-  const isCurrentVariantSoldOut = currentVariantStatus === 'sold_out';
+  const currentVariantStatus = currentOpt?.stock_status;
+  const isSoftStock = Boolean((product as any).metadata?.soft_stock_tracking);
+  const isProductOutOfStock = product.is_active === false || (!isSoftStock && typeof product.stock_quantity === 'number' && product.stock_quantity <= 0 && currentVariantStatus !== 'preorder');
+  const isCurrentVariantSoldOut = currentVariantStatus === 'sold_out' || isProductOutOfStock;
   const numericPrice = getProductPrice(product.price, currency) || 0;
   const numericOriginalPrice = getProductPrice(product.originalPrice, currency) || numericPrice;
 
@@ -184,18 +306,17 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
     setIsAdding(true);
 
     const finalImageIndex = product.images.indexOf(activeImage);
-    const currentOpt = product.variants?.options.find(o => {
+    const activeOpt = currentOpt || product.variants?.options.find(o => {
       const optName = typeof o.name === 'object' ? o.name[locale] || o.name['ro'] : o.name;
       return optName === selectedVariant;
     });
 
-    for (let i = 0; i < standardQuantity; i++) {
-      addItem(product, combinedVariantName ? {
-        name: combinedVariantName,
-        image: currentOpt?.image,
-        imageIndex: finalImageIndex !== -1 ? finalImageIndex : (currentOpt?.imageIndex || 0)
-      } : undefined);
-    }
+    addItem(product, combinedVariantName ? {
+      name: combinedVariantName,
+      image: activeOpt?.image,
+      imageIndex: finalImageIndex !== -1 ? finalImageIndex : (activeOpt?.imageIndex || 0),
+      stock_status: activeOpt?.stock_status,
+    } : undefined, standardQuantity);
 
     setTimeout(() => setIsAdding(false), 1000);
   };
@@ -232,13 +353,26 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
               {/* Product Image Ambient Glow */}
               <div className="absolute inset-0 bg-radial from-[#e32f8c]/15 via-transparent to-transparent blur-2xl pointer-events-none -z-10" />
 
-              {/* Product Image */}
-              <div className="relative w-full h-full z-10 flex items-center justify-center drop-shadow-2xl">
+              {/* Product Image with Mobile Touch Swipe & Prev/Next Controls */}
+              <div
+                className="relative w-full h-full z-10 flex items-center justify-center drop-shadow-2xl"
+                onTouchStart={(e) => {
+                  touchStartXRef.current = e.touches[0]?.clientX ?? null;
+                }}
+                onTouchEnd={(e) => {
+                  if (touchStartXRef.current === null || allGalleryImages.length <= 1) return;
+                  const deltaX = (e.changedTouches[0]?.clientX ?? touchStartXRef.current) - touchStartXRef.current;
+                  touchStartXRef.current = null;
+                  if (Math.abs(deltaX) < 40) return;
+                  const curIdx = Math.max(0, allGalleryImages.indexOf(activeImage || product.image));
+                  const nextIdx = deltaX < 0
+                    ? (curIdx + 1) % allGalleryImages.length
+                    : (curIdx - 1 + allGalleryImages.length) % allGalleryImages.length;
+                  setActiveImage(allGalleryImages[nextIdx]);
+                }}
+              >
                 {/* Pre-render all product images for instant switching */}
-                {Array.from(new Set([
-                  ...product.images,
-                  ...(product.variants?.options?.map(opt => opt.image).filter(Boolean) as string[] || [])
-                ])).map((img, idx) => (
+                {allGalleryImages.map((img, idx) => (
                   <div
                     key={idx}
                     className={cn(
@@ -256,52 +390,81 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                     />
                   </div>
                 ))}
+
+                {allGalleryImages.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label={locale === 'ro' ? 'Imaginea anterioară' : 'Previous image'}
+                      onClick={() => {
+                        const curIdx = Math.max(0, allGalleryImages.indexOf(activeImage || product.image));
+                        const prevIdx = (curIdx - 1 + allGalleryImages.length) % allGalleryImages.length;
+                        setActiveImage(allGalleryImages[prevIdx]);
+                      }}
+                      className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/60 hover:bg-[#e32f8c] text-white border border-white/15 flex items-center justify-center transition-all cursor-pointer active:scale-95 backdrop-blur-md"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={locale === 'ro' ? 'Imaginea următoare' : 'Next image'}
+                      onClick={() => {
+                        const curIdx = Math.max(0, allGalleryImages.indexOf(activeImage || product.image));
+                        const nextIdx = (curIdx + 1) % allGalleryImages.length;
+                        setActiveImage(allGalleryImages[nextIdx]);
+                      }}
+                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/60 hover:bg-[#e32f8c] text-white border border-white/15 flex items-center justify-center transition-all cursor-pointer active:scale-95 backdrop-blur-md"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
             <div className="flex justify-center flex-wrap gap-2 sm:gap-3 mt-2 sm:mt-3">
-              {product.variants && product.variants.type !== 'size' ? (
-                [...product.variants.options]
-                  .sort((a, b) => (a.stock_status === 'sold_out' ? 1 : 0) - (b.stock_status === 'sold_out' ? 1 : 0))
-                  .map((opt, idx) => {
-                    const optName = typeof opt.name === 'object' ? opt.name[locale as 'ro' | 'en'] || opt.name['ro'] : opt.name;
-                    const isSelected = selectedVariant === optName;
-                    const thumbSrc = opt.image || product.images[opt.imageIndex || 0] || product.image;
-                    const isWide = isWideProductImage(thumbSrc);
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => handleVariantSelect(optName as string, opt.image, opt.imageIndex)}
-                        className={cn(
-                          "relative rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer",
-                          isWide ? "w-20 h-14 sm:w-24 sm:h-16 bg-black" : "w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-zinc-950/80",
-                          isSelected ? "border-[#e32f8c] ring-2 ring-[#e32f8c]/40 scale-105 z-10 shadow-[0_0_20px_rgba(227,47,140,0.35)]" : "border-white/10 opacity-70 hover:opacity-100 hover:scale-102 hover:border-white/30",
-                          opt.stock_status === 'sold_out' ? "opacity-30 grayscale cursor-not-allowed" : ""
-                        )}
-                        title={optName as string}
-                      >
-                        <Image src={thumbSrc} alt={optName as string} fill priority className={isWide ? "object-contain p-1" : "object-cover"} sizes="(max-width: 768px) 64px, 112px" />
-                      </button>
-                    );
-                  })
-              ) : (
-                product.images.map((img, idx) => {
-                  const isWide = isWideProductImage(img);
-                  return (
+              {allGalleryImages.map((img, idx) => {
+                const isWide = isWideProductImage(img);
+                const matchingOpt = product.variants && product.variants.type !== 'size'
+                  ? product.variants.options.find(
+                      (o) => (o.image || product.images[o.imageIndex || 0]) === img
+                    )
+                  : undefined;
+                const optName = matchingOpt
+                  ? (typeof matchingOpt.name === 'object' ? matchingOpt.name[locale as 'ro' | 'en'] || matchingOpt.name['ro'] : matchingOpt.name)
+                  : undefined;
+                const isCurrentImg = (activeImage || product.image) === img;
+
+                return (
                   <button
                     key={idx}
-                    onClick={() => setActiveImage(img)}
+                    type="button"
+                    onClick={() => {
+                      setActiveImage(img);
+                      if (matchingOpt && matchingOpt.stock_status !== 'sold_out' && optName) {
+                        handleVariantSelect(optName as string, matchingOpt.image, matchingOpt.imageIndex);
+                      }
+                    }}
                     className={cn(
-                      "relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer",
-                      isWide ? "bg-black" : "bg-zinc-950/80",
-                      activeImage === img ? "border-[#e32f8c] ring-2 ring-[#e32f8c]/40 scale-105 z-10 shadow-[0_0_20px_rgba(227,47,140,0.35)]" : "border-white/10 opacity-70 hover:opacity-100 hover:scale-102 hover:border-white/30"
+                      "relative rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer",
+                      isWide ? "w-20 h-14 sm:w-24 sm:h-16 bg-black" : "w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-zinc-950/80",
+                      isCurrentImg
+                        ? "border-[#e32f8c] ring-2 ring-[#e32f8c]/40 scale-105 z-10 shadow-[0_0_20px_rgba(227,47,140,0.35)]"
+                        : "border-white/10 opacity-70 hover:opacity-100 hover:scale-102 hover:border-white/30"
                     )}
+                    title={(optName as string) || `${name} - ${idx + 1}`}
                   >
-                    <Image src={img} alt={`Thumbnail ${idx + 1}`} fill priority className={isWide ? "object-contain p-1" : "object-cover"} sizes="(max-width: 768px) 64px, 112px" />
+                    <Image
+                      src={img}
+                      alt={(optName as string) || `${name} - ${idx + 1}`}
+                      fill
+                      priority={idx < 2}
+                      className={isWide ? "object-contain p-1" : "object-cover"}
+                      sizes="(max-width: 768px) 64px, 112px"
+                    />
                   </button>
-                  );
-                })
-              )}
+                );
+              })}
             </div>
           </div>
 
@@ -364,6 +527,16 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       return locale === 'ro' ? 'ALEGE VARIANTA' : 'SELECT VARIANT';
                     })()} ({product.variants.options.length})
                   </h3>
+                  {getSizeGuideKind(product) === 'belt' && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSizeGuideOpen(true)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#e32f8c] hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Ruler className="w-3.5 h-3.5" />
+                      <span>{locale === 'ro' ? 'Ghid Mărimi' : 'Size Guide'}</span>
+                    </button>
+                  )}
                 </div>
 
                 <AnimatePresence>
@@ -393,6 +566,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       }
                     );
                     const isOpen = openDropdownIndex === 0;
+                    const isDigital = isDigitalProgramItem(product);
                     const isDesignMode = product.variants?.type === 'design' || (selectedVarOpt?.image && !selectedVarOpt?.color);
                     const selectedThumb = selectedVarOpt?.image || (selectedVarOpt?.imageIndex !== undefined ? product.images[selectedVarOpt.imageIndex] : undefined);
 
@@ -415,7 +589,9 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                           )}
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            {isDesignMode && selectedThumb ? (
+                            {isDigital ? (
+                              <LanguageFlagSvg isEnglish={(selectedVariant || '').toLowerCase().includes('eng')} />
+                            ) : isDesignMode && selectedThumb ? (
                               <div className={cn(
                                 "relative rounded-lg bg-black border border-white/15 overflow-hidden shrink-0",
                                 isWideProductImage(selectedThumb) ? "w-12 h-8" : "w-8 h-8"
@@ -481,7 +657,9 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                                       )}
                                     >
                                       <div className="flex items-center gap-3">
-                                        {showOptThumb && optThumb ? (
+                                        {isDigital ? (
+                                          <LanguageFlagSvg isEnglish={localizedName.toLowerCase().includes('eng')} />
+                                        ) : showOptThumb && optThumb ? (
                                           <div className={cn(
                                             "relative rounded-lg bg-black border border-white/15 overflow-hidden shrink-0",
                                             isWideProductImage(optThumb) ? "w-12 h-8" : "w-9 h-9"
@@ -504,12 +682,12 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                                           <span className={cn("text-sm uppercase tracking-wider", isSelected ? "font-black text-white" : "font-bold text-zinc-300")}>
                                             {localizedName}
                                           </span>
-                                          {(opt.badge || isSoldOut || isPreorder) && (
+                                          {(isSoldOut || isPreorder) && (
                                             <span className={cn(
                                               "text-[10px] font-black uppercase tracking-widest mt-0.5",
-                                              isSoldOut ? "text-red-400" : (isPreorder ? "text-cyan-400" : "text-[#e32f8c]")
+                                              isSoldOut ? "text-red-400" : "text-cyan-400"
                                             )}>
-                                              {isSoldOut ? (locale === "en" ? "SOLD OUT" : "STOC EPUIZAT") : (isPreorder ? (locale === "en" ? "PRE-ORDER" : "PRECOMANDĂ") : localizeBadge(opt.badge, locale))}
+                                              {isSoldOut ? (locale === "en" ? "SOLD OUT" : "STOC EPUIZAT") : (locale === "en" ? "PRE-ORDER" : "PRECOMANDĂ")}
                                             </span>
                                           )}
                                         </div>
@@ -543,9 +721,14 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                         : `SELECT ${(sizeLabelText || 'SIZE').toUpperCase()}`;
                     })()}
                   </h3>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                    Oversized Fit · 260 GSM
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsSizeGuideOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#e32f8c] hover:text-white transition-colors cursor-pointer"
+                  >
+                    <Ruler className="w-3.5 h-3.5" />
+                    <span>{locale === 'ro' ? 'Ghid Mărimi' : 'Size Guide'}</span>
+                  </button>
                 </div>
                 <div className="grid grid-cols-5 gap-2">
                   {sizeOptions.map((sz) => {
@@ -570,67 +753,69 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
               </div>
             )}
 
-            {/* Quantity Selector */}
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[12px] font-black uppercase tracking-wider text-zinc-300">
-                  {locale === 'ro' ? "CANTITATE" : "QUANTITY"}
-                </h3>
-              </div>
-              <div className="flex items-center border border-white/10 bg-zinc-900/80 rounded-xl w-32 h-12">
-                <button
-                  type="button"
-                  onClick={() => setStandardQuantity(Math.max(1, standardQuantity - 1))}
-                  className="w-10 h-full flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 transition-colors rounded-l-xl cursor-pointer"
+            {/* Quantity + ADD TO CART (Compact inline row) */}
+            <div className="flex items-stretch gap-2.5 sm:gap-3 mb-5">
+              {!isDigitalProgramItem(product) && (
+                <div
+                  className="flex items-center justify-between shrink-0 w-[116px] sm:w-[132px] h-[54px] border border-white/15 bg-zinc-900/85 rounded-xl px-1.5"
+                  aria-label={locale === 'ro' ? 'Cantitate' : 'Quantity'}
                 >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <div className="flex-1 text-center font-black text-sm text-white select-none">
-                  {standardQuantity}
+                  <button
+                    type="button"
+                    onClick={() => setStandardQuantity(Math.max(1, standardQuantity - 1))}
+                    disabled={standardQuantity <= 1}
+                    aria-label={locale === 'ro' ? 'Scade cantitatea' : 'Decrease quantity'}
+                    className="w-9 h-10 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 disabled:opacity-35 disabled:pointer-events-none transition-colors rounded-lg cursor-pointer"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-7 text-center font-black text-sm text-white select-none tabular-nums">
+                    {standardQuantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStandardQuantity(standardQuantity + 1)}
+                    aria-label={locale === 'ro' ? 'Crește cantitatea' : 'Increase quantity'}
+                    className="w-9 h-10 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 transition-colors rounded-lg cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setStandardQuantity(standardQuantity + 1)}
-                  className="w-10 h-full flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 transition-colors rounded-r-xl cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
+              )}
+
+              <button
+                ref={mainCtaRef}
+                onClick={handleAddToCart}
+                disabled={isAdding || isCurrentVariantSoldOut}
+                className={cn(
+                  "flex-1 min-w-0 h-[54px] px-4 rounded-xl font-black uppercase tracking-wider text-sm sm:text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-[0.99]",
+                  isCurrentVariantSoldOut
+                    ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5"
+                    : isSelectionIncomplete
+                      ? "bg-zinc-900 text-white border border-white/20 hover:border-[#e32f8c] hover:bg-zinc-850 hover:shadow-[0_0_20px_rgba(227,47,140,0.2)]"
+                      : "bg-[#e32f8c] text-white hover:bg-[#ff3b9e] shadow-[0_0_30px_rgba(227,47,140,0.4)] hover:shadow-[0_0_40px_rgba(227,47,140,0.6)]"
+                )}
+              >
+                {isAdding ? (
+                  <span className="animate-pulse">{locale === 'ro' ? "SE ADAUGĂ..." : "ADDING..."}</span>
+                ) : isSelectionIncomplete ? (
+                  <span className="flex items-center gap-1.5 text-xs sm:text-sm truncate">
+                    <span className="truncate">{locale === 'ro' ? "ALEGE VARIANTA" : "SELECT VARIANT"}</span>
+                    <ChevronDown className="w-4 h-4 shrink-0 animate-bounce" />
+                  </span>
+                ) : isCurrentVariantSoldOut ? (
+                  <span>{locale === 'ro' ? "STOC EPUIZAT" : "SOLD OUT"}</span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                    <span className="truncate">{locale === 'ro' ? "ADAUGĂ ÎN COȘ" : "ADD TO CART"}</span>
+                  </span>
+                )}
+              </button>
             </div>
 
-            {/* ADD TO CART BUTTON (Full Width for Maximum Mobile & Desktop Conversion) */}
-            <button
-              ref={mainCtaRef}
-              onClick={handleAddToCart}
-              disabled={isAdding || isCurrentVariantSoldOut}
-              className={cn(
-                "w-full py-4 rounded-xl font-black uppercase tracking-wider text-base flex items-center justify-center gap-2 mb-3 transition-all cursor-pointer shadow-lg active:scale-[0.99]",
-                isCurrentVariantSoldOut
-                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5"
-                  : isSelectionIncomplete
-                    ? "bg-zinc-900 text-white border border-white/20 hover:border-[#e32f8c] hover:bg-zinc-850 hover:shadow-[0_0_20px_rgba(227,47,140,0.2)]"
-                    : "bg-[#e32f8c] text-white hover:bg-[#ff3b9e] shadow-[0_0_30px_rgba(227,47,140,0.4)] hover:shadow-[0_0_40px_rgba(227,47,140,0.6)]"
-              )}
-            >
-              {isAdding ? (
-                <span className="animate-pulse">{locale === 'ro' ? "SE ADAUGĂ..." : "ADDING..."}</span>
-              ) : isSelectionIncomplete ? (
-                <span className="flex items-center gap-2 text-xs sm:text-sm">
-                  <span>{locale === 'ro' ? "ALEGE VARIANTA PENTRU A CONTINUA" : "SELECT VARIANT TO CONTINUE"}</span>
-                  <ChevronDown className="w-4 h-4 animate-bounce" />
-                </span>
-              ) : isCurrentVariantSoldOut ? (
-                <span>{locale === 'ro' ? "STOC EPUIZAT" : "SOLD OUT"}</span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5" />
-                  <span>{locale === 'ro' ? "ADAUGĂ ÎN COȘ" : "ADD TO CART"}</span>
-                </span>
-              )}
-            </button>
-
             {/* Actual Stripe Express Checkout Element */}
-            <div className={cn("mb-8 -mt-4", hasExpressWallets === false ? "hidden" : "block")}>
+            <div className={cn("mb-8", hasExpressWallets === false ? "hidden" : "block")}>
               <div className="flex items-center gap-4 py-2 mb-3">
                 <div className="h-px bg-white/10 flex-1" />
                 <span className="text-[9px] font-bold uppercase text-zinc-500 tracking-widest">{locale === 'ro' ? 'Plătește rapid' : 'Express Checkout'}</span>
@@ -643,9 +828,10 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
 
                 if (!isCurrentVariantSoldOut && !isSelectionIncomplete) {
                   isReady = true;
-                  const numericPrice = Number(product.price) || 149.99;
+                  const numericPrice = getProductPrice(product.price, currency) || 0;
                   
-                  const singleWeight = Number(product.weight) || 0.2;
+                  const isDigitalProd = isDigitalProgramItem(product);
+                  const singleWeight = isDigitalProd ? 0 : (Number(product.weight) > 0 ? Number(product.weight) : 0.2);
                   const currentOpt = product.variants?.options.find(o => {
                     const optName = typeof o.name === 'object' ? o.name[locale] || o.name['ro'] : o.name;
                     return optName === selectedVariant;
@@ -654,11 +840,20 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                   for (let i = 0; i < standardQuantity; i++) {
                     items.push({
                       id: product.id,
+                      slug: product.slug,
                       quantity: 1,
                       price: numericPrice,
                       weight: singleWeight,
+                      is_digital: isDigitalProd,
+                      specs_summary: (product as any).specs_summary,
                       name: product.name,
-                      selectedVariant: combinedVariantName ? { name: combinedVariantName, image: currentOpt?.image } : undefined
+                      selectedVariant: combinedVariantName
+                        ? {
+                            name: combinedVariantName,
+                            image: currentOpt?.image,
+                            stock_status: currentOpt?.stock_status,
+                          }
+                        : undefined
                     });
                     basePrice += numericPrice;
                   }
@@ -675,40 +870,168 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
               })()}
             </div>
 
-            {/* High-Converting Athlete Quality & Testing Assurance Strip */}
-            <div className="grid grid-cols-3 gap-2.5 mb-4 mt-2 text-center">
-              <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-[#e32f8c]/30 transition-colors">
-                <Dumbbell className="w-4 h-4 text-[#e32f8c] mb-1.5" />
-                <span className="text-[11px] font-black uppercase text-white tracking-tight">
-                  {locale === 'ro' ? 'MATERIAL SOLID' : 'BUILT TO LAST'}
-                </span>
-                <span className="text-[10px] text-zinc-400 font-medium">
-                  {locale === 'ro' ? 'Nu se lasă în timp' : "Won't stretch out"}
-                </span>
-              </div>
-              <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-[#e32f8c]/30 transition-colors">
-                <Zap className="w-4 h-4 text-[#e32f8c] mb-1.5" />
-                <span className="text-[11px] font-black uppercase text-white tracking-tight">
-                  {locale === 'ro' ? 'TESTATE LA 200KG+' : 'TESTED AT 200KG+'}
-                </span>
-                <span className="text-[10px] text-zinc-400 font-medium">
-                  {locale === 'ro' ? 'Sigure pe seriile grele' : 'Solid on heavy sets'}
-                </span>
-              </div>
-              <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-[#e32f8c]/30 transition-colors">
-                <ShieldCheck className="w-4 h-4 text-[#e32f8c] mb-1.5" />
-                <span className="text-[11px] font-black uppercase text-white tracking-tight">
-                  {locale === 'ro' ? 'SUPORT & REBOUND' : 'SUPPORT & REBOUND'}
-                </span>
-                <span className="text-[10px] text-zinc-400 font-medium">
-                  {locale === 'ro' ? 'Uită de dureri la împins' : 'Lift pain-free every set'}
-                </span>
-              </div>
-            </div>
+            {/* Dynamic Product Quality & Value Strip (Adapts to Digital Programs vs Apparel vs Wraps vs Custom Admin Highlights) */}
+            {(() => {
+              const highlights = getResolvedProductHighlights(product, locale);
+              if (!highlights.length) return null;
+              return (
+                <div
+                  className={cn(
+                    "grid gap-2.5 mb-4 mt-2 text-center",
+                    highlights.length === 1
+                      ? "grid-cols-1"
+                      : highlights.length === 2
+                      ? "grid-cols-2"
+                      : "grid-cols-3"
+                  )}
+                >
+                  {highlights.map((item, idx) => (
+                    <div
+                      key={`${item.title}-${idx}`}
+                      className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-[#e32f8c]/30 transition-colors"
+                    >
+                      {renderHighlightIcon(item.icon)}
+                      <span className="text-[11px] font-black uppercase text-white tracking-tight">
+                        {item.title}
+                      </span>
+                      {item.subtitle && (
+                        <span className="text-[10px] text-zinc-400 font-medium mt-0.5">
+                          {item.subtitle}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
           </div>
         </div>
       </div>
+
+      {/* 📏 Interactive Size Guide Modal */}
+      {mounted && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isSizeGuideOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSizeGuideOpen(false)}
+              className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 12 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 12 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg bg-zinc-950 border border-white/15 rounded-2xl p-5 sm:p-6 text-white shadow-2xl space-y-4"
+              >
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Ruler className="w-5 h-5 text-[#e32f8c]" />
+                    <h3 className="text-base sm:text-lg font-black uppercase tracking-tight">
+                      {locale === 'ro' ? 'Ghid Oficial de Mărimi' : 'Official Size Guide'}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSizeGuideOpen(false)}
+                    className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/15 flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {getSizeGuideKind(product) === 'belt' ? (
+                  <div className="space-y-3 text-xs sm:text-sm">
+                    <p className="text-zinc-300 leading-relaxed">
+                      {locale === 'ro'
+                        ? 'Măsoară circumferința taliei în dreptul buricului (unde stă centura în timpul genuflexiunilor/îndreptărilor), nu mărimea de la pantaloni:'
+                        : 'Measure your waist circumference across the navel (where the belt sits during squats/deadlifts), not your pant size:'}
+                    </p>
+                    <div className="overflow-hidden rounded-xl border border-white/10">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-white/5 text-[11px] font-black uppercase text-zinc-400">
+                            <th className="py-2.5 px-3">{locale === 'ro' ? 'Mărime' : 'Size'}</th>
+                            <th className="py-2.5 px-3">{locale === 'ro' ? 'Interval (cm)' : 'Range (cm)'}</th>
+                            <th className="py-2.5 px-3">{locale === 'ro' ? 'Interval (in)' : 'Range (in)'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/10 text-xs font-bold">
+                          {[
+                            { size: 'XS', cm: '57.5–70 cm', inch: '22.5–27.5 in' },
+                            { size: 'S', cm: '65–80 cm', inch: '25.5–31.5 in' },
+                            { size: 'M', cm: '72.5–90 cm', inch: '28.5–35.5 in' },
+                            { size: 'L', cm: '80–100 cm', inch: '31.5–39.5 in' },
+                            { size: 'XL', cm: '87.5–110 cm', inch: '34.5–43.5 in' },
+                            { size: '2XL', cm: '95–120 cm', inch: '37.5–47 in' },
+                          ].map((row) => (
+                            <tr key={row.size}>
+                              <td className="py-2.5 px-3 text-[#e32f8c] font-black">{row.size}</td>
+                              <td className="py-2.5 px-3 text-white">{row.cm}</td>
+                              <td className="py-2.5 px-3 text-zinc-400">{row.inch}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-xs sm:text-sm">
+                    <p className="text-zinc-300 leading-relaxed">
+                      {locale === 'ro'
+                        ? 'Croială Oversized din amestec rezistent 80% bumbac, 20% poliester (240 GSM). Consultă tabelul de mărimi pentru piept și talie (inch / cm):'
+                        : 'Oversized fit crafted from a durable 80% cotton, 20% polyester heavy blend (240 GSM). Check chest & waist measurements below (in / cm):'}
+                    </p>
+                    <div className="overflow-x-auto max-h-[58vh] overflow-y-auto rounded-xl border border-white/10">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 bg-zinc-900/95 backdrop-blur-sm">
+                          <tr className="bg-white/5 text-[11px] font-black uppercase text-zinc-400">
+                            <th className="py-2.5 px-3">{locale === 'ro' ? 'Mărime' : 'Size'}</th>
+                            <th className="py-2.5 px-3">{locale === 'ro' ? 'Piept (Chest)' : 'Chest'}</th>
+                            <th className="py-2.5 px-3">{locale === 'ro' ? 'Talie (Waist)' : 'Waist'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/10 text-xs font-bold">
+                          {[
+                            { size: 'S', label: 'Small', chest: '35–37"', chestCm: '89–94 cm', waist: '29–31"', waistCm: '74–79 cm' },
+                            { size: 'M', label: 'Medium', chest: '38–40"', chestCm: '96.5–101.5 cm', waist: '32–34"', waistCm: '81–86.5 cm' },
+                            { size: 'L', label: 'Large', chest: '42–44"', chestCm: '106.5–112 cm', waist: '36–38"', waistCm: '91.5–96.5 cm' },
+                            { size: 'XL', label: 'X-Large', chest: '46–48"', chestCm: '117–122 cm', waist: '40–42"', waistCm: '101.5–106.5 cm' },
+                            { size: '2XL', label: '2X-Large / XXL', chest: '50–52"', chestCm: '127–132 cm', waist: '44–46"', waistCm: '112–117 cm' },
+                            { size: '3XL', label: '3X-Large', chest: '54–56"', chestCm: '137–142 cm', waist: '48–50"', waistCm: '122–127 cm' },
+                            { size: '4XL', label: '4X-Large', chest: '58–60"', chestCm: '147.5–152.5 cm', waist: '52–54"', waistCm: '132–137 cm' },
+                            { size: '5XL', label: '5X-Large', chest: '62–64"', chestCm: '157.5–162.5 cm', waist: '56–58"', waistCm: '142–147.5 cm' },
+                            { size: '6XL', label: '6X-Large', chest: '66–68"', chestCm: '167.5–172.5 cm', waist: '60–62"', waistCm: '152.5–157.5 cm' },
+                          ].map((row) => (
+                            <tr key={row.size}>
+                              <td className="py-2 px-3">
+                                <span className="text-[#e32f8c] font-black">{row.size}</span>
+                                <span className="block text-[10px] font-medium text-zinc-500">{row.label}</span>
+                              </td>
+                              <td className="py-2 px-3 text-white">
+                                {row.chest}
+                                <span className="block text-[10px] font-medium text-zinc-400">{row.chestCm}</span>
+                              </td>
+                              <td className="py-2 px-3 text-zinc-200">
+                                {row.waist}
+                                <span className="block text-[10px] font-medium text-zinc-400">{row.waistCm}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* 📱 Sticky Mobile Add-to-Cart Bar (Portaled to document.body to prevent stacking context clipping) */}
       {mounted && typeof document !== 'undefined' && createPortal(

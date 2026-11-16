@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
 import crypto from "crypto";
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from "@/lib/ratelimit";
-import { convertToRon, getServerExchangeRates } from "@/utils/pricing";
+import { convertToRon, getProductPrice, getServerExchangeRates } from "@/utils/pricing";
 
 export type DiscountType = 'percentage' | 'fixed_amount' | 'free_shipping';
 
@@ -17,6 +17,10 @@ export interface CouponData {
   value: number;
   usage_limit: number | null;
   expiry_date: string | null;
+  min_purchase?: number | null;
+  max_discount?: number | null;
+  is_stackable?: boolean;
+  starts_at?: string | null;
   is_active?: boolean;
   used_count?: number;
 }
@@ -28,6 +32,10 @@ export interface CouponData {
 export async function getCoupons() {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error("Acces neautorizat.");
+
+  // Keep DB clean: automatically remove expired unused SCRATCH-% coupons older than 24h
+  const { cleanupExpiredScratchCoupons } = await import('@/lib/scratch-coupons');
+  await cleanupExpiredScratchCoupons();
 
   const { data, error } = await supabaseAdmin
     .from('coupons')
@@ -66,6 +74,10 @@ export async function createCoupon(data: Omit<CouponData, 'id' | 'used_count' | 
       value: data.type === 'free_shipping' ? 0 : data.value,
       usage_limit: data.usage_limit || null,
       expires_at: data.expiry_date || null, // Linked to the expires_at column in schema
+      min_purchase: data.min_purchase || null,
+      max_discount: data.max_discount || null,
+      is_stackable: typeof data.is_stackable === 'boolean' ? data.is_stackable : true,
+      starts_at: data.starts_at || null,
       is_active: true,
       used_count: 0,
       created_at: new Date().toISOString()
@@ -99,7 +111,11 @@ export async function updateCoupon(id: string, data: Omit<CouponData, 'id' | 'us
       type: data.type,
       value: data.type === 'free_shipping' ? 0 : data.value,
       usage_limit: data.usage_limit || null,
-      expires_at: data.expiry_date || null
+      expires_at: data.expiry_date || null,
+      min_purchase: data.min_purchase || null,
+      max_discount: data.max_discount || null,
+      is_stackable: typeof data.is_stackable === 'boolean' ? data.is_stackable : true,
+      starts_at: data.starts_at || null,
     })
     .eq('id', id);
 
@@ -150,8 +166,12 @@ export async function validateCoupon(code: string, subtotal: number = 0, currenc
       return { isValid: false, message: isEn ? 'The discount code is not active.' : 'Codul de reducere nu este activ.' };
     }
 
-    if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
+    if (coupon.usage_limit !== null && coupon.usage_limit !== undefined && coupon.used_count >= coupon.usage_limit) {
       return { isValid: false, message: isEn ? 'The discount code has reached its usage limit.' : 'Codul de reducere și-a atins limita de utilizări.' };
+    }
+
+    if (coupon.starts_at && new Date(coupon.starts_at) > new Date()) {
+      return { isValid: false, message: isEn ? 'This discount code is not active yet.' : 'Acest cod de reducere nu este activ încă.' };
     }
 
     if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
@@ -161,7 +181,12 @@ export async function validateCoupon(code: string, subtotal: number = 0, currenc
     const liveRates = await getServerExchangeRates();
     const subtotalInRon = convertToRon(subtotal, currency, liveRates);
     if (coupon.min_purchase && subtotalInRon < coupon.min_purchase) {
-      return { isValid: false, message: isEn ? `Minimum order value for this code is ${coupon.min_purchase} RON.` : `Valoarea minimă a comenzii pentru acest cod este de ${coupon.min_purchase} RON.` };
+      const upperCurrency = String(currency || 'RON').toUpperCase();
+      const displayMin =
+        upperCurrency === 'RON'
+          ? `${coupon.min_purchase} RON`
+          : `${getProductPrice(Number(coupon.min_purchase), upperCurrency, liveRates).toFixed(2)} ${upperCurrency}`;
+      return { isValid: false, message: isEn ? `Minimum order value for this code is ${displayMin}.` : `Valoarea minimă a comenzii pentru acest cod este de ${displayMin}.` };
     }
 
     return { isValid: true, coupon };
@@ -251,14 +276,14 @@ export async function generateScratchCoupon() {
     }
 
     const rand = crypto.randomInt(0, 100);
-    let discountValue = 5;
+    let discountValue = 3;
 
-    if (rand < 20) {
-      discountValue = 10;
-    } else if (rand < 40) {
+    if (rand < 10) {
       discountValue = 7;
-    } else {
+    } else if (rand < 40) {
       discountValue = 5;
+    } else {
+      discountValue = 3;
     }
 
     // Generate cryptographically random unique code: SCRATCH-XXXXXXX
@@ -276,6 +301,7 @@ export async function generateScratchCoupon() {
         type: 'percentage',
         value: discountValue,
         usage_limit: 1,
+        is_stackable: false,
         expires_at: expiryDate.toISOString(),
         is_active: true,
         used_count: 0,

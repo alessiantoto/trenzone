@@ -16,6 +16,7 @@
 
 import { getProductPrice } from '@/utils/pricing';
 import { getCanonicalOrderNumber } from '@/utils/admin-helpers';
+import { supabaseAdmin } from './supabase-admin';
 
 interface OblioTokenResponse {
   access_token: string;
@@ -398,4 +399,33 @@ export function isOblioConfigured(): boolean {
     process.env.OBLIO_SECRET &&
     process.env.OBLIO_CIF
   );
+}
+
+/**
+ * Citește din store_settings dacă integrarea Oblio este activată din Admin.
+ * Implicit este DEZACTIVATĂ (false) până la activarea explicită din Admin.
+ */
+export async function getOblioEnabledSetting(): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'oblio_config')
+      .maybeSingle();
+
+    if (error || !data?.value) {
+      return false;
+    }
+    return data.value.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verifică dacă Oblio este atât configurat în env, cât și activat din Admin toggle.
+ */
+export async function isOblioEnabled(): Promise<boolean> {
+  if (!isOblioConfigured()) return false;
+  return await getOblioEnabledSetting();
 }

@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import * as React from 'react';
 import { BaseEmailLayout } from './BaseEmailLayout';
+import { getSiteUrl } from '@/lib/site-config';
 
 interface AwbEmailTemplateProps {
   orderId: string;
@@ -21,25 +22,30 @@ interface AwbEmailTemplateProps {
 }
 
 export const AwbEmailTemplate: React.FC<Readonly<AwbEmailTemplateProps>> = ({
-  orderId,
-  customerName,
-  trackingNumber,
+  orderId = '',
+  customerName = '',
+  trackingNumber = '',
   courier,
   locale = 'ro',
-  baseUrl = "https://www.trenzone.fit",
+  baseUrl = getSiteUrl(),
   userEmail,
   templateData
 }) => {
   const isEn = locale === 'en';
   
-  const safeWelcome = (isEn ? "Hi, {{name}}!" : "Salut, {{name}}!").replace('{{name}}', customerName.split(' ')[0] || (isEn ? 'Champion' : 'Campionule'));
+  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || (isEn ? 'Champion' : 'Campionule');
+  const safeOrderId = String(orderId || '');
+  const replaceVars = (text: string) =>
+    text.replaceAll('{{name}}', firstCustomerName).replaceAll('{{id}}', safeOrderId);
+
+  const safeWelcome = replaceVars(isEn ? "Hi, {{name}}!" : "Salut, {{name}}!");
   
   const headingText = isEn ? templateData?.heading_en : templateData?.heading_ro;
   const bodyText = isEn ? templateData?.body_en : templateData?.body_ro;
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
 
-  const safeHeading = headingText || (isEn ? "Your Order is on the Way!" : "Comanda ta este pe drum!");
-  const safeBody = bodyText || (isEn ? "Great news! Your order has been handed over to the courier and is now on its way to you." : "Vești bune! Comanda ta a fost predată curierului și se îndreaptă spre tine.");
+  const safeHeading = replaceVars(headingText || (isEn ? "Your Order is on the Way!" : "Comanda ta este pe drum!"));
+  const safeBody = replaceVars(bodyText || (isEn ? "Great news! Your order has been handed over to the courier and is now on its way to you." : "Vești bune! Comanda ta a fost predată curierului și se îndreaptă spre tine."));
   const safeCta = ctaText || (isEn ? "TRACK YOUR ORDER" : "URMĂREȘTE LIVRAREA");
 
   const staticTranslations = isEn ? {
@@ -52,9 +58,10 @@ export const AwbEmailTemplate: React.FC<Readonly<AwbEmailTemplateProps>> = ({
     courier_label: "Curier:"
   };
 
+  const encodedTracking = encodeURIComponent(trackingNumber || '');
   const trackingLink = courier === 'sameday' 
-    ? `https://sameday.ro/awb-tracking/?awb=${trackingNumber}` 
-    : `https://tracking.packeta.com/${isEn ? 'en_US' : 'ro_RO'}/?id=${trackingNumber}`;
+    ? `https://sameday.ro/awb-tracking/?awb=${encodedTracking}` 
+    : `https://tracking.packeta.com/${isEn ? 'en_US' : 'ro_RO'}/?id=${encodedTracking}`;
 
   const courierName = courier === 'sameday' ? 'Sameday' : 'Packeta';
 

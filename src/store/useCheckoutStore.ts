@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { ALLOWED_SHIPPING_COUNTRIES } from '@/lib/shipping-config';
 
 interface CheckoutState {
   email: string;
@@ -12,6 +13,7 @@ interface CheckoutState {
   postalCode: string;
   phone: string;
   country: string;
+  hasManualCountry: boolean;
   phoneCountry: string;
   shippingType: 'hd' | 'pudo';
   selectedServiceId: string;
@@ -31,6 +33,7 @@ interface CheckoutState {
   setPostalCode: (val: string) => void;
   setPhone: (val: string) => void;
   setCountry: (val: string) => void;
+  setDetectedCountry: (val: string) => void;
   setPhoneCountry: (val: string) => void;
   setShippingType: (val: 'hd' | 'pudo') => void;
   setSelectedServiceId: (val: string) => void;
@@ -38,6 +41,7 @@ interface CheckoutState {
   setPriorityProcessing: (val: boolean) => void;
   setGiftPackaging: (val: boolean) => void;
   setGiftMessage: (val: string) => void;
+  resetOrderAddons: () => void;
   resetCheckout: () => void;
 }
 
@@ -54,6 +58,7 @@ export const useCheckoutStore = create<CheckoutState>()(
       postalCode: '',
       phone: '',
       country: 'RO',
+      hasManualCountry: false,
       phoneCountry: 'RO',
       shippingType: 'hd',
       selectedServiceId: '',
@@ -75,8 +80,18 @@ export const useCheckoutStore = create<CheckoutState>()(
       setPhone: (val) => set({ phone: val }),
       setCountry: (val) => set((state) => ({ 
         country: val,
+        hasManualCountry: true,
         postalCode: val === 'RO' ? state.postalCode.replace(/[^0-9]/g, '').slice(0, 6) : state.postalCode
       })),
+      setDetectedCountry: (val) => set((state) => {
+        if (state.hasManualCountry) return {};
+        const raw = String(val || 'RO').trim().toUpperCase() || 'RO';
+        const normalized = ALLOWED_SHIPPING_COUNTRIES.includes(raw) ? raw : 'RO';
+        return {
+          country: normalized,
+          postalCode: normalized === 'RO' ? state.postalCode.replace(/[^0-9]/g, '').slice(0, 6) : state.postalCode,
+        };
+      }),
       setPhoneCountry: (val) => set({ phoneCountry: val }),
       setShippingType: (val) => set({ shippingType: val }),
       setSelectedServiceId: (val) => set({ selectedServiceId: val }),
@@ -89,6 +104,11 @@ export const useCheckoutStore = create<CheckoutState>()(
       setPriorityProcessing: (val) => set({ priorityProcessing: val }),
       setGiftPackaging: (val) => set({ giftPackaging: val }),
       setGiftMessage: (val) => set({ giftMessage: val }),
+      resetOrderAddons: () => set({
+        priorityProcessing: false,
+        giftPackaging: false,
+        giftMessage: '',
+      }),
       resetCheckout: () => set({
         email: '',
         firstName: '',
@@ -100,6 +120,7 @@ export const useCheckoutStore = create<CheckoutState>()(
         postalCode: '',
         phone: '',
         country: 'RO',
+        hasManualCountry: false,
         phoneCountry: 'RO',
         shippingType: 'hd',
         selectedServiceId: '',

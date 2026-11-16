@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { setShippingConfigCache } from '@/lib/use-shipping-config';
 import { 
   Truck, 
   CheckCircle2, 
@@ -31,8 +32,9 @@ export default function ShippingPage() {
 
   const [config, setConfig] = useState({
     packaging_cost_ron: 0,
-    free_shipping_ro_ron: 499,
-    free_shipping_intl_eur: 200
+    free_shipping_ro_ron: 500,
+    free_shipping_intl_eur: 150,
+    lockers_enabled: false
   });
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
@@ -52,7 +54,14 @@ export default function ShippingPage() {
       try {
         const res = await fetch('/api/admin/data?action=shipping');
         const json = await res.json();
-        if (json.data) setConfig(json.data);
+        if (json.data) {
+          setConfig({
+            packaging_cost_ron: Number(json.data.packaging_cost_ron ?? 0),
+            free_shipping_ro_ron: Number(json.data.free_shipping_ro_ron ?? 500),
+            free_shipping_intl_eur: Number(json.data.free_shipping_intl_eur ?? 150),
+            lockers_enabled: json.data.lockers_enabled === true,
+          });
+        }
       } catch (err) {
         console.error('Error fetching shipping config:', err);
       }
@@ -103,11 +112,34 @@ export default function ShippingPage() {
     const res = await saveShippingConfig(config);
     setIsSavingConfig(false);
     if (res.success) {
+      if (res.config) {
+        setShippingConfigCache(res.config);
+      }
       setConfigSaved(true);
       toast.success("Configurarea de livrare a fost salvată!");
       setTimeout(() => setConfigSaved(false), 3000);
     } else {
       toast.error("Eroare la salvare: " + res.message);
+    }
+  };
+
+  const handleToggleLockers = async (newValue: boolean) => {
+    const previous = config.lockers_enabled;
+    const nextConfig = { ...config, lockers_enabled: newValue };
+    setConfig(nextConfig);
+    try {
+      const res = await saveShippingConfig(nextConfig);
+      if (!res?.success) {
+        throw new Error(res?.message || 'Eroare la salvare');
+      }
+      toast.success(
+        newValue
+          ? 'Livrarea în lockere (Sameday Easybox - RO) a fost activată.'
+          : 'Livrarea în lockere / Easybox a fost dezactivată în toate țările.'
+      );
+    } catch (e: any) {
+      setConfig(prev => ({ ...prev, lockers_enabled: previous }));
+      toast.error('Eroare la actualizare: ' + (e?.message || 'Necunoscută'));
     }
   };
 
@@ -563,6 +595,47 @@ export default function ShippingPage() {
                    />
                  </div>
                  <p className="text-[10px] sm:text-xs text-slate-500">Această sumă se adaugă la costul generat de curier. Lasă 0 dacă nu percepi taxe extra pentru cutii.</p>
+               </div>
+
+               <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70 space-y-2.5">
+                 <div className="flex items-center justify-between gap-3">
+                   <div>
+                     <div className="flex items-center gap-2 flex-wrap">
+                       <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                         Livrare în Lockere (Easybox / PUDO)
+                       </h4>
+                       <span
+                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                           config.lockers_enabled
+                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                             : 'bg-rose-50 text-rose-700 border-rose-200'
+                         }`}
+                       >
+                         {config.lockers_enabled ? 'ACTIVAT (Doar RO)' : 'DEZACTIVAT (Toate țările)'}
+                       </span>
+                     </div>
+                     <p className="text-[11px] sm:text-xs text-slate-500 mt-1 leading-relaxed">
+                       Când este dezactivat, livrarea la Easybox și lockere este oprită în toate țările (clienții pot comanda exclusiv prin curier la domiciliu).
+                     </p>
+                   </div>
+
+                   <button
+                     type="button"
+                     role="switch"
+                     aria-checked={config.lockers_enabled}
+                     onClick={() => handleToggleLockers(!config.lockers_enabled)}
+                     className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/20 ${
+                       config.lockers_enabled ? 'bg-emerald-500' : 'bg-slate-300'
+                     }`}
+                   >
+                     <span
+                       aria-hidden="true"
+                       className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                         config.lockers_enabled ? 'translate-x-5' : 'translate-x-0'
+                       }`}
+                     />
+                   </button>
+                 </div>
                </div>
 
                <button 

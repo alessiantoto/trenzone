@@ -104,10 +104,10 @@ export async function unsubscribeFromNewsletter(email: string, locale: "ro" | "e
       console.error("❌ [NEWSLETTER ACTION] Unsubscribe Error (subscribers):", dbError);
     }
 
-    // Add to global blocklist for absolute certainty
+    // Add to global blocklist for absolute certainty (both marketing & abandoned cart checks)
     const { error: blockError } = await supabaseAdmin
       .from("unsubscribed_emails")
-      .upsert({ email: cleanEmail, created_at: new Date().toISOString() }, { onConflict: "email" });
+      .upsert({ email: cleanEmail, marketing: false, created_at: new Date().toISOString() }, { onConflict: "email" });
 
     if (blockError) {
       console.error("❌ [NEWSLETTER ACTION] Unsubscribe Error (blocklist):", blockError);

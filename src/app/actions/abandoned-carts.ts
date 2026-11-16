@@ -5,6 +5,8 @@ import { isAdminAuthorized } from "./admin-auth";
 import { resend } from "@/lib/resend-service";
 import { AbandonedCartEmail } from "@/components/email/AbandonedCartEmail";
 import { getEmailTemplate } from "@/app/actions/email-templates";
+import { getSiteUrl, getResendFromEmail } from "@/lib/site-config";
+import { getServerExchangeRates, normalizeCartItemsCurrency } from "@/utils/pricing";
 
 export interface AbandonedCartItem {
   id: string;
@@ -246,7 +248,7 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
       updatedAt: session.updated_at || session.created_at,
       recoveredByOrderId,
       recoveredAt,
-      recoveryUrl: `https://www.trenzone.fit/${(session.country === 'RO' || !session.country) ? 'ro' : 'en'}/checkout`
+      recoveryUrl: `${getSiteUrl()}/${(session.country === 'RO' || !session.country) ? 'ro' : 'en'}/checkout`
     };
   });
 
@@ -457,17 +459,23 @@ export async function sendManualRecoveryEmail(
   }
   if (!Array.isArray(parsedSessionItems)) parsedSessionItems = [];
 
-  const cartCheckoutUrl = `https://www.trenzone.fit/${locale}/checkout${couponCode ? `?coupon=${encodeURIComponent(couponCode)}` : ''}`;
+  const siteUrl = getSiteUrl();
+  const cartCheckoutUrl = `${siteUrl}/${locale}/checkout${couponCode ? `?coupon=${encodeURIComponent(couponCode)}` : ''}`;
+  const sessionCurrency = String(session.currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase();
+  const liveRates = await getServerExchangeRates().catch(() => undefined);
+  const normalizedItems = normalizeCartItemsCurrency(parsedSessionItems, sessionCurrency, session.total_amount, liveRates);
 
   // 5. Send via Resend
   const emailPayload = {
-    from: 'TrenZone <contact@trenzone.fit>',
+    from: getResendFromEmail(),
     to: emailClean,
     subject: finalSubject,
     react: AbandonedCartEmail({
       customerName,
-      items: parsedSessionItems,
+      items: normalizedItems,
       locale: locale as 'ro' | 'en',
+      baseUrl: siteUrl,
+      currency: sessionCurrency,
       cartUrl: cartCheckoutUrl,
       templateData: template as any,
       userEmail: emailClean,
@@ -603,9 +611,10 @@ export async function runAbandonedCartsAutomation() {
     const locale = (session.country === 'RO' || !session.country) ? 'ro' : 'en';
     const customerName = session.first_name || (locale === 'en' ? 'Friend' : 'Prieten');
     const baseSubject = locale === 'en' ? templateToUse.subject_en : templateToUse.subject_ro;
+    const default24hSubject = locale === 'en' ? 'You left items in your cart!' : 'Ai lăsat produse în coș!';
     const finalSubject = (emailType === '72h'
       ? (locale === 'en' ? `Here is your ${couponValue72h}% discount for your cart!` : `Ai ${couponValue72h}% reducere pentru produsele din coș!`)
-      : baseSubject
+      : (baseSubject || default24hSubject)
     )
       .replace('{{name}}', customerName.split(' ')[0])
       .replace('{{coupon}}', couponCode72h)
@@ -621,17 +630,23 @@ export async function runAbandonedCartsAutomation() {
     }
     if (!Array.isArray(parsedItems)) parsedItems = [];
 
-    const autoCartUrl = `https://www.trenzone.fit/${locale}/checkout${emailType === '72h' ? `?coupon=${encodeURIComponent(couponCode72h)}` : ''}`;
+    const siteUrl = getSiteUrl();
+    const autoCartUrl = `${siteUrl}/${locale}/checkout${emailType === '72h' ? `?coupon=${encodeURIComponent(couponCode72h)}` : ''}`;
+    const sessionCurrency = String(session.currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase();
+    const liveRates = await getServerExchangeRates().catch(() => undefined);
+    const normalizedItems = normalizeCartItemsCurrency(parsedItems, sessionCurrency, session.total_amount, liveRates);
 
     try {
-      await resend.emails.send({
-        from: 'TrenZone <contact@trenzone.fit>',
+      const resendResult = await resend.emails.send({
+        from: getResendFromEmail(),
         to: emailObj,
         subject: finalSubject,
         react: AbandonedCartEmail({
           customerName,
-          items: parsedItems,
+          items: normalizedItems,
           locale: locale as 'ro' | 'en',
+          baseUrl: siteUrl,
+          currency: sessionCurrency,
           cartUrl: autoCartUrl,
           templateData: templateToUse as any,
           userEmail: emailObj,
@@ -639,6 +654,9 @@ export async function runAbandonedCartsAutomation() {
           couponValue: emailType === '72h' ? couponValue72h : undefined
         }) as any
       });
+      if (resendResult.error) {
+        throw new Error(resendResult.error.message || 'Resend error');
+      }
 
       recoveryEmailsSent[emailType] = true;
       recoveryEmailsSent[`${emailType}_sent_at`] = new Date().toISOString();
@@ -1019,17 +1037,23 @@ export async function sendAbandonedCartTranche(trancheNumber: 1 | 2) {
       .replace('{{coupon}}', couponCode)
       .replace('{{value}}', String(couponValue));
 
-    const cartCheckoutUrl = `https://www.trenzone.fit/${locale}/checkout?coupon=${encodeURIComponent(couponCode)}`;
+    const siteUrl = getSiteUrl();
+    const cartCheckoutUrl = `${siteUrl}/${locale}/checkout?coupon=${encodeURIComponent(couponCode)}`;
+    const sessionCurrency = String((s as any).currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase();
+    const liveRates = await getServerExchangeRates().catch(() => undefined);
+    const normalizedItems = normalizeCartItemsCurrency(parsedItems, sessionCurrency, (s as any).total_amount, liveRates);
 
     try {
       const resendResult = await resend.emails.send({
-        from: 'TrenZone <contact@trenzone.fit>',
+        from: getResendFromEmail(),
         to: email,
         subject: finalSubject,
         react: AbandonedCartEmail({
           customerName: person.name,
-          items: parsedItems,
+          items: normalizedItems,
           locale: locale as 'ro' | 'en',
+          baseUrl: siteUrl,
+          currency: sessionCurrency,
           cartUrl: cartCheckoutUrl,
           templateData: template as any,
           userEmail: email,

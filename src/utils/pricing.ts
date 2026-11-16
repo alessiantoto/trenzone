@@ -42,7 +42,7 @@ export async function getServerExchangeRates(): Promise<Record<string, number>> 
   }
 }
 
-export function getProductPrice(prices: any, currency: string): number {
+export function getProductPrice(prices: any, currency: string, customRates?: Record<string, number>): number {
   const targetCurrency = (currency || 'RON').toUpperCase();
 
   if (typeof prices === 'object' && prices !== null) {
@@ -53,13 +53,13 @@ export function getProductPrice(prices: any, currency: string): number {
 
     // 2. Fallback: convert from RON base using exchange rates
     const baseRon = Number(prices['RON'] || 0);
-    return targetCurrency === 'RON' ? baseRon : convertFromRon(baseRon, targetCurrency);
+    return targetCurrency === 'RON' ? baseRon : convertFromRon(baseRon, targetCurrency, customRates);
   }
 
   // 3. Primitive number or numeric string — this is the base RON price from DB
   const baseRon = Number(prices || 0);
   if (targetCurrency === 'RON') return baseRon;
-  return convertFromRon(baseRon, targetCurrency);
+  return convertFromRon(baseRon, targetCurrency, customRates);
 }
 
 export function resolveForeignPerRon(currency: string, rawRate: number): number {
@@ -167,4 +167,32 @@ export function convertToRon(amount: number, sourceCurrency?: string | null, cus
   // If rate was stored inverted (< 1.05 for EUR/USD/GBP/PLN/CHF), divide by rate.
   const ronPerUnit = rate > 1.05 ? rate : (rate > 0 ? 1 / rate : 1);
   return Number((Number(amount) * ronPerUnit).toFixed(2));
+}
+
+/**
+ * Ensures cart/session item prices match targetCurrency even for legacy rows
+ * that stored RON item prices alongside a foreign-currency total.
+ */
+export function normalizeCartItemsCurrency(
+  items: any[],
+  targetCurrency?: string | null,
+  expectedTotal?: number | null,
+  customRates?: Record<string, number>
+): any[] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const curr = (targetCurrency || 'RON').toUpperCase();
+  const total = Number(expectedTotal || 0);
+  if (curr === 'RON' || total <= 0) return items;
+
+  const rawSum = items.reduce((sum, it) => sum + (Number(it?.price || 0) * (Number(it?.quantity) || 1)), 0);
+  if (rawSum <= 0) return items;
+
+  const convertedSum = convertFromRon(rawSum, curr, customRates);
+  if (Math.abs(convertedSum - total) < Math.abs(rawSum - total)) {
+    return items.map((it) => ({
+      ...it,
+      price: convertFromRon(Number(it?.price || 0), curr, customRates),
+    }));
+  }
+  return items;
 }

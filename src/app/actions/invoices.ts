@@ -1,23 +1,30 @@
 'use server';
 
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isAdminAuthorized } from './admin-auth';
-import { issueOblioInvoice, isOblioConfigured, testOblioConnection } from '@/lib/oblio-api';
+import {
+  issueOblioInvoice,
+  isOblioConfigured,
+  getOblioEnabledSetting,
+  testOblioConnection,
+} from '@/lib/oblio-api';
 
 export async function checkOblioStatusAction() {
   const isAuthorized = await isAdminAuthorized();
-  if (!isAuthorized) return { success: false, error: 'Neautorizat' };
+  if (!isAuthorized) return { success: false as const, error: 'Neautorizat' };
 
-  const configured = isOblioConfigured();
+  const [configured, enabled] = [isOblioConfigured(), await getOblioEnabledSetting()];
   let connectionStatus: { success: boolean; companyName?: string; error?: string } | null = null;
 
-  if (configured) {
+  if (configured && enabled) {
     connectionStatus = await testOblioConnection();
   }
 
   return {
-    success: true,
-    configured: configured,
+    success: true as const,
+    enabled,
+    configured,
     cif: process.env.OBLIO_CIF ? `${process.env.OBLIO_CIF.substring(0, 4)}****` : null,
     series: process.env.OBLIO_SERIES_NAME || 'ODIN',
     connected: connectionStatus?.success || false,
@@ -26,9 +33,44 @@ export async function checkOblioStatusAction() {
   };
 }
 
+export async function setOblioEnabledAction(enabled: boolean) {
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) return { success: false as const, error: 'Neautorizat' };
+
+  try {
+    const resolvedEnabled = Boolean(enabled);
+    const { error } = await supabaseAdmin
+      .from('store_settings')
+      .upsert(
+        {
+          key: 'oblio_config',
+          value: { enabled: resolvedEnabled },
+        },
+        { onConflict: 'key' }
+      );
+
+    if (error) throw error;
+
+    revalidateTag('store_settings', 'max');
+    revalidatePath('/admin/invoices');
+
+    return await checkOblioStatusAction();
+  } catch (err: any) {
+    console.error('setOblioEnabledAction error:', err);
+    return { success: false as const, error: err?.message || 'Eroare la salvarea setării Oblio.' };
+  }
+}
+
 export async function emitOblioInvoiceAction(orderId: string) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) return { success: false, error: 'Neautorizat' };
+
+  if (!(await getOblioEnabledSetting())) {
+    return {
+      success: false,
+      error: 'Integrarea Oblio este dezactivată din Admin. Activează toggle-ul Oblio pentru a emite facturi.',
+    };
+  }
 
   if (!isOblioConfigured()) {
     return {
@@ -51,7 +93,10 @@ export async function emitOblioInvoiceAction(orderId: string) {
       query = query.or(`payment_intent_id.eq.${safeOrderId},receipt_url.ilike.%${safeOrderId}%`);
     }
 
-    const { data: order, error: fetchErr } = await query.maybeSingle();
+    const { data: order, error: fetchErr } = await query
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
     if (fetchErr || !order) {
       return { success: false, error: 'Comanda nu a fost găsită în baza de date.' };
@@ -61,7 +106,7 @@ export async function emitOblioInvoiceAction(orderId: string) {
       return { success: false, error: 'Comenzile anulate (neridicate) nu trebuie și nu pot fi facturate în SPV.' };
     }
 
-    const existingInvoice = order.tracking_metadata?.oblio_invoice;
+    const existingInvoice = order.tracking_metadata?.oblio_invoice || order.carrier_metadata?.oblio_invoice;
     if (existingInvoice?.number) {
       return {
         success: true,

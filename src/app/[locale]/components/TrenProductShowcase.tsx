@@ -13,6 +13,7 @@ import { formatPrice } from "@/utils/currency";
 import { getProductPrice } from "@/utils/pricing";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, getLocalized } from "@/lib/utils";
+import { isDigitalProgramItem } from "@/lib/programs";
 
 interface TrenProductShowcaseProps {
   products?: Product[];
@@ -21,7 +22,7 @@ interface TrenProductShowcaseProps {
 export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps) {
   const locale = useLocale();
   const isRo = locale === "ro";
-  const { addItem, setCartOpen } = useCartStore();
+  const { addItemsBatch, setCartOpen } = useCartStore();
 
   // The 5 official TrenZone products with identical shop structure and data
   const defaultProducts: Product[] = [
@@ -35,13 +36,10 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       price: 529.99,
       originalPrice: 599.99,
       badge: "PR CHASER · +20 KG",
-      image: "/images/products/x10_elbow_wraps_purple_1.webp",
+      image: "/images/products/x10_elbow_wraps_purple.webp",
       images: [
-        "/images/products/x10_elbow_wraps_purple_1.webp",
-        "/images/products/x10_elbow_wraps_purple_2.webp",
-        "/images/products/x10_elbow_wraps_white_3.webp",
-        "/images/products/x10_elbow_wraps_white_1.webp",
-        "/images/products/x10_elbow_wraps_white_2.webp"
+        "/images/products/x10_elbow_wraps_purple.webp",
+        "/images/products/x10_elbow_wraps_white.webp"
       ],
       variants: {
         type: "flavor",
@@ -50,7 +48,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
           {
             name: { ro: "Purple", en: "Purple" },
             color: "#a855f7",
-            image: "/images/products/x10_elbow_wraps_purple_1.webp",
+            image: "/images/products/x10_elbow_wraps_purple.webp",
             imageIndex: 0,
             stock_status: "in_stock",
             badge: "BEST SELLER"
@@ -58,8 +56,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
           {
             name: { ro: "White (Precomandă)", en: "White (Pre-Order)" },
             color: "#f8fafc",
-            image: "/images/products/x10_elbow_wraps_white_3.webp",
-            imageIndex: 2,
+            image: "/images/products/x10_elbow_wraps_white.webp",
+            imageIndex: 1,
             stock_status: "preorder",
             badge: locale === "ro" ? "PRECOMANDĂ" : "PRE-ORDER"
           }
@@ -142,9 +140,10 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       price: 299.99,
       originalPrice: 349.99,
       badge: "EXTREME STIFFNESS",
-      image: "/images/products/trenzone_wristwraps_default.webp",
+      image: "/images/products/x10_wrist_wraps_purple.webp",
       images: [
-        "/images/products/trenzone_wristwraps_default.webp"
+        "/images/products/x10_wrist_wraps_purple.webp",
+        "/images/products/x10_wrist_wraps_white.webp"
       ],
       variants: {
         type: "flavor",
@@ -153,16 +152,16 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
           {
             name: { ro: "Purple", en: "Purple" },
             color: "#a855f7",
-            image: "/images/products/trenzone_wristwraps_default.webp",
+            image: "/images/products/x10_wrist_wraps_purple.webp",
             imageIndex: 0,
             stock_status: "in_stock",
             badge: "BEST SELLER"
           },
           {
-            name: { ro: "Stealth Black", en: "Stealth Black" },
-            color: "#18181b",
-            image: "/images/products/trenzone_wristwraps_default.webp",
-            imageIndex: 0,
+            name: { ro: "White", en: "White" },
+            color: "#f8fafc",
+            image: "/images/products/x10_wrist_wraps_white.webp",
+            imageIndex: 1,
             stock_status: "in_stock"
           }
         ]
@@ -182,29 +181,31 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       id: "dd477884-5fd8-4d8f-ab75-1cade13c1cc8",
       slug: "centura-powerlifting",
       name: {
-        ro: "Centură Lever Powerlifting",
-        en: "Powerlifting Lever Belt"
+        ro: "Heavy Lifting Belt",
+        en: "Heavy Lifting Belt"
       },
       price: 749.99,
       originalPrice: 849.99,
       badge: "IPF GRADE · 13MM",
-      image: "/images/products/trenzone_belt_default.webp",
+      image: "/images/products/heavy_lifting_belt.webp",
       images: [
-        "/images/products/trenzone_belt_default.webp"
+        "/images/products/heavy_lifting_belt.webp"
       ],
       variants: {
         type: "size",
         label: { ro: "Mărime", en: "Size" },
         options: [
+          { name: { ro: "XS (57.5-70 cm)", en: "XS (57.5-70 cm)" }, stock_status: "in_stock" },
           { name: { ro: "S (65-80 cm)", en: "S (65-80 cm)" }, stock_status: "in_stock" },
-          { name: { ro: "M (75-90 cm)", en: "M (75-90 cm)" }, badge: "POPULAR", stock_status: "in_stock" },
-          { name: { ro: "L (85-100 cm)", en: "L (85-100 cm)" }, stock_status: "in_stock" },
-          { name: { ro: "XL (95-115 cm)", en: "XL (95-115 cm)" }, stock_status: "in_stock" }
+          { name: { ro: "M (72.5-90 cm)", en: "M (72.5-90 cm)" }, badge: "POPULAR", stock_status: "in_stock" },
+          { name: { ro: "L (80-100 cm)", en: "L (80-100 cm)" }, stock_status: "in_stock" },
+          { name: { ro: "XL (87.5-110 cm)", en: "XL (87.5-110 cm)" }, stock_status: "in_stock" },
+          { name: { ro: "2XL (95-120 cm)", en: "2XL (95-120 cm)" }, stock_status: "in_stock" }
         ]
       },
       description: {
-        ro: "Centură profesională de powerlifting din piele naturală veritabilă multi-strat, grosime 13mm și cataramă metalică rapidă cu levier (Quick-Release Lever).",
-        en: "Competition-grade 13mm multi-layer genuine leather powerlifting belt with heavy-duty quick-release steel lever."
+        ro: "Centură profesională de powerlifting din 100% piele naturală veritabilă, grosime 13mm și cataramă metalică rapidă cu levier (Quick-Release Lever).",
+        en: "Competition-grade 13mm 100% genuine leather powerlifting belt with heavy-duty quick-release steel lever."
       },
       stock_quantity: 50,
       weight: 1.5,
@@ -245,12 +246,12 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       bundleVariants: {
         size: {
           label: { ro: "Mărime", en: "Size" },
-          options: ["S", "M", "L", "XL", "XXL"]
+          options: ["S", "M", "L", "XL", "2XL"]
         }
       },
       description: {
-        ro: "Tricou heavy-cotton premium oversized fit (washed black). Bumbac 100% pieptănat de 260 GSM, printuri statement high-definition, guler întărit și emblemă TrenZone®.",
-        en: "Heavy-cotton premium washed-black oversized fit tee. 100% combed cotton 260 GSM, high-definition statement prints, reinforced collar, and TrenZone® emblem."
+        ro: "Tricou heavy-weight premium oversized fit (washed black), realizat din 80% bumbac și 20% poliester (240 GSM), printuri statement high-definition, guler întărit și emblemă TrenZone®.",
+        en: "Heavy-weight premium washed-black oversized fit tee crafted from an 80% cotton, 20% polyester blend (240 GSM), featuring high-definition statement prints, a reinforced collar, and TrenZone® emblem."
       },
       stock_quantity: 100,
       weight: 0.35,
@@ -261,9 +262,10 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
     }
   ];
 
-  // If server products are passed, display all active products, otherwise fallback
-  const displayProducts = (products && products.length > 0)
-    ? products
+  // If server products are passed, display all active physical products, otherwise fallback
+  const physicalProducts = products?.filter((p) => !isDigitalProgramItem(p)) || [];
+  const displayProducts = physicalProducts.length > 0
+    ? physicalProducts
     : defaultProducts;
 
   // Custom priority order for display: X10 wraps first, X5 wraps second, then accessories & gear
@@ -292,13 +294,13 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
 
   const [isDuoModalOpen, setIsDuoModalOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'x5' | 'x10' | null>(null);
-  const [selectedX5Opt, setSelectedX5Opt] = useState<any>(x5Options[0]);
-  const [selectedX10Opt, setSelectedX10Opt] = useState<any>(x10Options[0]);
+  const [selectedX5Opt, setSelectedX5Opt] = useState<any>(() => x5Options.find((o: any) => o.stock_status !== 'sold_out') || x5Options[0]);
+  const [selectedX10Opt, setSelectedX10Opt] = useState<any>(() => x10Options.find((o: any) => o.stock_status !== 'sold_out') || x10Options[0]);
 
   useEffect(() => {
-    if (!selectedX5Opt && x5Options.length > 0) setSelectedX5Opt(x5Options[0]);
-    if (!selectedX10Opt && x10Options.length > 0) setSelectedX10Opt(x10Options[0]);
-  }, [x5Options, x10Options]);
+    if (!selectedX5Opt && x5Options.length > 0) setSelectedX5Opt(x5Options.find((o: any) => o.stock_status !== 'sold_out') || x5Options[0]);
+    if (!selectedX10Opt && x10Options.length > 0) setSelectedX10Opt(x10Options.find((o: any) => o.stock_status !== 'sold_out') || x10Options[0]);
+  }, [x5Options, x10Options, selectedX5Opt, selectedX10Opt]);
 
   const { currency } = useRegionStore();
   const priceX5 = getProductPrice(x5Prod?.price || 329.99, currency);
@@ -307,9 +309,10 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
   const originalTotal = subtotalSubunits / 100;
   const discountedTotal = (subtotalSubunits - Math.round(subtotalSubunits * 0.05)) / 100; // 5% tiered bundle discount (2 items)
   const isMixedDuo = (selectedX5Opt?.stock_status === 'preorder') !== (selectedX10Opt?.stock_status === 'preorder');
+  const isDuoSoldOut = selectedX5Opt?.stock_status === 'sold_out' || selectedX10Opt?.stock_status === 'sold_out';
 
   const handleConfirmDuo = () => {
-    if (!x5Prod || !x10Prod || isMixedDuo) return;
+    if (!x5Prod || !x10Prod || isMixedDuo || isDuoSoldOut) return;
 
     const x5OptName = typeof selectedX5Opt?.name === 'object' 
       ? (selectedX5Opt?.name[locale] || selectedX5Opt?.name['ro']) 
@@ -319,17 +322,28 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       ? (selectedX10Opt?.name[locale] || selectedX10Opt?.name['ro']) 
       : selectedX10Opt?.name;
 
-    addItem(x5Prod, {
-      name: x5OptName,
-      image: selectedX5Opt?.image,
-      imageIndex: selectedX5Opt?.imageIndex !== undefined ? selectedX5Opt.imageIndex : 0
-    });
-
-    addItem(x10Prod, {
-      name: x10OptName,
-      image: selectedX10Opt?.image,
-      imageIndex: selectedX10Opt?.imageIndex !== undefined ? selectedX10Opt.imageIndex : 0
-    });
+    addItemsBatch([
+      {
+        product: x5Prod,
+        variant: {
+          name: x5OptName,
+          image: selectedX5Opt?.image,
+          imageIndex: selectedX5Opt?.imageIndex !== undefined ? selectedX5Opt.imageIndex : 0,
+          stock_status: selectedX5Opt?.stock_status,
+        },
+        quantity: 1,
+      },
+      {
+        product: x10Prod,
+        variant: {
+          name: x10OptName,
+          image: selectedX10Opt?.image,
+          imageIndex: selectedX10Opt?.imageIndex !== undefined ? selectedX10Opt.imageIndex : 0,
+          stock_status: selectedX10Opt?.stock_status,
+        },
+        quantity: 1,
+      },
+    ]);
 
     setIsDuoModalOpen(false);
     setCartOpen(true);
@@ -342,7 +356,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         {/* Header - Clean, direct, human fitness brand style */}
         <div className="flex flex-col items-center justify-center mb-8 md:mb-12 text-center">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white font-[family-name:var(--font-oswald)]">
-            BEST SELLERS
+            {isRo ? "CELE MAI CĂUTATE" : "BEST SELLERS"}
           </h2>
           <p className="text-xs sm:text-sm md:text-base text-zinc-400 font-medium mt-2 max-w-lg">
             {isRo 
@@ -383,13 +397,6 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
           {/* Subtle ambient lighting */}
           <div className="absolute -top-32 -right-32 w-80 h-80 bg-[#e32f8c]/10 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Top category label */}
-          <div className="flex items-center justify-between mb-4">
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#e32f8c]/15 border border-[#e32f8c]/30 text-[#e32f8c] text-[10px] sm:text-xs font-black uppercase tracking-wider">
-              {isRo ? "PACHET DUO · 5% REDUCERE AUTOMATĂ" : "DUO PACK · 5% AUTOMATIC DISCOUNT"}
-            </span>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-center">
             
             {/* Left: Dual Product Visuals */}
@@ -420,7 +427,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                     X10
                   </div>
                   <Image
-                    src={selectedX10Opt?.image || "/images/products/x10_elbow_wraps_purple_square.webp"}
+                    src={selectedX10Opt?.image || "/images/products/x10_elbow_wraps_purple.webp"}
                     alt="TrenZone X10 Elbow Wraps"
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -572,17 +579,20 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                           {x5Options.map((opt: any, idx: number) => {
                             const optName = getLocalized(opt.name, locale);
                             const isSelected = (selectedX5Opt?.name?.ro || selectedX5Opt?.name) === (opt.name?.ro || opt.name);
+                            const isSoldOutOpt = opt.stock_status === 'sold_out';
                             return (
                               <button
                                 key={`x5-${idx}`}
                                 type="button"
+                                disabled={isSoldOutOpt}
                                 onClick={() => {
+                                  if (isSoldOutOpt) return;
                                   setSelectedX5Opt(opt);
                                   setOpenDropdown(null);
                                 }}
                                 className={cn(
-                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-colors border-b border-black/10 last:border-none text-left cursor-pointer",
-                                  isSelected ? "bg-[#f4f4f4] font-black" : "hover:bg-[#f4f4f4]"
+                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-colors border-b border-black/10 last:border-none text-left",
+                                  isSoldOutOpt ? "opacity-40 cursor-not-allowed bg-zinc-50" : isSelected ? "bg-[#f4f4f4] font-black cursor-pointer" : "hover:bg-[#f4f4f4] cursor-pointer"
                                 )}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
@@ -593,6 +603,11 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                                   <span className="text-xs uppercase font-black tracking-wider text-black truncate">
                                     {optName}
                                   </span>
+                                  {isSoldOutOpt && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 font-black uppercase border border-red-500/20">
+                                      {isRo ? "STOC EPUIZAT" : "SOLD OUT"}
+                                    </span>
+                                  )}
                                 </div>
                                 {isSelected ? (
                                   <Check className="w-4 h-4 text-black shrink-0" />
@@ -619,7 +634,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-zinc-950 rounded-xl relative overflow-hidden shrink-0 border border-zinc-800 shadow-inner">
                     <Image
-                      src={selectedX10Opt?.image || x10Prod?.image || "/images/products/x10_elbow_wraps_purple_square.webp"}
+                      src={selectedX10Opt?.image || x10Prod?.image || "/images/products/x10_elbow_wraps_purple.webp"}
                       alt="X10 Elbow Wraps"
                       fill
                       sizes="48px"
@@ -666,17 +681,20 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                             const optName = getLocalized(opt.name, locale);
                             const isSelected = (selectedX10Opt?.name?.ro || selectedX10Opt?.name) === (opt.name?.ro || opt.name);
                             const isPreorderOpt = opt.stock_status === 'preorder';
+                            const isSoldOutOpt = opt.stock_status === 'sold_out';
                             return (
                               <button
                                 key={`x10-${idx}`}
                                 type="button"
+                                disabled={isSoldOutOpt}
                                 onClick={() => {
+                                  if (isSoldOutOpt) return;
                                   setSelectedX10Opt(opt);
                                   setOpenDropdown(null);
                                 }}
                                 className={cn(
-                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-colors border-b border-black/10 last:border-none text-left cursor-pointer",
-                                  isSelected ? "bg-[#f4f4f4] font-black" : "hover:bg-[#f4f4f4]"
+                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-colors border-b border-black/10 last:border-none text-left",
+                                  isSoldOutOpt ? "opacity-40 cursor-not-allowed bg-zinc-50" : isSelected ? "bg-[#f4f4f4] font-black cursor-pointer" : "hover:bg-[#f4f4f4] cursor-pointer"
                                 )}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
@@ -687,7 +705,11 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                                   <span className="text-xs uppercase font-black tracking-wider text-black truncate">
                                     {optName}
                                   </span>
-                                  {isPreorderOpt && (
+                                  {isSoldOutOpt ? (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 font-black uppercase border border-red-500/20">
+                                      {isRo ? "STOC EPUIZAT" : "SOLD OUT"}
+                                    </span>
+                                  ) : isPreorderOpt && (
                                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 font-black uppercase border border-amber-500/20">
                                       {isRo ? "PRECOMANDĂ" : "PRE-ORDER"}
                                     </span>
@@ -741,20 +763,22 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
 
                 <button
                   type="button"
-                  disabled={isMixedDuo}
+                  disabled={isMixedDuo || isDuoSoldOut}
                   onClick={handleConfirmDuo}
                   className={cn(
                     "w-full py-3.5 px-6 rounded-2xl font-black uppercase text-xs sm:text-sm tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-xl",
-                    isMixedDuo
+                    isMixedDuo || isDuoSoldOut
                       ? "bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none"
                       : "bg-[#e32f8c] hover:bg-[#c22074] active:scale-[0.98] text-white shadow-[#e32f8c]/25 cursor-pointer"
                   )}
                 >
                   <ShoppingCart className="w-4 h-4 shrink-0" />
                   <span>
-                    {isMixedDuo 
-                      ? (isRo ? "COMANDĂ SEPARAT" : "ORDER SEPARATELY") 
-                      : (isRo ? "CONFIRMĂ ȘI ADAUGĂ ÎN COȘ" : "CONFIRM & ADD TO CART")}
+                    {isDuoSoldOut
+                      ? (isRo ? "STOC EPUIZAT" : "SOLD OUT")
+                      : isMixedDuo
+                        ? (isRo ? "COMANDĂ SEPARAT" : "ORDER SEPARATELY")
+                        : (isRo ? "CONFIRMĂ ȘI ADAUGĂ ÎN COȘ" : "CONFIRM & ADD TO CART")}
                   </span>
                 </button>
               </div>

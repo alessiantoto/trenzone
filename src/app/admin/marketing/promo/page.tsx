@@ -272,7 +272,7 @@ export default function PromoSettingsPage() {
   const titleAccent = previewTitleWords.slice(splitIdx).join(' ');
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-12">
+    <div className="max-w-6xl mx-auto space-y-5 sm:space-y-8 animate-in fade-in duration-500 pb-6 sm:pb-12">
       {/* CROP MODAL */}
       {imgSrc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
@@ -356,7 +356,7 @@ export default function PromoSettingsPage() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-black px-6 py-3 rounded-2xl font-black shadow-md shadow-[#e32f8c]/20 transition-all disabled:opacity-50 text-sm sm:text-base"
+          className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-black px-6 py-3 rounded-2xl font-black shadow-md shadow-[#e32f8c]/20 transition-all disabled:opacity-50 text-sm sm:text-base"
         >
           {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save size={18} />}
           <span>{saving ? 'Se salvează...' : 'Salvează Modificările'}</span>
@@ -386,11 +386,11 @@ export default function PromoSettingsPage() {
             {/* Mode selector */}
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Mod Popup</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, mode: 'scratch' })}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-black border transition-all inline-flex items-center justify-center gap-1.5 ${
+                  className={`min-h-[44px] px-3 py-2.5 rounded-xl text-xs font-black border transition-all inline-flex items-center justify-center gap-1.5 ${
                     settings.mode === 'scratch' ? 'bg-[#e32f8c] text-black border-[#e32f8c]' : 'bg-slate-50 text-slate-600 border-slate-200'
                   }`}
                 >
@@ -400,7 +400,7 @@ export default function PromoSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, mode: 'newsletter' })}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-black border transition-all inline-flex items-center justify-center gap-1.5 ${
+                  className={`min-h-[44px] px-3 py-2.5 rounded-xl text-xs font-black border transition-all inline-flex items-center justify-center gap-1.5 ${
                     settings.mode === 'newsletter' ? 'bg-[#e32f8c] text-black border-[#e32f8c]' : 'bg-slate-50 text-slate-600 border-slate-200'
                   }`}
                 >
@@ -412,28 +412,39 @@ export default function PromoSettingsPage() {
 
             {settings.mode === 'scratch' ? (
               <div className="space-y-3 pt-1 border-t border-slate-100">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Percent size={14} className="text-[#e32f8c]" /> Probabilități Câștig (3% – 7%)
                   </label>
                   <span className="text-[11px] font-bold text-slate-400">Medie: {(['3','4','5','6','7'].reduce((acc, k) => acc + Number(k) * ((Number(settings.scratchWeights?.[k]) || 0) / totalWeight), 0)).toFixed(1)}%</span>
                 </div>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
                   {(['3', '4', '5', '6', '7'] as const).map((pct) => {
                     const weight = Number(settings.scratchWeights?.[pct] ?? 0);
                     const realPct = Math.round((weight / totalWeight) * 100);
                     return (
-                      <div key={pct} className="bg-slate-50 border border-slate-200 rounded-xl p-2 text-center">
-                        <div className="text-xs font-black text-slate-900 mb-1">{pct}%</div>
+                      <div key={pct} className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-2 flex sm:flex-col items-center justify-between gap-3 sm:gap-1.5 sm:text-center">
+                        <div className="flex items-center sm:flex-col gap-2 sm:gap-0.5 shrink-0 min-w-[78px] sm:min-w-0">
+                          <span className="text-sm sm:text-xs font-black text-slate-900">{pct}%</span>
+                          <span className="text-[11px] sm:text-[10px] font-bold text-slate-500 sm:text-slate-400">{realPct}% șansă</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={weight}
+                          onChange={(e) => handleWeightChange(pct, Number(e.target.value))}
+                          aria-label={`Greutate ${pct}%`}
+                          className="sm:hidden flex-1 min-w-0 accent-[#e32f8c] cursor-pointer"
+                        />
                         <input
                           type="number"
                           min={0}
                           max={100}
                           value={weight}
                           onChange={(e) => handleWeightChange(pct, Number(e.target.value))}
-                          className="w-full text-center bg-white border border-slate-200 rounded-lg py-1 text-xs font-bold focus:outline-none focus:border-[#e32f8c]"
+                          className="w-20 sm:w-full h-10 sm:h-9 text-center bg-white border border-slate-200 rounded-lg py-1 text-base sm:text-xs font-bold focus:outline-none focus:border-[#e32f8c] shrink-0"
                         />
-                        <div className="text-[10px] font-bold text-slate-400 mt-1">{realPct}% șansă</div>
                       </div>
                     );
                   })}
@@ -448,7 +459,7 @@ export default function PromoSettingsPage() {
                     max={168}
                     value={settings.scratchTtlHours}
                     onChange={(e) => setSettings({ ...settings, scratchTtlHours: Math.max(1, Number(e.target.value) || 24) })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-900"
+                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-base sm:text-sm font-bold text-slate-900"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
                     Codurile nefolosite expiră după {settings.scratchTtlHours}h și se șterg automat din baza de date.
@@ -490,7 +501,7 @@ export default function PromoSettingsPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Întârziere (sec)</label>
                 <input
@@ -499,7 +510,7 @@ export default function PromoSettingsPage() {
                   max={120}
                   value={settings.delaySeconds}
                   onChange={(e) => setSettings({ ...settings, delaySeconds: Math.max(1, Number(e.target.value) || 6) })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold"
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-base sm:text-sm font-bold"
                 />
               </div>
               <div>
@@ -511,7 +522,7 @@ export default function PromoSettingsPage() {
                   max={720}
                   value={settings.cooldownHours}
                   onChange={(e) => setSettings({ ...settings, cooldownHours: Math.max(0.5, Number(e.target.value) || 24) })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold"
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-base sm:text-sm font-bold"
                 />
               </div>
             </div>
@@ -526,7 +537,7 @@ export default function PromoSettingsPage() {
               </div>
               <div
                 onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                className="flex items-center gap-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm cursor-pointer"
+                className="min-h-[44px] flex items-center gap-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm cursor-pointer"
               >
                 <Calendar size={16} className="text-slate-400" />
                 <span className={settings.endDate ? 'font-bold text-slate-900' : 'text-slate-400'}>
@@ -578,14 +589,14 @@ export default function PromoSettingsPage() {
 
             {/* PC IMAGE */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-black text-slate-700 flex items-center gap-1.5"><Monitor size={14} /> Fundal PC (Landscape 16:9)</span>
-                <button type="button" onClick={() => handleResetDefaultImage('pc')} className="text-[11px] font-bold text-slate-400 hover:text-[#e32f8c]">Reset TrenZone</button>
+                <button type="button" onClick={() => handleResetDefaultImage('pc')} className="text-[11px] font-bold text-slate-400 hover:text-[#e32f8c] shrink-0">Reset TrenZone</button>
               </div>
               <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-200 bg-black group">
                 <Image src={getOptimizedImageUrl(settings.image)} alt="PC Promo Bg" fill sizes="400px" className="object-cover" />
-                <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <label className="cursor-pointer bg-white text-black px-3.5 py-2 rounded-xl text-xs font-black">
+                <div className="absolute inset-0 bg-black/45 sm:bg-black/55 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <label className="cursor-pointer bg-white text-black px-4 min-h-[40px] inline-flex items-center rounded-xl text-xs font-black shadow-md">
                     Schimbă PC
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => onSelectFile('pc', e)} />
                   </label>
@@ -595,16 +606,16 @@ export default function PromoSettingsPage() {
 
             {/* MOBILE IMAGE */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-black text-slate-700 flex items-center gap-1.5"><Smartphone size={14} /> Fundal Mobil (Portrait 9:16)</span>
-                <button type="button" onClick={() => handleResetDefaultImage('mobile')} className="text-[11px] font-bold text-slate-400 hover:text-[#e32f8c]">Reset TrenZone</button>
+                <button type="button" onClick={() => handleResetDefaultImage('mobile')} className="text-[11px] font-bold text-slate-400 hover:text-[#e32f8c] shrink-0">Reset TrenZone</button>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="relative w-28 aspect-[9/16] rounded-xl overflow-hidden border border-slate-200 bg-black shrink-0">
                   <Image src={getOptimizedImageUrl(settings.mobileImage)} alt="Mobile Promo Bg" fill sizes="120px" className="object-cover" />
                 </div>
-                <div className="space-y-2 flex-1">
-                  <label className="cursor-pointer inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-900 px-4 py-2.5 rounded-xl text-xs font-bold">
+                <div className="space-y-2 flex-1 min-w-0">
+                  <label className="cursor-pointer w-full sm:w-auto min-h-[40px] inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-900 px-4 py-2.5 rounded-xl text-xs font-bold">
                     <Upload size={14} /> Încarcă Fundal Mobil
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => onSelectFile('mobile', e)} />
                   </label>
@@ -637,10 +648,10 @@ export default function PromoSettingsPage() {
               </div>
             </div>
 
-            <div className="flex justify-center rounded-2xl bg-slate-950 p-4 sm:p-6">
+            <div className="flex justify-center rounded-2xl bg-slate-950 p-3 sm:p-6">
               <div
                 className={`relative overflow-hidden rounded-[22px] border border-white/15 bg-[#07070b] shadow-2xl flex ${
-                  previewMode === 'mobile' ? 'w-[300px] min-h-[480px] flex-col' : 'w-full min-h-[340px] flex-row'
+                  previewMode === 'mobile' ? 'w-full max-w-[300px] min-h-[460px] flex-col' : 'w-full min-h-[280px] sm:min-h-[340px] flex-col sm:flex-row'
                 }`}
               >
                 <img
@@ -652,7 +663,7 @@ export default function PromoSettingsPage() {
 
                 <div
                   className={`relative z-10 flex flex-col items-center justify-center text-center ${
-                    previewMode === 'mobile' ? 'w-full px-5 pt-6 pb-40' : 'w-[50%] px-6 py-6'
+                    previewMode === 'mobile' ? 'w-full px-5 pt-6 pb-36' : 'w-full sm:w-[50%] px-5 sm:px-6 py-6'
                   }`}
                 >
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-zinc-200 mb-2">
@@ -677,22 +688,22 @@ export default function PromoSettingsPage() {
               <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-black">RO</span>
               Texte Română
             </h2>
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Badge Sus</label>
-                <input type="text" value={settings.ro.badge} onChange={(e) => handleTextChange('ro', 'badge', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium" />
+                <input type="text" value={settings.ro.badge} onChange={(e) => handleTextChange('ro', 'badge', e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-medium" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Titlu</label>
-                <input type="text" value={settings.ro.title} onChange={(e) => handleTextChange('ro', 'title', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold" />
+                <input type="text" value={settings.ro.title} onChange={(e) => handleTextChange('ro', 'title', e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-bold" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Text Card Răzuire</label>
-                <input type="text" value={settings.ro.button} onChange={(e) => handleTextChange('ro', 'button', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold" />
+                <input type="text" value={settings.ro.button} onChange={(e) => handleTextChange('ro', 'button', e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-bold" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Link Alternativ</label>
-                <input type="text" value={settings.ro.skipLink} onChange={(e) => handleTextChange('ro', 'skipLink', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium" />
+                <input type="text" value={settings.ro.skipLink} onChange={(e) => handleTextChange('ro', 'skipLink', e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-medium" />
               </div>
             </div>
           </div>
@@ -703,25 +714,40 @@ export default function PromoSettingsPage() {
               <span className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-black">EN</span>
               Texte Engleză
             </h2>
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Top Badge</label>
-                <input type="text" value={settings.en.badge} onChange={(e) => handleTextChange('en', 'badge', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium" />
+                <input type="text" value={settings.en.badge} onChange={(e) => handleTextChange('en', 'badge', e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-medium" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Main Title</label>
-                <input type="text" value={settings.en.title} onChange={(e) => handleTextChange('en', 'title', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold" />
+                <input type="text" value={settings.en.title} onChange={(e) => handleTextChange('en', 'title', e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-bold" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Scratch Card Text</label>
-                <input type="text" value={settings.en.button} onChange={(e) => handleTextChange('en', 'button', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold" />
+                <input type="text" value={settings.en.button} onChange={(e) => handleTextChange('en', 'button', e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-bold" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Instant Reveal Link</label>
-                <input type="text" value={settings.en.skipLink} onChange={(e) => handleTextChange('en', 'skipLink', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium" />
+                <input type="text" value={settings.en.skipLink} onChange={(e) => handleTextChange('en', 'skipLink', e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-medium" />
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Sticky Mobile Save Bar */}
+      <div className="sm:hidden sticky bottom-2 z-30 pt-1">
+        <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-2 shadow-xl">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-black px-5 py-3 rounded-xl font-black shadow-sm transition-all disabled:opacity-50 text-sm"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save size={17} />}
+            <span>{saving ? 'Se salvează...' : 'Salvează Modificările'}</span>
+          </button>
         </div>
       </div>
     </div>

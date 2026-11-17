@@ -6,7 +6,7 @@ import { resend } from "@/lib/resend-service";
 import { AbandonedCartEmail } from "@/components/email/AbandonedCartEmail";
 import { getEmailTemplate } from "@/app/actions/email-templates";
 import { getSiteUrl, getResendFromEmail } from "@/lib/site-config";
-import { getServerExchangeRates, normalizeCartItemsCurrency } from "@/utils/pricing";
+import { convertToRon, getProductPrice, getServerExchangeRates, normalizeCartItemsCurrency } from "@/utils/pricing";
 
 export interface AbandonedCartItem {
   id: string;
@@ -41,6 +41,7 @@ export interface FormattedAbandonedCart {
   customer: AbandonedCartCustomer;
   items: AbandonedCartItem[];
   totalAmount: number;
+  totalAmountRon: number;
   currency: string;
   status: 'abandoned' | 'active' | 'recovered' | 'completed';
   rawStatus: string;
@@ -50,6 +51,16 @@ export interface FormattedAbandonedCart {
   recoveredByOrderId?: string | null;
   recoveredAt?: string | null;
   recoveryUrl: string;
+}
+
+export interface CurrencyBreakdownEntry {
+  count: number;
+  abandonedCount: number;
+  recoveredCount: number;
+  abandonedNative: number;
+  abandonedRon: number;
+  recoveredNative: number;
+  recoveredRon: number;
 }
 
 export interface AbandonedCartsStats {
@@ -62,6 +73,7 @@ export interface AbandonedCartsStats {
   recoveredRevenue: number;
   recoveryRate: number;
   todayCount: number;
+  currencyBreakdown?: Record<string, CurrencyBreakdownEntry>;
 }
 
 export interface AvailableRecoveryCoupon {
@@ -77,6 +89,71 @@ export interface GetAbandonedCartsResult {
   stats: AbandonedCartsStats;
   availableCoupons: AvailableRecoveryCoupon[];
   default72hCoupon?: string;
+}
+
+function parseSessionItemsArray(rawItems: any): any[] {
+  if (typeof rawItems === 'string') {
+    try {
+      const parsed = JSON.parse(rawItems);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(rawItems) ? rawItems : [];
+}
+
+function buildNormalizedAbandonedItems(
+  rawItems: any,
+  sessionCurrency: string,
+  expectedTotal: any,
+  liveRates?: Record<string, number>
+): AbandonedCartItem[] {
+  const parsed = parseSessionItemsArray(rawItems);
+  const preNormalized = parsed.map((item: any, idx: number) => {
+    let priceNum = 0;
+    if (typeof item?.price === 'number') {
+      priceNum = item.price;
+    } else if (item?.price && typeof item.price === 'object') {
+      priceNum = getProductPrice(item.price, sessionCurrency, liveRates);
+    } else {
+      priceNum = parseFloat(String(item?.price || 0)) || 0;
+    }
+
+    return {
+      id: String(item?.id || `item-${idx}`),
+      name:
+        typeof item?.name === 'object' && item.name !== null
+          ? item.name.ro || item.name.en || 'Produs'
+          : String(item?.name || 'Produs'),
+      quantity: Math.max(1, Number(item?.quantity) || 1),
+      price: Number(priceNum) || 0,
+      image: item?.image || item?.selectedVariant?.image || undefined,
+      selectedVariant: item?.selectedVariant || null,
+    };
+  });
+
+  return normalizeCartItemsCurrency(
+    preNormalized,
+    sessionCurrency,
+    expectedTotal,
+    liveRates
+  );
+}
+
+function computeSessionTotalInRon(
+  session: any,
+  liveRates: Record<string, number>
+): { sessionCurrency: string; nativeTotal: number; totalRon: number } {
+  const sessionCurrency = String(session?.currency || 'RON').toUpperCase().trim() || 'RON';
+  let nativeTotal = Number(session?.total_amount) || 0;
+  if (nativeTotal === 0) {
+    const itemsList = buildNormalizedAbandonedItems(session?.items, sessionCurrency, session?.total_amount, liveRates);
+    nativeTotal = itemsList.reduce((acc, curr) => acc + curr.price * curr.quantity, 0);
+  }
+  nativeTotal = Number(nativeTotal.toFixed(2));
+  const totalRon = convertToRon(nativeTotal, sessionCurrency, liveRates);
+  return { sessionCurrency, nativeTotal, totalRon };
 }
 
 /**
@@ -100,6 +177,7 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
   }
 
   const rawSessions = sessions || [];
+  const liveRates = await getServerExchangeRates();
 
   // 2. Fetch completed/recent orders to detect recovered sessions
   const { data: orders } = await supabaseAdmin
@@ -107,7 +185,7 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
     .select('id, customer_email, created_at, total_amount, currency, status')
     .neq('status', 'cancelled');
 
-  const ordersByEmail = new Map<string, Array<{ id: string; createdAt: string; totalAmount: number }>>();
+  const ordersByEmail = new Map<string, Array<{ id: string; createdAt: string; totalAmount: number; currency: string }>>();
   if (orders) {
     orders.forEach(o => {
       if (o.customer_email) {
@@ -118,7 +196,8 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
         ordersByEmail.get(emailClean)!.push({
           id: o.id,
           createdAt: o.created_at,
-          totalAmount: Number(o.total_amount || 0)
+          totalAmount: Number(o.total_amount || 0),
+          currency: String(o.currency || 'RON').toUpperCase().trim() || 'RON',
         });
       }
     });
@@ -137,42 +216,42 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
   let potentialLostRev = 0;
   let recoveredRev = 0;
   let todayCount = 0;
+  const currencyBreakdown: Record<string, CurrencyBreakdownEntry> = {};
 
   const formattedCarts: FormattedAbandonedCart[] = rawSessions.map(session => {
     const emailClean = (session.email || '').trim().toLowerCase();
     const sessionCreatedAt = new Date(session.created_at).getTime();
     const sessionUpdatedAt = new Date(session.updated_at || session.created_at).getTime();
+    const sessionCurrency = String(session.currency || 'RON').toUpperCase().trim() || 'RON';
 
-    // Parse items safely
-    let itemsList: AbandonedCartItem[] = [];
-    if (Array.isArray(session.items)) {
-      itemsList = session.items.map((item: any, idx: number) => {
-        let priceNum = 0;
-        if (typeof item.price === 'number') {
-          priceNum = item.price;
-        } else if (item.price && typeof item.price === 'object') {
-          priceNum = Number(item.price.RON || item.price.EUR || Object.values(item.price)[0] || 0);
-        } else {
-          priceNum = parseFloat(String(item.price || 0)) || 0;
-        }
+    const itemsList = buildNormalizedAbandonedItems(
+      session.items,
+      sessionCurrency,
+      session.total_amount,
+      liveRates
+    );
 
-        return {
-          id: String(item.id || `item-${idx}`),
-          name: typeof item.name === 'object' ? (item.name.ro || item.name.en || 'Produs') : String(item.name || 'Produs'),
-          quantity: Number(item.quantity) || 1,
-          price: priceNum,
-          image: item.image || item.selectedVariant?.image || undefined,
-          selectedVariant: item.selectedVariant || null
-        };
-      });
-    }
-
-    // Calculate total amount
+    // Calculate total amount in session's native currency & convert to RON for unified stats
     let totalAmt = Number(session.total_amount) || 0;
     if (totalAmt === 0 && itemsList.length > 0) {
       totalAmt = itemsList.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
     }
     totalAmt = Number(totalAmt.toFixed(2));
+    const totalAmountRon = convertToRon(totalAmt, sessionCurrency, liveRates);
+
+    if (!currencyBreakdown[sessionCurrency]) {
+      currencyBreakdown[sessionCurrency] = {
+        count: 0,
+        abandonedCount: 0,
+        recoveredCount: 0,
+        abandonedNative: 0,
+        abandonedRon: 0,
+        recoveredNative: 0,
+        recoveredRon: 0,
+      };
+    }
+    const currStats = currencyBreakdown[sessionCurrency];
+    currStats.count += 1;
 
     // Determine status
     let effectiveStatus: 'abandoned' | 'active' | 'recovered' | 'completed' = 'abandoned';
@@ -185,7 +264,10 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
     } else if (session.status === 'recovered') {
       effectiveStatus = 'recovered';
       totalRecovered++;
-      recoveredRev += totalAmt;
+      recoveredRev += totalAmountRon;
+      currStats.recoveredCount += 1;
+      currStats.recoveredNative = Number((currStats.recoveredNative + totalAmt).toFixed(2));
+      currStats.recoveredRon = Number((currStats.recoveredRon + totalAmountRon).toFixed(2));
     } else {
       // Check if user made a purchase after starting this checkout session
       const userOrders = emailClean ? ordersByEmail.get(emailClean) : null;
@@ -196,7 +278,10 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
         recoveredByOrderId = orderAfterSession.id;
         recoveredAt = orderAfterSession.createdAt;
         totalRecovered++;
-        recoveredRev += totalAmt;
+        recoveredRev += totalAmountRon;
+        currStats.recoveredCount += 1;
+        currStats.recoveredNative = Number((currStats.recoveredNative + totalAmt).toFixed(2));
+        currStats.recoveredRon = Number((currStats.recoveredRon + totalAmountRon).toFixed(2));
       } else {
         const timeSinceUpdate = nowMs - sessionUpdatedAt;
         if (timeSinceUpdate <= ABANDON_TIMEOUT_MS) {
@@ -205,7 +290,10 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
         } else {
           effectiveStatus = 'abandoned';
           totalAbandoned++;
-          potentialLostRev += totalAmt;
+          potentialLostRev += totalAmountRon;
+          currStats.abandonedCount += 1;
+          currStats.abandonedNative = Number((currStats.abandonedNative + totalAmt).toFixed(2));
+          currStats.abandonedRon = Number((currStats.abandonedRon + totalAmountRon).toFixed(2));
         }
       }
     }
@@ -240,7 +328,8 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
       },
       items: itemsList,
       totalAmount: totalAmt,
-      currency: session.currency || 'RON',
+      totalAmountRon,
+      currency: sessionCurrency,
       status: effectiveStatus,
       rawStatus: session.status || 'initiated',
       recoveryEmailsSent: session.recovery_emails_sent || {},
@@ -294,7 +383,8 @@ export async function getAdminAbandonedCarts(): Promise<GetAbandonedCartsResult>
       potentialLostRevenue: Number(potentialLostRev.toFixed(2)),
       recoveredRevenue: Number(recoveredRev.toFixed(2)),
       recoveryRate,
-      todayCount
+      todayCount,
+      currencyBreakdown,
     },
     availableCoupons: activeCoupons,
     default72hCoupon
@@ -448,22 +538,11 @@ export async function sendManualRecoveryEmail(
     .replace('{{coupon}}', couponCode || '')
     .replace('{{value}}', String(couponValue || ''));
 
-  // Parse items safely
-  let parsedSessionItems = session.items || [];
-  if (typeof parsedSessionItems === 'string') {
-    try {
-      parsedSessionItems = JSON.parse(parsedSessionItems);
-    } catch {
-      parsedSessionItems = [];
-    }
-  }
-  if (!Array.isArray(parsedSessionItems)) parsedSessionItems = [];
-
   const siteUrl = getSiteUrl();
   const cartCheckoutUrl = `${siteUrl}/${locale}/checkout${couponCode ? `?coupon=${encodeURIComponent(couponCode)}` : ''}`;
-  const sessionCurrency = String(session.currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase();
+  const sessionCurrency = String(session.currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase().trim() || 'RON';
   const liveRates = await getServerExchangeRates().catch(() => undefined);
-  const normalizedItems = normalizeCartItemsCurrency(parsedSessionItems, sessionCurrency, session.total_amount, liveRates);
+  const normalizedItems = buildNormalizedAbandonedItems(session.items, sessionCurrency, session.total_amount, liveRates);
 
   // 5. Send via Resend
   const emailPayload = {
@@ -556,6 +635,7 @@ export async function runAbandonedCartsAutomation() {
 
   const template24h = await getEmailTemplate('abandoned_24h');
   const template72h = await getEmailTemplate('abandoned_72h');
+  const liveRates = await getServerExchangeRates();
 
   const { data: setting72h } = await supabaseAdmin.from('store_settings').select('value').eq('key', 'abandoned_72h_coupon').single();
   const couponCode72h = setting72h?.value || 'TREN10';
@@ -620,21 +700,10 @@ export async function runAbandonedCartsAutomation() {
       .replace('{{coupon}}', couponCode72h)
       .replace('{{value}}', String(couponValue72h));
 
-    let parsedItems = session.items || [];
-    if (typeof parsedItems === 'string') {
-      try {
-        parsedItems = JSON.parse(parsedItems);
-      } catch {
-        parsedItems = [];
-      }
-    }
-    if (!Array.isArray(parsedItems)) parsedItems = [];
-
     const siteUrl = getSiteUrl();
     const autoCartUrl = `${siteUrl}/${locale}/checkout${emailType === '72h' ? `?coupon=${encodeURIComponent(couponCode72h)}` : ''}`;
-    const sessionCurrency = String(session.currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase();
-    const liveRates = await getServerExchangeRates().catch(() => undefined);
-    const normalizedItems = normalizeCartItemsCurrency(parsedItems, sessionCurrency, session.total_amount, liveRates);
+    const sessionCurrency = String(session.currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase().trim() || 'RON';
+    const normalizedItems = buildNormalizedAbandonedItems(session.items, sessionCurrency, session.total_amount, liveRates);
 
     try {
       const resendResult = await resend.emails.send({
@@ -798,6 +867,7 @@ export async function getTranchesStatus(): Promise<TranchesStatusResult> {
     .select('email, marketing');
   const unsubSet = new Set((unsubscribed || []).filter(u => u.marketing === false).map(u => u.email.toLowerCase().trim()));
 
+  const liveRates = await getServerExchangeRates();
   const nowMs = Date.now();
   const ABANDON_TIMEOUT_MS = 30 * 60 * 1000;
   const uniqueMap = new Map<string, any>();
@@ -816,10 +886,7 @@ export async function getTranchesStatus(): Promise<TranchesStatusResult> {
     const sUpdatedAt = new Date(s.updated_at || s.created_at).getTime();
     if (nowMs - sUpdatedAt <= ABANDON_TIMEOUT_MS) continue;
 
-    let amt = Number(s.total_amount) || 0;
-    if (amt === 0 && Array.isArray(s.items)) {
-      amt = s.items.reduce((acc: number, curr: any) => acc + ((Number(curr.price) || 0) * (Number(curr.quantity) || 1)), 0);
-    }
+    const { totalRon: amt } = computeSessionTotalInRon(s, liveRates);
 
     const has72hSent = !!(s.recovery_emails_sent?.['72h']);
     const sentAt = s.recovery_emails_sent?.['72h_sent_at'];
@@ -948,6 +1015,7 @@ export async function sendAbandonedCartTranche(trancheNumber: 1 | 2) {
     .select('email, marketing');
   const unsubSet = new Set((unsubscribed || []).filter(u => u.marketing === false).map(u => u.email.toLowerCase().trim()));
 
+  const liveRates = await getServerExchangeRates();
   const nowMs = Date.now();
   const ABANDON_TIMEOUT_MS = 30 * 60 * 1000;
   const uniqueMap = new Map<string, any>();
@@ -968,10 +1036,7 @@ export async function sendAbandonedCartTranche(trancheNumber: 1 | 2) {
 
     const has72hSent = !!(s.recovery_emails_sent?.['72h']);
 
-    let amt = Number(s.total_amount) || 0;
-    if (amt === 0 && Array.isArray(s.items)) {
-      amt = s.items.reduce((acc: number, curr: any) => acc + ((Number(curr.price) || 0) * (Number(curr.quantity) || 1)), 0);
-    }
+    const { totalRon: amt } = computeSessionTotalInRon(s, liveRates);
 
     if (!uniqueMap.has(email)) {
       uniqueMap.set(email, {
@@ -1016,16 +1081,6 @@ export async function sendAbandonedCartTranche(trancheNumber: 1 | 2) {
     const email = person.email;
     const locale = (person.country === 'RO' || !person.country) ? 'ro' : 'en';
 
-    let parsedItems = s.items || [];
-    if (typeof parsedItems === 'string') {
-      try {
-        parsedItems = JSON.parse(parsedItems);
-      } catch {
-        parsedItems = [];
-      }
-    }
-    if (!Array.isArray(parsedItems)) parsedItems = [];
-
     const customerFirstName = person.name.split(' ')[0] || (locale === 'en' ? 'Friend' : 'Prieten');
     const defaultSubject = locale === 'en'
       ? `Here is your ${couponValue}% discount for your cart!`
@@ -1039,9 +1094,8 @@ export async function sendAbandonedCartTranche(trancheNumber: 1 | 2) {
 
     const siteUrl = getSiteUrl();
     const cartCheckoutUrl = `${siteUrl}/${locale}/checkout?coupon=${encodeURIComponent(couponCode)}`;
-    const sessionCurrency = String((s as any).currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase();
-    const liveRates = await getServerExchangeRates().catch(() => undefined);
-    const normalizedItems = normalizeCartItemsCurrency(parsedItems, sessionCurrency, (s as any).total_amount, liveRates);
+    const sessionCurrency = String((s as any).currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase().trim() || 'RON';
+    const normalizedItems = buildNormalizedAbandonedItems(s.items, sessionCurrency, (s as any).total_amount, liveRates);
 
     try {
       const resendResult = await resend.emails.send({

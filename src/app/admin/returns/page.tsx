@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { updateReturnStatus } from '@/app/actions/returns';
 import { getCanonicalOrderNumber } from '@/utils/admin-helpers';
+import { convertToRon, FALLBACK_RATES } from '@/utils/pricing';
 import { 
   RefreshCw, 
   CheckCircle2, 
@@ -31,6 +32,8 @@ type ReturnFilter = 'all' | 'pending' | 'approved' | 'returned' | 'rejected';
 
 export default function AdminReturnsPage() {
   const [returns, setReturns] = useState<any[]>([]);
+  const [ordersById, setOrdersById] = useState<Record<string, { currency: string; totalAmount: number }>>({});
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(FALLBACK_RATES);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<ReturnFilter>('all');
@@ -62,9 +65,30 @@ export default function AdminReturnsPage() {
   async function fetchReturns() {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/data?action=returns');
-      const json = await res.json();
-      setReturns(json.data || []);
+      const [returnsRes, ordersRes, ratesRes] = await Promise.all([
+        fetch('/api/admin/data?action=returns').then((r) => r.json()),
+        fetch('/api/admin/orders').then((r) => r.json()).catch(() => ({ orders: [] })),
+        fetch('/api/exchange-rates').then((r) => r.json()).catch(() => ({ rates: FALLBACK_RATES })),
+      ]);
+
+      setReturns(returnsRes?.data || []);
+
+      const nextOrdersMap: Record<string, { currency: string; totalAmount: number }> = {};
+      const ordersList = Array.isArray(ordersRes) ? ordersRes : (ordersRes?.orders || ordersRes?.data || []);
+      for (const o of ordersList) {
+        const key = String(o.supabaseId || o.id || '');
+        if (key) {
+          nextOrdersMap[key] = {
+            currency: String(o.currency || 'RON').toUpperCase().trim(),
+            totalAmount: Number(o.totalAmount ?? o.total_amount ?? 0),
+          };
+        }
+      }
+      setOrdersById(nextOrdersMap);
+
+      if (ratesRes?.rates && typeof ratesRes.rates === 'object') {
+        setExchangeRates({ ...FALLBACK_RATES, ...ratesRes.rates });
+      }
     } catch (err: any) {
       toast.error('Eroare la încărcarea retururilor.');
     } finally {
@@ -130,16 +154,72 @@ export default function AdminReturnsPage() {
     return getCanonicalOrderNumber(ret.orders || ret);
   };
 
-  // Counts for each tab
+  const getReturnMoney = (ret: any) => {
+    const orderKey = String(ret.orders?.id || ret.order_id || '');
+    const matched = orderKey ? ordersById[orderKey] : undefined;
+    const currency = String(
+      ret.orders?.currency ||
+      matched?.currency ||
+      ret.orders?.carrier_metadata?.currency ||
+      'RON'
+    ).toUpperCase().trim();
+    const nativeAmount = Number(ret.total_refund_amount) > 0
+      ? Number(ret.total_refund_amount)
+      : Number(ret.orders?.total_amount ?? matched?.totalAmount ?? 0);
+    const ronAmount = convertToRon(nativeAmount, currency, exchangeRates);
+    return { nativeAmount, currency, ronAmount };
+  };
+
+  // Counts and multi-currency converted RON totals for KPIs
   const counts = useMemo(() => {
-    return {
-      all: returns.length,
-      pending: returns.filter(r => r.status === 'pending').length,
-      approved: returns.filter(r => r.status === 'approved').length,
-      returned: returns.filter(r => r.status === 'returned' || r.status === 'refunded').length,
-      rejected: returns.filter(r => r.status === 'rejected').length,
+    const summarize = (list: any[]) => {
+      let ronTotal = 0;
+      const byCurrency: Record<string, number> = {};
+      for (const r of list) {
+        const orderKey = String(r.orders?.id || r.order_id || '');
+        const matched = orderKey ? ordersById[orderKey] : undefined;
+        const curr = String(
+          r.orders?.currency ||
+          matched?.currency ||
+          r.orders?.carrier_metadata?.currency ||
+          'RON'
+        ).toUpperCase().trim();
+        const amt = Number(r.total_refund_amount) > 0
+          ? Number(r.total_refund_amount)
+          : Number(r.orders?.total_amount ?? matched?.totalAmount ?? 0);
+        ronTotal += convertToRon(amt, curr, exchangeRates);
+        byCurrency[curr] = Number(((byCurrency[curr] || 0) + amt).toFixed(2));
+      }
+      return {
+        count: list.length,
+        ronTotal: Number(ronTotal.toFixed(2)),
+        byCurrency,
+      };
     };
-  }, [returns]);
+
+    const pendingList = returns.filter((r) => r.status === 'pending');
+    const approvedList = returns.filter((r) => r.status === 'approved');
+    const returnedList = returns.filter((r) => r.status === 'returned' || r.status === 'refunded');
+    const rejectedList = returns.filter((r) => r.status === 'rejected');
+
+    const allSummary = summarize(returns);
+    const pendingSummary = summarize(pendingList);
+    const approvedSummary = summarize(approvedList);
+    const returnedSummary = summarize(returnedList);
+
+    return {
+      all: allSummary.count,
+      pending: pendingSummary.count,
+      approved: approvedSummary.count,
+      returned: returnedSummary.count,
+      rejected: rejectedList.length,
+      allRon: allSummary.ronTotal,
+      pendingRon: pendingSummary.ronTotal,
+      approvedRon: approvedSummary.ronTotal,
+      returnedRon: returnedSummary.ronTotal,
+      allByCurrency: allSummary.byCurrency,
+    };
+  }, [returns, ordersById, exchangeRates]);
 
   // Filter and search logic
   const filteredReturns = useMemo(() => {
@@ -170,10 +250,10 @@ export default function AdminReturnsPage() {
 
   return (
     <div className="space-y-5 sm:space-y-6 pb-12 w-full max-w-full">
-      {/* 🌟 HEADER */}
+      {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2.5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
               <RotateCcw className="text-[#e32f8c]" size={24} /> Gestionează Retururi
             </h1>
@@ -182,41 +262,62 @@ export default function AdminReturnsPage() {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">
-            Cererile de retragere trimise de clienți. Verifică IBAN-ul și datele comenzii înainte de rambursare.
+            Cererile de retragere trimise de clienți. Verifică IBAN-ul, moneda și datele comenzii înainte de rambursare.
           </p>
         </div>
 
         <button 
           onClick={fetchReturns}
           disabled={loading}
-          className="w-full sm:w-auto h-9 px-4 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+          className="w-full sm:w-auto min-h-[40px] px-4 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
         >
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           <span>Actualizează lista</span>
         </button>
       </div>
 
-      {/* 📊 SUMMARY METRICS PILLS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Total Cereri</span>
-          <p className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">{counts.all}</p>
+      {/* SUMMARY METRICS PILLS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-2xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block truncate">Total Cereri</span>
+          <div className="flex items-baseline justify-between gap-2 mt-0.5 flex-wrap">
+            <p className="text-lg sm:text-xl font-black text-slate-900">{counts.all}</p>
+            <span className="text-[11px] font-black text-slate-700 tabular-nums">{counts.allRon.toFixed(2)} RON</span>
+          </div>
+          {Object.keys(counts.allByCurrency).some((c) => c !== 'RON') && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {Object.entries(counts.allByCurrency).map(([curr, amt]) => (
+                <span key={curr} className="text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                  {amt.toFixed(2)} {curr}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-amber-200/80 bg-amber-50/20 shadow-2xs">
-          <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider">În Așteptare</span>
-          <p className="text-lg sm:text-xl font-black text-amber-700 mt-0.5">{counts.pending}</p>
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-amber-200/80 bg-amber-50/20 shadow-2xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider block truncate">În Așteptare</span>
+          <div className="flex items-baseline justify-between gap-2 mt-0.5 flex-wrap">
+            <p className="text-lg sm:text-xl font-black text-amber-700">{counts.pending}</p>
+            <span className="text-[11px] font-black text-amber-800 tabular-nums">{counts.pendingRon.toFixed(2)} RON</span>
+          </div>
         </div>
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-blue-200/80 bg-blue-50/20 shadow-2xs">
-          <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider">Aprobate</span>
-          <p className="text-lg sm:text-xl font-black text-blue-700 mt-0.5">{counts.approved}</p>
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-blue-200/80 bg-blue-50/20 shadow-2xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider block truncate">Aprobate</span>
+          <div className="flex items-baseline justify-between gap-2 mt-0.5 flex-wrap">
+            <p className="text-lg sm:text-xl font-black text-blue-700">{counts.approved}</p>
+            <span className="text-[11px] font-black text-blue-800 tabular-nums">{counts.approvedRon.toFixed(2)} RON</span>
+          </div>
         </div>
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-emerald-200/80 bg-emerald-50/20 shadow-2xs">
-          <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Finalizate</span>
-          <p className="text-lg sm:text-xl font-black text-emerald-700 mt-0.5">{counts.returned}</p>
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-emerald-200/80 bg-emerald-50/20 shadow-2xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider block truncate">Finalizate</span>
+          <div className="flex items-baseline justify-between gap-2 mt-0.5 flex-wrap">
+            <p className="text-lg sm:text-xl font-black text-emerald-700">{counts.returned}</p>
+            <span className="text-[11px] font-black text-emerald-800 tabular-nums">{counts.returnedRon.toFixed(2)} RON</span>
+          </div>
         </div>
       </div>
 
-      {/* 🔍 SEARCH AND FILTERS (Zero Horizontal Scroll!) */}
+      {/* SEARCH AND FILTERS */}
       <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
         {/* Search */}
         <div className="relative w-full">
@@ -226,12 +327,12 @@ export default function AdminReturnsPage() {
             placeholder="Caută după comandă (TZ / ODIN), nume, email, telefon sau IBAN..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all placeholder:text-slate-400"
+            className="w-full min-h-[40px] pl-10 pr-14 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all placeholder:text-slate-400"
           />
           {search && (
             <button 
               onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-700"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-700 min-h-[32px] px-1.5 cursor-pointer"
             >
               Șterge
             </button>
@@ -242,7 +343,7 @@ export default function AdminReturnsPage() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 sm:gap-2 pt-1 border-t border-slate-100">
           <button
             onClick={() => setActiveFilter('all')}
-            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`min-h-[40px] py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeFilter === 'all'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80'
@@ -256,7 +357,7 @@ export default function AdminReturnsPage() {
 
           <button
             onClick={() => setActiveFilter('pending')}
-            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`min-h-[40px] py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeFilter === 'pending'
                 ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
                 : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80'
@@ -271,7 +372,7 @@ export default function AdminReturnsPage() {
 
           <button
             onClick={() => setActiveFilter('approved')}
-            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`min-h-[40px] py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeFilter === 'approved'
                 ? 'bg-blue-600 text-white shadow-xs font-black'
                 : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80'
@@ -286,7 +387,7 @@ export default function AdminReturnsPage() {
 
           <button
             onClick={() => setActiveFilter('returned')}
-            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`min-h-[40px] py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeFilter === 'returned'
                 ? 'bg-emerald-600 text-white shadow-xs font-black'
                 : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80'
@@ -301,7 +402,7 @@ export default function AdminReturnsPage() {
 
           <button
             onClick={() => setActiveFilter('rejected')}
-            className={`col-span-2 sm:col-span-1 py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`col-span-2 sm:col-span-1 min-h-[40px] py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeFilter === 'rejected'
                 ? 'bg-rose-600 text-white shadow-xs font-black'
                 : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80'
@@ -316,7 +417,7 @@ export default function AdminReturnsPage() {
         </div>
       </div>
 
-      {/* 📦 RETURNS CARD LIST (ZERO HORIZONTAL SCROLL) */}
+      {/* RETURNS CARD LIST */}
       <div className="space-y-3 sm:space-y-4">
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
@@ -340,6 +441,7 @@ export default function AdminReturnsPage() {
             const displayOrderId = getOrderDisplay(ret);
             const isReasonExpanded = expandedReasonId === ret.id;
             const isProcessing = actionInProgress === ret.id;
+            const money = getReturnMoney(ret);
 
             return (
               <div 
@@ -366,17 +468,22 @@ export default function AdminReturnsPage() {
                     {/* Quick link to admin orders */}
                     <Link
                       href={`/admin/orders?search=${encodeURIComponent(displayOrderId)}`}
-                      className="text-xs font-bold text-slate-500 hover:text-[#009bb3] flex items-center gap-1 bg-slate-100/80 hover:bg-[#e32f8c]/10 px-2 py-1 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                      className="text-xs font-bold text-slate-500 hover:text-[#009bb3] flex items-center gap-1 bg-slate-100/80 hover:bg-[#e32f8c]/10 px-2.5 py-1 rounded-lg border border-slate-200 transition-colors cursor-pointer"
                       title="Deschide în Panou Comenzi"
                     >
                       <ExternalLink size={12} />
                       <span className="hidden sm:inline">Vezi Comandă</span>
                     </Link>
 
-                    {/* Order Amount */}
-                    <span className="text-xs font-black text-slate-800 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md">
-                      {ret.orders?.total_amount || 0} RON
+                    {/* Order Amount in Native Currency (+ RON equivalent if foreign) */}
+                    <span className="text-xs font-black bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md tabular-nums">
+                      {money.nativeAmount.toFixed(2)} {money.currency}
                     </span>
+                    {money.currency !== 'RON' && money.nativeAmount > 0 && (
+                      <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md tabular-nums">
+                        ≈ {money.ronAmount.toFixed(2)} RON
+                      </span>
+                    )}
                   </div>
 
                   {/* Right: Return Status & Date */}
@@ -495,11 +602,11 @@ export default function AdminReturnsPage() {
                 {/* 4. ACTION FOOTER BAR */}
                 <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
                   {ret.status === 'pending' && (
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
                       <button
                         onClick={() => promptStatusChange(ret, 'rejected')}
                         disabled={isProcessing}
-                        className="flex-1 sm:flex-initial h-8 sm:h-9 px-3.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer"
+                        className="flex-1 sm:flex-initial min-h-[40px] px-3.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <XCircle size={13} />
                         <span>Respinge</span>
@@ -508,7 +615,7 @@ export default function AdminReturnsPage() {
                       <button
                         onClick={() => promptStatusChange(ret, 'approved')}
                         disabled={isProcessing}
-                        className="flex-1 sm:flex-initial h-8 sm:h-9 px-4 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl transition-all shadow-xs shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="flex-1 sm:flex-initial min-h-[40px] px-4 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl transition-all shadow-xs shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <CheckCircle2 size={13} />
                         <span>Aprobă Returul</span>
@@ -517,11 +624,11 @@ export default function AdminReturnsPage() {
                   )}
 
                   {ret.status === 'approved' && (
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
                       <button
                         onClick={() => promptStatusChange(ret, 'rejected')}
                         disabled={isProcessing}
-                        className="h-8 sm:h-9 px-3 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                        className="min-h-[40px] px-3 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
                       >
                         Respinge
                       </button>
@@ -529,7 +636,7 @@ export default function AdminReturnsPage() {
                       <button
                         onClick={() => promptStatusChange(ret, 'returned')}
                         disabled={isProcessing}
-                        className="flex-1 sm:flex-initial h-8 sm:h-9 px-4 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 rounded-xl transition-all shadow-xs shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="flex-1 sm:flex-initial min-h-[40px] px-4 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 rounded-xl transition-all shadow-xs shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <CheckCircle2 size={13} />
                         <span>Marchează Returnată & Rambursată</span>
@@ -555,7 +662,7 @@ export default function AdminReturnsPage() {
         )}
       </div>
 
-      {/* 🛡️ CONFIRMATION MODAL OVERLAY */}
+      {/* CONFIRMATION MODAL OVERLAY */}
       <AnimatePresence>
         {popup.isOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -570,7 +677,7 @@ export default function AdminReturnsPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 sm:p-6 transform transition-all space-y-4"
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-5 sm:p-6 transform transition-all space-y-4"
             >
               <div>
                 <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">

@@ -31,6 +31,7 @@ import {
 import { uploadAdminProgramPdf } from '@/lib/admin-pdf-upload';
 import { extractProgramPdfDisplayName } from '@/lib/program-pdf-display';
 import { LanguageFlagSvg } from '@/components/programs/LanguageFlagSvg';
+import { convertToRon, FALLBACK_RATES } from '@/utils/pricing';
 import type { StoredProgramFiles, ProgramFileSlot } from '@/lib/program-pdf-generator';
 
 type FilterTab = 'all' | 'needs_attention' | 'ready_to_send' | 'delivered';
@@ -41,6 +42,7 @@ export default function AdminProgramsPage() {
   const [files, setFiles] = useState<StoredProgramFiles>({});
   const [slots, setSlots] = useState<AdminProgramPdfSlot[]>([]);
   const [availableSlots, setAvailableSlots] = useState<Record<string, boolean>>({});
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(FALLBACK_RATES);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -52,7 +54,13 @@ export default function AdminProgramsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getAdminProgramOrdersAction();
+      const [res, ratesRes] = await Promise.all([
+        getAdminProgramOrdersAction(),
+        fetch('/api/exchange-rates').then((r) => r.json()).catch(() => ({ rates: FALLBACK_RATES })),
+      ]);
+      if (ratesRes?.rates && typeof ratesRes.rates === 'object') {
+        setExchangeRates({ ...FALLBACK_RATES, ...ratesRes.rates });
+      }
       if (!res.success) {
         toast.error(res.error || 'Eroare la încărcarea comenzilor cu programe.');
       } else {
@@ -90,6 +98,19 @@ export default function AdminProgramsPage() {
     const readyToSend = orders.filter(isOrderReadyForFinalPdf).length;
     const missingPdfOrders = orders.filter((o) => o.missingCount > 0).length;
     const loadedSlotsCount = slots.filter((s) => availableSlots[s.slot]).length;
+
+    let totalRevenueRon = 0;
+    const revenueByCurrency: Record<string, number> = {};
+    for (const o of orders) {
+      if (['cancelled', 'refunded', 'returned', 'failed'].includes(String(o.status || '').toLowerCase())) {
+        continue;
+      }
+      const curr = String(o.currency || 'RON').toUpperCase().trim();
+      const amt = Number(o.totalAmount || 0);
+      totalRevenueRon += convertToRon(amt, curr, exchangeRates);
+      revenueByCurrency[curr] = Number(((revenueByCurrency[curr] || 0) + amt).toFixed(2));
+    }
+
     return {
       total,
       delivered,
@@ -97,8 +118,10 @@ export default function AdminProgramsPage() {
       missingPdfOrders,
       loadedSlotsCount,
       totalSlotsCount: slots.length,
+      totalRevenueRon: Number(totalRevenueRon.toFixed(2)),
+      revenueByCurrency,
     };
-  }, [orders, slots, availableSlots]);
+  }, [orders, slots, availableSlots, exchangeRates]);
 
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -221,60 +244,74 @@ export default function AdminProgramsPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
           {stats.readyToSend > 0 && (
             <button
               type="button"
               onClick={handleBulkSendReady}
               disabled={bulkSending}
-              className="flex items-center gap-2 bg-[#e32f8c] hover:bg-[#c81e78] text-black px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-sm transition-all disabled:opacity-50"
+              className="min-h-[40px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c81e78] text-black px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-sm transition-all disabled:opacity-50 cursor-pointer"
             >
               {bulkSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               <span>Trimite PDF tuturor celor gata ({stats.readyToSend})</span>
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => setShowPdfManager((v) => !v)}
-            className="flex items-center gap-2 bg-white border border-slate-200 hover:border-[#e32f8c] text-slate-800 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all"
-          >
-            <FileText size={16} className="text-[#e32f8c]" />
-            <span>
-              PDF-uri ({stats.loadedSlotsCount}/{stats.totalSlotsCount})
-            </span>
-            {showPdfManager ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
+          <div className="grid grid-cols-2 sm:flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPdfManager((v) => !v)}
+              className="min-h-[40px] flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-[#e32f8c] text-slate-800 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer"
+            >
+              <FileText size={16} className="text-[#e32f8c] shrink-0" />
+              <span className="truncate">
+                PDF-uri ({stats.loadedSlotsCount}/{stats.totalSlotsCount})
+              </span>
+              {showPdfManager ? <ChevronUp size={15} className="shrink-0" /> : <ChevronDown size={15} className="shrink-0" />}
+            </button>
 
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all"
-          >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">Reîmprospătează</span>
-          </button>
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              className="min-h-[40px] flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer"
+            >
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              <span>Reîmprospătează</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* KPI STRIP */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs">
-          <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Comenzi Programe</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{stats.total}</div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-3.5 sm:p-4 shadow-xs min-w-0">
+          <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">Total Comenzi Programe</div>
+          <div className="flex items-baseline justify-between gap-2 mt-1 flex-wrap">
+            <div className="text-xl sm:text-2xl font-black text-slate-900 tabular-nums">{stats.total}</div>
+            <div className="text-xs font-black text-emerald-700 tabular-nums">{stats.totalRevenueRon.toFixed(2)} RON</div>
+          </div>
+          {Object.keys(stats.revenueByCurrency).some((c) => c !== 'RON') && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {Object.entries(stats.revenueByCurrency).map(([curr, amt]) => (
+                <span key={curr} className="text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded tabular-nums">
+                  {amt.toFixed(2)} {curr}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="bg-white border border-amber-100 rounded-2xl p-4 shadow-xs">
-          <div className="text-[11px] font-black uppercase tracking-wider text-amber-600">Fără PDF Încărcat</div>
-          <div className="text-2xl font-black text-amber-700 mt-1">{stats.missingPdfOrders}</div>
+        <div className="bg-white border border-amber-100 rounded-2xl p-3.5 sm:p-4 shadow-xs min-w-0">
+          <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-amber-600 truncate">Fără PDF Încărcat</div>
+          <div className="text-xl sm:text-2xl font-black text-amber-700 mt-1 tabular-nums">{stats.missingPdfOrders}</div>
         </div>
-        <div className="bg-white border border-pink-100 rounded-2xl p-4 shadow-xs">
-          <div className="text-[11px] font-black uppercase tracking-wider text-[#e32f8c]">Gata de Trimis (PDF Nou)</div>
-          <div className="text-2xl font-black text-[#c81e78] mt-1">{stats.readyToSend}</div>
+        <div className="bg-white border border-pink-100 rounded-2xl p-3.5 sm:p-4 shadow-xs min-w-0">
+          <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-[#e32f8c] truncate">Gata de Trimis (PDF Nou)</div>
+          <div className="text-xl sm:text-2xl font-black text-[#c81e78] mt-1 tabular-nums">{stats.readyToSend}</div>
         </div>
-        <div className="bg-white border border-emerald-100 rounded-2xl p-4 shadow-xs">
-          <div className="text-[11px] font-black uppercase tracking-wider text-emerald-600">Livrate cu PDF</div>
-          <div className="text-2xl font-black text-emerald-700 mt-1">{stats.delivered}</div>
+        <div className="bg-white border border-emerald-100 rounded-2xl p-3.5 sm:p-4 shadow-xs min-w-0">
+          <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-600 truncate">Livrate cu PDF</div>
+          <div className="text-xl sm:text-2xl font-black text-emerald-700 mt-1 tabular-nums">{stats.delivered}</div>
         </div>
       </div>
 
@@ -391,7 +428,7 @@ export default function AdminProgramsPage() {
           />
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 w-full md:w-auto">
           {[
             { id: 'all' as FilterTab, label: `Toate (${stats.total})` },
             { id: 'ready_to_send' as FilterTab, label: `Gata de Trimis (${stats.readyToSend})` },
@@ -402,7 +439,7 @@ export default function AdminProgramsPage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer truncate ${
                 activeTab === tab.id
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -458,9 +495,14 @@ export default function AdminProgramsPage() {
                           minute: '2-digit',
                         })}
                       </span>
-                      <span className="text-xs font-black text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">
-                        {order.totalAmount.toFixed(2)} {order.currency}
+                      <span className="text-xs font-black text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md tabular-nums">
+                        {order.totalAmount.toFixed(2)} {String(order.currency || 'RON').toUpperCase()}
                       </span>
+                      {String(order.currency || 'RON').toUpperCase() !== 'RON' && order.totalAmount > 0 && (
+                        <span className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md tabular-nums">
+                          ≈ {convertToRon(order.totalAmount, order.currency, exchangeRates).toFixed(2)} RON
+                        </span>
+                      )}
                       <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
                         {order.isDigitalOnly ? 'Doar Digital' : 'Mixt (Fizic + Digital)'}
                       </span>
@@ -485,18 +527,18 @@ export default function AdminProgramsPage() {
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-600">
-                      <span className="inline-flex items-center gap-1.5 font-bold text-slate-900">
-                        <User size={14} className="text-slate-400" />
-                        {order.customerName}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-600 min-w-0">
+                      <span className="inline-flex items-center gap-1.5 font-bold text-slate-900 min-w-0">
+                        <User size={14} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{order.customerName}</span>
                       </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Mail size={14} className="text-slate-400" />
-                        {order.customerEmail || 'Lipsă email'}
+                      <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+                        <Mail size={14} className="text-slate-400 shrink-0" />
+                        <span className="break-all">{order.customerEmail || 'Lipsă email'}</span>
                       </span>
                       {order.customerPhone && order.customerPhone !== 'N/A' && (
                         <span className="inline-flex items-center gap-1.5">
-                          <Phone size={14} className="text-slate-400" />
+                          <Phone size={14} className="text-slate-400 shrink-0" />
                           {order.customerPhone}
                         </span>
                       )}
@@ -539,7 +581,7 @@ export default function AdminProgramsPage() {
                       type="button"
                       disabled={isSending || !order.customerEmail}
                       onClick={() => handleManualSend(order, 'auto')}
-                      className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all disabled:opacity-50 ${
+                      className={`min-h-[40px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all disabled:opacity-50 cursor-pointer ${
                         allHavePdf
                           ? 'bg-[#e32f8c] hover:bg-[#c81e78] text-black shadow-sm'
                           : noneHavePdf

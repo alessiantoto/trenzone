@@ -344,6 +344,27 @@ export default function AdminDashboard() {
     }));
   }, [stats?.revenue, stats?.exchangeRates]);
 
+  const currencyBreakdownList = useMemo(() => {
+    const raw: Array<{ currency: string; orders: number; revenueNative: number; revenueRon: number }> =
+      stats?.currencyBreakdown || [];
+    const byCode = new Map(raw.map((item) => [item.currency, item]));
+    return AVAILABLE_CURRENCIES.map((c) => {
+      const entry = byCode.get(c.code);
+      const nativeVal = entry?.revenueNative || 0;
+      return {
+        code: c.code,
+        symbol: c.symbol,
+        orders: entry?.orders || 0,
+        revenueNative: nativeVal,
+        revenueRon: entry?.revenueRon || 0,
+        formattedNative: nativeVal.toLocaleString('ro-RO', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+      };
+    });
+  }, [stats?.currencyBreakdown]);
+
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
 
   if (isRedirecting || (loading && !stats)) {
@@ -451,7 +472,7 @@ export default function AdminDashboard() {
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ type: 'spring', stiffness: 520, damping: 36, mass: 0.6 }}
                     style={{ willChange: 'transform, opacity' }}
-                    className="absolute right-[-54px] sm:right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-[#14141d] text-white border border-white/15 rounded-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.85)] p-1.5 z-[200] transform-gpu"
+                    className="fixed inset-x-4 top-20 sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:right-0 sm:w-64 bg-[#14141d] text-white border border-white/15 rounded-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.85)] p-1.5 z-[200] transform-gpu"
                   >
                     <div className="flex items-center justify-between px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-400 border-b border-white/[0.07] mb-1">
                       <span>Monedă</span>
@@ -632,6 +653,51 @@ export default function AdminDashboard() {
               </span>
               <DeltaBadge pct={deltas.customersPct} dark />
             </div>
+          </div>
+        </div>
+
+        {/* 4-CURRENCY MIX BREAKDOWN PILLS (RON · EUR · USD · GBP) */}
+        <div className="relative z-10 mb-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+              Încasări native pe monedă
+            </span>
+            <span className="text-[11px] font-bold text-zinc-300 tabular-nums">
+              Total convertit ({selectedCurrency}):{' '}
+              <strong className="text-white">{formatMoney(stats?.revenue || 0).display}</strong>
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
+            {currencyBreakdownList.map((item) => {
+              const isSelected = selectedCurrency === item.code;
+              const hasOrders = item.orders > 0;
+              return (
+                <button
+                  key={item.code}
+                  type="button"
+                  onClick={() => setSelectedCurrency(item.code)}
+                  className={`flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#e32f8c]/20 border-[#e32f8c]/55 text-white'
+                      : hasOrders
+                        ? 'bg-white/[0.06] border-white/10 text-zinc-200 hover:bg-white/[0.11]'
+                        : 'bg-white/[0.02] border-white/[0.05] text-zinc-500 hover:bg-white/[0.06]'
+                  }`}
+                  title={`Afișează totalurile în ${item.code}`}
+                >
+                  <span className="inline-flex items-center gap-1.5 min-w-0">
+                    <CurrencyFlagIcon code={item.code} />
+                    <span className="text-[11px] font-black tracking-tight">{item.code}</span>
+                    <span className="text-[10px] font-bold text-zinc-400 tabular-nums">
+                      ({item.orders})
+                    </span>
+                  </span>
+                  <span className="text-[11px] font-black tabular-nums truncate">
+                    {item.formattedNative} {item.symbol}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -820,12 +886,12 @@ export default function AdminDashboard() {
         {/* Secondary Financial Health Strip */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
           <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-              <span>Valoare Medie (AOV)</span>
-              <Banknote size={14} className="text-emerald-500" />
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 gap-1">
+              <span className="truncate">Valoare Medie (AOV)</span>
+              <Banknote size={14} className="text-emerald-500 shrink-0" />
             </div>
             <div className="mt-1.5 flex items-baseline justify-between gap-1 flex-wrap">
-              <span className="text-base sm:text-lg font-black text-slate-900 tabular-nums">
+              <span className="text-sm sm:text-lg font-black text-slate-900 tabular-nums">
                 {formatMoney(stats?.aov || 0).display}
               </span>
               <DeltaBadge pct={deltas.aovPct} />
@@ -833,9 +899,9 @@ export default function AdminDashboard() {
           </div>
 
           <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-              <span>Plăți Card vs Ramburs</span>
-              <CreditCard size={14} className="text-blue-500" />
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 gap-1">
+              <span className="truncate">Plăți Card vs Ramburs</span>
+              <CreditCard size={14} className="text-blue-500 shrink-0" />
             </div>
             <div className="mt-1.5 text-xs sm:text-sm font-black text-slate-900 truncate tabular-nums">
               {stats?.cardCount ?? 0} Card · {stats?.rambursCount ?? 0} Ramburs
@@ -850,27 +916,27 @@ export default function AdminDashboard() {
             href="/admin/returns"
             className="bg-white border border-slate-200/90 hover:border-red-300 rounded-2xl p-3.5 sm:p-4 shadow-xs transition-all"
           >
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-              <span>Retururi / Anulări</span>
-              <RotateCcw size={14} className="text-red-500" />
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 gap-1">
+              <span className="truncate">Retururi / Anulări</span>
+              <RotateCcw size={14} className="text-red-500 shrink-0" />
             </div>
-            <div className="mt-1.5 flex items-baseline justify-between gap-1">
-              <span className="text-base sm:text-lg font-black text-red-600 tabular-nums">
+            <div className="mt-1.5 flex items-baseline justify-between gap-1 flex-wrap">
+              <span className="text-sm sm:text-lg font-black text-red-600 tabular-nums">
                 {stats?.returnRate || '0.0'}%
               </span>
-              <span className="text-[11px] font-bold text-slate-500 tabular-nums">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 tabular-nums">
                 {stats?.returnsCount || 0} ret. · {stats?.cancelledOrdersCount || 0} anul.
               </span>
             </div>
           </Link>
 
           <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-              <span>Neridicate / Eșuate</span>
-              <PackageX size={14} className="text-purple-500" />
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 gap-1">
+              <span className="truncate">Neridicate / Eșuate</span>
+              <PackageX size={14} className="text-purple-500 shrink-0" />
             </div>
-            <div className="mt-1.5 flex items-baseline justify-between gap-1">
-              <span className="text-base sm:text-lg font-black text-purple-600 tabular-nums">
+            <div className="mt-1.5 flex items-baseline justify-between gap-1 flex-wrap">
+              <span className="text-sm sm:text-lg font-black text-purple-600 tabular-nums">
                 {stats?.failedOrdersCount || 0}
               </span>
               <span className="text-[10px] font-bold text-slate-500 truncate tabular-nums">
@@ -913,7 +979,7 @@ export default function AdminDashboard() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3.5 rounded-xl bg-pink-50/60 border border-pink-100">
               <div className="flex items-center justify-between gap-1 text-xs font-bold text-slate-600">
                 <span className="flex items-center gap-1.5">
@@ -979,7 +1045,7 @@ export default function AdminDashboard() {
                       : 'bg-amber-500';
               return (
                 <div key={bucket.key} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
-                  <div className="flex items-center justify-between gap-2 text-xs mb-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-1 sm:gap-2 text-xs mb-1.5">
                     <span className="font-bold text-slate-800 truncate">{bucket.label}</span>
                     <span className="font-black text-slate-900 shrink-0 tabular-nums">
                       {bucket.count} ({bucket.percentage}%) · {formatMoney(bucket.revenue).display}

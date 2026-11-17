@@ -50,7 +50,7 @@ import { addAdminUser, removeAdminUser } from '@/app/actions/admin-users';
 import { ClearCacheButton } from '../components/ClearCacheButton';
 import toast from 'react-hot-toast';
 
-// 🌟 MODERN MAINTENANCE DATE PICKER COMPONENT
+// MODERN MAINTENANCE DATE PICKER COMPONENT
 function ModernMaintenanceDatePicker({
   value,
   onChange,
@@ -214,21 +214,21 @@ function ModernMaintenanceDatePicker({
         <button
           type="button"
           onClick={() => applyPreset(() => addHours(new Date(), 1), '+1h')}
-          className="flex-1 py-2 px-3 bg-white hover:bg-[#e32f8c]/15 active:bg-[#e32f8c]/25 border border-slate-200 hover:border-[#e32f8c] rounded-xl text-xs font-black text-slate-800 transition-all cursor-pointer shadow-2xs text-center"
+          className="flex-1 min-h-[40px] py-2 px-3 bg-white hover:bg-[#e32f8c]/15 active:bg-[#e32f8c]/25 border border-slate-200 hover:border-[#e32f8c] rounded-xl text-xs font-black text-slate-800 transition-all cursor-pointer shadow-2xs text-center"
         >
           +1h
         </button>
         <button
           type="button"
           onClick={() => applyPreset(() => addHours(new Date(), 3), '+3h')}
-          className="flex-1 py-2 px-3 bg-white hover:bg-[#e32f8c]/15 active:bg-[#e32f8c]/25 border border-slate-200 hover:border-[#e32f8c] rounded-xl text-xs font-black text-slate-800 transition-all cursor-pointer shadow-2xs text-center"
+          className="flex-1 min-h-[40px] py-2 px-3 bg-white hover:bg-[#e32f8c]/15 active:bg-[#e32f8c]/25 border border-slate-200 hover:border-[#e32f8c] rounded-xl text-xs font-black text-slate-800 transition-all cursor-pointer shadow-2xs text-center"
         >
           +3h
         </button>
         <button
           type="button"
           onClick={() => applyPreset(() => addDays(new Date(), 1), '+1 zi')}
-          className="flex-1 py-2 px-3 bg-white hover:bg-[#e32f8c]/15 active:bg-[#e32f8c]/25 border border-slate-200 hover:border-[#e32f8c] rounded-xl text-xs font-black text-slate-800 transition-all cursor-pointer shadow-2xs text-center"
+          className="flex-1 min-h-[40px] py-2 px-3 bg-white hover:bg-[#e32f8c]/15 active:bg-[#e32f8c]/25 border border-slate-200 hover:border-[#e32f8c] rounded-xl text-xs font-black text-slate-800 transition-all cursor-pointer shadow-2xs text-center"
         >
           +1 zi
         </button>
@@ -405,7 +405,7 @@ function ModernMaintenanceDatePicker({
           type="button"
           onClick={() => onSave()}
           disabled={saving}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+          className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer shadow-sm"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check size={14} className="text-[#e32f8c]" />}
           <span>{saving ? 'Se salvează data...' : 'Salvează Data Mentenanței'}</span>
@@ -588,10 +588,10 @@ export default function AdminSettingsPage() {
   };
 
   return (
-    <div className="p-3.5 sm:p-6 max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in pb-16">
-      {/* 🏁 HEADER */}
+    <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in pb-16">
+      {/* HEADER */}
       <div className="flex items-center gap-3 sm:gap-3.5 mb-6 sm:mb-8">
-        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#e32f8c]/10 text-[#008ba3] flex items-center justify-center shadow-xs">
+        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#e32f8c]/10 text-[#008ba3] flex items-center justify-center shadow-xs shrink-0">
           <SettingsIcon size={22} className="sm:w-6 sm:h-6" />
         </div>
         <div>
@@ -602,7 +602,7 @@ export default function AdminSettingsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
 
-        {/* 🛠️ Maintenance Mode Card */}
+        {/* Maintenance Mode Card */}
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col justify-between relative">
           {isMaintenance && (
             <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-pulse rounded-t-2xl sm:rounded-t-3xl" />
@@ -668,14 +668,14 @@ export default function AdminSettingsPage() {
 
             {/* Quick Preview & Bypass Reset for Administrator */}
             {isMaintenance && (
-              <div className="w-full flex items-center gap-2 mt-2 pt-2 border-t border-dashed border-slate-200 flex-wrap">
+              <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2 pt-2 border-t border-dashed border-slate-200">
                 <button
                   type="button"
                   onClick={async () => {
                     await clearMaintenanceBypass();
                     window.open('/ro', '_blank');
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black transition-all shadow-xs cursor-pointer"
+                  className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black transition-all shadow-xs cursor-pointer"
                   title="Deschide magazinul fără bypass pentru a vedea exact ce văd vizitatorii"
                 >
                   <Eye size={13} className="text-[#e32f8c]" /> Vezi Ecranul de Mentenanță
@@ -686,7 +686,7 @@ export default function AdminSettingsPage() {
                     await clearMaintenanceBypass();
                     toast.success('Bypass-ul local a fost resetat!');
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                  className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
                   title="Șterge deblocarea pe acest browser pentru testare"
                 >
                   <RotateCcw size={12} /> Resetează Bypass Local
@@ -696,7 +696,7 @@ export default function AdminSettingsPage() {
           </div>
         </div>
         
-        {/* 🔐 Maintenance Password Card */}
+        {/* Maintenance Password Card */}
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="space-y-4">
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shadow-xs">
@@ -721,12 +721,12 @@ export default function AdminSettingsPage() {
                 placeholder="Ex: trenzone2026"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-1 focus:ring-[#e32f8c]/20"
+                className="flex-1 h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-1 focus:ring-[#e32f8c]/20"
               />
               <button
                 onClick={handleSavePassword}
                 disabled={pwdSaving || !password}
-                className="bg-[#e32f8c] text-black px-5 py-3 rounded-xl font-black text-sm hover:bg-[#c41a72] active:scale-95 transition-all disabled:opacity-50 disabled:hover:bg-[#e32f8c] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-[#e32f8c]/20 shrink-0"
+                className="h-11 bg-[#e32f8c] text-black px-5 rounded-xl font-black text-sm hover:bg-[#c41a72] active:scale-95 transition-all disabled:opacity-50 disabled:hover:bg-[#e32f8c] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-[#e32f8c]/20 shrink-0"
               >
                 {pwdSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock size={15} />}
                 <span>{pwdSaving ? 'Se setează...' : 'Setează'}</span>
@@ -735,7 +735,7 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
-        {/* 👥 Admin Users Card */}
+        {/* Admin Users Card */}
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col relative overflow-hidden lg:col-span-2">
           <div className="flex items-start justify-between mb-4">
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-xs">
@@ -757,19 +757,19 @@ export default function AdminSettingsPage() {
                   placeholder="Email Administrator (ex: admin@trenzone.ro)"
                   value={newAdminEmail}
                   onChange={(e) => setNewAdminEmail(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c]"
+                  className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-base sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c]"
                 />
                 <input
                   type="text"
                   placeholder="Nume Complet (opțional)"
                   value={newAdminName}
                   onChange={(e) => setNewAdminName(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c]"
+                  className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-base sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c]"
                 />
                 <button
                   onClick={handleAddAdmin}
                   disabled={adminSaving || !newAdminEmail}
-                  className="bg-slate-900 text-white px-5 py-3 rounded-xl font-black text-sm hover:bg-slate-800 active:scale-98 transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                  className="h-11 bg-slate-900 text-white px-5 rounded-xl font-black text-sm hover:bg-slate-800 active:scale-98 transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                 >
                   {adminSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus size={16} />} 
                   <span>Adaugă Administrator</span>
@@ -798,11 +798,11 @@ export default function AdminSettingsPage() {
                           {user.role || 'Admin'}
                         </span>
                       </div>
-                      <div className="absolute top-3.5 right-3">
+                      <div className="absolute top-3 right-3">
                         <button
                           onClick={() => handleRemoveAdmin(user.id, user.email)}
                           disabled={deletingId === user.id}
-                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                          className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                           title="Revocă acces"
                         >
                           {deletingId === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 size={16} />}
@@ -816,15 +816,16 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
-        {/* 💱 Exchange Rates Card */}
+        {/* Exchange Rates Card */}
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col relative overflow-hidden lg:col-span-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-xs">
               <TrendingUp size={22} className="sm:w-6 sm:h-6" />
             </div>
             {ratesLastSaved && (
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full w-fit">
-                ✓ Salvat la {ratesLastSaved}
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full w-fit">
+                <Check size={13} className="shrink-0" />
+                <span>Salvat la {ratesLastSaved}</span>
               </span>
             )}
           </div>
@@ -854,7 +855,7 @@ export default function AdminSettingsPage() {
                     min="0.00001"
                     value={value}
                     onChange={(e) => setRates(prev => ({ ...prev, [currency]: e.target.value }))}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-base sm:text-sm font-black text-slate-900 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                    className="w-full h-11 bg-white border border-slate-200 rounded-xl px-3 text-base sm:text-sm font-black text-slate-900 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
                     id={`rate-${currency.toLowerCase()}`}
                   />
                   <span className="text-xs sm:text-sm font-black text-slate-700 min-w-[36px]">
@@ -868,7 +869,14 @@ export default function AdminSettingsPage() {
                 <p className="text-[10px] text-slate-400 mt-1.5 font-medium truncate">
                   {(() => { 
                     const n = parseFloat(value); 
-                    if (isNaN(n) || n <= 0) return '⚠ Invalid';
+                    if (isNaN(n) || n <= 0) {
+                      return (
+                        <span className="inline-flex items-center gap-1 text-amber-600 font-bold">
+                          <AlertTriangle size={11} className="shrink-0" />
+                          <span>Invalid</span>
+                        </span>
+                      );
+                    }
                     const isRonPerUnit = n > 1.05;
                     const foreignAmount = isRonPerUnit ? (100 / n) : (100 * n);
                     return `100 RON ≈ ${foreignAmount.toFixed(2)} ${currency}`; 
@@ -882,7 +890,7 @@ export default function AdminSettingsPage() {
             <button
               onClick={handleSaveRates}
               disabled={ratesSaving}
-              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-6 py-3 rounded-xl font-black text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              className="w-full sm:w-auto min-h-[44px] bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-6 py-3 rounded-xl font-black text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
               {ratesSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw size={16} />}
               <span>Salvează Cursurile</span>
@@ -893,7 +901,7 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
-        {/* ⚡ Aggressive Cache & Edge Optimization Card */}
+        {/* Aggressive Cache & Edge Optimization Card */}
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col relative overflow-hidden lg:col-span-2">
           <div className="flex items-center justify-between gap-2 mb-4">
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-pink-50 text-[#e32f8c] flex items-center justify-center shadow-xs shrink-0">
@@ -914,9 +922,10 @@ export default function AdminSettingsPage() {
             {['Produse & Stocuri', 'Clipuri Video', 'Recenzii', 'Setări & Livrare', 'Pagini RO / EN'].map((tag) => (
               <span
                 key={tag}
-                className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/80 text-[10px] sm:text-[11px] font-bold text-slate-600"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/80 text-[10px] sm:text-[11px] font-bold text-slate-600"
               >
-                ✓ {tag}
+                <Check size={12} className="text-emerald-600 shrink-0" />
+                <span>{tag}</span>
               </span>
             ))}
           </div>
@@ -930,7 +939,7 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
-      {/* ⚠️ Maintenance Confirmation Modal */}
+      {/* Maintenance Confirmation Modal */}
       {showMaintenanceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-5 sm:p-6 animate-in zoom-in-95 duration-200">
@@ -946,7 +955,7 @@ export default function AdminSettingsPage() {
                 type="button"
                 onClick={() => setShowMaintenanceModal(false)}
                 disabled={saving}
-                className="w-full sm:flex-1 py-3 px-4 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
+                className="w-full sm:flex-1 min-h-[44px] py-3 px-4 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Anulează
               </button>
@@ -954,7 +963,7 @@ export default function AdminSettingsPage() {
                 type="button"
                 onClick={() => executeToggle(true)}
                 disabled={saving}
-                className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-red-600 text-white text-xs sm:text-sm font-black hover:bg-red-700 active:scale-98 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-sm"
+                className="w-full sm:flex-1 min-h-[44px] py-3 px-4 rounded-xl bg-red-600 text-white text-xs sm:text-sm font-black hover:bg-red-700 active:scale-98 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <AlertTriangle size={16} />}
                 Activează Acum

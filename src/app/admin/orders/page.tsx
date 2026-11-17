@@ -55,6 +55,7 @@ import {
   isItemSnapshotPreorder,
   matchesAdminOrderSearch,
 } from '@/utils/order-search';
+import { convertToRon, FALLBACK_RATES } from '@/utils/pricing';
 import { FulfillmentModal } from './FulfillmentModal';
 
 // Modern Custom Checkbox Component
@@ -172,6 +173,22 @@ export function normalizeFlavor(flavor: string): string {
   return trimmed;
 }
 
+export function resolveOrderItemUnitPrice(item: any, orderCurrency?: string): number {
+  const raw = item?.price;
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+  if (typeof raw === 'string') {
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (raw && typeof raw === 'object') {
+    const curr = String(orderCurrency || 'RON').toUpperCase().trim();
+    const candidate = raw[curr] ?? raw.RON ?? raw.EUR ?? Object.values(raw)[0];
+    const parsed = Number(candidate);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 // Helper to extract clean name, variant, and bundle breakdown from an order item
 export function getItemDisplayDetails(item: any) {
   const rawName = typeof item?.name === 'object'
@@ -241,6 +258,7 @@ function OrdersPageContent() {
   const initialStatus = searchParams.get('status') || 'all';
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(FALLBACK_RATES);
   const [searchQuery, setSearchQuery] = useState('');
   const [monthFilter, setMonthFilter] = useState('all');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -635,7 +653,7 @@ function OrdersPageContent() {
       const res = await response.json();
       
       if (res.success && res.generatedCount > 0) {
-        toast.success(`✓ ${res.generatedCount} AWB-uri generate cu succes!`, { id: toastId });
+        toast.success(`${res.generatedCount} AWB-uri generate cu succes!`, { id: toastId });
         setSelectedOrders([]);
         await fetchOrders();
       } else if (!res.success) {
@@ -655,13 +673,13 @@ function OrdersPageContent() {
         const lines: string[] = [];
         for (const [msg, ids] of grouped) {
           if (ids.length <= 3) {
-            lines.push(`${ids.join(', ')}:\n→ ${msg}`);
+            lines.push(`${ids.join(', ')}:\n-> ${msg}`);
           } else {
-            lines.push(`${ids.slice(0, 3).join(', ')} + alte ${ids.length - 3}:\n→ ${msg}`);
+            lines.push(`${ids.slice(0, 3).join(', ')} + alte ${ids.length - 3}:\n-> ${msg}`);
           }
         }
         
-        const successInfo = res.generatedCount > 0 ? `✓ ${res.generatedCount} AWB-uri generate cu succes.\n\n` : '';
+        const successInfo = res.generatedCount > 0 ? `Succes: ${res.generatedCount} AWB-uri generate.\n\n` : '';
         showAlert(
           `${res.errors.length} comenzi cu probleme`, 
           `${successInfo}${lines.join('\n\n')}`
@@ -770,10 +788,20 @@ function OrdersPageContent() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/orders');
+      const [res, ratesRes] = await Promise.all([
+        fetch('/api/admin/orders'),
+        fetch('/api/exchange-rates').catch(() => null),
+      ]);
       const json = await res.json();
       const data = Array.isArray(json) ? json : (json.orders || json.data || []);
       setOrders(data);
+
+      if (ratesRes && ratesRes.ok) {
+        const ratesJson = await ratesRes.json().catch(() => null);
+        if (ratesJson?.rates && typeof ratesJson.rates === 'object') {
+          setExchangeRates({ ...FALLBACK_RATES, ...ratesJson.rates });
+        }
+      }
 
       // Fetch fulfillment settings
       fetch('/api/admin/data?action=fulfillment-settings')
@@ -1026,6 +1054,35 @@ function OrdersPageContent() {
     return { total, pendingAwb, generatedAwb, printed, notPrinted, delivered, returned, cancelled, preorder, activePreorder, fulfillmentSent, fulfillmentPending };
   }, [orders, trackingStatus, isOrderHeldAsActivePreorder]);
 
+  // Multi-currency converted summary for filtered orders (never sums mixed currencies directly)
+  const filteredFinancialSummary = useMemo(() => {
+    let activeCount = 0;
+    let excludedCount = 0;
+    let totalRon = 0;
+    const byCurrency: Record<string, number> = {};
+
+    for (const o of filteredOrders) {
+      const st = String(o.status || '').toLowerCase();
+      if (st === 'cancelled' || st === 'returned' || st === 'refunded' || st === 'failed') {
+        excludedCount++;
+        continue;
+      }
+      activeCount++;
+      const curr = String(o.currency || 'RON').toUpperCase().trim();
+      const amt = Number(o.totalAmount ?? 0) || 0;
+      totalRon += convertToRon(amt, curr, exchangeRates);
+      byCurrency[curr] = Number(((byCurrency[curr] || 0) + amt).toFixed(2));
+    }
+
+    return {
+      totalCount: filteredOrders.length,
+      activeCount,
+      excludedCount,
+      totalRon: Number(totalRon.toFixed(2)),
+      byCurrency,
+    };
+  }, [filteredOrders, exchangeRates]);
+
   return (
     <div className="w-full max-w-7xl mx-auto space-y-5 pb-24 text-slate-900 animate-in fade-in duration-500 overflow-x-hidden">
       
@@ -1042,21 +1099,22 @@ function OrdersPageContent() {
         </div>
 
         {/* Global actions (Refresh & Expand All) */}
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             onClick={fetchOrders}
             disabled={loading}
-            className="h-9 sm:h-10 px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="min-h-[40px] px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
             title="Reîncarcă comenzile"
           >
             <RotateCcw size={14} className={loading ? 'animate-spin text-[#e32f8c]' : ''} />
+            <span className="sm:hidden">Actualizează</span>
             <span className="hidden sm:inline">Reîmprospătează</span>
           </button>
 
           <button
             onClick={handleSyncAllTracking}
             disabled={isSyncingAllTracking || loading || manualShippingEnabled}
-            className={`h-9 sm:h-10 px-3 border rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 ${
+            className={`min-h-[40px] px-3 border rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 ${
               manualShippingEnabled
                 ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
                 : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700 cursor-pointer disabled:opacity-50'
@@ -1064,23 +1122,25 @@ function OrdersPageContent() {
             title={manualShippingEnabled ? "Sincronizarea AWB este dezactivată în modul Expediere Manuală" : "Sincronizează automat statusul tuturor coletelor nelivrate din Sameday și Packeta"}
           >
             <Truck size={14} className={isSyncingAllTracking ? 'animate-bounce text-[#e32f8c]' : 'text-slate-500'} />
+            <span className="sm:hidden">{isSyncingAllTracking ? 'Sync...' : 'Sync AWB'}</span>
             <span className="hidden sm:inline">{isSyncingAllTracking ? 'Se sincronizează...' : 'Sincronizează AWB'}</span>
           </button>
 
           <button
             onClick={handleSyncStripe}
             disabled={isSyncingStripe || loading}
-            className="h-9 sm:h-10 px-3 bg-white border border-[#635BFF]/30 hover:border-[#635BFF]/60 hover:bg-[#635BFF]/5 rounded-xl text-[#635BFF] font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+            className="min-h-[40px] px-3 bg-white border border-[#635BFF]/30 hover:border-[#635BFF]/60 hover:bg-[#635BFF]/5 rounded-xl text-[#635BFF] font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
             title="Scanează ultimele plăți reușite din Stripe și importă/recuperează automat orice comandă lipsă sau chitanță (#receipt)"
           >
             <CreditCard size={14} className={isSyncingStripe ? 'animate-pulse' : ''} />
+            <span className="sm:hidden">{isSyncingStripe ? 'Sync...' : 'Sync Stripe'}</span>
             <span className="hidden sm:inline">{isSyncingStripe ? 'Sync Stripe...' : 'Sincronizează Stripe'}</span>
           </button>
 
-          {/* 📦 Centru Fulfillment Button */}
+          {/* Centru Fulfillment Button */}
           <button
             onClick={() => setShowFulfillmentModal(true)}
-            className={`h-9 sm:h-10 px-3 border rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer ${
+            className={`min-h-[40px] px-3 border rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer ${
               manualShippingEnabled
                 ? 'bg-amber-500 text-white border-amber-600 shadow-amber-200'
                 : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
@@ -1097,7 +1157,7 @@ function OrdersPageContent() {
 
           <button
             onClick={toggleExpandAll}
-            className="h-9 sm:h-10 px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="col-span-2 sm:col-span-1 min-h-[40px] px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
             title={expandedOrders.size === filteredOrders.length ? "Restrânge toate" : "Extinde toate"}
           >
             {expandedOrders.size === filteredOrders.length && filteredOrders.length > 0 ? (
@@ -1112,6 +1172,52 @@ function OrdersPageContent() {
               </>
             )}
           </button>
+        </div>
+      </div>
+
+      {/* MULTI-CURRENCY SUMMARY STRIP */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block truncate">Comenzi Filtrate</span>
+          <p className="text-lg sm:text-xl font-black text-slate-900 mt-0.5 tabular-nums">{filteredFinancialSummary.totalCount}</p>
+          <span className="text-[10px] font-bold text-slate-400">
+            {filteredFinancialSummary.activeCount} active{filteredFinancialSummary.excludedCount > 0 ? ` · ${filteredFinancialSummary.excludedCount} anulate/ret.` : ''}
+          </span>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-emerald-200/80 bg-emerald-50/20 shadow-xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider block truncate">Total Echivalent RON</span>
+          <p className="text-lg sm:text-xl font-black text-emerald-800 mt-0.5 tabular-nums truncate">
+            {filteredFinancialSummary.totalRon.toFixed(2)} RON
+          </p>
+          <span className="text-[10px] font-bold text-emerald-700/80">Comenzi active convertite</span>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block truncate">Defalcare Monede</span>
+          {Object.keys(filteredFinancialSummary.byCurrency).length === 0 ? (
+            <p className="text-xs font-bold text-slate-400 mt-1.5">0.00 RON</p>
+          ) : (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {Object.entries(filteredFinancialSummary.byCurrency).map(([curr, amt]) => (
+                <span key={curr} className="text-[11px] font-black bg-slate-100 text-slate-800 border border-slate-200 px-1.5 py-0.5 rounded tabular-nums">
+                  {amt.toFixed(2)} {curr}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-amber-200/80 bg-amber-50/20 shadow-xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider block truncate">
+            {manualShippingEnabled ? 'În Așteptare Depozit' : 'De Expediat (Fără AWB)'}
+          </span>
+          <p className="text-lg sm:text-xl font-black text-amber-800 mt-0.5 tabular-nums">
+            {manualShippingEnabled ? counts.fulfillmentPending : counts.pendingAwb}
+          </p>
+          <span className="text-[10px] font-bold text-amber-700/80">
+            {counts.activePreorder > 0 ? `${counts.activePreorder} precomenzi reținute` : 'Comenzi eligibile acum'}
+          </span>
         </div>
       </div>
 
@@ -1181,11 +1287,11 @@ function OrdersPageContent() {
         </div>
       )}
 
-      {/* QUICK STATUS FILTERS (Balanced 3x2 Grid on Mobile, 6 Cols on Desktop) */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 w-full">
+      {/* QUICK STATUS FILTERS (2-col on 375px mobile, 3-col on sm, 6-col on lg) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full">
         <button
           onClick={() => setStatusFilter('all')}
-          className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+          className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
             statusFilter === 'all' 
               ? 'bg-slate-900 text-white shadow-sm ring-1 ring-slate-900' 
               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1626,9 +1732,16 @@ function OrdersPageContent() {
                     </div>
 
                     {/* Mobile Price: Always neatly aligned top right on mobile */}
-                    <span className="sm:hidden font-mono text-sm font-black text-slate-900 shrink-0">
-                      {order.total}
-                    </span>
+                    <div className="sm:hidden flex flex-col items-end shrink-0">
+                      <span className="font-mono text-sm font-black text-slate-900 tabular-nums">
+                        {order.total}
+                      </span>
+                      {String(order.currency || 'RON').toUpperCase() !== 'RON' && Number(order.totalAmount || 0) > 0 && (
+                        <span className="text-[10px] font-bold text-slate-500 tabular-nums">
+                          ≈ {convertToRon(Number(order.totalAmount), order.currency, exchangeRates).toFixed(2)} RON
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Line 2 on mobile / Right side on desktop: Unified badges row + Desktop price */}
@@ -1773,9 +1886,16 @@ function OrdersPageContent() {
                     {/* Desktop Total Amount */}
                     <div className="hidden sm:flex items-center gap-3 shrink-0 pl-1">
                       <div className="h-5 w-px bg-slate-200" />
-                      <span className="font-mono text-sm sm:text-base font-black text-slate-900 tracking-tight">
-                        {order.total}
-                      </span>
+                      <div className="text-right">
+                        <span className="font-mono text-sm sm:text-base font-black text-slate-900 tracking-tight tabular-nums block">
+                          {order.total}
+                        </span>
+                        {String(order.currency || 'RON').toUpperCase() !== 'RON' && Number(order.totalAmount || 0) > 0 && (
+                          <span className="text-[10px] font-bold text-slate-500 tabular-nums block">
+                            ≈ {convertToRon(Number(order.totalAmount), order.currency, exchangeRates).toFixed(2)} RON
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2011,11 +2131,11 @@ function OrdersPageContent() {
                         </div>
 
                         {/* Right: AWB Action row (Verifică Status, Print AWB, Reset) */}
-                        <div className="flex items-center gap-2 shrink-0 pt-1.5 sm:pt-0 border-t sm:border-0 border-slate-200/60">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0 pt-1.5 sm:pt-0 border-t sm:border-0 border-slate-200/60">
                           <button 
                             onClick={() => fetchTracking(order.supabaseId || order.id)}
                             disabled={fetchingTracking[order.id] || (order.supabaseId ? fetchingTracking[order.supabaseId] : false)}
-                            className="text-[11px] font-bold text-[#00a8c4] hover:text-[#008ba3] flex items-center gap-1.5 transition-colors cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50"
+                            className="min-h-[38px] text-[11px] font-bold text-[#00a8c4] hover:text-[#008ba3] flex items-center gap-1.5 transition-colors cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50"
                           >
                             <RotateCcw size={11} className={(fetchingTracking[order.id] || (order.supabaseId && fetchingTracking[order.supabaseId])) ? 'animate-spin' : ''} /> 
                             <span>{(fetchingTracking[order.id] || (order.supabaseId && fetchingTracking[order.supabaseId])) ? 'Verificare...' : 'Verifică Status'}</span>
@@ -2024,7 +2144,7 @@ function OrdersPageContent() {
                           <button
                             onClick={() => handlePrintAwb(order.supabaseId || order.id, order.trackingNumber)}
                             disabled={printingAwb[order.id]}
-                            className="text-[11px] font-bold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50"
+                            className="min-h-[38px] text-[11px] font-bold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50"
                           >
                             <Printer size={11} />
                             <span>Print AWB</span>
@@ -2039,7 +2159,7 @@ function OrdersPageContent() {
                               confirmDeleteAwb(order.supabaseId || order.id);
                             }}
                             disabled={deletingAwb[order.id] || manualShippingEnabled}
-                            className={`text-[11px] font-bold transition-colors ml-auto sm:ml-0 px-1.5 py-1 ${
+                            className={`min-h-[38px] text-[11px] font-bold transition-colors ml-auto sm:ml-0 px-2 py-1.5 ${
                               manualShippingEnabled
                                 ? 'text-slate-300 cursor-not-allowed'
                                 : 'text-slate-400 hover:text-red-500 cursor-pointer'
@@ -2247,7 +2367,7 @@ function OrdersPageContent() {
                                         )}
 
                                         <p className="text-[11px] font-semibold text-slate-500 mt-1">
-                                          {Number(item.price).toFixed(2)} {order.currency || 'RON'} / buc
+                                          {resolveOrderItemUnitPrice(item, order.currency).toFixed(2)} {order.currency || 'RON'} / buc
                                         </p>
                                       </div>
                                     </div>
@@ -2257,7 +2377,7 @@ function OrdersPageContent() {
                                         x{item.quantity}
                                       </span>
                                       <p className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">
-                                        {(Number(item.price) * Number(item.quantity)).toFixed(2)} {order.currency || 'RON'}
+                                        {(resolveOrderItemUnitPrice(item, order.currency) * (Number(item.quantity) || 1)).toFixed(2)} {order.currency || 'RON'}
                                       </p>
                                     </div>
                                   </div>
@@ -2277,7 +2397,7 @@ function OrdersPageContent() {
                               <span className="font-bold text-slate-700">
                                 {(order.subtotalAmount > 0 
                                   ? order.subtotalAmount 
-                                  : (order.items?.reduce((sum: number, it: any) => sum + (Number(it.price || 0) * Number(it.quantity || 1)), 0) || 0)
+                                  : (order.items?.reduce((sum: number, it: any) => sum + (resolveOrderItemUnitPrice(it, order.currency) * (Number(it.quantity) || 1)), 0) || 0)
                                 ).toFixed(2)} {order.currency || 'RON'}
                               </span>
                             </div>
@@ -2318,9 +2438,16 @@ function OrdersPageContent() {
 
                             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-slate-900 font-black text-sm">
                               <span>Total de plată:</span>
-                              <span className="text-[#00b0ce] font-black">
-                                {order.total}
-                              </span>
+                              <div className="text-right">
+                                <span className="text-[#00b0ce] font-black tabular-nums">
+                                  {order.total}
+                                </span>
+                                {String(order.currency || 'RON').toUpperCase() !== 'RON' && Number(order.totalAmount || 0) > 0 && (
+                                  <span className="block text-[11px] font-bold text-slate-500 tabular-nums">
+                                    ≈ {convertToRon(Number(order.totalAmount), order.currency, exchangeRates).toFixed(2)} RON
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -2445,7 +2572,7 @@ function OrdersPageContent() {
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-5 sm:p-6 my-8 z-10 space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-5 sm:p-6 my-8 z-10 space-y-4 max-h-[90dvh] overflow-y-auto custom-scrollbar"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -2462,7 +2589,7 @@ function OrdersPageContent() {
                 <button 
                   onClick={() => setEditingOrder(null)}
                   disabled={savingShipping}
-                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+                  className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <X size={15} />
                 </button>
@@ -2471,7 +2598,7 @@ function OrdersPageContent() {
               {/* Form */}
               <form onSubmit={handleSaveShipping} className="space-y-3.5 text-xs">
                 {/* Nume & Prenume */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider block mb-1">
                       Prenume
@@ -2482,7 +2609,7 @@ function OrdersPageContent() {
                       onChange={(e) => setEditForm(prev => ({ ...prev, customerFirstName: e.target.value }))}
                       placeholder="Ion"
                       required
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all"
+                      className="w-full min-h-[40px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all"
                     />
                   </div>
                   <div>
@@ -2495,13 +2622,13 @@ function OrdersPageContent() {
                       onChange={(e) => setEditForm(prev => ({ ...prev, customerLastName: e.target.value }))}
                       placeholder="Popescu"
                       required
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all"
+                      className="w-full min-h-[40px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all"
                     />
                   </div>
                 </div>
 
                 {/* Telefon & Email */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider block mb-1">
                       Telefon
@@ -2732,7 +2859,7 @@ function OrdersPageContent() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all space-y-4 z-10 border border-slate-100"
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-6 transform transition-all space-y-4 z-10 border border-slate-100"
             >
               <div className="flex items-start gap-3.5">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${

@@ -199,30 +199,30 @@ export default function ShippingPage() {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full max-w-6xl mx-auto min-w-0 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/50 shadow-sm relative overflow-hidden">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#e32f8c]/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-        <div className="relative z-10">
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <div className="w-12 h-12 bg-[#e32f8c]/10 rounded-2xl flex items-center justify-center text-[#e32f8c]">
-              <Truck size={24} strokeWidth={2.5} />
+        <div className="relative z-10 min-w-0">
+          <h1 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 bg-[#e32f8c]/10 rounded-2xl flex items-center justify-center text-[#e32f8c] shrink-0">
+              <Truck size={22} strokeWidth={2.5} />
             </div>
-            Curieri & Livrare
+            <span>Curieri & Livrare</span>
           </h1>
-          <p className="text-slate-500 mt-2 text-sm max-w-xl">
+          <p className="text-slate-500 mt-2 text-xs sm:text-sm max-w-xl">
             Gestionează conexiunile API cu partenerii de livrare și configurează prețurile de bază pentru coletele tale.
           </p>
         </div>
       </div>
 
-      {/* 📦 EXPEDIERE MANUALĂ & CENTRU FULFILLMENT */}
+      {/* EXPEDIERE MANUALA & CENTRU FULFILLMENT */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="bg-white rounded-3xl p-5 sm:p-7 border border-amber-200/90 shadow-sm relative overflow-hidden"
+        className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-7 border border-amber-200/90 shadow-sm relative overflow-hidden"
       >
         <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
@@ -257,7 +257,7 @@ export default function ShippingPage() {
 
           <Link
             href="/admin/orders?fulfillment=open"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100/90 text-amber-900 font-bold text-xs sm:text-sm border border-amber-200/80 transition-all hover:scale-[1.02] active:scale-98 shadow-xs w-full sm:w-auto shrink-0"
+            className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100/90 text-amber-900 font-bold text-xs sm:text-sm border border-amber-200/80 transition-all hover:scale-[1.02] active:scale-98 shadow-xs w-full sm:w-auto shrink-0"
           >
             <PackageCheck size={16} className="text-amber-600" />
             <span>Panou Fulfillment & Istoric</span>
@@ -351,7 +351,7 @@ export default function ShippingPage() {
                   value={fulfillmentEmail}
                   onChange={(e) => setFulfillmentEmail(e.target.value)}
                   placeholder="curierat@tceholding.ro"
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 block p-3.5 pl-11 transition-all"
+                  className="w-full min-h-[44px] bg-slate-50 border border-slate-200 text-slate-900 text-base sm:text-sm font-medium rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 block p-3 pl-11 transition-all"
                 />
               </div>
             </div>
@@ -371,7 +371,7 @@ export default function ShippingPage() {
                   value={fulfillmentSecondaryEmail}
                   onChange={(e) => setFulfillmentSecondaryEmail(e.target.value)}
                   placeholder="admin@trenzone.fit"
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 block p-3.5 pl-11 transition-all"
+                  className="w-full min-h-[44px] bg-slate-50 border border-slate-200 text-slate-900 text-base sm:text-sm font-medium rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 block p-3 pl-11 transition-all"
                 />
               </div>
             </div>
@@ -406,7 +406,7 @@ export default function ShippingPage() {
                 </button>
               </div>
 
-              <div className="pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
+              <div className="pt-2.5 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-1.5 text-xs text-slate-500">
                 <span className="flex items-center gap-1.5 font-medium">
                   <Clock size={13} className="text-slate-400" />
                   Ultima expediere:
@@ -460,20 +460,20 @@ export default function ShippingPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white rounded-3xl p-6 border border-slate-200/50 shadow-sm relative overflow-hidden group"
+            className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-200/50 shadow-sm relative overflow-hidden group"
           >
-            <div className="flex items-start justify-between relative z-10">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 shadow-sm group-hover:scale-105 transition-transform">
-                   <Package size={28} strokeWidth={2} />
+            <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap relative z-10">
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 shadow-sm group-hover:scale-105 transition-transform shrink-0">
+                   <Package size={24} strokeWidth={2} />
                 </div>
-                <div>
-                  <h3 className="font-bold text-lg text-slate-900">Sameday Courier</h3>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-base sm:text-lg text-slate-900 truncate">Sameday Courier</h3>
                   <p className="text-xs text-slate-500 mt-0.5">România & Ungaria</p>
                 </div>
               </div>
               
-              <div className="flex flex-col items-end">
+              <div className="flex flex-col items-end shrink-0">
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${
                   samedayStatus.status === 'ok' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                   samedayStatus.status === 'error' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
@@ -494,7 +494,7 @@ export default function ShippingPage() {
               </div>
             </div>
             
-            <div className="mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600">
+            <div className="mt-4 sm:mt-5 p-3.5 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs sm:text-sm text-slate-600 break-words">
                {samedayStatus.message}
             </div>
           </motion.div>
@@ -504,20 +504,20 @@ export default function ShippingPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-white rounded-3xl p-6 border border-slate-200/50 shadow-sm relative overflow-hidden group"
+            className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-200/50 shadow-sm relative overflow-hidden group"
           >
-            <div className="flex items-start justify-between relative z-10">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-sm group-hover:scale-105 transition-transform">
-                   <Package size={28} strokeWidth={2} />
+            <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap relative z-10">
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-sm group-hover:scale-105 transition-transform shrink-0">
+                   <Package size={24} strokeWidth={2} />
                 </div>
-                <div>
-                  <h3 className="font-bold text-lg text-slate-900">Packeta (Zásilkovna)</h3>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-base sm:text-lg text-slate-900 truncate">Packeta (Zásilkovna)</h3>
                   <p className="text-xs text-slate-500 mt-0.5">Internațional (EU)</p>
                 </div>
               </div>
               
-              <div className="flex flex-col items-end">
+              <div className="flex flex-col items-end shrink-0">
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${
                   packetaStatus.status === 'ok' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                   packetaStatus.status === 'error' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
@@ -550,11 +550,11 @@ export default function ShippingPage() {
             <Settings size={16} className="text-[#e32f8c]" /> Setări Platformă
           </h2>
 
-          <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/50 shadow-sm relative overflow-hidden">
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-200/50 shadow-sm relative overflow-hidden">
              <div className="space-y-6">
                
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 <div className="space-y-2">
+                 <div className="space-y-2 min-w-0">
                    <label className="text-xs sm:text-sm font-bold text-slate-700">Livrare gratuită (România)</label>
                    <div className="relative">
                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs sm:text-sm">RON</span>
@@ -562,13 +562,13 @@ export default function ShippingPage() {
                        type="number" 
                        value={config.free_shipping_ro_ron} 
                        onChange={e => setConfig({...config, free_shipping_ro_ron: Number(e.target.value)})}
-                       className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-[#e32f8c]/20 focus:border-[#e32f8c] block p-3.5 pl-12 sm:pl-14 transition-all" 
+                       className="w-full min-h-[44px] bg-slate-50 border border-slate-200 text-slate-900 text-base sm:text-sm rounded-2xl focus:ring-2 focus:ring-[#e32f8c]/20 focus:border-[#e32f8c] block p-3 pl-14 transition-all" 
                      />
                    </div>
-                   <p className="text-[10px] sm:text-xs text-slate-500">Comenzile peste această sumă au transportul gratuit în țară.</p>
+                   <p className="text-[11px] sm:text-xs text-slate-500">Comenzile peste această sumă au transportul gratuit în țară.</p>
                  </div>
 
-                 <div className="space-y-2">
+                 <div className="space-y-2 min-w-0">
                    <label className="text-xs sm:text-sm font-bold text-slate-700">Livrare gratuită (Internațional)</label>
                    <div className="relative">
                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs sm:text-sm">EUR</span>
@@ -576,10 +576,10 @@ export default function ShippingPage() {
                        type="number" 
                        value={config.free_shipping_intl_eur} 
                        onChange={e => setConfig({...config, free_shipping_intl_eur: Number(e.target.value)})}
-                       className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-[#e32f8c]/20 focus:border-[#e32f8c] block p-3.5 pl-12 sm:pl-14 transition-all" 
+                       className="w-full min-h-[44px] bg-slate-50 border border-slate-200 text-slate-900 text-base sm:text-sm rounded-2xl focus:ring-2 focus:ring-[#e32f8c]/20 focus:border-[#e32f8c] block p-3 pl-14 transition-all" 
                      />
                    </div>
-                   <p className="text-[10px] sm:text-xs text-slate-500">Pragul minim pentru coletele expediate în Europa.</p>
+                   <p className="text-[11px] sm:text-xs text-slate-500">Pragul minim pentru coletele expediate în Europa.</p>
                  </div>
                </div>
 
@@ -591,15 +591,15 @@ export default function ShippingPage() {
                      type="number" 
                      value={config.packaging_cost_ron} 
                      onChange={e => setConfig({...config, packaging_cost_ron: Number(e.target.value)})}
-                     className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-[#e32f8c]/20 focus:border-[#e32f8c] block p-3.5 pl-12 sm:pl-14 transition-all" 
+                     className="w-full min-h-[44px] bg-slate-50 border border-slate-200 text-slate-900 text-base sm:text-sm rounded-2xl focus:ring-2 focus:ring-[#e32f8c]/20 focus:border-[#e32f8c] block p-3 pl-14 transition-all" 
                    />
                  </div>
-                 <p className="text-[10px] sm:text-xs text-slate-500">Această sumă se adaugă la costul generat de curier. Lasă 0 dacă nu percepi taxe extra pentru cutii.</p>
+                 <p className="text-[11px] sm:text-xs text-slate-500">Această sumă se adaugă la costul generat de curier. Lasă 0 dacă nu percepi taxe extra pentru cutii.</p>
                </div>
 
                <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70 space-y-2.5">
-                 <div className="flex items-center justify-between gap-3">
-                   <div>
+                 <div className="flex items-start sm:items-center justify-between gap-3">
+                   <div className="min-w-0 flex-1">
                      <div className="flex items-center gap-2 flex-wrap">
                        <h4 className="text-xs sm:text-sm font-bold text-slate-900">
                          Livrare în Lockere (Easybox / PUDO)
@@ -655,7 +655,10 @@ export default function ShippingPage() {
       </div>
 
       {/* FULL WIDTH TABLE */}
-      <div className="w-full">
+      <div className="w-full min-w-0">
+        <p className="sm:hidden text-[11px] font-bold text-slate-400 px-1 mb-2">
+          Glisează orizontal pe tabelele de tarife pentru a vedea toate coloanele.
+        </p>
         <ShippingRatesTable />
       </div>
     </div>

@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { emitOblioInvoiceAction, setOblioEnabledAction } from '@/app/actions/invoices';
+import { convertToRon, FALLBACK_RATES } from '@/utils/pricing';
 import toast from 'react-hot-toast';
 
 const MONTHS_RO = [
@@ -73,31 +74,33 @@ function ModernSelect({
   const selectedOption = options.find((o) => o.value === value) || options[0];
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative w-full sm:w-auto" ref={containerRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 bg-slate-50 hover:bg-slate-100/90 active:bg-slate-200/60 border rounded-xl px-3 py-2 text-xs transition-all cursor-pointer shadow-2xs group ${
+        className={`w-full sm:w-auto min-h-[40px] flex items-center justify-between sm:justify-start gap-2 bg-slate-50 hover:bg-slate-100/90 active:bg-slate-200/60 border rounded-xl px-3 py-2 text-xs transition-all cursor-pointer shadow-2xs group ${
           isOpen ? 'border-[#e32f8c] ring-2 ring-[#e32f8c]/15 bg-white' : 'border-slate-200 hover:border-slate-300'
         }`}
       >
-        {Icon && <Icon size={13} className="text-[#008ba3] shrink-0" />}
-        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-          {label}:
-        </span>
-        <span className="font-bold text-slate-800 text-xs truncate max-w-[130px]">
-          {selectedOption ? selectedOption.label : value}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {Icon && <Icon size={13} className="text-[#008ba3] shrink-0" />}
+          <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider shrink-0">
+            {label}:
+          </span>
+          <span className="font-bold text-slate-800 text-xs truncate max-w-[120px]">
+            {selectedOption ? selectedOption.label : value}
+          </span>
+        </div>
         <ChevronDown
           size={13}
-          className={`text-slate-400 transition-transform duration-200 ml-0.5 ${
+          className={`text-slate-400 transition-transform duration-200 ml-0.5 shrink-0 ${
             isOpen ? 'rotate-180 text-[#e32f8c]' : ''
           }`}
         />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-1.5 left-0 z-50 min-w-[170px] max-h-64 overflow-y-auto bg-white border border-slate-200/90 rounded-2xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-1 duration-150 custom-scrollbar">
+        <div className="absolute top-full mt-1.5 left-0 z-50 min-w-[170px] max-w-[calc(100vw-2rem)] max-h-64 overflow-y-auto bg-white border border-slate-200/90 rounded-2xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-1 duration-150 custom-scrollbar">
           {options.map((opt) => {
             const isSelected = opt.value === value;
             return (
@@ -128,6 +131,7 @@ function ModernSelect({
 export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(FALLBACK_RATES);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [filterType, setFilterType] = useState('all');
@@ -157,12 +161,16 @@ export default function InvoicesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ordersData, oblioData] = await Promise.all([
+      const [ordersData, oblioData, ratesData] = await Promise.all([
         fetch('/api/admin/data?action=orders').then(r => r.json()).then(j => j.data),
-        fetch('/api/admin/data?action=oblio-status').then(r => r.json()).then(j => j.data)
+        fetch('/api/admin/data?action=oblio-status').then(r => r.json()).then(j => j.data),
+        fetch('/api/exchange-rates').then(r => r.json()).catch(() => ({ rates: FALLBACK_RATES })),
       ]);
 
       setOrders(ordersData || []);
+      if (ratesData?.rates && typeof ratesData.rates === 'object') {
+        setExchangeRates({ ...FALLBACK_RATES, ...ratesData.rates });
+      }
       if (oblioData && oblioData.success) {
         setOblioStatus({
           enabled: Boolean(oblioData.enabled),
@@ -251,6 +259,32 @@ export default function InvoicesPage() {
   const selectableInvoices = filteredInvoices.filter((inv: any) => !isCancelled(inv.status));
   const isAllSelected = selectableInvoices.length > 0 && selectableInvoices.every((inv: any) => selectedOrders.includes(inv.supabaseId || inv.id));
   const isSomeSelected = selectedOrders.length > 0 && !isAllSelected;
+
+  // Multi-currency accounting summary (never mix currencies without conversion)
+  const accountingSummary = useMemo(() => {
+    const active = filteredInvoices.filter((inv: any) => !isCancelled(inv.status) && !isReturned(inv.status));
+    let totalRon = 0;
+    const byCurrency: Record<string, number> = {};
+    let oblioEmittedCount = 0;
+
+    for (const inv of active) {
+      const curr = String(inv.currency || 'RON').toUpperCase().trim();
+      const amt = Number(inv.totalAmount ?? ((inv.total || '').replace(/[^0-9.]/g, '') || 0)) || 0;
+      totalRon += convertToRon(amt, curr, exchangeRates);
+      byCurrency[curr] = Number(((byCurrency[curr] || 0) + amt).toFixed(2));
+      if (inv.trackingMetadata?.oblio_invoice || inv.oblioInvoice) {
+        oblioEmittedCount++;
+      }
+    }
+
+    return {
+      totalCount: filteredInvoices.length,
+      activeCount: active.length,
+      totalRon: Number(totalRon.toFixed(2)),
+      byCurrency,
+      oblioEmittedCount,
+    };
+  }, [filteredInvoices, exchangeRates]);
 
   const handleToggleSelectAll = () => {
     if (isAllSelected) {
@@ -343,11 +377,15 @@ export default function InvoicesPage() {
     let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n<Facturi>\n';
     toExport.forEach((inv: any) => {
       const safeCustomer = (inv.customer || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const curr = String(inv.currency || 'RON').toUpperCase().trim();
+      const numericTotal = Number(inv.totalAmount ?? ((inv.total || '').replace(/[^0-9.]/g, '') || 0)).toFixed(2);
       xmlContent += `  <Factura>\n`;
       xmlContent += `    <ID>${inv.id}</ID>\n`;
       xmlContent += `    <Client>${safeCustomer}</Client>\n`;
       xmlContent += `    <Data>${inv.date}</Data>\n`;
       xmlContent += `    <Total>${inv.total}</Total>\n`;
+      xmlContent += `    <TotalNumeric>${numericTotal}</TotalNumeric>\n`;
+      xmlContent += `    <Moneda>${curr}</Moneda>\n`;
       xmlContent += `    <Status>${inv.status}</Status>\n`;
       xmlContent += `  </Factura>\n`;
     });
@@ -463,7 +501,7 @@ export default function InvoicesPage() {
       // 30 secunde intre fiecare factura - zero sansa de limitare Oblio
       if (toEmit.indexOf(inv) + 1 < toEmit.length) {
         const processedCount = toEmit.indexOf(inv) + 1;
-        toast.loading(`⏳ [${processedCount}/${toEmit.length}] Așteptăm 30s...`, { id: toastId });
+        toast.loading(`[${processedCount}/${toEmit.length}] Așteptăm 30s...`, { id: toastId });
         await new Promise(r => setTimeout(r, 30000));
       }
     }
@@ -473,11 +511,11 @@ export default function InvoicesPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12 text-slate-900 max-w-full">
-      {/* 🏁 HEADER & METRICS */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2.5">
+    <div className="space-y-5 sm:space-y-6 pb-12 text-slate-900 max-w-full">
+      {/* HEADER & METRICS */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
               <FileText className="text-[#e32f8c]" size={24} /> Facturi Fiscale
             </h1>
@@ -494,7 +532,7 @@ export default function InvoicesPage() {
           <button 
             onClick={loadData}
             disabled={loading}
-            className="w-full sm:w-auto h-9 px-3.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+            className="w-full sm:w-auto min-h-[40px] px-4 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             <span>Reîmprospătează</span>
@@ -502,7 +540,46 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {/* 🇷🇴 OBLIO & SPV BANNER */}
+      {/* MULTI-CURRENCY ACCOUNTING KPI STRIP */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-2xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block truncate">Facturi Filtrate</span>
+          <p className="text-lg sm:text-xl font-black text-slate-900 mt-0.5 tabular-nums">{accountingSummary.activeCount}</p>
+          <span className="text-[10px] font-bold text-slate-400">din {accountingSummary.totalCount} totale</span>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-emerald-200/80 bg-emerald-50/20 shadow-2xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider block truncate">Total Echivalent RON</span>
+          <p className="text-lg sm:text-xl font-black text-emerald-800 mt-0.5 tabular-nums truncate">
+            {accountingSummary.totalRon.toFixed(2)} RON
+          </p>
+          <span className="text-[10px] font-bold text-emerald-700/80">Conversie curs activ</span>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-2xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block truncate">Defalcare Monede</span>
+          {Object.keys(accountingSummary.byCurrency).length === 0 ? (
+            <p className="text-xs font-bold text-slate-400 mt-1.5">0.00 RON</p>
+          ) : (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {Object.entries(accountingSummary.byCurrency).map(([curr, amt]) => (
+                <span key={curr} className="text-[11px] font-black bg-slate-100 text-slate-800 border border-slate-200 px-1.5 py-0.5 rounded tabular-nums">
+                  {amt.toFixed(2)} {curr}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-blue-200/80 bg-blue-50/20 shadow-2xs min-w-0">
+          <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider block truncate">Emise Oblio / SPV</span>
+          <p className="text-lg sm:text-xl font-black text-blue-800 mt-0.5 tabular-nums">
+            {accountingSummary.oblioEmittedCount} <span className="text-xs font-bold text-blue-600">/ {accountingSummary.activeCount}</span>
+          </p>
+        </div>
+      </div>
+
+      {/* OBLIO & SPV BANNER */}
       <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
         !oblioStatus.enabled
           ? 'bg-slate-50 border-slate-200'
@@ -557,7 +634,7 @@ export default function InvoicesPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 self-end sm:self-center shrink-0">
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-700">
                 {oblioStatus.enabled ? 'Pornit' : 'Oprit'}
@@ -621,8 +698,8 @@ export default function InvoicesPage() {
         </AnimatePresence>
       </div>
 
-      {/* 🔍 SEARCH AND FILTERS (LUNĂ, AN, INTERVAL, EXPORTURI) */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+      {/* SEARCH AND FILTERS */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
         {/* Search input */}
         <div className="relative w-full lg:max-w-xs xl:max-w-sm">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -631,12 +708,12 @@ export default function InvoicesPage() {
             placeholder="Caută după comandă (TZ), nume, email, tel..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-xs sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all placeholder:text-slate-400"
+            className="w-full min-h-[40px] bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-xs sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all placeholder:text-slate-400"
           />
         </div>
 
-        {/* Filters (An, Lună, Preset, Reset) & Exports */}
-        <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
+        {/* Filters (An, Lună, Reset) & Exports */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 justify-start lg:justify-end">
           {/* Selector An */}
           <ModernSelect 
             label="An"
@@ -659,7 +736,7 @@ export default function InvoicesPage() {
           {hasActiveFilters && (
             <button
               onClick={handleResetFilters}
-              className="h-9 px-2.5 text-xs font-bold text-red-500 hover:text-red-700 bg-red-50/70 hover:bg-red-100/70 border border-red-200 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+              className="col-span-2 sm:col-span-1 min-h-[40px] px-2.5 text-xs font-bold text-red-500 hover:text-red-700 bg-red-50/70 hover:bg-red-100/70 border border-red-200 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
               title="Resetează toate filtrele"
             >
               <X size={13} />
@@ -672,17 +749,17 @@ export default function InvoicesPage() {
           {/* Export CSV (Excel) */}
           <button 
             onClick={handleExportCsv}
-            className="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer"
+            className="min-h-[40px] px-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer"
             title="Exportă în format Excel / CSV pentru contabilitate"
           >
             <FileSpreadsheet size={14} />
-            <span>Export Excel {selectedOrders.length > 0 ? `(${selectedOrders.length})` : '(Toate)'}</span>
+            <span className="truncate">Export Excel {selectedOrders.length > 0 ? `(${selectedOrders.length})` : '(Toate)'}</span>
           </button>
 
           {/* Export XML */}
           <button 
             onClick={handleExportXml}
-            className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+            className="min-h-[40px] px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
             title="Exportă în format XML"
           >
             <FileCode size={14} />
@@ -810,10 +887,15 @@ export default function InvoicesPage() {
                       <span>{inv.id}</span>
                     </span>
 
-                    {/* Total Amount */}
-                    <span className="text-xs font-black text-slate-900 bg-slate-100/90 border border-slate-200 px-2.5 py-1 rounded-lg">
+                    {/* Total Amount (+ RON equivalent if foreign currency) */}
+                    <span className="text-xs font-black text-slate-900 bg-slate-100/90 border border-slate-200 px-2.5 py-1 rounded-lg tabular-nums">
                       {inv.total}
                     </span>
+                    {String(inv.currency || 'RON').toUpperCase() !== 'RON' && Number(inv.totalAmount || 0) > 0 && (
+                      <span className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md tabular-nums">
+                        ≈ {convertToRon(Number(inv.totalAmount), inv.currency, exchangeRates).toFixed(2)} RON
+                      </span>
+                    )}
 
                     {/* Status Badge */}
                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border shrink-0 ${
@@ -857,8 +939,9 @@ export default function InvoicesPage() {
                           <CheckCircle2 size={12} />
                           <span>Emisă: {oblioInfo.seriesName} {oblioInfo.number}</span>
                         </div>
-                        <p className="text-[11px] text-emerald-700 font-medium">
-                          ✓ Transmisă automat în ANAF SPV
+                        <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                          <Check size={12} className="shrink-0" />
+                          <span>Transmisă automat în ANAF SPV</span>
                         </p>
                       </div>
                     ) : oblioStatus.enabled ? (
@@ -892,13 +975,13 @@ export default function InvoicesPage() {
                   </div>
 
                   {/* Right Actions */}
-                  <div className="flex items-center gap-2 ml-auto">
+                  <div className="flex flex-wrap items-center gap-2 ml-auto">
                     {/* Internal PDF Download */}
                     <a 
                       href={`/api/admin/orders/${targetOrderId}/invoice`} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="h-8 sm:h-9 px-3 sm:px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+                      className="min-h-[40px] px-3 sm:px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
                     >
                       <Download size={13} />
                       <span>Factură PDF</span>
@@ -909,7 +992,7 @@ export default function InvoicesPage() {
                       <button
                         onClick={() => handleEmitOblio(targetOrderId)}
                         disabled={isEmitting}
-                        className={`h-8 sm:h-9 px-3.5 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                        className={`min-h-[40px] px-3.5 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                           oblioInfo 
                             ? 'bg-slate-800 hover:bg-slate-700 text-white shadow-xs'
                             : 'bg-[#e32f8c] hover:bg-[#00bad9] active:scale-95 text-slate-950 shadow-md shadow-[#e32f8c]/20'

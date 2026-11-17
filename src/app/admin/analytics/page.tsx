@@ -40,6 +40,13 @@ import {
 } from 'recharts';
 import type { AnalyticsRangeKey, Ga4AnalyticsReport } from '@/lib/ga4-analytics';
 
+interface CurrencyBreakdownEntry {
+  currency: 'RON' | 'EUR' | 'USD' | 'GBP';
+  orders: number;
+  revenueNative: number;
+  revenueRon: number;
+}
+
 interface AnalyticsApiResponse {
   success: boolean;
   range: AnalyticsRangeKey;
@@ -49,6 +56,8 @@ interface AnalyticsApiResponse {
     prevStartDate: string;
     prevEndDate: string;
   };
+  exchangeRates?: Record<string, number>;
+  currencyBreakdown?: CurrencyBreakdownEntry[];
   ga4: Ga4AnalyticsReport;
   funnel: {
     ga4Connected: boolean;
@@ -72,6 +81,7 @@ interface AnalyticsApiResponse {
   supabaseMarketing: {
     ordersInPeriod: number;
     revenueInPeriodRon: number;
+    currencyBreakdown?: CurrencyBreakdownEntry[];
     scratchCard: {
       generatedInPeriod: number;
       redeemedInPeriod: number;
@@ -148,12 +158,53 @@ const RANGE_OPTIONS: Array<{ key: AnalyticsRangeKey; label: string }> = [
 ];
 
 type ChartMetric = 'sessions' | 'users' | 'pageviews';
+type DisplayCurrency = 'RON' | 'EUR' | 'USD' | 'GBP';
 
-function formatRon(val: number): string {
-  return `${(Number(val) || 0).toLocaleString('ro-RO', {
+const AVAILABLE_CURRENCIES: Array<{ code: DisplayCurrency; symbol: string }> = [
+  { code: 'RON', symbol: 'RON' },
+  { code: 'EUR', symbol: '€' },
+  { code: 'USD', symbol: '$' },
+  { code: 'GBP', symbol: '£' },
+];
+
+const FALLBACK_EXCHANGE_RATES: Record<string, number> = {
+  EUR: 5.3,
+  USD: 4.88,
+  GBP: 6.2,
+};
+
+function convertRonForDisplay(
+  ronAmount: number,
+  currencyCode: DisplayCurrency,
+  rates?: Record<string, number>
+): number {
+  const num = Number(ronAmount) || 0;
+  if (currencyCode === 'RON') return num;
+  const rawRate = rates?.[currencyCode] || FALLBACK_EXCHANGE_RATES[currencyCode] || 1;
+  const isRonPerUnit = rawRate > 1.05;
+  const foreignPerRon = isRonPerUnit ? 1 / rawRate : rawRate;
+  return num * foreignPerRon;
+}
+
+function formatMoneyInCurrency(
+  ronAmount: number,
+  currencyCode: DisplayCurrency,
+  rates?: Record<string, number>
+): string {
+  const converted = convertRonForDisplay(ronAmount, currencyCode, rates);
+  const symbol = AVAILABLE_CURRENCIES.find((c) => c.code === currencyCode)?.symbol || currencyCode;
+  return `${converted.toLocaleString('ro-RO', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  })} RON`;
+  })} ${symbol}`;
+}
+
+function formatNativeCurrency(amount: number, currencyCode: DisplayCurrency): string {
+  const symbol = AVAILABLE_CURRENCIES.find((c) => c.code === currencyCode)?.symbol || currencyCode;
+  return `${(Number(amount) || 0).toLocaleString('ro-RO', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${symbol}`;
 }
 
 function formatDuration(totalSec: number): string {
@@ -203,11 +254,17 @@ function SourceBarColor(sourceMedium: string): string {
 
 export default function AdminAnalyticsPage() {
   const [range, setRange] = useState<AnalyticsRangeKey>('30d');
+  const [selectedCurrency, setSelectedCurrency] = useState<DisplayCurrency>('RON');
   const [chartMetric, setChartMetric] = useState<ChartMetric>('sessions');
   const [data, setData] = useState<AnalyticsApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const formatMoney = useCallback(
+    (ronAmount: number) => formatMoneyInCurrency(ronAmount, selectedCurrency, data?.exchangeRates),
+    [selectedCurrency, data?.exchangeRates]
+  );
 
   const loadAnalytics = useCallback(
     async (selectedRange: AnalyticsRangeKey, isRefresh = false) => {
@@ -321,6 +378,23 @@ export default function AdminAnalyticsPage() {
                 }`}
               >
                 {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+            {AVAILABLE_CURRENCIES.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => setSelectedCurrency(c.code)}
+                className={`px-2 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                  selectedCurrency === c.code
+                    ? 'bg-[#e32f8c] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+                }`}
+              >
+                {c.code}
               </button>
             ))}
           </div>
@@ -1052,7 +1126,7 @@ export default function AdminAnalyticsPage() {
                         {row.soldQty} buc
                       </td>
                       <td className="py-2.5 px-2 text-right font-bold text-slate-800 tabular-nums">
-                        {formatRon(row.revenueRon)}
+                        {formatMoney(row.revenueRon)}
                       </td>
                       <td className="py-2.5 pl-2 text-right font-black tabular-nums">
                         {row.viewToBuyPct !== null ? (
@@ -1087,10 +1161,83 @@ export default function AdminAnalyticsPage() {
                 Date 100% reale din baza de date a magazinului (independente de GA4)
               </p>
             </div>
-            <span className="text-[11px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-              {mkt.ordersInPeriod} comenzi · {formatRon(mkt.revenueInPeriodRon)}
+            <span className="text-[11px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full tabular-nums">
+              {mkt.ordersInPeriod} comenzi · {formatMoney(mkt.revenueInPeriodRon)}
             </span>
           </div>
+
+          {/* 4-Currency Mix Breakdown Strip */}
+          {(() => {
+            const rawBreakdown = mkt.currencyBreakdown || data?.currencyBreakdown || [];
+            const byCode = new Map(rawBreakdown.map((b) => [b.currency, b]));
+            const totalRon = mkt.revenueInPeriodRon || 0;
+            return (
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
+                      Mix Încasări Multi-Valută (RON · EUR · USD · GBP)
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Sume native încasate per monedă și total unificat convertit la cursul live
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Total Unificat ({selectedCurrency})
+                    </div>
+                    <div className="text-base sm:text-lg font-black text-slate-950 tabular-nums">
+                      {formatMoney(totalRon)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {AVAILABLE_CURRENCIES.map((curr) => {
+                    const entry = byCode.get(curr.code);
+                    const ordersCount = entry?.orders || 0;
+                    const nativeAmount = entry?.revenueNative || 0;
+                    const ronEquivalent = entry?.revenueRon || 0;
+                    const sharePct =
+                      totalRon > 0 ? Math.round((ronEquivalent / totalRon) * 100) : 0;
+                    const isSelected = selectedCurrency === curr.code;
+
+                    return (
+                      <button
+                        key={curr.code}
+                        type="button"
+                        onClick={() => setSelectedCurrency(curr.code)}
+                        className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#e32f8c]/5 border-[#e32f8c]/45 shadow-2xs'
+                            : 'bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-black text-slate-900">{curr.code}</span>
+                          <span
+                            className={`text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums ${
+                              ordersCount > 0
+                                ? 'bg-slate-900 text-white'
+                                : 'bg-slate-200/80 text-slate-500'
+                            }`}
+                          >
+                            {ordersCount} com.
+                          </span>
+                        </div>
+                        <div className="text-sm sm:text-base font-black text-slate-950 mt-1 tabular-nums truncate">
+                          {formatNativeCurrency(nativeAmount, curr.code)}
+                        </div>
+                        <div className="text-[10px] font-semibold text-slate-500 mt-0.5 tabular-nums truncate">
+                          {sharePct}% din total · {formatMoney(ronEquivalent)}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 1. Performanță ScratchCard & Cupoane */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
@@ -1142,7 +1289,7 @@ export default function AdminAnalyticsPage() {
                     Venit generat ScratchCard
                   </div>
                   <div className="text-base font-black tabular-nums mt-0.5">
-                    {formatRon(mkt.scratchCard.revenueRon)}
+                    {formatMoney(mkt.scratchCard.revenueRon)}
                   </div>
                 </div>
                 <div className="text-right">
@@ -1150,7 +1297,7 @@ export default function AdminAnalyticsPage() {
                     Discount acordat
                   </div>
                   <div className="text-sm font-black text-[#ff6eb6] tabular-nums mt-0.5">
-                    -{formatRon(mkt.scratchCard.discountRon)}
+                    -{formatMoney(mkt.scratchCard.discountRon)}
                   </div>
                 </div>
               </div>
@@ -1165,7 +1312,7 @@ export default function AdminAnalyticsPage() {
                     Cupoane: TREN5 vs Influenceri vs ScratchCard
                   </h3>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    {mkt.coupons.ordersWithCouponCount} comenzi cu cupon ({mkt.coupons.couponSharePct}% din comenzi) · Discount total acordat: {formatRon(mkt.coupons.totalDiscountGrantedRon)}
+                    {mkt.coupons.ordersWithCouponCount} comenzi cu cupon ({mkt.coupons.couponSharePct}% din comenzi) · Discount total acordat: {formatMoney(mkt.coupons.totalDiscountGrantedRon)}
                   </p>
                 </div>
                 <Link
@@ -1184,10 +1331,10 @@ export default function AdminAnalyticsPage() {
                     </div>
                     <div className="text-lg font-black text-slate-900 mt-1 tabular-nums">{cat.orders} com.</div>
                     <div className="text-[11px] font-bold text-emerald-700 mt-0.5 tabular-nums">
-                      {formatRon(cat.revenueRon)}
+                      {formatMoney(cat.revenueRon)}
                     </div>
                     <div className="text-[10px] font-semibold text-rose-600 tabular-nums">
-                      -{formatRon(cat.discountRon)}
+                      -{formatMoney(cat.discountRon)}
                     </div>
                   </div>
                 ))}
@@ -1220,10 +1367,10 @@ export default function AdminAnalyticsPage() {
                           </td>
                           <td className="py-2 px-2 text-right font-black tabular-nums">{c.orders}</td>
                           <td className="py-2 px-2 text-right font-bold text-slate-800 tabular-nums">
-                            {formatRon(c.revenueRon)}
+                            {formatMoney(c.revenueRon)}
                           </td>
                           <td className="py-2 pl-2 text-right font-bold text-rose-600 tabular-nums">
-                            -{formatRon(c.discountRon)}
+                            -{formatMoney(c.discountRon)}
                           </td>
                         </tr>
                       ))}
@@ -1248,8 +1395,8 @@ export default function AdminAnalyticsPage() {
                     {mkt.leads.activeSubscribersAllTime} activi din {mkt.leads.totalSubscribersAllTime} total (+{mkt.leads.subscribersInPeriod} în interval)
                   </p>
                 </div>
-                <Link href="/admin/leads" className="text-[11px] font-bold text-blue-600 hover:underline shrink-0">
-                  Vezi Leads
+                <Link href="/admin/marketing/broadcast?tab=subscribers" className="text-[11px] font-bold text-blue-600 hover:underline shrink-0">
+                  Vezi Abonați
                 </Link>
               </div>
 
@@ -1278,8 +1425,10 @@ export default function AdminAnalyticsPage() {
                 })}
               </div>
 
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="font-semibold text-slate-500">Mesaje Contact (formular):</span>
+              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <Link href="/admin/leads" className="font-semibold text-slate-500 hover:text-[#e32f8c] transition-colors">
+                  Mesaje Contact (formular):
+                </Link>
                 <span className="font-black text-slate-900 tabular-nums">
                   {mkt.leads.contactLeadsInPeriod} în interval · {mkt.leads.contactLeadsAllTime} total
                 </span>
@@ -1304,12 +1453,12 @@ export default function AdminAnalyticsPage() {
                     <span>Card Online (Stripe)</span>
                     <span className="font-black text-blue-700 tabular-nums">{mkt.payments.card.percentage}%</span>
                   </div>
-                  <div className="mt-1 flex items-baseline justify-between gap-2">
+                  <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-xl font-black text-slate-900 tabular-nums">
                       {mkt.payments.card.count} comenzi
                     </span>
                     <span className="text-xs font-bold text-slate-700 tabular-nums">
-                      {formatRon(mkt.payments.card.revenueRon)}
+                      {formatMoney(mkt.payments.card.revenueRon)}
                     </span>
                   </div>
                   {(mkt.payments.card.applePayCount > 0 || mkt.payments.card.googlePayCount > 0) && (
@@ -1324,12 +1473,12 @@ export default function AdminAnalyticsPage() {
                     <span>Ramburs (COD România)</span>
                     <span className="font-black text-amber-700 tabular-nums">{mkt.payments.ramburs.percentage}%</span>
                   </div>
-                  <div className="mt-1 flex items-baseline justify-between gap-2">
+                  <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-xl font-black text-slate-900 tabular-nums">
                       {mkt.payments.ramburs.count} comenzi
                     </span>
                     <span className="text-xs font-bold text-slate-700 tabular-nums">
-                      {formatRon(mkt.payments.ramburs.revenueRon)}
+                      {formatMoney(mkt.payments.ramburs.revenueRon)}
                     </span>
                   </div>
                 </div>
@@ -1371,14 +1520,14 @@ export default function AdminAnalyticsPage() {
                           : 'bg-amber-500';
                   return (
                     <div key={s.key} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
-                      <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                      <div className="flex flex-wrap items-center justify-between gap-1 sm:gap-2 text-xs mb-1">
                         <span className="font-bold text-slate-800 truncate">{s.label}</span>
                         <span className="font-black text-slate-900 shrink-0 tabular-nums">
                           {s.count} ({s.percentage}%)
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold mb-1.5 tabular-nums">
-                        <span>Venit: {formatRon(s.revenueRon)}</span>
+                        <span>Venit: {formatMoney(s.revenueRon)}</span>
                       </div>
                       <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                         <div

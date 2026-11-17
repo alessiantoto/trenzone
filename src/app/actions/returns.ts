@@ -241,6 +241,7 @@ export async function getAdminReturns() {
         payment_intent_id,
         receipt_url,
         total_amount,
+        currency,
         status,
         created_at,
         carrier_metadata,

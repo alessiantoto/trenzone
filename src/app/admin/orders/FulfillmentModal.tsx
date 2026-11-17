@@ -365,7 +365,7 @@ export function FulfillmentModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 12 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        className="relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 z-10"
+        className="relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90dvh] flex flex-col overflow-hidden border border-slate-200 z-10"
       >
         {/* LIGHT CLEAN MODAL HEADER (NO BLACK) */}
         <div className="p-4 sm:p-5 bg-white text-slate-900 flex items-center justify-between border-b border-slate-200 shrink-0">
@@ -463,20 +463,20 @@ export function FulfillmentModal({
 
               {/* Operational Queue Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Gata de Expediere</div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Gata de Expediere</div>
                   <div className="text-lg font-black text-emerald-700 mt-0.5">{pendingOrders.length}</div>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Precomenzi Reținute</div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Precomenzi Reținute</div>
                   <div className="text-lg font-black text-violet-700 mt-0.5">{queueOverview.excludedPreorders}</div>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Deja Trimise</div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Deja Trimise</div>
                   <div className="text-lg font-black text-indigo-700 mt-0.5">{queueOverview.excludedAlreadyDispatched}</div>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Excluse (PDF/Anul./AWB)</div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Excluse (PDF/Anul./AWB)</div>
                   <div className="text-lg font-black text-slate-600 mt-0.5">
                     {queueOverview.excludedDigital + queueOverview.excludedUnpaidOrInvalid}
                   </div>
@@ -772,10 +772,10 @@ export function FulfillmentModal({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
                     <button
                       onClick={() => handleDownloadCsv('pending')}
-                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      className="min-h-[40px] px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                     >
                       <Download size={14} className="text-emerald-600" />
                       <span>Descarcă CSV ({pendingOrders.length})</span>
@@ -784,7 +784,7 @@ export function FulfillmentModal({
                     <button
                       onClick={handleTriggerDispatchNow}
                       disabled={dispatching || !settings.email}
-                      className="px-5 py-2.5 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-[#e32f8c]/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                      className="min-h-[40px] px-5 py-2.5 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-[#e32f8c]/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                     >
                       {dispatching ? (
                         <>
@@ -1255,15 +1255,15 @@ export function FulfillmentModal({
                                     key={o.id || oIdx}
                                     className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs text-xs space-y-2"
                                   >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                         <span className="font-black text-slate-900">{o.id}</span>
                                         <span className="text-slate-400">•</span>
-                                        <span className="font-bold text-slate-700">{o.customer}</span>
+                                        <span className="font-bold text-slate-700 truncate max-w-[160px] sm:max-w-none">{o.customer}</span>
                                         <span className="text-slate-400">•</span>
                                         <span className="text-slate-500">{o.city} ({o.country || 'RO'})</span>
                                       </div>
-                                      <span className="font-black text-slate-900">{o.total}</span>
+                                      <span className="font-black text-slate-900 shrink-0">{o.total}</span>
                                     </div>
 
                                     {/* Items summary */}

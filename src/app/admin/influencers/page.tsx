@@ -355,13 +355,13 @@ export default function AdminInfluencersPage() {
   return (
     <div className="p-3.5 sm:p-6 max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in pb-16">
       
-      {/* 🌟 PAGE HEADER & STATS */}
+      {/* PAGE HEADER & STATS */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-3.5">
           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#e32f8c]/10 text-[#008ba3] flex items-center justify-center shrink-0 shadow-xs">
             <Film size={22} className="sm:w-6 sm:h-6" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Management Influenceri</h1>
             <p className="text-xs sm:text-sm text-slate-500 font-medium">Clipurile video verticale afișate pe prima pagină</p>
           </div>
@@ -380,35 +380,35 @@ export default function AdminInfluencersPage() {
         </div>
       </div>
 
-      {/* 📊 KPI STATS PILLS */}
+      {/* KPI STATS PILLS */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 flex items-center gap-3 shadow-2xs">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
-            <Video size={18} />
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-3 shadow-2xs">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
+            <Video size={16} className="sm:w-[18px] sm:h-[18px]" />
           </div>
-          <div className="min-w-0">
-            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 truncate">Total Clipuri</p>
-            <p className="text-sm sm:text-xl font-black text-slate-900">{influencers.length}</p>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 flex items-center gap-3 shadow-2xs">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
-            <Check size={18} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 truncate">Active pe Site</p>
-            <p className="text-sm sm:text-xl font-black text-emerald-700">{activeCount}</p>
+          <div className="min-w-0 w-full">
+            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 leading-tight">Total Clipuri</p>
+            <p className="text-base sm:text-xl font-black text-slate-900 mt-0.5">{influencers.length}</p>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 flex items-center gap-3 shadow-2xs">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
-            <Eye size={18} />
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-3 shadow-2xs">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+            <Check size={16} className="sm:w-[18px] sm:h-[18px]" />
           </div>
-          <div className="min-w-0">
-            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 truncate">Dezactivate</p>
-            <p className="text-sm sm:text-xl font-black text-amber-700">{inactiveCount}</p>
+          <div className="min-w-0 w-full">
+            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 leading-tight">Active pe Site</p>
+            <p className="text-base sm:text-xl font-black text-emerald-700 mt-0.5">{activeCount}</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-3 shadow-2xs">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+            <Eye size={16} className="sm:w-[18px] sm:h-[18px]" />
+          </div>
+          <div className="min-w-0 w-full">
+            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 leading-tight">Dezactivate</p>
+            <p className="text-base sm:text-xl font-black text-amber-700 mt-0.5">{inactiveCount}</p>
           </div>
         </div>
       </div>
@@ -433,7 +433,7 @@ export default function AdminInfluencersPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
             <button
               type="button"
               onClick={() =>
@@ -442,7 +442,7 @@ export default function AdminInfluencersPage() {
                   show_on_programs: !prev.show_on_programs,
                 }))
               }
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border text-center ${
                 programVideoConfig.show_on_programs
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                   : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
@@ -455,7 +455,7 @@ export default function AdminInfluencersPage() {
               type="button"
               disabled={savingProgramConfig}
               onClick={handleSaveProgramVideoConfig}
-              className="px-4 py-2 rounded-xl bg-[#e32f8c] hover:bg-[#c41a72] text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-[#e32f8c] hover:bg-[#c41a72] text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
             >
               {savingProgramConfig ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               <span>Salvează pentru Programe</span>
@@ -473,7 +473,7 @@ export default function AdminInfluencersPage() {
               type="text"
               value={programVideoConfig.title_ro}
               onChange={(e) => setProgramVideoConfig((p) => ({ ...p, title_ro: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
             />
           </div>
           <div>
@@ -484,7 +484,7 @@ export default function AdminInfluencersPage() {
               type="text"
               value={programVideoConfig.subtitle_ro}
               onChange={(e) => setProgramVideoConfig((p) => ({ ...p, subtitle_ro: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
             />
           </div>
           <div>
@@ -495,7 +495,7 @@ export default function AdminInfluencersPage() {
               type="text"
               value={programVideoConfig.title_en}
               onChange={(e) => setProgramVideoConfig((p) => ({ ...p, title_en: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
             />
           </div>
           <div>
@@ -506,7 +506,7 @@ export default function AdminInfluencersPage() {
               type="text"
               value={programVideoConfig.subtitle_en}
               onChange={(e) => setProgramVideoConfig((p) => ({ ...p, subtitle_en: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]"
             />
           </div>
         </div>
@@ -601,10 +601,10 @@ export default function AdminInfluencersPage() {
         </div>
       </div>
 
-      {/* 🚀 MAIN CONTENT: FORM + LIST */}
+      {/* MAIN CONTENT: FORM + LIST */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* ➕ ADD NEW INFLUENCER FORM CARD */}
+        {/* ADD NEW INFLUENCER FORM CARD */}
         <div className={`lg:col-span-4 ${showMobileAddForm ? 'block' : 'hidden lg:block'}`}>
           <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-sm sticky top-6 space-y-4 sm:space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -748,7 +748,7 @@ export default function AdminInfluencersPage() {
           </div>
         </div>
 
-        {/* 🎬 INFLUENCERS LIST CARD */}
+        {/* INFLUENCERS LIST CARD */}
         <div className="lg:col-span-8">
           <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
             
@@ -964,9 +964,9 @@ export default function AdminInfluencersPage() {
 
                                   </div>
 
-                                  {/* RIGHT: Full Action Bar (Always 100% visible on Mobile & PC) */}
+                                  {/* RIGHT: Full Action Bar */}
                                   {!isEditingThis && (
-                                    <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                                    <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                                       
                                       {/* Toggle Active Switch Button */}
                                       <button
@@ -1054,18 +1054,18 @@ export default function AdminInfluencersPage() {
 
       </div>
 
-      {/* 🎥 FULLSCREEN / POPUP VIDEO PREVIEW MODAL */}
+      {/* FULLSCREEN / POPUP VIDEO PREVIEW MODAL */}
       {previewVideo && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-200"
           onClick={() => setPreviewVideo(null)}
         >
           <div 
-            className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden max-w-sm w-full shadow-2xl relative flex flex-col max-h-[90vh]"
+            className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden max-w-sm w-full shadow-2xl relative flex flex-col max-h-[90dvh]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between text-white">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between text-white shrink-0">
               <div className="min-w-0 pr-2">
                 <h3 className="font-heading font-black text-sm sm:text-base truncate">
                   {previewVideo.influencer_name}
@@ -1084,7 +1084,7 @@ export default function AdminInfluencersPage() {
             </div>
 
             {/* Video Player */}
-            <div className="relative aspect-[9/16] bg-black w-full flex items-center justify-center overflow-hidden">
+            <div className="relative aspect-[9/16] max-h-[65dvh] bg-black w-full flex items-center justify-center overflow-hidden">
               <video
                 src={previewVideo.video_url}
                 controls
@@ -1095,7 +1095,7 @@ export default function AdminInfluencersPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3.5 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+            <div className="p-3.5 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 shrink-0">
               <span className={`inline-flex items-center gap-1 font-bold ${previewVideo.is_active ? 'text-emerald-400' : 'text-slate-400'}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${previewVideo.is_active ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                 {previewVideo.is_active ? 'Activ pe prima pagină' : 'Inactiv pe prima pagină'}
@@ -1112,14 +1112,14 @@ export default function AdminInfluencersPage() {
         </div>
       )}
 
-      {/* ⚠️ DELETE CONFIRMATION MODAL */}
+      {/* DELETE CONFIRMATION MODAL */}
       {influencerToDelete && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200"
           onClick={() => setInfluencerToDelete(null)}
         >
           <div 
-            className="bg-white rounded-3xl p-5 sm:p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-4"
+            className="bg-white rounded-3xl p-5 sm:p-6 max-w-sm w-full max-h-[90dvh] overflow-y-auto shadow-2xl border border-slate-200 space-y-4"
             onClick={e => e.stopPropagation()}
           >
             <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shadow-xs">

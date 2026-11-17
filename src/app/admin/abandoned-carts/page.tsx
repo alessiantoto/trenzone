@@ -84,6 +84,7 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
     return {
       stage: 'recovered' as const,
       badgeText: 'Recuperat',
+      badgeIcon: null,
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       actionTitle: 'Comandă finalizată cu succes!',
       actionSubtitle: 'Clientul a revenit pe site și a plasat comanda.',
@@ -103,6 +104,7 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
     return {
       stage: 'active' as const,
       badgeText: 'În Navigare (<30m)',
+      badgeIcon: null,
       badgeColor: 'bg-cyan-100 text-cyan-800 border-cyan-300',
       actionTitle: 'Sesiune activă în timp real',
       actionSubtitle: 'Clientul se află în checkout sau a navigat recent. Nu se trimite email acum.',
@@ -122,6 +124,7 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
     return {
       stage: 'no_email' as const,
       badgeText: 'Fără Email',
+      badgeIcon: null,
       badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
       actionTitle: 'Email necompletat',
       actionSubtitle: cart.customer.phone 
@@ -143,6 +146,7 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
     return {
       stage: 'sequence_finished' as const,
       badgeText: 'Secvență Trimisă (2/2)',
+      badgeIcon: null,
       badgeColor: 'bg-purple-100 text-purple-800 border-purple-300',
       actionTitle: 'Secvență completă de emailuri trimisă',
       actionSubtitle: `A primit Reminderul 24h și Oferta 72h${lastCouponCode ? ` (Cupon: ${lastCouponCode} -${lastCouponValue}%)` : ''}. Fără alte trimiteri automate.`,
@@ -162,9 +166,10 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
     if (hoursSince >= 72) {
       return {
         stage: 'ready_72h' as const,
-        badgeText: '⚡ Trimite Oferta 72h',
+        badgeText: 'Trimite Oferta 72h',
+        badgeIcon: 'zap' as const,
         badgeColor: 'bg-purple-600 text-white border-purple-700 animate-pulse',
-        actionTitle: '⚡ Eligibil acum pentru Pasul 2: Oferta 72h cu Cupon',
+        actionTitle: 'Eligibil acum pentru Pasul 2: Oferta 72h cu Cupon',
         actionSubtitle: 'Au trecut peste 3 zile. Apasă "Trimite reducere" sau se va trimite automat prin cronul zilnic.',
         isReadyToSend: true,
         readyType: '72h' as const,
@@ -181,6 +186,7 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
       return {
         stage: 'waiting_72h' as const,
         badgeText: `Urmează 72h în ~${rem}h`,
+        badgeIcon: null,
         badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
         actionTitle: `Reminderul 24h a fost trimis. Urmează Oferta 72h în ~${rem} ore`,
         actionSubtitle: 'Oferta cu reducere se va trimite automat de sistem dacă nu plasează comanda între timp.',
@@ -201,9 +207,10 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
     if (hoursSince >= 24) {
       return {
         stage: 'ready_24h' as const,
-        badgeText: '⚡ Trimite Reminder 24h',
+        badgeText: 'Trimite Reminder 24h',
+        badgeIcon: 'zap' as const,
         badgeColor: 'bg-orange-600 text-white border-orange-700 animate-pulse',
-        actionTitle: '⚡ Eligibil acum pentru Pasul 1: Reminder 24h',
+        actionTitle: 'Eligibil acum pentru Pasul 1: Reminder 24h',
         actionSubtitle: 'Au trecut peste 24h de la abandon. Apasă "Trimite 24h" sau se va trimite automat prin cronul zilnic.',
         isReadyToSend: true,
         readyType: '24h' as const,
@@ -220,6 +227,7 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
       return {
         stage: 'waiting_24h' as const,
         badgeText: `Urmează 24h în ~${rem}h`,
+        badgeIcon: null,
         badgeColor: 'bg-slate-100 text-slate-600 border-slate-300',
         actionTitle: `Coș abandonat recent. Primul reminder va fi trimis în ~${rem} ore`,
         actionSubtitle: 'Lăsăm clientul să finalizeze liniștit în primele 24 de ore înainte de prima notificare.',
@@ -239,6 +247,7 @@ export function getCartRecoveryStatus(cart: FormattedAbandonedCart) {
   return {
     stage: 'unknown' as const,
     badgeText: 'În Așteptare',
+    badgeIcon: null,
     badgeColor: 'bg-slate-100 text-slate-600',
     actionTitle: 'Status în așteptare',
     actionSubtitle: '',
@@ -593,7 +602,7 @@ export default function AbandonedCartsPage() {
       });
     }
 
-    // Sorting
+    // Sorting (compare equivalent RON amounts across multi-currency sessions)
     result.sort((a, b) => {
       if (sortOrder === 'newest') {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -601,11 +610,13 @@ export default function AbandonedCartsPage() {
       if (sortOrder === 'oldest') {
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }
+      const aRon = a.totalAmountRon ?? a.totalAmount;
+      const bRon = b.totalAmountRon ?? b.totalAmount;
       if (sortOrder === 'highest') {
-        return b.totalAmount - a.totalAmount;
+        return bRon - aRon;
       }
       if (sortOrder === 'lowest') {
-        return a.totalAmount - b.totalAmount;
+        return aRon - bRon;
       }
       return 0;
     });
@@ -633,7 +644,7 @@ export default function AbandonedCartsPage() {
       return;
     }
 
-    const headers = ["ID Coș", "Data", "Status", "Nume Client", "Email", "Telefon", "Oraș", "Total (RON)", "Produse", "Email 24h", "Email 72h"];
+    const headers = ["ID Coș", "Data", "Status", "Nume Client", "Email", "Telefon", "Oraș", "Valoare Nativă", "Monedă", "Total (RON)", "Produse", "Email 24h", "Email 72h"];
     const rows = filteredCarts.map(c => [
       c.id,
       formatDate(c.createdAt),
@@ -643,6 +654,8 @@ export default function AbandonedCartsPage() {
       c.customer.phone,
       `"${c.customer.city}"`,
       c.totalAmount,
+      c.currency || 'RON',
+      c.totalAmountRon ?? c.totalAmount,
       `"${c.items.map(i => `${i.name} (x${i.quantity})`).join(', ').replace(/"/g, '""')}"`,
       c.recoveryEmailsSent?.['24h'] ? 'Trimis' : 'Nu',
       c.recoveryEmailsSent?.['72h'] ? 'Trimis' : 'Nu'
@@ -660,29 +673,29 @@ export default function AbandonedCartsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-4 sm:space-y-6 pb-20">
       {/* PAGE HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center flex-wrap gap-2 mb-1">
             <span className="p-2 bg-orange-50 text-orange-600 rounded-xl border border-orange-100">
-              <ShoppingCart size={22} />
+              <ShoppingCart size={20} />
             </span>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Coșuri Abandonate</h1>
-            <span className="text-xs font-black uppercase tracking-wider bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Coșuri Abandonate</h1>
+            <span className="text-[11px] font-black uppercase tracking-wider bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full">
               Live Tracker
             </span>
           </div>
-          <p className="text-sm text-slate-500 font-medium">
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
             Monitorizează clienții care au abandonat coșul și recuperează comenzile prin email automat sau contact direct.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full md:w-auto shrink-0">
           <button
             onClick={handleRunAutomation}
             disabled={runningAutomation || loading}
-            className="px-3.5 py-2 text-xs font-black text-slate-900 bg-[#e32f8c] hover:bg-[#00bad9] active:scale-95 rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            className="col-span-2 sm:col-span-1 px-3.5 py-2.5 sm:py-2 text-xs font-black text-slate-900 bg-[#e32f8c] hover:bg-[#00bad9] active:scale-95 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
             title="Trimite automat reminderele de 24h și cele de 72h cu 10% reducere (TREN10) pentru toate coșurile eligibile"
           >
             <Play size={12} fill="currentColor" className={runningAutomation ? "animate-spin" : ""} />
@@ -691,7 +704,7 @@ export default function AbandonedCartsPage() {
 
           <Link
             href="/admin/emails"
-            className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-1.5"
+            className="px-3 py-2.5 sm:py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center justify-center gap-1.5"
             title="Configurează template-urile de email pentru coșuri abandonate"
           >
             <Mail size={14} className="text-[#e32f8c]" />
@@ -700,7 +713,7 @@ export default function AbandonedCartsPage() {
 
           <button
             onClick={exportToCsv}
-            className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-3 py-2.5 sm:py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
             title="Exportă lista filtrată în format CSV"
           >
             <Download size={14} />
@@ -710,7 +723,7 @@ export default function AbandonedCartsPage() {
           <button
             onClick={() => loadData(true)}
             disabled={refreshing || loading}
-            className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+            className="col-span-2 sm:col-span-1 px-4 py-2.5 sm:py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
             <span>{refreshing ? "Se actualizează..." : "Reîmprospătează"}</span>
@@ -772,7 +785,7 @@ export default function AbandonedCartsPage() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 4, scale: 0.97 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-purple-100 p-2 z-50 overflow-hidden"
+                    className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-[calc(100vw-3rem)] max-w-72 bg-white rounded-2xl shadow-2xl border border-purple-100 p-2 z-50 overflow-hidden"
                   >
                     {/* Header & Quick Search */}
                     <div className="pb-2 mb-1.5 border-b border-slate-100">
@@ -907,15 +920,15 @@ export default function AbandonedCartsPage() {
       </div>
 
       {/* SUMMARY KPI CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {/* Card 1: Total Abandonat */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-sm relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/5 rounded-bl-[100px] -z-10 group-hover:scale-110 transition-transform"></div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">Coșuri Abandonate</span>
-            <span className="p-1.5 bg-orange-50 text-orange-600 rounded-lg"><ShoppingCart size={14} /></span>
+          <div className="flex items-center justify-between gap-1 mb-1">
+            <span className="text-[10px] sm:text-xs font-black uppercase text-slate-400 tracking-wider truncate">Coșuri Abandonate</span>
+            <span className="p-1.5 bg-orange-50 text-orange-600 rounded-lg shrink-0"><ShoppingCart size={14} /></span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-orange-600">
+          <div className="text-xl sm:text-3xl font-black text-orange-600">
             {stats?.abandonedCount ?? (loading ? "..." : 0)}
           </div>
           <p className="text-[11px] text-slate-500 font-semibold mt-1">
@@ -924,43 +937,43 @@ export default function AbandonedCartsPage() {
         </div>
 
         {/* Card 2: Pierdere Potențială */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-sm relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-20 h-20 bg-red-500/5 rounded-bl-[100px] -z-10 group-hover:scale-110 transition-transform"></div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">Pierdere Potențială</span>
-            <span className="p-1.5 bg-red-50 text-red-600 rounded-lg"><TrendingDown size={14} /></span>
+          <div className="flex items-center justify-between gap-1 mb-1">
+            <span className="text-[10px] sm:text-xs font-black uppercase text-slate-400 tracking-wider truncate">Pierdere Potențială</span>
+            <span className="p-1.5 bg-red-50 text-red-600 rounded-lg shrink-0"><TrendingDown size={14} /></span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 truncate">
-            {stats ? formatMoney(stats.potentialLostRevenue) : (loading ? "..." : "0 RON")}
+          <div className="text-lg sm:text-2xl xl:text-3xl font-black text-slate-900 truncate">
+            {stats ? formatMoney(stats.potentialLostRevenue, 'RON') : (loading ? "..." : "0,00 RON")}
           </div>
           <p className="text-[11px] text-slate-500 font-semibold mt-1">
-            Valoarea produselor abandonate
+            Total convertit în RON
           </p>
         </div>
 
         {/* Card 3: Recuperate */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-sm relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-bl-[100px] -z-10 group-hover:scale-110 transition-transform"></div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">Comenzi Recuperate</span>
-            <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><CheckCircle2 size={14} /></span>
+          <div className="flex items-center justify-between gap-1 mb-1">
+            <span className="text-[10px] sm:text-xs font-black uppercase text-slate-400 tracking-wider truncate">Comenzi Recuperate</span>
+            <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg shrink-0"><CheckCircle2 size={14} /></span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-emerald-600">
+          <div className="text-xl sm:text-3xl font-black text-emerald-600">
             {stats?.recoveredCount ?? (loading ? "..." : 0)}
           </div>
-          <p className="text-[11px] text-slate-500 font-semibold mt-1">
-            Valoare: <span className="font-bold text-slate-900">{stats ? formatMoney(stats.recoveredRevenue) : "0 RON"}</span>
+          <p className="text-[11px] text-slate-500 font-semibold mt-1 truncate">
+            Valoare: <span className="font-bold text-slate-900">{stats ? formatMoney(stats.recoveredRevenue, 'RON') : "0,00 RON"}</span>
           </p>
         </div>
 
         {/* Card 4: Rată de Recuperare */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-sm relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-20 h-20 bg-[#e32f8c]/5 rounded-bl-[100px] -z-10 group-hover:scale-110 transition-transform"></div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">Rată Recuperare</span>
-            <span className="p-1.5 bg-[#e32f8c]/10 text-[#00b0ce] rounded-lg"><Percent size={14} /></span>
+          <div className="flex items-center justify-between gap-1 mb-1">
+            <span className="text-[10px] sm:text-xs font-black uppercase text-slate-400 tracking-wider truncate">Rată Recuperare</span>
+            <span className="p-1.5 bg-[#e32f8c]/10 text-[#00b0ce] rounded-lg shrink-0"><Percent size={14} /></span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900">
+          <div className="text-xl sm:text-3xl font-black text-slate-900">
             {stats?.recoveryRate ?? (loading ? "..." : 0)}%
           </div>
           <p className="text-[11px] text-slate-500 font-semibold mt-1">
@@ -970,7 +983,7 @@ export default function AbandonedCartsPage() {
       </div>
 
       {/* SEARCH & FILTER BAR */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-sm space-y-3.5 sm:space-y-4">
         {/* Top row: search + quick filters */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Search Input */}
@@ -981,7 +994,7 @@ export default function AbandonedCartsPage() {
               placeholder="Caută după nume, email, telefon, oraș, produs sau ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/30 focus:border-[#e32f8c] transition-all"
+              className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/30 focus:border-[#e32f8c] transition-all"
             />
             {searchQuery && (
               <button
@@ -994,27 +1007,27 @@ export default function AbandonedCartsPage() {
           </div>
 
           {/* Sort dropdown */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
             <span className="text-xs font-bold text-slate-400 shrink-0">Sortare:</span>
             <select
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/30 cursor-pointer"
+              className="flex-1 sm:flex-initial px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/30 cursor-pointer"
             >
               <option value="newest">Cele mai recente</option>
-              <option value="highest">Valoare maximă</option>
-              <option value="lowest">Valoare minimă</option>
+              <option value="highest">Valoare maximă (RON)</option>
+              <option value="lowest">Valoare minimă (RON)</option>
               <option value="oldest">Cele mai vechi</option>
             </select>
           </div>
         </div>
 
         {/* Bottom row: status tabs + toggles */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-          <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 sm:flex-wrap custom-scrollbar">
             <button
               onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 statusFilter === 'all'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -1026,65 +1039,65 @@ export default function AbandonedCartsPage() {
             {/* Quick Action Filter: Ready to Send */}
             <button
               onClick={() => setStatusFilter('ready_to_send')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
                 statusFilter === 'ready_to_send'
                   ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
                   : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-300'
               }`}
               title="Afișează coșurile care au atins 24h sau 72h și sunt pregătite pentru trimiterea emailului"
             >
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-              ⚡ De trimis acum ({readyToSendCount})
+              <Zap size={12} className="shrink-0" />
+              <span>De trimis acum ({readyToSendCount})</span>
             </button>
 
             {/* Quick Filter: Emails Sent */}
             <button
               onClick={() => setStatusFilter('sent')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
                 statusFilter === 'sent'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200/60'
               }`}
               title="Afișează doar coșurile la care s-a trimis deja cel puțin un email (24h sau 72h)"
             >
-              <Mail size={12} />
-              ✉️ Emailuri Trimise ({emailsSentCount})
+              <Mail size={12} className="shrink-0" />
+              <span>Emailuri Trimise ({emailsSentCount})</span>
             </button>
 
             <button
               onClick={() => setStatusFilter('abandoned')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
                 statusFilter === 'abandoned'
                   ? 'bg-orange-500 text-white shadow-xs'
                   : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200/50'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
-              Abandonate ({carts.filter(c => c.status === 'abandoned').length})
+              <span>Abandonate ({carts.filter(c => c.status === 'abandoned').length})</span>
             </button>
 
             <button
               onClick={() => setStatusFilter('active')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
                 statusFilter === 'active'
                   ? 'bg-[#e32f8c] text-slate-950 shadow-xs'
                   : 'bg-cyan-50 text-cyan-800 hover:bg-cyan-100 border border-cyan-200/50'
               }`}
             >
-              <Clock size={12} />
-              În Curs &lt; 30m ({carts.filter(c => c.status === 'active').length})
+              <Clock size={12} className="shrink-0" />
+              <span>În Curs &lt; 30m ({carts.filter(c => c.status === 'active').length})</span>
             </button>
 
             <button
               onClick={() => setStatusFilter('recovered')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
                 statusFilter === 'recovered'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/50'
               }`}
             >
-              <CheckCircle2 size={12} />
-              Recuperate ({carts.filter(c => c.status === 'recovered').length})
+              <CheckCircle2 size={12} className="shrink-0" />
+              <span>Recuperate ({carts.filter(c => c.status === 'recovered').length})</span>
             </button>
           </div>
 
@@ -1171,9 +1184,14 @@ export default function AbandonedCartsPage() {
         </div>
       ) : (
         <div className="space-y-3.5">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-400 px-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-bold text-slate-400 px-1 sm:px-2">
             <span>Se afișează {filteredCarts.length} coșuri din {carts.length}</span>
-            <span>Total valoare afișată: {formatMoney(filteredCarts.reduce((acc, c) => acc + c.totalAmount, 0))}</span>
+            <span>
+              Total valoare afișată:{' '}
+              <strong className="text-slate-700 font-mono">
+                {formatMoney(filteredCarts.reduce((acc, c) => acc + (c.totalAmountRon ?? c.totalAmount), 0), 'RON')}
+              </strong>
+            </span>
           </div>
 
           {filteredCarts.map((cart) => {
@@ -1197,58 +1215,64 @@ export default function AbandonedCartsPage() {
                 }`}
               >
                 {/* TOP ROW: Status, ID, Customer Name, Value */}
-                <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/40">
-                  <div className="flex items-start sm:items-center gap-3">
+                <div className="p-3.5 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 border-b border-slate-100 bg-slate-50/40">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 min-w-0">
                     {/* Status Badge & Stage */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                       {cart.status === 'recovered' ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
                           <CheckCircle2 size={13} /> Recuperat
                         </span>
                       ) : cart.status === 'active' ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-cyan-100 text-cyan-800 border border-cyan-300">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-black bg-cyan-100 text-cyan-800 border border-cyan-300">
                           <Clock size={13} className="animate-spin" /> În Curs (&lt;30m)
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-orange-100 text-orange-800 border border-orange-300">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-black bg-orange-100 text-orange-800 border border-orange-300">
                           <span className="w-2 h-2 rounded-full bg-orange-500"></span> Abandonat
                         </span>
                       )}
 
                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${recoveryStatus.badgeColor}`}>
-                        {recoveryStatus.badgeText}
+                        {recoveryStatus.badgeIcon === 'zap' && <Zap size={11} className="shrink-0" />}
+                        <span>{recoveryStatus.badgeText}</span>
                       </span>
                     </div>
 
                     {/* Customer Name & Creation Date */}
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm sm:text-base font-black text-slate-900">
+                    <div className="min-w-0">
+                      <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
+                        <h3 className="text-sm sm:text-base font-black text-slate-900 truncate">
                           {cart.customer.fullName}
                         </h3>
                         {cart.customer.city && (
                           <span className="text-xs font-semibold text-slate-500 flex items-center gap-0.5">
-                            <MapPin size={11} className="text-slate-400" />
+                            <MapPin size={11} className="text-slate-400 shrink-0" />
                             {cart.customer.city}{cart.customer.state ? `, ${cart.customer.state}` : ''}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-medium">
+                      <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[11px] sm:text-xs text-slate-400 font-medium">
                         <span>{formatRelativeTime(cart.createdAt)}</span>
                         <span>•</span>
                         <span>{formatDate(cart.createdAt)}</span>
-                        <span>•</span>
+                        <span className="hidden sm:inline">•</span>
                         <span className="font-mono text-[10px] text-slate-400">ID: {cart.id.slice(0, 8)}...</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Total Value & Main Toggle */}
-                  <div className="flex items-center justify-between md:justify-end gap-4 shrink-0">
-                    <div className="text-right">
-                      <div className="text-lg sm:text-xl font-black text-slate-900 tracking-tight font-mono">
+                  <div className="flex items-center justify-between md:justify-end gap-4 pt-2 border-t border-slate-100 md:border-t-0 md:pt-0 shrink-0">
+                    <div className="text-left md:text-right">
+                      <div className="text-base sm:text-xl font-black text-slate-900 tracking-tight font-mono">
                         {formatMoney(cart.totalAmount, cart.currency)}
                       </div>
+                      {cart.currency !== 'RON' && (
+                        <div className="text-[11px] font-bold text-slate-500 font-mono">
+                          (~{formatMoney(cart.totalAmountRon ?? cart.totalAmount, 'RON')})
+                        </div>
+                      )}
                       <span className="text-[11px] font-semibold text-slate-400">
                         {cart.items.length} {cart.items.length === 1 ? 'produs' : 'produse'}
                       </span>
@@ -1264,7 +1288,7 @@ export default function AbandonedCartsPage() {
                   </div>
                 </div>
 
-                {/* 🚀 SALES FUNNEL STEPPER & AUDIT TRAIL */}
+                {/* SALES FUNNEL STEPPER & AUDIT TRAIL */}
                 <div className="px-4 sm:px-5 py-3 bg-slate-50/70 border-b border-slate-100">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                     {/* Stepper Steps */}
@@ -1405,23 +1429,23 @@ export default function AbandonedCartsPage() {
                 </div>
 
                 {/* MIDDLE ROW: Contact info + Mini products preview + Recovery Email Status */}
-                <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                <div className="p-3.5 sm:p-5 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                   {/* Client Contact Info (Col 5) */}
-                  <div className="md:col-span-5 space-y-1.5 text-xs">
+                  <div className="md:col-span-5 space-y-1.5 text-xs min-w-0">
                     {/* Email */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Mail size={13} className="text-slate-400 shrink-0" />
                       {hasEmail ? (
                         <>
                           <a 
                             href={`mailto:${cart.customer.email}`}
-                            className="font-bold text-slate-800 hover:text-[#e32f8c] transition-colors truncate"
+                            className="font-bold text-slate-800 hover:text-[#e32f8c] transition-colors truncate min-w-0"
                           >
                             {cart.customer.email}
                           </a>
                           <button
                             onClick={() => copyToClipboard(cart.customer.email, `email-${cart.id}`, 'Email')}
-                            className="text-slate-400 hover:text-slate-600 p-0.5"
+                            className="text-slate-400 hover:text-slate-600 p-0.5 shrink-0"
                             title="Copiază email"
                           >
                             {copiedKey === `email-${cart.id}` ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
@@ -1433,7 +1457,7 @@ export default function AbandonedCartsPage() {
                     </div>
 
                     {/* Phone */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
                       <Phone size={13} className="text-slate-400 shrink-0" />
                       {hasPhone ? (
                         <>
@@ -1455,7 +1479,7 @@ export default function AbandonedCartsPage() {
                             href={getWhatsAppLink(cart.customer.phone, cart.customer.fullName, cart.items)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="ml-1 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md transition-colors"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md transition-colors"
                             title="Deschide WhatsApp pentru a asista clientul"
                           >
                             <MessageCircle size={11} /> WhatsApp
@@ -1529,7 +1553,7 @@ export default function AbandonedCartsPage() {
                               {item.name}
                             </p>
                             <p className="text-[10px] text-slate-500 font-semibold leading-tight">
-                              x{item.quantity} • {formatMoney(item.price)}
+                              x{item.quantity} • {formatMoney(item.price, cart.currency)}
                             </p>
                           </div>
                         </div>
@@ -1545,33 +1569,33 @@ export default function AbandonedCartsPage() {
                   {/* Email Recovery Status & Actions (Col 3) */}
                   <div className="md:col-span-3 flex flex-col justify-end items-start md:items-end gap-1.5">
                     {/* Recovery Email Badges */}
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-start md:justify-end">
                       <span 
-                        className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                        className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
                           emailSent24h
                             ? 'bg-blue-50 text-blue-700 border-blue-200' 
                             : 'bg-slate-100 text-slate-400 border-slate-200'
                         }`}
                         title={emailSent24h ? `Email reminder 24h trimis: ${cart.recoveryEmailsSent?.['24h_sent_at'] ? formatDate(cart.recoveryEmailsSent['24h_sent_at']) : 'Da'}` : "Email 24h netrimis"}
                       >
-                        {emailSent24h ? '✓ 24h Trimis' : '24h Netrimis'}
+                        {emailSent24h ? <><Check size={10} /><span>24h Trimis</span></> : '24h Netrimis'}
                       </span>
 
                       <span 
-                        className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                        className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
                           emailSent72h 
                             ? 'bg-purple-50 text-purple-700 border-purple-200' 
                             : 'bg-slate-100 text-slate-400 border-slate-200'
                         }`}
                         title={emailSent72h ? `Email ofertă 72h trimis: ${cart.recoveryEmailsSent?.['72h_sent_at'] ? formatDate(cart.recoveryEmailsSent['72h_sent_at']) : 'Da'} (Cupon: ${cart.recoveryEmailsSent?.last_coupon_code || 'TREN10'})` : "Email 72h netrimis"}
                       >
-                        {emailSent72h ? `✓ 72h Trimis (${cart.recoveryEmailsSent?.last_coupon_code || '-10%'})` : '72h Netrimis'}
+                        {emailSent72h ? <><Check size={10} /><span>72h Trimis ({cart.recoveryEmailsSent?.last_coupon_code || '-10%'})</span></> : '72h Netrimis'}
                       </span>
                     </div>
 
                     {/* Quick Recovery Button */}
                     {hasEmail && cart.status !== 'recovered' && (
-                      <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         <button
                           onClick={() => setDiscountModal({
                             isOpen: true,
@@ -1684,7 +1708,7 @@ export default function AbandonedCartsPage() {
                                         {details.cleanTitle}
                                       </p>
 
-                                      {/* 📦 BUNDLE BREAKDOWN */}
+                                      {/* BUNDLE BREAKDOWN */}
                                       {details.isBundle && (
                                         <div className="mt-2.5 p-2.5 sm:p-3 bg-gradient-to-r from-cyan-50/90 to-blue-50/60 rounded-xl border border-cyan-200/90 space-y-2">
                                           <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-cyan-950">
@@ -1718,7 +1742,7 @@ export default function AbandonedCartsPage() {
                                         </div>
                                       )}
 
-                                      {/* 🏷️ SINGLE PRODUCT VARIANT */}
+                                      {/* SINGLE PRODUCT VARIANT */}
                                       {!details.isBundle && details.variantStr && (
                                         <div className="mt-1 flex items-center gap-1.5">
                                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md text-[11px] font-bold border border-slate-200">
@@ -1748,11 +1772,18 @@ export default function AbandonedCartsPage() {
                             })}
                           </div>
 
-                          <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between font-mono text-sm font-black text-slate-900">
+                          <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2 font-mono text-sm font-black text-slate-900">
                             <span>Total Coș:</span>
-                            <span className="text-base text-orange-600 font-black">
-                              {formatMoney(cart.totalAmount, cart.currency)}
-                            </span>
+                            <div className="text-right">
+                              <span className="text-base text-orange-600 font-black block">
+                                {formatMoney(cart.totalAmount, cart.currency)}
+                              </span>
+                              {cart.currency !== 'RON' && (
+                                <span className="text-[11px] text-slate-500 font-bold block">
+                                  (~{formatMoney(cart.totalAmountRon ?? cart.totalAmount, 'RON')})
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -1873,12 +1904,12 @@ export default function AbandonedCartsPage() {
       {/* DISCOUNT & RECOVERY EMAIL POPUP MODAL */}
       <AnimatePresence>
         {discountModal.isOpen && discountModal.cart && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 overflow-hidden"
+              className="bg-white rounded-3xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-7 shadow-2xl border border-slate-200 space-y-4 sm:space-y-5"
             >
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -1915,9 +1946,14 @@ export default function AbandonedCartsPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-[10px] uppercase font-black text-slate-400 block">Valoare Coș</span>
-                  <span className="font-mono font-black text-orange-600 text-sm">
+                  <span className="font-mono font-black text-orange-600 text-sm block">
                     {formatMoney(discountModal.cart.totalAmount, discountModal.cart.currency)}
                   </span>
+                  {discountModal.cart.currency !== 'RON' && (
+                    <span className="font-mono text-[10px] font-bold text-slate-500 block">
+                      (~{formatMoney(discountModal.cart.totalAmountRon ?? discountModal.cart.totalAmount, 'RON')})
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1961,44 +1997,44 @@ export default function AbandonedCartsPage() {
               </div>
 
               {/* Mode switcher tabs */}
-              <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+              <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-[11px] sm:text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setDiscountModal(prev => ({ ...prev, mode: 'existing' }))}
-                  className={`py-2 px-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`py-2 px-1.5 rounded-lg transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                     discountModal.mode === 'existing'
                       ? 'bg-white text-purple-700 shadow-2xs font-black'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <Ticket size={13} />
-                  <span className="truncate">Cupon Existent</span>
+                  <Ticket size={13} className="shrink-0" />
+                  <span className="truncate max-w-full">Cupon Existent</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setDiscountModal(prev => ({ ...prev, mode: 'custom' }))}
-                  className={`py-2 px-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`py-2 px-1.5 rounded-lg transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                     discountModal.mode === 'custom'
                       ? 'bg-white text-purple-700 shadow-2xs font-black'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <Plus size={13} />
-                  <span className="truncate">Cupon Custom</span>
+                  <Plus size={13} className="shrink-0" />
+                  <span className="truncate max-w-full">Cupon Custom</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setDiscountModal(prev => ({ ...prev, mode: 'reminder_only' }))}
-                  className={`py-2 px-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`py-2 px-1.5 rounded-lg transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                     discountModal.mode === 'reminder_only'
                       ? 'bg-white text-slate-900 shadow-2xs font-black'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <Clock size={13} />
-                  <span className="truncate">Doar Reminder</span>
+                  <Clock size={13} className="shrink-0" />
+                  <span className="truncate max-w-full">Doar Reminder</span>
                 </button>
               </div>
 
@@ -2076,7 +2112,7 @@ export default function AbandonedCartsPage() {
                       placeholder="Ex: SPECIAL15, TRENZONE, VIP20"
                       value={discountModal.customCouponCode}
                       onChange={(e) => setDiscountModal(prev => ({ ...prev, customCouponCode: e.target.value.toUpperCase() }))}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-black text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-base sm:text-xs font-mono font-black text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-purple-400"
                     />
                   </div>
 
@@ -2097,7 +2133,7 @@ export default function AbandonedCartsPage() {
                         max="90"
                         value={discountModal.customDiscountValue}
                         onChange={(e) => setDiscountModal(prev => ({ ...prev, customDiscountValue: Math.max(1, Math.min(90, parseInt(e.target.value) || 10)) }))}
-                        className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        className="w-20 sm:w-24 px-3 py-2 bg-white border border-slate-200 rounded-xl text-base sm:text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
                       />
 
                       {/* Quick percentage pills */}
@@ -2232,42 +2268,49 @@ export default function AbandonedCartsPage() {
       {/* SLIDE-OVER DETAIL MODAL */}
       <AnimatePresence>
         {selectedCartForDetail && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden"
+              className="bg-white rounded-2xl max-w-2xl w-full max-h-[90dvh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden"
             >
-              <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-black text-slate-900">
+              <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between">
+                <div className="min-w-0 pr-2">
+                  <h3 className="text-base font-black text-slate-900 truncate">
                     Detalii Complete Coș Abandonat
                   </h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                  <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">
                     ID: {selectedCartForDetail.id}
                   </p>
                 </div>
                 <button
                   onClick={() => setSelectedCartForDetail(null)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 min-w-0">
                     <span className="text-[10px] font-black uppercase text-slate-400 block">Client:</span>
-                    <span className="font-bold text-slate-900">{selectedCartForDetail.customer.fullName}</span>
-                    <span className="block text-slate-600">{selectedCartForDetail.customer.email || 'Fără email'}</span>
+                    <span className="font-bold text-slate-900 block truncate">{selectedCartForDetail.customer.fullName}</span>
+                    <span className="block text-slate-600 break-all">{selectedCartForDetail.customer.email || 'Fără email'}</span>
                     <span className="block text-slate-600">{selectedCartForDetail.customer.phone || 'Fără telefon'}</span>
                   </div>
 
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <span className="text-[10px] font-black uppercase text-slate-400 block">Valoare & Status:</span>
-                    <span className="font-bold text-orange-600 text-sm font-mono">{formatMoney(selectedCartForDetail.totalAmount, selectedCartForDetail.currency)}</span>
+                    <span className="font-bold text-orange-600 text-sm font-mono block">
+                      {formatMoney(selectedCartForDetail.totalAmount, selectedCartForDetail.currency)}
+                    </span>
+                    {selectedCartForDetail.currency !== 'RON' && (
+                      <span className="block text-[11px] font-bold text-slate-500 font-mono">
+                        (~{formatMoney(selectedCartForDetail.totalAmountRon ?? selectedCartForDetail.totalAmount, 'RON')})
+                      </span>
+                    )}
                     <span className="block text-slate-600 text-[11px] mt-0.5">
                       Status: <strong className="text-slate-800">{
                         selectedCartForDetail.status === 'recovered' ? 'Comandă Recuperată' :
@@ -2281,12 +2324,20 @@ export default function AbandonedCartsPage() {
 
                 {/* Produse din coș */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-black uppercase text-slate-500 tracking-wider">
                       Produse în Coș ({selectedCartForDetail.items.length})
                     </span>
                     <span className="text-xs font-bold text-slate-500">
-                      Total: <strong className="text-slate-900 font-mono">{formatMoney(selectedCartForDetail.totalAmount, selectedCartForDetail.currency)}</strong>
+                      Total:{' '}
+                      <strong className="text-slate-900 font-mono">
+                        {formatMoney(selectedCartForDetail.totalAmount, selectedCartForDetail.currency)}
+                      </strong>
+                      {selectedCartForDetail.currency !== 'RON' && (
+                        <span className="ml-1 text-[11px] text-slate-400 font-mono">
+                          (~{formatMoney(selectedCartForDetail.totalAmountRon ?? selectedCartForDetail.totalAmount, 'RON')})
+                        </span>
+                      )}
                     </span>
                   </div>
 
@@ -2348,12 +2399,13 @@ export default function AbandonedCartsPage() {
                   <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
                     <Mail size={13} /> Istoric Notificări & Emailuri Trimise
                   </span>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="p-2.5 bg-white rounded-lg border border-slate-200">
                       <span className="font-bold text-slate-700 block">Reminder 24h:</span>
                       {selectedCartForDetail.recoveryEmailsSent?.['24h'] ? (
-                        <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">
-                          ✓ Trimis {selectedCartForDetail.recoveryEmailsSent?.['24h_sent_at'] ? `pe ${formatDate(selectedCartForDetail.recoveryEmailsSent['24h_sent_at'])}` : ''}
+                        <div className="text-[11px] text-emerald-700 font-semibold mt-0.5 flex items-center gap-1">
+                          <Check size={12} className="shrink-0" />
+                          <span>Trimis {selectedCartForDetail.recoveryEmailsSent?.['24h_sent_at'] ? `pe ${formatDate(selectedCartForDetail.recoveryEmailsSent['24h_sent_at'])}` : ''}</span>
                         </div>
                       ) : (
                         <div className="text-[11px] text-slate-400 italic mt-0.5">Netrimis</div>
@@ -2363,8 +2415,11 @@ export default function AbandonedCartsPage() {
                       <span className="font-bold text-slate-700 block">Ofertă 72h:</span>
                       {selectedCartForDetail.recoveryEmailsSent?.['72h'] ? (
                         <div className="text-[11px] text-purple-700 font-semibold mt-0.5">
-                          ✓ Trimis {selectedCartForDetail.recoveryEmailsSent?.['72h_sent_at'] ? `pe ${formatDate(selectedCartForDetail.recoveryEmailsSent['72h_sent_at'])}` : ''}
-                          <span className="block font-mono text-[10px] text-slate-500">
+                          <div className="flex items-center gap-1">
+                            <Check size={12} className="shrink-0" />
+                            <span>Trimis {selectedCartForDetail.recoveryEmailsSent?.['72h_sent_at'] ? `pe ${formatDate(selectedCartForDetail.recoveryEmailsSent['72h_sent_at'])}` : ''}</span>
+                          </div>
+                          <span className="block font-mono text-[10px] text-slate-500 mt-0.5">
                             Cupon: {selectedCartForDetail.recoveryEmailsSent?.last_coupon_code || 'TREN10'}
                           </span>
                         </div>

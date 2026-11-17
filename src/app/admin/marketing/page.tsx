@@ -15,7 +15,7 @@ export default function MarketingPage() {
   // Editor State
   const [formData, setFormData] = useState({
     subject: '',
-    title: 'Noutăți TrenZone 🏆',
+    title: 'Noutăți TrenZone',
     message: 'Salutare!\n\nAvem noutăți importante pentru tine...',
     ctaText: 'Vezi Oferta',
     ctaLink: 'https://www.trenzone.fit',
@@ -116,13 +116,13 @@ export default function MarketingPage() {
               Nicio campanie trimisă încă.
             </div>
           ) : campaigns.map((camp) => (
-            <div key={camp.id || camp.title} className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm group hover:shadow-md transition-shadow relative overflow-hidden">
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex flex-col">
-                  <h3 className="text-xl font-black text-slate-900">{camp.title}</h3>
+            <div key={camp.id || camp.title} className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-sm group hover:shadow-md transition-shadow relative overflow-hidden">
+              <div className="flex items-start sm:items-center justify-between gap-2 mb-6 sm:mb-8">
+                <div className="flex flex-col min-w-0">
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 break-words">{camp.title}</h3>
                   <span className="text-xs text-slate-500 font-bold mt-1">Creat în {camp.date}</span>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${camp.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 ${camp.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
                   {camp.status === 'sent' ? 'Trimis' : 'Ciornă'}
                 </span>
               </div>
@@ -141,16 +141,16 @@ export default function MarketingPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4 duration-500">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 animate-in slide-in-from-bottom-4 duration-500">
           {/* EDITOR SECTION */}
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[800px]">
-             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-sm overflow-hidden flex flex-col lg:h-[800px]">
+             <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/50">
+               <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                   <Mail className="text-[#e32f8c]" size={20} /> Setări Campanie
                </h2>
              </div>
              
-             <div className="p-6 flex-1 overflow-y-auto space-y-6">
+             <div className="p-4 sm:p-6 flex-1 overflow-y-auto space-y-5 sm:space-y-6">
                 <div>
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Subiect Email *</label>
                    <div className="relative">
@@ -204,7 +204,7 @@ export default function MarketingPage() {
                       />
                    </div>
 
-                   <div className="grid grid-cols-2 gap-4">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Text Buton CTA</label>
                         <input 
@@ -233,7 +233,7 @@ export default function MarketingPage() {
                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                      <Users size={14} /> Segment Audiență
                    </h3>
-                   <div className="grid grid-cols-3 gap-3">
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                       <button 
                         onClick={() => setFormData({...formData, segment: 'subscribers'})}
                         className={`py-3 px-2 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-colors ${formData.segment === 'subscribers' ? 'bg-[#e32f8c]/10 text-[#e32f8c] border-[#e32f8c]/30' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300'}`}

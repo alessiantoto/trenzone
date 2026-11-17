@@ -20,7 +20,8 @@ import {
   ExternalLink, 
   MessageCircle,
   Copy,
-  Check
+  Check,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -69,20 +70,23 @@ export default function CustomersPage() {
       const res = await fetch('/api/admin/data?action=customers', { cache: 'no-store' });
       const json = await res.json();
       const data = json.data || [];
-      const mapped = data.map((c: any) => ({
-        id: c.id || c.email,
-        name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Fără nume',
-        email: c.email || 'N/A',
-        phone: c.phone || '',
-        city: c.city || '',
-        county: c.county || '',
-        country: c.country || 'RO',
-        orders: c.orders || 0,
-        spent: c.spent > 0 ? `${c.spent.toFixed(2)} RON` : '0 RON',
-        spentNum: c.spent || 0,
-        lastActive: c.created_at ? new Date(c.created_at).toLocaleDateString('ro-RO') : 'N/A',
-        isSubscriberOnly: !!c.is_subscriber_only
-      }));
+      const mapped = data.map((c: any) => {
+        const spentNum = Number(c.spent) || 0;
+        return {
+          id: c.id || c.email,
+          name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Fără nume',
+          email: c.email || 'N/A',
+          phone: c.phone || '',
+          city: c.city || '',
+          county: c.county || '',
+          country: c.country || 'RO',
+          orders: c.orders || 0,
+          spent: `${spentNum.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RON`,
+          spentNum,
+          lastActive: c.created_at ? new Date(c.created_at).toLocaleDateString('ro-RO') : 'N/A',
+          isSubscriberOnly: !!c.is_subscriber_only
+        };
+      });
       setCustomers(mapped);
     } catch (err) {
       console.error(err);
@@ -204,7 +208,7 @@ export default function CustomersPage() {
     });
   }, [customers, searchQuery, filterType]);
 
-  // Key KPI Metrics
+  // Key KPI Metrics (all totals normalized to RON server-side)
   const metrics = useMemo(() => {
     const total = customers.length;
     const buyers = customers.filter(c => c.orders > 0);
@@ -220,10 +224,16 @@ export default function CustomersPage() {
       buyersCount,
       vipCount,
       leadsCount,
-      totalRevenue: totalRevenue.toFixed(2),
-      avgSpent: avgSpent.toFixed(2)
+      totalRevenue: totalRevenue.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      avgSpent: avgSpent.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     };
   }, [customers]);
+
+  const buildWhatsAppHref = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    const formatted = digits.startsWith('0') ? `4${digits}` : digits;
+    return `https://wa.me/${formatted}`;
+  };
 
   if (loading) {
     return (
@@ -236,67 +246,68 @@ export default function CustomersPage() {
   return (
     <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-6xl mx-auto space-y-6">
       
-      {/* 🏁 HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl tracking-tight font-black text-slate-900">Clienți</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl sm:text-2xl tracking-tight font-black text-slate-900">Clienți</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Gestionează profilurile clienților, istoricul comenzilor și datele de contact.
           </p>
         </div>
         <button 
           onClick={() => setIsAddModalOpen(true)}
-          className="h-11 px-5 bg-[#e32f8c] text-black rounded-xl text-sm font-black hover:bg-[#c41a72] transition-all flex items-center gap-2 shadow-sm shrink-0"
+          className="h-11 px-5 bg-[#e32f8c] text-black rounded-xl text-sm font-black hover:bg-[#c41a72] transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto shrink-0 cursor-pointer"
         >
           <Plus size={18} /> Adaugă Client Nou
         </button>
       </div>
 
-      {/* 📊 KPI METRIC CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
-            <Users size={20} />
+      {/* KPI METRIC CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
+            <Users size={18} className="sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Clienți</p>
-            <p className="text-xl font-black text-slate-900 leading-tight mt-0.5">{metrics.total}</p>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
-            <ShoppingBag size={20} />
-          </div>
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Cu Comenzi</p>
-            <p className="text-xl font-black text-green-700 leading-tight mt-0.5">{metrics.buyersCount}</p>
+          <div className="min-w-0">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">Total Clienți</p>
+            <p className="text-lg sm:text-xl font-black text-slate-900 leading-tight mt-0.5">{metrics.total}</p>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <Award size={20} />
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
+            <ShoppingBag size={18} className="sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Clienți VIP (&gt; 500 RON)</p>
-            <p className="text-xl font-black text-amber-700 leading-tight mt-0.5">{metrics.vipCount}</p>
+          <div className="min-w-0">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">Cu Comenzi</p>
+            <p className="text-lg sm:text-xl font-black text-green-700 leading-tight mt-0.5">{metrics.buyersCount}</p>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-pink-50 text-[#e32f8c] flex items-center justify-center shrink-0">
-            <DollarSign size={20} />
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Award size={18} className="sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Încasat (LTV)</p>
-            <p className="text-xl font-black text-slate-900 leading-tight mt-0.5">{metrics.totalRevenue} RON</p>
+          <div className="min-w-0">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">VIP (&gt; 500 RON)</p>
+            <p className="text-lg sm:text-xl font-black text-amber-700 leading-tight mt-0.5">{metrics.vipCount}</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-pink-50 text-[#e32f8c] flex items-center justify-center shrink-0">
+            <DollarSign size={18} className="sm:w-5 sm:h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">Total Încasat (LTV)</p>
+            <p className="text-base sm:text-xl font-black text-slate-900 leading-tight mt-0.5 truncate">{metrics.totalRevenue} RON</p>
+            <p className="text-[10px] text-slate-400 font-bold truncate">Medie: {metrics.avgSpent} RON</p>
           </div>
         </div>
       </div>
 
-      {/* 🔍 SEARCH & FILTERS BAR */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* SEARCH & FILTERS BAR */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         {/* Search */}
         <div className="relative flex-1 max-w-md">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -305,7 +316,7 @@ export default function CustomersPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Caută după nume, email, telefon sau oraș..."
-            className="w-full h-10 pl-10 pr-9 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#e32f8c]"
+            className="w-full h-10 pl-10 pr-9 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#e32f8c]"
           />
           {searchQuery && (
             <button
@@ -318,10 +329,10 @@ export default function CustomersPage() {
         </div>
 
         {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl shrink-0 overflow-x-auto">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl shrink-0 overflow-x-auto custom-scrollbar">
           <button
             onClick={() => setFilterType('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               filterType === 'all' 
                 ? 'bg-white text-slate-900 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-900'
@@ -331,7 +342,7 @@ export default function CustomersPage() {
           </button>
           <button
             onClick={() => setFilterType('buyers')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
               filterType === 'buyers' 
                 ? 'bg-white text-green-700 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-900'
@@ -342,7 +353,7 @@ export default function CustomersPage() {
           </button>
           <button
             onClick={() => setFilterType('vip')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
               filterType === 'vip' 
                 ? 'bg-white text-amber-700 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-900'
@@ -353,7 +364,7 @@ export default function CustomersPage() {
           </button>
           <button
             onClick={() => setFilterType('leads')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
               filterType === 'leads' 
                 ? 'bg-white text-blue-700 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-900'
@@ -365,32 +376,34 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* 📋 CUSTOMERS TABLE */}
+      {/* CUSTOMERS TABLE */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
 
-        {/* 📱 MOBILE VIEW (Cards) */}
+        {/* MOBILE VIEW (Cards) */}
         <div className="md:hidden flex flex-col divide-y divide-slate-100">
           {filteredCustomers.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-sm font-bold">Nu au fost găsiți clienți conform filtrelor.</div>
           ) : (
             filteredCustomers.map((customer) => (
               <div key={customer.id} className="p-4 flex flex-col gap-3 bg-white hover:bg-slate-50 transition-colors">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-slate-700 text-sm shrink-0">
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-slate-700 text-sm shrink-0">
                       {customer.name[0]?.toUpperCase() || 'C'}
                     </div>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-black text-slate-900 leading-tight">{customer.name}</span>
+                        <span className="text-sm font-black text-slate-900 leading-tight truncate max-w-full">{customer.name}</span>
                         {customer.spentNum > 500 && (
-                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
-                            👑 VIP
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
+                            <Award size={10} />
+                            <span>VIP</span>
                           </span>
                         )}
                         {customer.orders > 0 && customer.spentNum <= 500 && (
-                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-200">
-                            ★ Activ
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-200">
+                            <CheckCircle2 size={10} />
+                            <span>Activ</span>
                           </span>
                         )}
                         {customer.orders === 0 && (
@@ -399,8 +412,9 @@ export default function CustomersPage() {
                           </span>
                         )}
                       </div>
-                      <a href={`mailto:${customer.email}`} className="text-xs text-slate-500 hover:text-[#e32f8c] font-medium mt-0.5 flex items-center gap-1">
-                        <Mail size={12} /> {customer.email}
+                      <a href={`mailto:${customer.email}`} className="text-xs text-slate-500 hover:text-[#e32f8c] font-medium mt-0.5 flex items-center gap-1 min-w-0">
+                        <Mail size={12} className="shrink-0" />
+                        <span className="truncate">{customer.email}</span>
                       </a>
                     </div>
                   </div>
@@ -424,29 +438,31 @@ export default function CustomersPage() {
                 </div>
 
                 {/* Info row */}
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 text-xs">
-                  {customer.phone && (
-                    <div className="flex items-center gap-1.5 text-slate-700 font-bold">
-                      <Phone size={13} className="text-slate-400" />
-                      <a href={`tel:${customer.phone}`} className="hover:text-[#e32f8c]">{customer.phone}</a>
-                      <a
-                        href={`https://wa.me/4${customer.phone.replace(/\D/g, '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-600 hover:text-green-700 ml-1"
-                        title="Deschide WhatsApp"
-                      >
-                        <MessageCircle size={14} />
-                      </a>
-                    </div>
-                  )}
-                  {customer.city && (
-                    <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                      <MapPin size={13} className="text-slate-400 shrink-0" />
-                      <span className="truncate">{customer.city}</span>
-                    </div>
-                  )}
-                </div>
+                {(customer.phone || customer.city) && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+                    {customer.phone && (
+                      <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                        <Phone size={13} className="text-slate-400 shrink-0" />
+                        <a href={`tel:${customer.phone}`} className="hover:text-[#e32f8c]">{customer.phone}</a>
+                        <a
+                          href={buildWhatsAppHref(customer.phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-600 hover:text-green-700 ml-1"
+                          title="Deschide WhatsApp"
+                        >
+                          <MessageCircle size={14} />
+                        </a>
+                      </div>
+                    )}
+                    {customer.city && (
+                      <div className="flex items-center gap-1.5 text-slate-600 font-medium min-w-0">
+                        <MapPin size={13} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{customer.city}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                   <div className="flex items-center gap-3">
@@ -467,7 +483,7 @@ export default function CustomersPage() {
           )}
         </div>
 
-        {/* 💻 DESKTOP VIEW (Table) */}
+        {/* DESKTOP VIEW (Table) */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -502,13 +518,15 @@ export default function CustomersPage() {
                               {customer.name}
                             </span>
                             {customer.spentNum > 500 && (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
-                                👑 VIP
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
+                                <Award size={10} />
+                                <span>VIP</span>
                               </span>
                             )}
                             {customer.orders > 0 && customer.spentNum <= 500 && (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-200">
-                                ★ Activ
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-200">
+                                <CheckCircle2 size={10} />
+                                <span>Activ</span>
                               </span>
                             )}
                             {customer.orders === 0 && (
@@ -539,7 +557,7 @@ export default function CustomersPage() {
                               {copiedPhone === customer.phone ? <Check size={12} className="text-green-600" /> : <Copy size={12} />}
                             </button>
                             <a
-                              href={`https://wa.me/4${customer.phone.replace(/\D/g, '')}`}
+                              href={buildWhatsAppHref(customer.phone)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-green-600 hover:text-green-700 transition-colors"
@@ -612,36 +630,36 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* ✏️ EDIT MODAL */}
+      {/* EDIT MODAL */}
       <AnimatePresence>
         {isEditModalOpen && editingCustomer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl"
+              className="bg-white rounded-3xl w-full max-w-lg max-h-[90dvh] overflow-y-auto shadow-2xl"
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#e32f8c]/10 flex items-center justify-center text-[#e32f8c]">
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 sticky top-0 z-10">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#e32f8c]/10 flex items-center justify-center text-[#e32f8c] shrink-0">
                     <Edit2 size={20} />
                   </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900">Editează Client</h3>
-                    <p className="text-xs font-bold text-slate-500 mt-0.5">Modifică datele de contact și identificare.</p>
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 truncate">Editează Client</h3>
+                    <p className="text-xs font-bold text-slate-500 mt-0.5 truncate">Modifică datele de contact și identificare.</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => setIsEditModalOpen(false)}
-                  className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-xl transition-colors"
+                  className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-xl transition-colors shrink-0"
                 >
                   <X size={20} />
                 </button>
               </div>
               
-              <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleEditSubmit} className="p-4 sm:p-6 space-y-4">
                 <div>
                   <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Nume Complet</label>
                   <input
@@ -649,7 +667,7 @@ export default function CustomersPage() {
                     required
                     value={editingCustomer.name}
                     onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
                     placeholder="ex: Andrei Popescu"
                   />
                 </div>
@@ -661,20 +679,20 @@ export default function CustomersPage() {
                     required
                     value={editingCustomer.email}
                     onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
                     placeholder="email@exemplu.ro"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">Dacă schimbi email-ul, toate comenzile din istoric vor fi reasociate automat.</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Telefon</label>
                     <input
                       type="tel"
                       value={editingCustomer.phone}
                       onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
                       placeholder="07xxxxxxxx"
                     />
                   </div>
@@ -684,7 +702,7 @@ export default function CustomersPage() {
                       type="text"
                       value={editingCustomer.city}
                       onChange={(e) => setEditingCustomer({...editingCustomer, city: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
                       placeholder="ex: București"
                     />
                   </div>
@@ -709,36 +727,36 @@ export default function CustomersPage() {
         )}
       </AnimatePresence>
 
-      {/* ➕ ADD NEW CUSTOMER MODAL */}
+      {/* ADD NEW CUSTOMER MODAL */}
       <AnimatePresence>
         {isAddModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl"
+              className="bg-white rounded-3xl w-full max-w-lg max-h-[90dvh] overflow-y-auto shadow-2xl"
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#e32f8c]/10 flex items-center justify-center text-[#e32f8c]">
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 sticky top-0 z-10">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#e32f8c]/10 flex items-center justify-center text-[#e32f8c] shrink-0">
                     <Plus size={20} />
                   </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900">Adaugă Client Nou</h3>
-                    <p className="text-xs font-bold text-slate-500 mt-0.5">Înregistrează un client nou în baza de date.</p>
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 truncate">Adaugă Client Nou</h3>
+                    <p className="text-xs font-bold text-slate-500 mt-0.5 truncate">Înregistrează un client nou în baza de date.</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => setIsAddModalOpen(false)}
-                  className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-xl transition-colors"
+                  className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-xl transition-colors shrink-0"
                 >
                   <X size={20} />
                 </button>
               </div>
               
-              <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleAddSubmit} className="p-4 sm:p-6 space-y-4">
                 <div>
                   <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Nume Complet *</label>
                   <input
@@ -746,7 +764,7 @@ export default function CustomersPage() {
                     required
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
                     placeholder="ex: Cristian Mureșan"
                   />
                 </div>
@@ -758,19 +776,19 @@ export default function CustomersPage() {
                     required
                     value={newCustomer.email}
                     onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
                     placeholder="email@exemplu.ro"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Telefon</label>
                     <input
                       type="tel"
                       value={newCustomer.phone}
                       onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
                       placeholder="07xxxxxxxx"
                     />
                   </div>
@@ -780,7 +798,7 @@ export default function CustomersPage() {
                       type="text"
                       value={newCustomer.city}
                       onChange={(e) => setNewCustomer({...newCustomer, city: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] transition-all"
                       placeholder="ex: Cluj-Napoca"
                     />
                   </div>
@@ -805,7 +823,7 @@ export default function CustomersPage() {
         )}
       </AnimatePresence>
 
-      {/* 🗑️ DELETE CONFIRMATION MODAL */}
+      {/* DELETE CONFIRMATION MODAL */}
       <AnimatePresence>
         {customerToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">

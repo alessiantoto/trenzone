@@ -166,6 +166,12 @@ export default function BroadcastMarketingPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (tabParam === 'subscribers' || tabParam === 'campaigns' || tabParam === 'editor') {
+        setActiveTab(tabParam);
+      }
+    }
     fetchData();
   }, []);
 
@@ -437,10 +443,10 @@ export default function BroadcastMarketingPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-24 text-slate-900 animate-in fade-in duration-500">
       
-      {/* 🌟 TOP HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200/80 pb-6">
-        <div>
-          <div className="flex items-center gap-2.5">
+      {/* TOP HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 border-b border-slate-200/80 pb-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <span className="px-2.5 py-1 rounded-md text-[11px] font-black tracking-wider uppercase bg-[#e32f8c]/10 text-[#e32f8c] border border-[#e32f8c]/20">
               Marketing & Newsletter
             </span>
@@ -448,27 +454,30 @@ export default function BroadcastMarketingPage() {
               <ShieldCheck size={14} className="text-emerald-500" /> Resend Engine
             </span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-950 tracking-tight mt-1">
-            Campanii & Abonați Notificări
+          <h1 className="text-2xl md:text-3xl font-black text-slate-950 tracking-tight mt-1.5">
+            Campanii Email & Abonați
           </h1>
-          <p className="text-sm text-slate-500 mt-1 max-w-2xl font-medium">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl font-medium">
             Transmite broadcast-uri de mare impact, segmentează audiența în mod flexibil și monitorizează proveniența abonaților.
           </p>
         </div>
 
         {/* Global Action Buttons */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex items-center gap-2.5 w-full md:w-auto">
           <button
+            type="button"
             onClick={() => { fetchData(); toast.success('Date actualizate!'); }}
-            className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors"
+            className="h-11 w-11 shrink-0 text-slate-500 hover:text-slate-800 hover:bg-slate-100 bg-white rounded-xl border border-slate-200 transition-colors flex items-center justify-center cursor-pointer"
             title="Reîmprospătează datele"
+            aria-label="Reîmprospătează datele"
           >
             <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('editor')}
-            className={`h-11 px-5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 flex-1 md:flex-none shadow-sm ${
+            className={`h-11 px-5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 flex-1 md:flex-none shadow-sm cursor-pointer ${
               activeTab === 'editor'
                 ? 'bg-slate-900 text-white shadow-md'
                 : 'bg-[#e32f8c] text-white hover:bg-[#c41a72] active:scale-95 shadow-md shadow-[#e32f8c]/20'
@@ -479,36 +488,36 @@ export default function BroadcastMarketingPage() {
         </div>
       </div>
 
-      {/* 📊 4 KPI STATS CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 4 KPI STATS CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Audience */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Audiență Totală</span>
-            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
-              <Users size={18} />
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-2.5 gap-2">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider truncate">Audiență Totală</span>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-sm shrink-0">
+              <Users size={16} />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-900 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
             {stats.totalAudience}
           </div>
-          <p className="text-[11px] text-slate-500 font-medium mt-1">
-            Persoane unice contactabile (Abonați + Clienți)
+          <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+            Persoane unice contactabile
           </p>
         </div>
 
         {/* Newsletter Subscribers */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Abonați Notificări</span>
-            <div className="w-9 h-9 rounded-xl bg-[#e32f8c] text-white flex items-center justify-center shadow-sm shadow-[#e32f8c]/20">
-              <BellRing size={18} />
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+          <div className="flex items-center justify-between mb-2.5 gap-2">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider truncate">Abonați</span>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#e32f8c] text-white flex items-center justify-center shadow-sm shadow-[#e32f8c]/20 shrink-0">
+              <BellRing size={16} />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-900 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
             {stats.subscribersCount}
           </div>
-          <div className="flex flex-wrap gap-1.5 mt-2">
+          <div className="flex flex-wrap gap-1 mt-2">
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
               Footer: {stats.sourceBreakdown.footer || 0}
             </span>
@@ -522,71 +531,74 @@ export default function BroadcastMarketingPage() {
         </div>
 
         {/* Verified Order Customers */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clienți Comenzi</span>
-            <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm shadow-purple-600/20">
-              <ShoppingBag size={18} />
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+          <div className="flex items-center justify-between mb-2.5 gap-2">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider truncate">Clienți Comenzi</span>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm shadow-purple-600/20 shrink-0">
+              <ShoppingBag size={16} />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-900 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
             {stats.customersCount}
           </div>
-          <p className="text-[11px] text-slate-500 font-medium mt-1">
-            Cumpărători cu istoric de comenzi finalizate
+          <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+            Cumpărători cu comenzi finalizate
           </p>
         </div>
 
         {/* Broadcasts Sent */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Campanii Trimise</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-600/20">
-              <Send size={18} />
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+          <div className="flex items-center justify-between mb-2.5 gap-2">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider truncate">Campanii Trimise</span>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-600/20 shrink-0">
+              <Send size={16} />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-900 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
             {stats.campaignsCount}
           </div>
-          <p className="text-[11px] text-slate-500 font-medium mt-1">
-            Broadcast-uri expediate către comunitate
+          <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+            Broadcast-uri expediate
           </p>
         </div>
       </div>
 
-      {/* 🧭 NAVIGATION TABS */}
+      {/* NAVIGATION TABS */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
         <button
+          type="button"
           onClick={() => setActiveTab('campaigns')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+          className={`flex items-center gap-2 px-3.5 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
             activeTab === 'campaigns'
               ? 'bg-slate-950 text-white shadow-sm'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
-          <Send size={15} /> Campanii Trimise ({campaigns.length})
+          <Send size={14} /> Campanii ({campaigns.length})
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('subscribers')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+          className={`flex items-center gap-2 px-3.5 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
             activeTab === 'subscribers'
               ? 'bg-slate-950 text-white shadow-sm'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
-          <BellRing size={15} /> Abonați Notificări ({subscribers.length})
+          <BellRing size={14} /> Abonați ({subscribers.length})
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('editor')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+          className={`flex items-center gap-2 px-3.5 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
             activeTab === 'editor'
               ? 'bg-[#e32f8c] text-white shadow-sm shadow-[#e32f8c]/20'
               : 'bg-white text-[#e32f8c] hover:bg-[#e32f8c]/5 border border-[#e32f8c]/30'
           }`}
         >
-          <Plus size={15} /> Editor Campanie Nouă
+          <Plus size={14} /> Editor Campanie
         </button>
       </div>
 
@@ -690,8 +702,8 @@ export default function BroadcastMarketingPage() {
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
           
           {/* Controls Bar: Search, Source Filter, Status Filter & CSV Export */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               
               {/* Search Bar */}
               <div className="relative flex-1">
@@ -701,10 +713,11 @@ export default function BroadcastMarketingPage() {
                   placeholder="Caută după email sau nume..."
                   value={subscriberSearch}
                   onChange={(e) => { setSubscriberSearch(e.target.value); setSubscribersPage(1); }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs font-semibold focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-9 text-xs font-semibold focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all"
                 />
                 {subscriberSearch && (
                   <button 
+                    type="button"
                     onClick={() => setSubscriberSearch('')} 
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
@@ -714,10 +727,11 @@ export default function BroadcastMarketingPage() {
               </div>
 
               {/* Actions & CSV Export */}
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <button
+                  type="button"
                   onClick={handleExportCSV}
-                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm flex items-center gap-2 transition-all active:scale-95"
+                  className="w-full sm:w-auto justify-center px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
                 >
                   <Download size={15} /> Exportă CSV
                 </button>
@@ -725,7 +739,7 @@ export default function BroadcastMarketingPage() {
             </div>
 
             {/* Filter Pills */}
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1">
                 <Filter size={12} /> Sursă:
               </span>
@@ -738,9 +752,10 @@ export default function BroadcastMarketingPage() {
                 { id: 'modal', label: `Modal (${stats.sourceBreakdown.modal || 0})` },
               ].map(f => (
                 <button
+                  type="button"
                   key={f.id}
                   onClick={() => { setSelectedSourceFilter(f.id); setSubscribersPage(1); }}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                     selectedSourceFilter === f.id
                       ? 'bg-[#e32f8c] text-white shadow-sm'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -750,23 +765,26 @@ export default function BroadcastMarketingPage() {
                 </button>
               ))}
 
-              <div className="ml-auto flex items-center gap-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Status:</span>
+              <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center gap-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 mr-1">Status:</span>
                 <button
+                  type="button"
                   onClick={() => { setSelectedStatusFilter('all'); setSubscribersPage(1); }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold ${selectedStatusFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${selectedStatusFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
                 >
                   Toți
                 </button>
                 <button
+                  type="button"
                   onClick={() => { setSelectedStatusFilter('active'); setSubscribersPage(1); }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold ${selectedStatusFilter === 'active' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${selectedStatusFilter === 'active' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
                 >
                   Activi
                 </button>
                 <button
+                  type="button"
                   onClick={() => { setSelectedStatusFilter('inactive'); setSubscribersPage(1); }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold ${selectedStatusFilter === 'inactive' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${selectedStatusFilter === 'inactive' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'}`}
                 >
                   Inactivi
                 </button>
@@ -885,22 +903,24 @@ export default function BroadcastMarketingPage() {
 
                 {/* Pagination Controls */}
                 {totalSubscribersPages > 1 && (
-                  <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
+                  <div className="p-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-500">
                     <span>
                       Pagina {subscribersPage} din {totalSubscribersPages} ({filteredSubscribers.length} rezultate)
                     </span>
                     <div className="flex gap-2">
                       <button
+                        type="button"
                         disabled={subscribersPage === 1}
                         onClick={() => setSubscribersPage(p => Math.max(1, p - 1))}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors"
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
                       >
                         Înapoi
                       </button>
                       <button
+                        type="button"
                         disabled={subscribersPage === totalSubscribersPages}
                         onClick={() => setSubscribersPage(p => Math.min(totalSubscribersPages, p + 1))}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors"
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
                       >
                         Înainte
                       </button>
@@ -917,22 +937,23 @@ export default function BroadcastMarketingPage() {
       {/* 3. TAB: CAMPAIGN BUILDER & LIVE PREVIEW */}
       {/* ========================================================================= */}
       {activeTab === 'editor' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in slide-in-from-bottom-2 duration-300">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 animate-in slide-in-from-bottom-2 duration-300">
           
-          {/* 📝 FORM BUILDER (LEFT - 7 COLS) */}
-          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-8">
+          {/* FORM BUILDER (LEFT - 7 COLS) */}
+          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm space-y-6 sm:space-y-8">
             
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-5">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Mail className="text-[#e32f8c]" size={18} /> Configurator Campanie
+            <div className="flex items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 sm:pb-5">
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Mail className="text-[#e32f8c] shrink-0" size={18} /> Configurator Campanie
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">Definește audiența țintă și personalizează conținutul emailului.</p>
               </div>
               <button
+                type="button"
                 onClick={() => setActiveTab('campaigns')}
-                className="text-xs text-slate-400 hover:text-slate-700 font-bold"
+                className="text-xs text-slate-400 hover:text-slate-700 font-bold shrink-0 cursor-pointer"
               >
                 Anulează
               </button>
@@ -940,7 +961,7 @@ export default function BroadcastMarketingPage() {
 
             {/* STEP 1: AUDIENCE SELECTOR CARDS */}
             <div className="space-y-3">
-              <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex flex-wrap items-center justify-between gap-1.5">
                 <span>1. Selectează Audiența Țintă</span>
                 <span className="text-[11px] font-bold text-[#e32f8c]">
                   Destinatari estimați: ~{estimatedRecipientsCount} persoane
@@ -1061,22 +1082,24 @@ export default function BroadcastMarketingPage() {
 
               {/* Custom Recipients Box (if Manual is chosen) */}
               {formData.segment === 'custom' && (
-                <div className="mt-4 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 animate-in fade-in">
-                  <div className="flex items-center justify-between">
+                <div className="mt-4 bg-slate-50 border border-slate-200 rounded-2xl p-3.5 sm:p-4 space-y-3 animate-in fade-in">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-bold text-slate-700">
                       Bifează destinatarii ({customRecipients.length} selectați)
                     </span>
                     <div className="flex gap-2">
                       <button 
+                        type="button"
                         onClick={selectAllCustomFiltered} 
-                        className="text-[10px] font-black text-[#e32f8c] uppercase hover:underline"
+                        className="text-[10px] font-black text-[#e32f8c] uppercase hover:underline cursor-pointer"
                       >
                         Bifează toți
                       </button>
                       <span className="text-slate-300">|</span>
                       <button 
+                        type="button"
                         onClick={deselectAllCustomFiltered} 
-                        className="text-[10px] font-black text-slate-400 uppercase hover:underline"
+                        className="text-[10px] font-black text-slate-400 uppercase hover:underline cursor-pointer"
                       >
                         Debifează
                       </button>
@@ -1309,8 +1332,8 @@ export default function BroadcastMarketingPage() {
             </div>
           </div>
 
-          {/* 📱 LIVE PREVIEW MOCKUP (RIGHT - 5 COLS) */}
-          <div className="lg:col-span-5 space-y-4">
+          {/* LIVE PREVIEW MOCKUP (RIGHT - 5 COLS) */}
+          <div className="lg:col-span-5 space-y-4 min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                 <Eye size={14} className="text-[#e32f8c]" /> Live Email Simulator
@@ -1340,10 +1363,10 @@ export default function BroadcastMarketingPage() {
             </div>
 
             {/* Mockup Frame */}
-            <div className={`mx-auto transition-all duration-300 ${
+            <div className={`mx-auto w-full transition-all duration-300 ${
               previewDevice === 'mobile' ? 'max-w-[340px]' : 'max-w-full'
             }`}>
-              <div className="bg-slate-900 rounded-[32px] p-2.5 shadow-2xl border-4 border-slate-800">
+              <div className="bg-slate-900 rounded-[24px] sm:rounded-[32px] p-2 sm:p-2.5 shadow-2xl border-4 border-slate-800 overflow-hidden">
                 
                 {/* Simulated Email Client Bar */}
                 <div className="bg-slate-800 px-4 py-2.5 rounded-t-[20px] flex items-center justify-between text-[11px] text-slate-400">

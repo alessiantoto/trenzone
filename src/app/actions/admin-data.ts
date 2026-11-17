@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isAdminAuthorized } from './admin-auth';
 import { getStoreWebAnalytics } from '@/lib/analytics';
 import { getVercelOfficialAnalytics, isVercelApiConfigured } from '@/lib/vercel-analytics-api';
-import { getServerExchangeRates, FALLBACK_RATES } from '@/utils/pricing';
+import { getServerExchangeRates, FALLBACK_RATES, convertToRon } from '@/utils/pricing';
 import { normalizeCityName, normalizeFlavor, normalizeCountry, getBucharestIsoBounds } from '@/utils/admin-helpers';
 import { hasAnyDigitalProgram, isDigitalOnlyCart } from '@/lib/programs';
 
@@ -26,31 +26,62 @@ function getPreviousDateRange(startDay: string, endDay: string): { prevStart: st
   };
 }
 
-function convertToRon(amount: number, currency: string, rates: Record<string, number>): number {
-  const curr = (currency || 'RON').toUpperCase();
-  if (curr === 'RON') return amount;
-  const rawRate = rates[curr] || FALLBACK_RATES[curr];
-  if (!rawRate || rawRate <= 0) return amount;
-  
-  // Auto-detect rate format:
-  // e.g. EUR = 4.97 (RON per EUR), HUF = 0.0125 (RON per HUF) -> isRonPerUnit
-  // e.g. EUR = 0.196 (EUR per RON) -> !isRonPerUnit
-  const isRonPerUnit = rawRate > 1.5 || (curr === 'HUF' && rawRate < 0.1);
-  const foreignPerRon = isRonPerUnit ? (1 / rawRate) : rawRate;
-  return Number((amount / foreignPerRon).toFixed(2));
+function resolveItemPriceRon(price: any, orderCurrency: string, rates: Record<string, number>): number {
+  const curr = (orderCurrency || 'RON').toUpperCase().trim();
+  if (typeof price === 'number' || typeof price === 'string') {
+    return convertToRon(Number(price) || 0, curr, rates);
+  }
+  if (price && typeof price === 'object') {
+    if (price[curr] !== undefined && price[curr] !== null) {
+      return convertToRon(Number(price[curr]) || 0, curr, rates);
+    }
+    if (price.RON !== undefined && price.RON !== null) {
+      return Number(price.RON) || 0;
+    }
+    for (const fallbackCurr of ['EUR', 'USD', 'GBP', 'PLN', 'CHF']) {
+      if (price[fallbackCurr] !== undefined && price[fallbackCurr] !== null) {
+        return convertToRon(Number(price[fallbackCurr]) || 0, fallbackCurr, rates);
+      }
+    }
+  }
+  return 0;
 }
 
-
-
-
+function resolveCartSessionRon(session: any, rates: Record<string, number>): { ron: number; native: number; currency: string } {
+  const sessionCurr = String(session?.currency || 'RON').toUpperCase().trim();
+  const explicitTotal = Number(session?.total_amount) || 0;
+  if (explicitTotal > 0) {
+    return {
+      ron: convertToRon(explicitTotal, sessionCurr, rates),
+      native: Number(explicitTotal.toFixed(2)),
+      currency: sessionCurr,
+    };
+  }
+  let itemsRon = 0;
+  let itemsNative = 0;
+  if (Array.isArray(session?.items)) {
+    for (const item of session.items) {
+      const qty = Math.max(1, Number(item?.quantity) || 1);
+      const priceRon = resolveItemPriceRon(item?.price, sessionCurr, rates);
+      itemsRon += priceRon * qty;
+      const rawUnit =
+        typeof item?.price === 'number' || typeof item?.price === 'string'
+          ? Number(item.price) || 0
+          : Number(item?.price?.[sessionCurr] ?? item?.price?.RON ?? item?.price?.EUR ?? 0) || 0;
+      itemsNative += rawUnit * qty;
+    }
+  }
+  return {
+    ron: Number(itemsRon.toFixed(2)),
+    native: Number(itemsNative.toFixed(2)),
+    currency: sessionCurr,
+  };
+}
 
 function unpackOrderItem(item: any, orderCurrency: string, rates: Record<string, number>) {
   const isBundle = String(item.id || '').includes('-bundle-') || (typeof item.name === 'string' && item.name.toLowerCase().includes('pachet'));
   const qty = Math.max(1, Number(item.quantity) || 1);
-  const rawPrice = typeof item.price === 'number' 
-    ? item.price 
-    : (Number(item.price?.RON) || Number(item.price?.EUR) || Number(item.price) || 0);
-  const priceRon = convertToRon(rawPrice, orderCurrency, rates);
+  const priceRon = resolveItemPriceRon(item.price, orderCurrency, rates);
 
   if (isBundle) {
     const rawVariant = item.selectedVariant?.name || item.variant?.name || item.variant || '';
@@ -147,16 +178,18 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
   const successfulOrders = allOrders?.filter(o => !['cancelled', 'refunded', 'failed', 'returned'].includes(o.status)) || [];
   const failedOrders = allOrders?.filter(o => ['failed', 'returned', 'cancelled'].includes(o.status)) || [];
   
+  const revenueByCurrency: Record<string, number> = {};
   const totalRevenue = Number(successfulOrders.reduce((sum, order) => {
-    const orderCurr = (order.currency || 'RON').toUpperCase();
+    const orderCurr = (order.currency || 'RON').toUpperCase().trim();
     const orderAmt = Number(order.total_amount) || 0;
+    revenueByCurrency[orderCurr] = Number(((revenueByCurrency[orderCurr] || 0) + orderAmt).toFixed(2));
     return sum + convertToRon(orderAmt, orderCurr, rates);
   }, 0).toFixed(2));
   const totalOrders = successfulOrders.length;
   
   const failedOrdersCount = failedOrders.length;
   const failedOrdersValue = Number(failedOrders.reduce((sum, order) => {
-    const orderCurr = (order.currency || 'RON').toUpperCase();
+    const orderCurr = (order.currency || 'RON').toUpperCase().trim();
     const orderAmt = Number(order.total_amount) || 0;
     return sum + convertToRon(orderAmt, orderCurr, rates);
   }, 0).toFixed(2));
@@ -164,10 +197,10 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
   // Calculate AOV (Average Order Value in RON)
   const aov = totalOrders > 0 ? (totalRevenue / totalOrders).toFixed(2) : "0.00";
 
-  // Calculate Cart Abandonment Metrics
+  // Calculate Cart Abandonment Metrics (converted to RON using session currency)
   let checkoutQuery = supabase
     .from('checkout_sessions')
-    .select('status, items, total_amount, updated_at, created_at');
+    .select('status, items, total_amount, currency, updated_at, created_at');
     
   if (startIso) checkoutQuery = checkoutQuery.gte('created_at', startIso);
   if (endIso) checkoutQuery = checkoutQuery.lte('created_at', endIso);
@@ -176,36 +209,44 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
   
   let abandonedCarts = 0;
   let potentialLostRevenue = 0;
+  const abandonedByCurrency: Record<string, number> = {};
   
   if (checkouts) {
     checkouts.forEach(c => {
       if (c.status === 'initiated' || c.status === 'pending') {
         abandonedCarts++;
-        let cartVal = Number(c.total_amount) || 0;
-        if (cartVal === 0 && c.items && Array.isArray(c.items)) {
-          cartVal = c.items.reduce((sum: number, item: any) => {
-            const p = typeof item.price === 'number' 
-              ? item.price 
-              : (Number(item.price?.RON) || Number(item.price?.EUR) || Number(item.price) || 0);
-            return sum + (p * (item.quantity || 1));
-          }, 0);
-        }
-        potentialLostRevenue += cartVal;
+        const resolved = resolveCartSessionRon(c, rates);
+        potentialLostRevenue += resolved.ron;
+        abandonedByCurrency[resolved.currency] = Number(
+          ((abandonedByCurrency[resolved.currency] || 0) + resolved.native).toFixed(2)
+        );
       }
     });
   }
+  potentialLostRevenue = Number(potentialLostRevenue.toFixed(2));
   
   const totalInitiated = totalOrders + abandonedCarts;
   const abandonmentRate = totalInitiated > 0 ? ((abandonedCarts / totalInitiated) * 100).toFixed(1) : "0.0";
 
-  // Returns data
-  let returnsQuery = supabase.from('returns').select('status, total_refund_amount');
+  // Returns data (converted to RON using joined order currency)
+  let returnsQuery = supabase.from('returns').select('status, total_refund_amount, orders(total_amount, currency)');
   if (startIso) returnsQuery = returnsQuery.gte('created_at', startIso);
   if (endIso) returnsQuery = returnsQuery.lte('created_at', endIso);
   
   const { data: returnsData } = await returnsQuery;
   const returnsCount = returnsData?.length || 0;
-  const returnsValue = returnsData?.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0) || 0;
+  let returnsValue = 0;
+  const returnsByCurrency: Record<string, number> = {};
+  (returnsData || []).forEach((r: any) => {
+    const orderObj = Array.isArray(r.orders) ? r.orders[0] : r.orders;
+    const retCurrency = String(orderObj?.currency || 'RON').toUpperCase().trim();
+    const rawRefund = Number(r.total_refund_amount) > 0
+      ? Number(r.total_refund_amount)
+      : Number(orderObj?.total_amount || 0);
+    returnsValue += convertToRon(rawRefund, retCurrency, rates);
+    returnsByCurrency[retCurrency] = Number(((returnsByCurrency[retCurrency] || 0) + rawRefund).toFixed(2));
+  });
+  returnsValue = Number(returnsValue.toFixed(2));
   const returnRate = totalOrders > 0 ? ((returnsCount / totalOrders) * 100).toFixed(1) : "0.0";
 
   const rambursOrders = successfulOrders.filter(o => {
@@ -522,6 +563,7 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
 
   return {
     revenue: totalRevenue,
+    revenueByCurrency,
     prevRevenue,
     prevOrders: prevOrdersCount,
     prevSessions: prevSessionsCount,
@@ -555,8 +597,10 @@ export async function getDashboardStats(startDate?: string, endDate?: string) {
     abandonmentRate,
     abandonedCarts,
     potentialLostRevenue,
+    abandonedByCurrency,
     returnsCount,
     returnsValue,
+    returnsByCurrency,
     returnRate,
     failedOrdersCount,
     failedOrdersValue,
@@ -603,24 +647,27 @@ export async function getAdminRecentOrders(limit = 5) {
   if (!isAuthorized) throw new Error('Neautorizat');
 
   const supabase = supabaseAdmin;
-  const { data } = await supabase
-    .from('orders')
-    .select(`
-      id,
-      payment_intent_id,
-      receipt_url,
-      status,
-      total_amount,
-      currency,
-      created_at,
-      customer_firstname,
-      customer_lastname,
-      customer_email,
-      addr_city,
-      addr_country
-    `)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const [rates, { data }] = await Promise.all([
+    getServerExchangeRates(),
+    supabase
+      .from('orders')
+      .select(`
+        id,
+        payment_intent_id,
+        receipt_url,
+        status,
+        total_amount,
+        currency,
+        created_at,
+        customer_firstname,
+        customer_lastname,
+        customer_email,
+        addr_city,
+        addr_country
+      `)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+  ]);
     
   const currencySymbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', PLN: 'zł', RON: 'RON' };
 
@@ -637,6 +684,7 @@ export async function getAdminRecentOrders(limit = 5) {
       currency: rawCurrency,
       currencySymbol: sym,
       total: formattedTotal,
+      totalAmountRon: convertToRon(Number(o.total_amount || 0), rawCurrency, rates),
       customer: `${o.customer_firstname || ''} ${o.customer_lastname || ''}`.trim() || o.customer_email || 'Client'
     };
   }) || [];
@@ -713,7 +761,7 @@ export async function getAdminCustomers() {
       if (!['cancelled', 'refunded', 'failed'].includes(o.status)) {
         c.orders += 1;
         const converted = convertToRon(Number(o.total_amount) || 0, o.currency || 'RON', rates);
-        c.spent += converted;
+        c.spent = Number((c.spent + converted).toFixed(2));
         c.order_ids.push(o.id);
       }
       

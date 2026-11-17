@@ -2,7 +2,7 @@
 
 import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Plus, Package, Image as ImageIcon, X, Save, Trash2, ChevronDown, Check, Search, ExternalLink, Edit, Eye } from 'lucide-react';
+import { Plus, Package, Image as ImageIcon, X, Save, Trash2, ChevronDown, Check, Search, ExternalLink, Edit, FileText } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { deleteProductServer } from '@/app/actions/products';
@@ -70,21 +70,21 @@ function VariantRow({ v, variants, setVariants, setCroppingImage, variantType }:
           type="text" 
           value={v.name} 
           onChange={(e) => updateField('name', e.target.value)}
-          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]" 
+          className="w-full min-h-[40px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]" 
           placeholder="Nume variantă..."
         />
         <input 
           type="text" 
           value={v.price || ''} 
           onChange={(e) => updateField('price', e.target.value)}
-          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]" 
+          className="w-full min-h-[40px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]" 
           placeholder="Preț (opțional)..."
         />
         <input 
           type="number" 
           value={v.stock === undefined || v.stock === '' ? '' : v.stock} 
           onChange={(e) => updateField('stock', e.target.value === '' ? '' : parseInt(e.target.value))}
-          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]" 
+          className="w-full min-h-[40px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c]" 
           placeholder="Stoc (opțional)"
         />
       </div>
@@ -93,7 +93,7 @@ function VariantRow({ v, variants, setVariants, setCroppingImage, variantType }:
       <div className="relative w-full sm:w-36 shrink-0" ref={dropdownRef}>
         <button 
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 hover:border-[#e32f8c] transition-colors focus:outline-none focus:border-[#e32f8c]"
+          className="w-full min-h-[40px] flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 hover:border-[#e32f8c] transition-colors focus:outline-none focus:border-[#e32f8c]"
         >
           {selectedStatus.label}
           <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
@@ -131,7 +131,7 @@ function VariantRow({ v, variants, setVariants, setCroppingImage, variantType }:
 
       <button 
         onClick={() => setVariants(variants.filter((va: any) => va.id !== v.id))}
-        className="p-2 w-full sm:w-auto flex justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+        className="min-h-[40px] min-w-[40px] p-2 w-full sm:w-auto flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
         title="Șterge varianta"
       >
         <Trash2 size={16} />
@@ -147,6 +147,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'physical' | 'digital'>('all');
   const [croppingImage, setCroppingImage] = useState<{ src: string, targetId: string | 'main' } | null>(null);
   
   const [productToDelete, setProductToDelete] = useState<any>(null);
@@ -189,9 +190,10 @@ export default function ProductsPage() {
       const formatted = data.map((p: any) => ({
         id: p.id,
         slug: p.slug,
-        name: p.name,
+        name: typeof p.name === 'object' && p.name !== null ? (p.name.ro || p.name.en || '') : String(p.name || ''),
         image: p.image,
         badge: p.badge,
+        is_digital: Boolean(p.is_digital || p.specs_summary?.is_digital),
         status: p.is_active ? 'active' : 'draft',
         is_active: p.is_active,
         inventory: p.stock_quantity,
@@ -292,12 +294,17 @@ export default function ProductsPage() {
                             (product.slug || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                             (product.badge || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || product.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesCategory =
+        categoryFilter === 'all' ||
+        (categoryFilter === 'digital' ? Boolean(product.is_digital) : !product.is_digital);
+      return matchesSearch && matchesStatus && matchesCategory;
     });
-  }, [products, searchQuery, statusFilter]);
+  }, [products, searchQuery, statusFilter, categoryFilter]);
 
   const activeCount = useMemo(() => products.filter(p => p.is_active).length, [products]);
   const draftCount = useMemo(() => products.filter(p => !p.is_active).length, [products]);
+  const physicalCount = useMemo(() => products.filter(p => !p.is_digital).length, [products]);
+  const digitalCount = useMemo(() => products.filter(p => Boolean(p.is_digital)).length, [products]);
 
   const handleSave = async () => {
     if (!selectedProduct) return;
@@ -386,9 +393,9 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-6xl mx-auto space-y-6">
+    <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-6xl mx-auto space-y-5 sm:space-y-6">
       
-      {/* 🏁 HEADER */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl tracking-tight font-black text-slate-900">Produse</h1>
@@ -396,75 +403,123 @@ export default function ProductsPage() {
         </div>
         <button 
           onClick={() => setSelectedProduct({ id: 'nou', name: '', price: '0', inventory: 0, status: 'draft', image: null, variant_type: 'flavor' })}
-          className="h-11 px-5 bg-[#e32f8c] text-black rounded-xl text-sm font-black hover:bg-[#c41a72] transition-all flex items-center gap-2 shadow-sm shrink-0"
+          className="w-full md:w-auto min-h-[44px] h-11 px-5 bg-[#e32f8c] text-black rounded-xl text-sm font-black hover:bg-[#c41a72] transition-all flex items-center justify-center gap-2 shadow-sm shrink-0"
         >
           <Plus size={18} /> Adaugă Produs Nou
         </button>
       </div>
 
-      {/* 🔍 SEARCH & FILTERS BAR */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Caută după nume, slug sau insignă..."
-            className="w-full h-10 pl-10 pr-9 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#e32f8c]"
-          />
-          {searchQuery && (
+      {/* SEARCH & FILTERS BAR */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Search */}
+          <div className="relative flex-1 md:max-w-md">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Caută după nume, slug sau insignă..."
+              className="w-full h-11 pl-10 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#e32f8c]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center text-slate-400 hover:text-slate-600"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+
+          {/* Status Filter Tabs */}
+          <div className="w-full md:w-auto grid grid-cols-3 md:flex items-center gap-1 p-1 bg-slate-100 rounded-xl shrink-0">
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center whitespace-nowrap ${
+                statusFilter === 'all' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
             >
-              <X size={15} />
+              Toate ({products.length})
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => setStatusFilter('active')}
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                statusFilter === 'active' 
+                  ? 'bg-white text-green-700 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>
+              Active ({activeCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('draft')}
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                statusFilter === 'draft' 
+                  ? 'bg-white text-slate-700 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0"></span>
+              Ciorne ({draftCount})
+            </button>
+          </div>
         </div>
 
-        {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl shrink-0">
-          <button
-            onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-              statusFilter === 'all' 
-                ? 'bg-white text-slate-900 shadow-sm' 
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Toate ({products.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('active')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-              statusFilter === 'active' 
-                ? 'bg-white text-green-700 shadow-sm' 
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-green-500"></span>
-            Active ({activeCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('draft')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-              statusFilter === 'draft' 
-                ? 'bg-white text-slate-700 shadow-sm' 
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-            Ciorne ({draftCount})
-          </button>
+        {/* Category Filter Tabs (Physical vs Digital) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
+          <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Categorie produs</span>
+          <div className="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center whitespace-nowrap ${
+                categoryFilter === 'all'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Toate ({products.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('physical')}
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                categoryFilter === 'physical'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Package size={13} className="shrink-0" />
+              Fizice ({physicalCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('digital')}
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                categoryFilter === 'digital'
+                  ? 'bg-white text-purple-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <FileText size={13} className="shrink-0" />
+              Digitale ({digitalCount})
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 📋 PRODUCTS TABLE CONTAINER */}
+      {/* PRODUCTS TABLE CONTAINER */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
 
-        {/* 📱 MOBILE VIEW (Cards) */}
+        {/* MOBILE VIEW (Cards) */}
         <div className="md:hidden flex flex-col divide-y divide-slate-100">
           {filteredProducts.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-sm">Nu au fost găsite produse.</div>
@@ -486,60 +541,87 @@ export default function ProductsPage() {
                   <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-bold text-slate-900 leading-tight group-hover:text-[#e32f8c] transition-colors">{product.name}</span>
+                      {product.is_digital ? (
+                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200">
+                          Digital PDF
+                        </span>
+                      ) : null}
                       {product.badge && (
                         <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#e32f8c]/10 text-[#e32f8c] border border-[#e32f8c]/20">
                           {product.badge}
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-slate-400 font-medium mt-0.5">/{product.slug}</span>
-                    <span className="text-xs text-slate-500 mt-1">{product.variants > 0 ? `${product.variants} variante` : 'Produs simplu'}</span>
+                    <span className="text-xs text-slate-400 font-medium mt-0.5 truncate">/{product.slug}</span>
+                    <span className="text-xs text-slate-500 mt-1">
+                      {product.variants > 0
+                        ? `${product.variants} ${product.is_digital ? 'limbi PDF' : 'variante'}`
+                        : product.is_digital
+                          ? 'Program Digital'
+                          : 'Produs simplu'}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <button
+                      type="button"
                       onClick={(e) => handleToggleStatus(e, product)}
-                      className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                      className={`min-h-[40px] px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all inline-flex items-center gap-1.5 ${
                         product.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                       title="Apasă pentru a comuta statusul"
                     >
-                      {product.is_active ? '● Activ' : '○ Ciornă'}
+                      <span className={`w-2 h-2 rounded-full ${product.is_active ? 'bg-green-500' : 'bg-slate-400'}`} />
+                      {product.is_active ? 'Activ' : 'Ciornă'}
                     </button>
-                    <span className={`text-xs font-bold ${product.inventory > 10 ? 'text-slate-700' : product.inventory > 0 ? 'text-orange-500' : 'text-red-500'}`}>
-                      {product.inventory} buc.
-                    </span>
+                    {product.is_digital ? (
+                      <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2.5 py-1 rounded-lg">
+                        Nelimitat
+                      </span>
+                    ) : (
+                      <span className={`text-xs font-bold ${product.inventory > 10 ? 'text-slate-700' : product.inventory > 0 ? 'text-orange-500' : 'text-red-500'}`}>
+                        {product.inventory} buc.
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-black text-slate-900 mr-2">{product.price}</span>
-                    <a
-                      href={`/ro/product/${product.slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-                      title="Vezi în Magazin"
-                    >
-                      <ExternalLink size={16} />
-                    </a>
-                    <button 
-                      onClick={(e) => handleDeleteClick(e, product)}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Șterge produs"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                  <span className="text-sm font-black text-slate-900 tabular-nums shrink-0">{product.price}</span>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                  <Link
+                    href={`/admin/products/${product.slug}`}
+                    className="flex-1 min-h-[40px] px-3 rounded-xl bg-slate-100 hover:bg-[#e32f8c] hover:text-black text-slate-800 text-xs font-black flex items-center justify-center gap-1.5 transition-colors"
+                    title="Editează produsul"
+                  >
+                    <Edit size={14} /> Editează
+                  </Link>
+                  <a
+                    href={`/ro/product/${product.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[40px] px-3.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                    title="Vezi în Magazin"
+                  >
+                    <ExternalLink size={14} /> Vezi
+                  </a>
+                  <button 
+                    type="button"
+                    onClick={(e) => handleDeleteClick(e, product)}
+                    className="min-h-[40px] min-w-[40px] rounded-xl border border-slate-200 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors shrink-0"
+                    title="Șterge produs"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))
           )}
         </div>
 
-        {/* 💻 DESKTOP VIEW */}
+        {/* DESKTOP VIEW */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -579,6 +661,11 @@ export default function ProductsPage() {
                             <span className="text-sm font-black text-slate-900 group-hover:text-[#e32f8c] transition-colors">
                               {product.name}
                             </span>
+                            {product.is_digital && (
+                              <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200">
+                                Digital PDF
+                              </span>
+                            )}
                             {product.badge && (
                               <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#e32f8c]/10 text-[#e32f8c] border border-[#e32f8c]/20">
                                 {product.badge}
@@ -586,15 +673,22 @@ export default function ProductsPage() {
                             )}
                           </div>
                           <span className="text-xs text-slate-400 font-medium mt-0.5">/{product.slug}</span>
-                          <span className="text-xs text-slate-500 mt-0.5">{product.variants > 0 ? `${product.variants} variante configurate` : 'Produs simplu'}</span>
+                          <span className="text-xs text-slate-500 mt-0.5">
+                            {product.variants > 0
+                              ? `${product.variants} ${product.is_digital ? 'limbi configurate' : 'variante configurate'}`
+                              : product.is_digital
+                                ? 'Program Digital'
+                                : 'Produs simplu'}
+                          </span>
                         </div>
                       </div>
                     </td>
 
                     <td className="px-6 py-4">
                       <button
+                        type="button"
                         onClick={(e) => handleToggleStatus(e, product)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm ${
+                        className={`min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm ${
                           product.is_active 
                             ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200' 
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
@@ -607,20 +701,26 @@ export default function ProductsPage() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <span className={`text-sm font-bold ${product.inventory > 10 ? 'text-slate-700' : product.inventory > 0 ? 'text-orange-500' : 'text-red-500'}`}>
-                        {product.inventory} în stoc
-                      </span>
+                      {product.is_digital ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-purple-50 border border-purple-100 text-xs font-bold text-purple-700">
+                          PDF Nelimitat
+                        </span>
+                      ) : (
+                        <span className={`text-sm font-bold ${product.inventory > 10 ? 'text-slate-700' : product.inventory > 0 ? 'text-orange-500' : 'text-red-500'}`}>
+                          {product.inventory} în stoc
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-6 py-4">
-                      <span className="text-sm font-black text-slate-900">{product.price}</span>
+                      <span className="text-sm font-black text-slate-900 tabular-nums">{product.price}</span>
                     </td>
 
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <Link
                           href={`/admin/products/${product.slug}`}
-                          className="h-9 px-3 rounded-lg bg-slate-100 hover:bg-[#e32f8c] hover:text-black text-slate-700 text-xs font-black flex items-center gap-1.5 transition-colors shadow-sm"
+                          className="min-h-[40px] px-3 rounded-lg bg-slate-100 hover:bg-[#e32f8c] hover:text-black text-slate-700 text-xs font-black flex items-center gap-1.5 transition-colors shadow-sm"
                           title="Editează produsul complet"
                         >
                           <Edit size={14} /> Editează
@@ -629,14 +729,15 @@ export default function ProductsPage() {
                           href={`/ro/product/${product.slug}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="h-9 px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                          className="min-h-[40px] px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
                           title="Previzualizează pe site"
                         >
                           <ExternalLink size={14} /> Vezi
                         </a>
                         <button 
+                          type="button"
                           onClick={(e) => handleDeleteClick(e, product)}
-                          className="h-9 w-9 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          className="min-h-[40px] min-w-[40px] rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                           title="Șterge produs"
                         >
                           <Trash2 size={16} />
@@ -651,7 +752,7 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* 📊 INVENTAR TRICOURI (5 Modele × 5 Mărimi) */}
+      {/* INVENTAR TRICOURI (5 Modele x 5 Marimi) */}
       {teeStockProduct && (
         <TeeStockMatrixCard
           productName={teeStockProduct.name}
@@ -665,14 +766,14 @@ export default function ProductsPage() {
         />
       )}
 
-      {/* 🛠️ EDIT MODAL */}
+      {/* EDIT MODAL */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setSelectedProduct(null)} />
           <div className="relative bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 custom-scrollbar">
             <div className="p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <h2 className="text-lg md:text-xl font-black text-slate-900">Editare Produs</h2>
-              <button onClick={() => setSelectedProduct(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200/50 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors">
+              <button onClick={() => setSelectedProduct(null)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-200/50 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors shrink-0">
                 <X size={16} />
               </button>
             </div>
@@ -706,7 +807,7 @@ export default function ProductsPage() {
                       type="text" 
                       value={selectedProduct.name} 
                       onChange={(e) => setSelectedProduct({...selectedProduct, name: e.target.value})}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                      className="w-full min-h-[44px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                     />
                   </div>
                   <p className="text-xs text-slate-500">ID: {selectedProduct.id}</p>
@@ -716,7 +817,7 @@ export default function ProductsPage() {
               {selectedProduct.id === 'nou' && (
                 <div className="space-y-2">
                   <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Tip Produs</label>
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <button
                       type="button"
                       onClick={() => setSelectedProduct({
@@ -757,14 +858,14 @@ export default function ProductsPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className={`space-y-2 ${selectedProduct.variant_type === 'size' ? 'col-span-2' : ''}`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className={`space-y-2 ${selectedProduct.variant_type === 'size' ? 'sm:col-span-2' : ''}`}>
                   <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Preț (RON)</label>
                   <input 
                     type="text" 
                     value={selectedProduct.price.replace(' RON', '')} 
                     onChange={(e) => setSelectedProduct({...selectedProduct, price: e.target.value})}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                    className="w-full min-h-[44px] bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                   />
                 </div>
                 {selectedProduct.variant_type !== 'size' && !(selectedProduct.is_digital || selectedProduct.specs_summary?.is_digital) && (
@@ -774,19 +875,19 @@ export default function ProductsPage() {
                       type="number" 
                       value={selectedProduct.inventory} 
                       onChange={(e) => setSelectedProduct({...selectedProduct, inventory: parseInt(e.target.value) || 0})}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                      className="w-full min-h-[44px] bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                     />
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Status Produs</label>
                   <div className="relative w-full" ref={statusDropdownRef}>
                     <button 
                       onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-                      className="w-full flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 hover:border-[#e32f8c] transition-colors focus:outline-none focus:border-[#e32f8c] shadow-sm"
+                      className="w-full min-h-[44px] flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 hover:border-[#e32f8c] transition-colors focus:outline-none focus:border-[#e32f8c] shadow-sm"
                     >
                       {productStatusOptions.find(o => o.value === selectedProduct.status)?.label || 'Alege...'}
                       <ChevronDown size={16} className={`transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
@@ -812,7 +913,7 @@ export default function ProductsPage() {
                   <div className="relative w-full" ref={variantTypeDropdownRef}>
                     <button 
                       onClick={() => setIsVariantTypeDropdownOpen(!isVariantTypeDropdownOpen)}
-                      className="w-full flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 hover:border-[#e32f8c] transition-colors focus:outline-none focus:border-[#e32f8c] shadow-sm"
+                      className="w-full min-h-[44px] flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 hover:border-[#e32f8c] transition-colors focus:outline-none focus:border-[#e32f8c] shadow-sm"
                     >
                       {variantTypeOptions.find(o => o.value === (selectedProduct.variant_type || 'size'))?.label || 'Alege...'}
                       <ChevronDown size={16} className={`transition-transform duration-200 ${isVariantTypeDropdownOpen ? 'rotate-180' : ''}`} />
@@ -835,13 +936,13 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* 🧩 VARIANTS SECTION */}
+              {/* VARIANTS SECTION */}
               <div className="pt-6 border-t border-slate-100 space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-wider">Variante Produs</h4>
                   <button 
                     onClick={() => setVariants([...variants, { id: Date.now().toString(), name: '', image: null, price: '', stock: '', status: 'in_stock' }])}
-                    className="text-[10px] font-bold uppercase tracking-wider text-[#e32f8c] hover:text-[#c41a72] flex items-center gap-1 bg-[#e32f8c]/10 px-3 py-1.5 rounded-lg transition-colors"
+                    className="min-h-[40px] text-[11px] font-bold uppercase tracking-wider text-[#e32f8c] hover:text-[#c41a72] flex items-center gap-1 bg-[#e32f8c]/10 px-3 py-1.5 rounded-lg transition-colors"
                   >
                     <Plus size={14} /> Adaugă Variantă
                   </button>
@@ -879,7 +980,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* 🗑️ DELETE CONFIRMATION MODAL */}
+      {/* DELETE CONFIRMATION MODAL */}
       {productToDelete && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => !isDeleting && setProductToDelete(null)} />
@@ -895,14 +996,14 @@ export default function ProductsPage() {
               <button 
                 onClick={() => setProductToDelete(null)}
                 disabled={isDeleting}
-                className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50"
+                className="flex-1 min-h-[44px] px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50"
               >
                 Anulează
               </button>
               <button 
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="flex-1 px-4 py-2.5 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 min-h-[44px] px-4 py-2.5 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isDeleting ? 'Se șterge...' : 'Da, Șterge'}
               </button>

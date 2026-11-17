@@ -93,7 +93,7 @@ const CommissionDropdown = ({ value, onChange }: { value: number, onChange: (v: 
   );
 };
 
-// 🌟 Detailed Affiliate Portal View (Matches https://www.trenzone.fit/en/affiliate/login experience)
+// Detailed Affiliate Portal View
 function AffiliatePortalView({
   affiliate,
   onOpenEdit,
@@ -152,7 +152,7 @@ function AffiliatePortalView({
   return (
     <div className="space-y-5 text-slate-900 animate-in fade-in duration-300">
       
-      {/* 👑 HERO & PARTNERSHIP IDENTITY CARD */}
+      {/* HERO & PARTNERSHIP IDENTITY CARD */}
       <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 w-72 h-72 bg-[#e32f8c]/10 blur-3xl pointer-events-none" />
         
@@ -169,7 +169,7 @@ function AffiliatePortalView({
         )}
         
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
+          <div className="pr-10 sm:pr-0">
             <div className="flex items-center gap-2 text-[#e32f8c] text-[10px] font-black uppercase tracking-widest mb-1.5">
               <Award size={12} />
               <span>Panou Afiliat Partener • TrenZone</span>
@@ -242,7 +242,7 @@ function AffiliatePortalView({
         </div>
       </div>
 
-      {/* 📊 6 FINANCIAL KPI CARDS (Exact ca în Portalul Afiliatului) */}
+      {/* 6 FINANCIAL KPI CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 sm:gap-3">
         {/* Total Sales */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
@@ -332,7 +332,7 @@ function AffiliatePortalView({
         </div>
       </div>
 
-      {/* 💳 IBAN, PROGRES DECONTARE & ISTORIC PLĂȚI */}
+      {/* IBAN, PROGRES DECONTARE & ISTORIC PLĂȚI */}
       <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
@@ -504,7 +504,7 @@ function AffiliatePortalView({
         )}
       </div>
 
-      {/* 📱 SOCIAL MEDIA & MOTIVATION (Dacă există) */}
+      {/* SOCIAL MEDIA & MOTIVATION (Dacă există) */}
       {(affiliate.socialLinks?.links?.length > 0 || affiliate.socialLinks?.motivation) && (
         <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-2.5 text-xs">
           {affiliate.socialLinks?.links?.length > 0 && (
@@ -538,7 +538,7 @@ function AffiliatePortalView({
         </div>
       )}
 
-      {/* 📦 ISTORIC COMENZI & PRODUSE (EXACT CA ÎN PORTALUL AFILIATULUI) */}
+      {/* ISTORIC COMENZI & PRODUSE */}
       <div className="p-4 sm:p-5 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -558,7 +558,7 @@ function AffiliatePortalView({
                 value={orderSearch}
                 onChange={(e) => setOrderSearch(e.target.value)}
                 placeholder="Caută după produs sau ODIN..."
-                className="w-full sm:w-56 bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-[#e32f8c]"
+                className="w-full sm:w-56 bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-base sm:text-xs text-slate-900 focus:outline-none focus:border-[#e32f8c]"
               />
               <Search size={12} className="text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
@@ -612,8 +612,8 @@ function AffiliatePortalView({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
+                  <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/70">
+                    <div className="text-left sm:text-right">
                       <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Coș</span>
                       <span className={`text-xs font-black ${isNonCountable ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                         {formatRon(order.totalAmount)}
@@ -691,7 +691,7 @@ function AffiliatePortalView({
                           <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
                             {it.variant && <span className="font-semibold text-slate-600 truncate">{it.variant}</span>}
                             <span className="font-bold text-slate-800">x{it.quantity}</span>
-                            <span>({Number(it.price).toFixed(2)} RON)</span>
+                            <span>({formatRon(it.price)})</span>
                           </div>
                         </div>
                       </div>
@@ -707,8 +707,8 @@ function AffiliatePortalView({
         )}
       </div>
 
-      {/* ⚙️ ADMINISTRATIVE ACTION BUTTONS */}
-      <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-wrap items-center justify-between gap-2.5">
+      {/* ADMINISTRATIVE ACTION BUTTONS */}
+      <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
           {affiliate.status === 'pending' ? (
             <>
@@ -1117,40 +1117,40 @@ export default function AffiliatesPage() {
   return (
     <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-6xl mx-auto space-y-8">
       
-      {/* 🏁 HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl tracking-tight font-bold text-slate-900">Program Afiliați</h1>
-          <p className="text-sm text-slate-500 mt-1">Gestionează ambasadorii și comisionul generat de aceștia.</p>
+          <h1 className="text-xl sm:text-2xl tracking-tight font-bold text-slate-900">Program Afiliați</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Gestionează ambasadorii și comisionul generat de aceștia (toate sumele calculate în RON).</p>
         </div>
         <button 
           id="btn-add-affiliate"
           onClick={() => setIsAddModalOpen(true)} 
-          className="h-10 px-4 bg-[#e32f8c] text-black rounded-lg text-[13px] font-bold hover:bg-[#c41a72] transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+          className="h-10 px-4 bg-[#e32f8c] text-black rounded-lg text-[13px] font-bold hover:bg-[#c41a72] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
         >
           <Plus size={16} /> Adaugă Afiliat
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Vânzări Totale Afiliați</h3>
-            <TrendingUp size={16} className="text-[#e32f8c]" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-500 truncate">Vânzări Afiliați</h3>
+            <TrendingUp size={15} className="text-[#e32f8c] shrink-0" />
           </div>
-          <p className="text-2xl font-black mt-2 text-slate-900">{formatRon(stats.totalSales)}</p>
-          <p className="text-xs font-bold text-slate-400 mt-1">
-            {stats.totalOrders || 0} comenzi valide • net {formatRon(stats.totalNetSales || 0)}
+          <p className="text-lg sm:text-2xl font-black mt-2 text-slate-900 truncate">{formatRon(stats.totalSales)}</p>
+          <p className="text-[11px] sm:text-xs font-bold text-slate-400 mt-1 truncate">
+            {stats.totalOrders || 0} comenzi • net {formatRon(stats.totalNetSales || 0)}
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Comisioane Generate</h3>
-            <UserCheck size={16} className="text-[#008ba3]" />
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-500 truncate">Comisioane</h3>
+            <UserCheck size={15} className="text-[#008ba3] shrink-0" />
           </div>
-          <p className="text-2xl font-black mt-2 text-slate-900">{formatRon(stats.totalCommissions)}</p>
-          <p className="text-xs font-bold text-slate-400 mt-1">
+          <p className="text-lg sm:text-2xl font-black mt-2 text-slate-900 truncate">{formatRon(stats.totalCommissions)}</p>
+          <p className="text-[11px] sm:text-xs font-bold text-slate-400 mt-1 truncate">
             {stats.activeCount} activi
             {(stats.pendingCount || 0) > 0 && (
               <span className="ml-1.5 text-amber-600">• {stats.pendingCount} în așteptare</span>
@@ -1158,44 +1158,44 @@ export default function AffiliatesPage() {
           </p>
         </div>
 
-        <div className={`border rounded-3xl p-5 sm:p-6 shadow-sm ${
+        <div className={`border rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0 ${
           (stats.totalPending || 0) > 0
             ? 'bg-amber-50/70 border-amber-200'
             : 'bg-white border-slate-200'
         }`}>
-          <div className="flex items-center justify-between">
-            <h3 className={`text-xs font-black uppercase tracking-wider ${
+          <div className="flex items-center justify-between gap-1">
+            <h3 className={`text-[10px] sm:text-xs font-black uppercase tracking-wider truncate ${
               (stats.totalPending || 0) > 0 ? 'text-amber-800' : 'text-slate-500'
             }`}>De Plată Acum</h3>
-            <Clock size={16} className={(stats.totalPending || 0) > 0 ? 'text-amber-600' : 'text-slate-400'} />
+            <Clock size={15} className={`${(stats.totalPending || 0) > 0 ? 'text-amber-600' : 'text-slate-400'} shrink-0`} />
           </div>
-          <p className={`text-2xl font-black mt-2 ${
+          <p className={`text-lg sm:text-2xl font-black mt-2 truncate ${
             (stats.totalPending || 0) > 0 ? 'text-amber-900' : 'text-slate-900'
           }`}>{formatRon(stats.totalPending || 0)}</p>
-          <p className={`text-xs font-bold mt-1 ${
+          <p className={`text-[11px] sm:text-xs font-bold mt-1 truncate ${
             (stats.totalPending || 0) > 0 ? 'text-amber-700' : 'text-emerald-600'
           }`}>
-            {(stats.totalPending || 0) > 0 ? 'Rest neachitat către afiliați' : 'Toate comisionele sunt achitate'}
+            {(stats.totalPending || 0) > 0 ? 'Rest neachitat' : 'Achitat integral'}
           </p>
         </div>
 
-        <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-3xl p-5 sm:p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase tracking-wider text-emerald-800">Plătit Deja</h3>
-            <CheckCircle2 size={16} className="text-emerald-600" />
+        <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-800 truncate">Plătit Deja</h3>
+            <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
           </div>
-          <p className="text-2xl font-black mt-2 text-emerald-900">{formatRon(stats.totalPaid || 0)}</p>
-          <p className="text-xs font-bold text-emerald-700 mt-1">
+          <p className="text-lg sm:text-2xl font-black mt-2 text-emerald-900 truncate">{formatRon(stats.totalPaid || 0)}</p>
+          <p className="text-[11px] sm:text-xs font-bold text-emerald-700 mt-1 truncate">
             {stats.totalCommissions > 0
               ? `${Math.min(100, Math.round(((stats.totalPaid || 0) / stats.totalCommissions) * 100))}% decontat din total`
-              : 'Transferuri bancare înregistrate'}
+              : 'Transferuri înregistrate'}
           </p>
         </div>
       </div>
 
-      {/* 📋 AFFILIATES TABLE */}
+      {/* AFFILIATES TABLE */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4">
           <div className="relative w-full md:flex-1 md:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
@@ -1203,7 +1203,7 @@ export default function AffiliatesPage() {
               placeholder="Caută afiliat sau cod..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-[#e32f8c] transition-colors"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] transition-colors"
             />
           </div>
           <div className="relative w-full md:w-auto z-20">
@@ -1221,7 +1221,7 @@ export default function AffiliatesPage() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 5, scale: 0.95 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute top-full right-0 mt-2 w-56 bg-white border border-slate-100 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] p-2 z-50 flex flex-col gap-1"
+                  className="absolute top-full right-0 mt-2 w-full sm:w-56 bg-white border border-slate-100 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] p-2 z-50 flex flex-col gap-1"
                 >
                   <button 
                     onClick={() => { setFilterType('all'); setIsFilterDropdownOpen(false); }}
@@ -1271,14 +1271,14 @@ export default function AffiliatesPage() {
               <div 
                 key={affiliate.id} 
                 onClick={() => setSelectedPortalAffiliateId(affiliate.id)}
-                className="p-5 flex flex-col gap-3.5 bg-white border-b-[8px] border-slate-50 last:border-0 cursor-pointer active:bg-slate-50 transition-colors"
+                className="p-4 sm:p-5 flex flex-col gap-3.5 bg-white border-b-[8px] border-slate-50 last:border-0 cursor-pointer active:bg-slate-50 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-900">{affiliate.name}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-bold text-slate-900 truncate">{affiliate.name}</span>
                     <span className="text-[11px] font-bold text-slate-500">{affiliate.commission} Comision</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 shrink-0">
                     {affiliate.status === 'pending' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-orange-100 text-orange-600">În așteptare</span>}
                     {affiliate.status === 'active' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-green-100 text-green-600">Activ</span>}
                     {affiliate.status === 'suspended' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-red-100 text-red-600">Suspendat</span>}
@@ -1324,7 +1324,7 @@ export default function AffiliatesPage() {
           )}
         </div>
 
-        {/* 💻 DESKTOP VIEW (Table) */}
+        {/* DESKTOP VIEW (Table) */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -1456,14 +1456,14 @@ export default function AffiliatesPage() {
         )}
       </div>
 
-      {/* 🌟 AFFILIATE PORTAL MODAL (POPUP STATISTICI AVANSATE IDENTIC CU /affiliate/dashboard) */}
+      {/* AFFILIATE PORTAL MODAL */}
       {selectedPortalAffiliate && (
         <div className="fixed inset-0 z-[99999] flex items-start sm:items-center justify-center p-0 sm:p-6 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] animate-in fade-in duration-200 overflow-y-auto">
           <div 
             className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity -z-10"
             onClick={() => setSelectedPortalAffiliateId(null)} 
           />
-          <div className="relative bg-slate-50 w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-3xl shadow-2xl border-0 sm:border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 my-auto sm:my-0">
+          <div className="relative bg-slate-50 w-full sm:max-w-5xl h-[100dvh] sm:h-auto sm:max-h-[92dvh] rounded-none sm:rounded-3xl shadow-2xl border-0 sm:border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 my-auto sm:my-0">
             
             {/* Modal Top Header Bar */}
             <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs">
@@ -1527,12 +1527,12 @@ export default function AffiliatesPage() {
         </div>
       )}
 
-      {/* 🧩 ADD AFFILIATE MODAL */}
+      {/* ADD AFFILIATE MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-[100002] flex items-start sm:items-center justify-center p-3 sm:p-4 pt-[calc(env(safe-area-inset-top,0px)+1rem)] pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] overflow-y-auto animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity -z-10" onClick={() => !isCreating && setIsAddModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto sm:my-0">
-            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-3xl sticky top-0 z-10">
+          <div className="relative bg-white w-full max-w-lg max-h-[90dvh] flex flex-col rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto sm:my-0">
+            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-3xl shrink-0">
               <div className="min-w-0 pr-2">
                 <h2 className="text-base sm:text-xl font-black text-slate-900">Adaugă Afiliat Nou</h2>
                 <p className="text-xs font-bold text-slate-500 mt-0.5">Configurează un nou ambasador și codul său de reducere.</p>
@@ -1549,8 +1549,8 @@ export default function AffiliatesPage() {
               </button>
             </div>
             
-            <form onSubmit={handleCreateAffiliate}>
-              <div className="p-5 md:p-6 space-y-4">
+            <form onSubmit={handleCreateAffiliate} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-4 sm:p-5 md:p-6 space-y-4 overflow-y-auto flex-1">
                 <div className="space-y-2">
                   <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Nume Complet *</label>
                   <input 
@@ -1559,7 +1559,7 @@ export default function AffiliatesPage() {
                     placeholder="ex: Andrei Popescu" 
                     value={newAffiliate.name}
                     onChange={(e) => setNewAffiliate(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                   />
                 </div>
 
@@ -1571,13 +1571,11 @@ export default function AffiliatesPage() {
                     placeholder="andrei@exemplu.ro" 
                     value={newAffiliate.email}
                     onChange={(e) => setNewAffiliate(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                   />
                 </div>
 
-
-
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Cod Reducere *</label>
                     <input 
@@ -1586,7 +1584,7 @@ export default function AffiliatesPage() {
                       placeholder="ex: ANDREI10" 
                       value={newAffiliate.code}
                       onChange={(e) => setNewAffiliate(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm uppercase" 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm uppercase" 
                     />
                   </div>
                   <div className="space-y-2">
@@ -1649,12 +1647,12 @@ export default function AffiliatesPage() {
         </div>
       )}
 
-      {/* 🚀 APPROVE AFFILIATE MODAL */}
+      {/* APPROVE AFFILIATE MODAL */}
       {isApproveModalOpen && approvingData && (
         <div className="fixed inset-0 z-[100002] flex items-start sm:items-center justify-center p-3 sm:p-4 pt-[calc(env(safe-area-inset-top,0px)+1rem)] pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] overflow-y-auto animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity -z-10" onClick={() => !processingId && setIsApproveModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto sm:my-0">
-            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-emerald-50/60 rounded-t-3xl sticky top-0 z-10">
+          <div className="relative bg-white w-full max-w-lg max-h-[90dvh] flex flex-col rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto sm:my-0">
+            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-emerald-50/60 rounded-t-3xl shrink-0">
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
                   <CheckCircle2 size={20} />
@@ -1676,14 +1674,12 @@ export default function AffiliatesPage() {
               </button>
             </div>
 
-            <div className="p-5 md:p-6 space-y-4">
+            <div className="p-4 sm:p-5 md:p-6 space-y-4 overflow-y-auto flex-1">
               <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-900 leading-relaxed font-medium">
                 La aprobare, codul de reducere va fi activat în baza de date, iar afiliatului i se va trimite automat un email oficial cu codul său și linkul de autentificare în dashboard.
               </div>
 
-
-
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Cod Reducere Atribuit *</label>
                   <input 
@@ -1691,7 +1687,7 @@ export default function AffiliatesPage() {
                     required 
                     value={approvingData.code}
                     onChange={(e) => setApprovingData(prev => prev ? { ...prev, code: e.target.value.toUpperCase() } : null)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm uppercase" 
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm uppercase" 
                   />
                 </div>
                 <div className="space-y-2">
@@ -1704,12 +1700,12 @@ export default function AffiliatesPage() {
               </div>
             </div>
 
-            <div className="p-5 md:p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end gap-3 rounded-b-3xl">
+            <div className="p-4 sm:p-5 md:p-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 rounded-b-3xl shrink-0">
               <button 
                 type="button" 
                 onClick={() => setIsApproveModalOpen(false)}
                 disabled={!!processingId}
-                className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
+                className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50 w-full sm:w-auto text-center"
               >
                 Anulează
               </button>
@@ -1717,7 +1713,7 @@ export default function AffiliatesPage() {
                 type="button" 
                 onClick={handleConfirmApprove}
                 disabled={!!processingId}
-                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto"
               >
                 {processingId ? (
                   <><Loader2 size={16} className="animate-spin" /> Se aprobă...</>
@@ -1731,12 +1727,12 @@ export default function AffiliatesPage() {
       )}
 
 
-      {/* ✏️ EDIT AFFILIATE MODAL */}
+      {/* EDIT AFFILIATE MODAL */}
       {isEditModalOpen && editingData && (
         <div className="fixed inset-0 z-[100002] flex items-start sm:items-center justify-center p-3 sm:p-4 pt-[calc(env(safe-area-inset-top,0px)+1rem)] pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] overflow-y-auto animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity -z-10" onClick={() => !processingId && setIsEditModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto sm:my-0">
-            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-blue-50/60 rounded-t-3xl sticky top-0 z-10">
+          <div className="relative bg-white w-full max-w-lg max-h-[90dvh] flex flex-col rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto sm:my-0">
+            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-blue-50/60 rounded-t-3xl shrink-0">
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
                   <Ticket size={20} />
@@ -1758,12 +1754,12 @@ export default function AffiliatesPage() {
               </button>
             </div>
 
-            <div className="p-5 md:p-6 space-y-4">
+            <div className="p-4 sm:p-5 md:p-6 space-y-4 overflow-y-auto flex-1">
               <div className="p-3.5 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-900 leading-relaxed font-medium">
                 Dacă modifici codul de reducere sau comisionul, afiliatul va fi notificat automat pe email, iar cuponul nou va fi activat.
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Cod Reducere *</label>
                   <input 
@@ -1771,7 +1767,7 @@ export default function AffiliatesPage() {
                     required 
                     value={editingData.code}
                     onChange={(e) => setEditingData(prev => prev ? { ...prev, code: e.target.value.toUpperCase() } : null)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm uppercase" 
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm uppercase" 
                   />
                 </div>
                 <div className="space-y-2">
@@ -1784,12 +1780,12 @@ export default function AffiliatesPage() {
               </div>
             </div>
 
-            <div className="p-5 md:p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end gap-3 rounded-b-3xl">
+            <div className="p-4 sm:p-5 md:p-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 rounded-b-3xl shrink-0">
               <button 
                 type="button" 
                 onClick={() => setIsEditModalOpen(false)}
                 disabled={!!processingId}
-                className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
+                className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50 w-full sm:w-auto text-center"
               >
                 Anulează
               </button>
@@ -1797,7 +1793,7 @@ export default function AffiliatesPage() {
                 type="button" 
                 onClick={handleConfirmEdit}
                 disabled={!!processingId}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto"
               >
                 {processingId ? (
                   <><Loader2 size={16} className="animate-spin" /> Se salvează...</>
@@ -1810,12 +1806,12 @@ export default function AffiliatesPage() {
         </div>
       )}
 
-      {/* 💵 RECORD PAYOUT MODAL */}
+      {/* RECORD PAYOUT MODAL */}
       {isPayoutModalOpen && payoutAffiliate && (
         <div className="fixed inset-0 z-[100002] flex items-start sm:items-center justify-center p-3 sm:p-4 pt-[calc(env(safe-area-inset-top,0px)+1rem)] pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] overflow-y-auto animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity -z-10" onClick={() => !isRecordingPayout && setIsPayoutModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto sm:my-0">
-            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-emerald-50/60 rounded-t-3xl sticky top-0 z-10">
+          <div className="relative bg-white w-full max-w-md max-h-[90dvh] flex flex-col rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto sm:my-0">
+            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex items-center justify-between bg-emerald-50/60 rounded-t-3xl shrink-0">
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
                   <Banknote size={20} />
@@ -1837,9 +1833,9 @@ export default function AffiliatesPage() {
               </button>
             </div>
 
-            <div className="p-5 md:p-6 space-y-4">
+            <div className="p-4 sm:p-5 md:p-6 space-y-4 overflow-y-auto flex-1">
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5">
-                <p><span className="font-bold text-slate-500">Cont IBAN:</span> <span className="font-mono font-bold text-slate-900">{payoutAffiliate.paymentDetails?.iban || 'Necompletat'}</span></p>
+                <p><span className="font-bold text-slate-500">Cont IBAN:</span> <span className="font-mono font-bold text-slate-900 break-all">{payoutAffiliate.paymentDetails?.iban || 'Necompletat'}</span></p>
                 <p><span className="font-bold text-slate-500">Balanță de plată actuală:</span> <span className="font-black text-amber-800">{payoutAffiliate.pendingPayout}</span></p>
                 <p><span className="font-bold text-slate-500">Plătit anterior:</span> <span className="font-bold text-emerald-700">{payoutAffiliate.paidPayout}</span></p>
               </div>
@@ -1873,7 +1869,7 @@ export default function AffiliatesPage() {
                   value={payoutAmount}
                   onChange={(e) => setPayoutAmount(e.target.value)}
                   placeholder="ex: 150.00"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-black text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-black text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                 />
                 {Number(payoutAmount) > (payoutAffiliate.pendingPayoutRaw || 0) + 0.01 && (
                   <p className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
@@ -1890,17 +1886,17 @@ export default function AffiliatesPage() {
                   value={payoutNote}
                   onChange={(e) => setPayoutNote(e.target.value)}
                   placeholder="ex: OP Banca Transilvania • Decont Decembrie"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
                 />
               </div>
             </div>
 
-            <div className="p-5 md:p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end gap-3 rounded-b-3xl">
+            <div className="p-4 sm:p-5 md:p-6 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 rounded-b-3xl shrink-0">
               <button 
                 type="button" 
                 onClick={() => setIsPayoutModalOpen(false)}
                 disabled={isRecordingPayout}
-                className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
+                className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50 w-full sm:w-auto text-center"
               >
                 Anulează
               </button>
@@ -1908,7 +1904,7 @@ export default function AffiliatesPage() {
                 type="button" 
                 onClick={handleConfirmPayout}
                 disabled={isRecordingPayout}
-                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto"
               >
                 {isRecordingPayout ? (
                   <><Loader2 size={16} className="animate-spin" /> Se înregistrează...</>

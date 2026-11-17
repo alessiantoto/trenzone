@@ -48,6 +48,37 @@ function getPreviousDateRange(startDay: string, endDay: string): { prevStart: st
   };
 }
 
+const SUPPORTED_CURRENCIES = ['RON', 'EUR', 'USD', 'GBP'] as const;
+type SupportedCurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
+
+function computeCurrencyBreakdown(
+  orders: any[],
+  rates: Record<string, number>
+): Array<{ currency: SupportedCurrencyCode; orders: number; revenueNative: number; revenueRon: number }> {
+  const buckets: Record<
+    SupportedCurrencyCode,
+    { currency: SupportedCurrencyCode; orders: number; revenueNative: number; revenueRon: number }
+  > = {
+    RON: { currency: 'RON', orders: 0, revenueNative: 0, revenueRon: 0 },
+    EUR: { currency: 'EUR', orders: 0, revenueNative: 0, revenueRon: 0 },
+    USD: { currency: 'USD', orders: 0, revenueNative: 0, revenueRon: 0 },
+    GBP: { currency: 'GBP', orders: 0, revenueNative: 0, revenueRon: 0 },
+  };
+
+  orders.forEach((order: any) => {
+    const curr = String(order.currency || 'RON').toUpperCase().trim();
+    if (curr === 'RON' || curr === 'EUR' || curr === 'USD' || curr === 'GBP') {
+      const nativeAmt = Number(order.total_amount) || 0;
+      const ronAmt = convertToRon(nativeAmt, curr, rates);
+      buckets[curr].orders += 1;
+      buckets[curr].revenueNative = Number((buckets[curr].revenueNative + nativeAmt).toFixed(2));
+      buckets[curr].revenueRon = Number((buckets[curr].revenueRon + ronAmt).toFixed(2));
+    }
+  });
+
+  return SUPPORTED_CURRENCIES.map((code) => buckets[code]);
+}
+
 function convertToRon(amount: number, currency: string, rates: Record<string, number>): number {
   const curr = (currency || 'RON').toUpperCase().trim();
   const numericAmount = Number(amount) || 0;
@@ -239,6 +270,7 @@ export async function GET(request: Request) {
         .reduce((sum, order) => sum + convertToRon(Number(order.total_amount) || 0, order.currency || 'RON', rates), 0)
         .toFixed(2)
     );
+    const currencyBreakdown = computeCurrencyBreakdown(successfulOrders, rates);
     const totalOrders = successfulOrders.length;
     const aov = totalOrders > 0 ? Number((totalRevenue / totalOrders).toFixed(2)) : 0;
 
@@ -656,6 +688,7 @@ export async function GET(request: Request) {
         timeseries,
         locations,
         topProducts,
+        currencyBreakdown,
         exchangeRates: rates,
       },
     });

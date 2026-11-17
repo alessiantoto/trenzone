@@ -57,7 +57,7 @@ import {
 import { linkAffiliateCoupon } from '@/app/actions/admin-affiliates';
 import toast from 'react-hot-toast';
 
-// 🌟 MODERN COUPON DATE & TIME PICKER COMPONENT
+// MODERN COUPON DATE & TIME PICKER COMPONENT
 function ModernCouponDatePicker({
   value,
   onChange,
@@ -361,7 +361,7 @@ function ModernCouponDatePicker({
 
             {/* Time Selector */}
             <div className="pt-3 border-t border-slate-100 bg-slate-50/70 p-3 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1">
                   <Clock size={12} className="text-[#008ba3]" />
                   <span>Ora & Minutul Expirării</span>
@@ -703,14 +703,14 @@ export default function CouponsPage() {
   return (
     <div className="animate-in fade-in zoom-in-95 duration-700 pb-16 text-slate-900 max-w-6xl mx-auto space-y-6 sm:space-y-8 px-2 sm:px-0">
       
-      {/* 🏁 HEADER & ACTION */}
+      {/* HEADER & ACTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#e32f8c]/15 text-[#008ba3] flex items-center justify-center font-black shadow-2xs">
+            <div className="w-10 h-10 rounded-2xl bg-[#e32f8c]/15 text-[#008ba3] flex items-center justify-center font-black shadow-2xs shrink-0">
               <Ticket size={22} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl tracking-tight font-black text-slate-900">Cupoane Promoționale</h1>
               <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">Controlul discount-urilor, campaniilor de marketing și afiliaților.</p>
             </div>
@@ -726,10 +726,10 @@ export default function CouponsPage() {
         </button>
       </div>
 
-      {/* 📊 KPI STATS CARDS */}
+      {/* KPI STATS CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl sm:rounded-3xl shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+        <div className="bg-white border border-slate-200/80 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl shadow-2xs flex items-center gap-2.5 sm:gap-3.5">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <Tag size={18} />
           </div>
           <div className="min-w-0">
@@ -738,8 +738,8 @@ export default function CouponsPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl sm:rounded-3xl shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+        <div className="bg-white border border-slate-200/80 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl shadow-2xs flex items-center gap-2.5 sm:gap-3.5">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <CheckCircle2 size={18} />
           </div>
           <div className="min-w-0">
@@ -748,8 +748,8 @@ export default function CouponsPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl sm:rounded-3xl shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+        <div className="bg-white border border-slate-200/80 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl shadow-2xs flex items-center gap-2.5 sm:gap-3.5">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
             <TrendingUp size={18} />
           </div>
           <div className="min-w-0">
@@ -758,8 +758,8 @@ export default function CouponsPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl sm:rounded-3xl shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+        <div className="bg-white border border-slate-200/80 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl shadow-2xs flex items-center gap-2.5 sm:gap-3.5">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
             <AlertCircle size={18} />
           </div>
           <div className="min-w-0">
@@ -769,7 +769,7 @@ export default function CouponsPage() {
         </div>
       </div>
 
-      {/* 🏷️ TABS & SEARCH & STATUS FILTER */}
+      {/* TABS & SEARCH & STATUS FILTER */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Category Tabs */}
         <div className="flex items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/60 overflow-x-auto custom-scrollbar">
@@ -816,10 +816,10 @@ export default function CouponsPage() {
         </div>
 
         {/* Status Filter Pills */}
-        <div className="flex items-center gap-1.5 self-start md:self-auto overflow-x-auto custom-scrollbar w-full md:w-auto">
+        <div className="flex items-center gap-1.5 self-start md:self-auto overflow-x-auto custom-scrollbar w-full md:w-auto pb-0.5 sm:pb-0">
           <button
             onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               statusFilter === 'all'
                 ? 'bg-slate-900 text-white font-black'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -829,7 +829,7 @@ export default function CouponsPage() {
           </button>
           <button
             onClick={() => setStatusFilter('active')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               statusFilter === 'active'
                 ? 'bg-emerald-600 text-white font-black'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -839,7 +839,7 @@ export default function CouponsPage() {
           </button>
           <button
             onClick={() => setStatusFilter('expired')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               statusFilter === 'expired'
                 ? 'bg-red-500 text-white font-black'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -850,7 +850,7 @@ export default function CouponsPage() {
         </div>
       </div>
 
-      {/* 📋 MAIN CONTAINER */}
+      {/* MAIN CONTAINER */}
       <div className="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
         
         {/* Search Header */}
@@ -862,7 +862,7 @@ export default function CouponsPage() {
               placeholder="Caută după cod (ex: TREN10) sau nume afiliat..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-2xl py-2 pl-10 pr-9 text-xs sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all placeholder:text-slate-400"
+              className="w-full bg-white border border-slate-200 rounded-2xl py-2 pl-10 pr-9 text-base sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all placeholder:text-slate-400"
             />
             {searchQuery && (
               <button
@@ -879,7 +879,7 @@ export default function CouponsPage() {
           </span>
         </div>
 
-        {/* 📱 MOBILE VIEW (Rich Modern Cards) */}
+        {/* MOBILE VIEW (Rich Modern Cards) */}
         <div className="md:hidden divide-y divide-slate-100">
           {loading ? (
             [...Array(3)].map((_, i) => (
@@ -961,32 +961,32 @@ export default function CouponsPage() {
                   )}
 
                   {/* Key Metrics Grid */}
-                  <div className="grid grid-cols-3 gap-2 bg-slate-50/80 p-3 rounded-2xl border border-slate-100 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-slate-50/80 p-3 rounded-2xl border border-slate-100 text-xs">
                     {/* Discount */}
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-0">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Discount</span>
                       <span className="font-black text-slate-900 text-xs truncate">
                         {getDiscountLabel(coupon)}
                       </span>
                     </div>
 
+                    {/* Usage */}
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Utilizări</span>
+                      <span className="font-black text-slate-900 text-xs">
+                        {usedCount} {limit ? `/ ${limit}` : ''}
+                      </span>
+                    </div>
+
                     {/* Expiration */}
-                    <div className="flex flex-col">
+                    <div className="flex flex-col col-span-2 sm:col-span-1 pt-1.5 border-t border-slate-200/60 sm:pt-0 sm:border-t-0 min-w-0">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Expirare</span>
-                      <span className={`font-bold text-xs truncate ${isExpired ? 'text-red-500' : 'text-slate-700'}`}>
+                      <span className={`font-bold text-xs ${isExpired ? 'text-red-500' : 'text-slate-700'}`}>
                         {hasExpiry ? (
                           format(new Date(expiry), 'd MMM yyyy, HH:mm', { locale: ro })
                         ) : (
                           'Permanent'
                         )}
-                      </span>
-                    </div>
-
-                    {/* Usage */}
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Utilizări</span>
-                      <span className="font-black text-slate-900 text-xs">
-                        {usedCount} {limit ? `/ ${limit}` : ''}
                       </span>
                     </div>
                   </div>
@@ -1031,7 +1031,7 @@ export default function CouponsPage() {
           )}
         </div>
 
-        {/* 💻 DESKTOP VIEW (Refined Modern Table) */}
+        {/* DESKTOP VIEW (Refined Modern Table) */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -1196,7 +1196,7 @@ export default function CouponsPage() {
         </div>
       </div>
 
-      {/* 🛠️ CREATE / EDIT COUPON MODAL */}
+      {/* CREATE / EDIT COUPON MODAL */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -1205,10 +1205,10 @@ export default function CouponsPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="bg-white rounded-3xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200/80"
+              className="bg-white rounded-3xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-2xl border border-slate-200/80"
             >
               {/* Modal Header */}
-              <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-[#e32f8c]/20 text-[#008ba3] flex items-center justify-center font-black shadow-2xs">
                     <Zap size={20} />
@@ -1261,7 +1261,7 @@ export default function CouponsPage() {
                         }
                       }
                     }}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-2xl p-3 text-xs sm:text-sm font-bold text-slate-800 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all cursor-pointer"
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-2xl p-3 text-base sm:text-sm font-bold text-slate-800 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all cursor-pointer"
                   >
                     <option value="">-- Fără afiliat (Cupon general magazin) --</option>
                     {affiliates.map((a) => (
@@ -1295,7 +1295,7 @@ export default function CouponsPage() {
                     placeholder="EX: TREN20, VIP15, etc."
                     value={formData.code}
                     onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm sm:text-base text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all font-mono font-black tracking-widest uppercase placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-400"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-base sm:text-base text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all font-mono font-black tracking-widest uppercase placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-400"
                   />
                 </div>
 
@@ -1308,7 +1308,7 @@ export default function CouponsPage() {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, type: 'percentage' })}
-                      className={`p-2.5 rounded-2xl text-xs font-black border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      className={`p-2 sm:p-2.5 rounded-2xl text-[11px] sm:text-xs font-black border transition-all flex flex-col items-center justify-center gap-1 text-center leading-tight cursor-pointer ${
                         formData.type === 'percentage'
                           ? 'bg-[#e32f8c]/15 border-[#e32f8c] text-[#008ba3] shadow-xs'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -1320,7 +1320,7 @@ export default function CouponsPage() {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, type: 'fixed_amount' })}
-                      className={`p-2.5 rounded-2xl text-xs font-black border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      className={`p-2 sm:p-2.5 rounded-2xl text-[11px] sm:text-xs font-black border transition-all flex flex-col items-center justify-center gap-1 text-center leading-tight cursor-pointer ${
                         formData.type === 'fixed_amount'
                           ? 'bg-[#e32f8c]/15 border-[#e32f8c] text-[#008ba3] shadow-xs'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -1332,7 +1332,7 @@ export default function CouponsPage() {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, type: 'free_shipping', value: 0 })}
-                      className={`p-2.5 rounded-2xl text-xs font-black border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      className={`p-2 sm:p-2.5 rounded-2xl text-[11px] sm:text-xs font-black border transition-all flex flex-col items-center justify-center gap-1 text-center leading-tight cursor-pointer ${
                         formData.type === 'free_shipping'
                           ? 'bg-[#e32f8c]/15 border-[#e32f8c] text-[#008ba3] shadow-xs'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -1347,7 +1347,7 @@ export default function CouponsPage() {
                 {/* Discount Value */}
                 {formData.type !== 'free_shipping' && (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                       <label className="text-[10px] text-slate-500 font-black uppercase tracking-wider block">
                         Valoare Discount * ({formData.type === 'percentage' ? '%' : 'RON'})
                       </label>
@@ -1359,7 +1359,7 @@ export default function CouponsPage() {
                             onClick={() => setFormData({ ...formData, value: val })}
                             className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
                           >
-                            {val}{formData.type === 'percentage' ? '%' : 'L'}
+                            {val}{formData.type === 'percentage' ? '%' : ' RON'}
                           </button>
                         ))}
                       </div>
@@ -1372,7 +1372,7 @@ export default function CouponsPage() {
                         max={formData.type === 'percentage' ? 100 : 10000}
                         value={formData.value}
                         onChange={(e) => setFormData({...formData, value: Number(e.target.value)})}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 pr-12 text-sm sm:text-base text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all font-black"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 pr-14 text-base text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all font-black"
                       />
                       <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">
                         {formData.type === 'percentage' ? '%' : 'RON'}
@@ -1383,7 +1383,7 @@ export default function CouponsPage() {
 
                 {/* Usage Limit */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <label className="text-[10px] text-slate-500 font-black uppercase tracking-wider block">
                       Limită Utilizări
                     </label>
@@ -1417,11 +1417,11 @@ export default function CouponsPage() {
                     placeholder="Nelimitat (lasă liber pentru comenzi nelimitate)"
                     value={formData.usage_limit}
                     onChange={(e) => setFormData({...formData, usage_limit: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all placeholder:font-normal placeholder:text-slate-400"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/15 transition-all placeholder:font-normal placeholder:text-slate-400"
                   />
                 </div>
 
-                {/* 🌟 Modern Date & Time Picker */}
+                {/* Modern Date & Time Picker */}
                 <ModernCouponDatePicker 
                   value={formData.expiry_date}
                   onChange={(val) => setFormData({ ...formData, expiry_date: val })}
@@ -1429,18 +1429,18 @@ export default function CouponsPage() {
               </form>
 
               {/* Fixed Modal Footer */}
-              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/90 backdrop-blur flex items-center justify-end gap-3 shrink-0">
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/90 backdrop-blur flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-slate-600 hover:bg-slate-200/80 transition-all cursor-pointer"
+                  className="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-slate-600 hover:bg-slate-200/80 transition-all cursor-pointer w-full sm:w-auto text-center"
                 >
                   Anulează
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-[#e32f8c] hover:bg-[#00bee0] active:scale-98 text-black font-black text-xs sm:text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-md shadow-[#e32f8c]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  className="px-6 py-2.5 bg-[#e32f8c] hover:bg-[#00bee0] active:scale-98 text-black font-black text-xs sm:text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-md shadow-[#e32f8c]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer w-full sm:w-auto"
                 >
                   {isSubmitting ? (
                     <><Loader2 size={16} className="animate-spin" /> Se salvează...</>
@@ -1454,7 +1454,7 @@ export default function CouponsPage() {
         )}
       </AnimatePresence>
 
-      {/* ⚠️ DELETE CONFIRMATION DIALOG */}
+      {/* DELETE CONFIRMATION DIALOG */}
       <AnimatePresence>
         {couponToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">

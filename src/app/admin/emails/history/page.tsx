@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, Search, Filter, Calendar, CheckCircle2, XCircle, Eye, X, Clock } from 'lucide-react';
+import { Mail, Search, Calendar, CheckCircle2, XCircle, X, Clock, RefreshCw } from 'lucide-react';
 import { getEmailLogs, EmailLog } from '@/app/actions/email-logs';
 
 import { WelcomeDiscountEmail } from '@/components/email/WelcomeDiscountEmail';
@@ -16,6 +16,7 @@ export default function EmailHistoryPage() {
   const [logs, setLogs] = useState<EmailLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'failed'>('all');
   const [selectedLog, setSelectedLog] = useState<EmailLog | null>(null);
 
   useEffect(() => {
@@ -42,11 +43,17 @@ export default function EmailHistoryPage() {
     }
   };
 
-  const filteredLogs = logs.filter(log => 
-    log.recipient.toLowerCase().includes(search.toLowerCase()) || 
-    log.subject.toLowerCase().includes(search.toLowerCase()) ||
-    log.type.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredLogs = logs.filter(log => {
+    const q = search.toLowerCase();
+    const matchesSearch =
+      log.recipient.toLowerCase().includes(q) ||
+      log.subject.toLowerCase().includes(q) ||
+      log.type.toLowerCase().includes(q);
+    if (!matchesSearch) return false;
+    if (statusFilter === 'sent') return log.status === 'sent';
+    if (statusFilter === 'failed') return log.status !== 'sent';
+    return true;
+  });
 
   const getLogTypeBadge = (type: string) => {
     switch (type) {
@@ -118,32 +125,122 @@ export default function EmailHistoryPage() {
   };
 
   return (
-    <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-7xl mx-auto space-y-8">
+    <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-7xl mx-auto space-y-6 sm:space-y-8">
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl tracking-tight font-bold text-slate-900">Istoric Email-uri</h1>
-          <p className="text-sm text-slate-500 mt-1">Jurnalul complet al tuturor mesajelor trimise automat de platformă.</p>
+          <h1 className="text-xl sm:text-2xl tracking-tight font-black text-slate-900">Istoric Email-uri</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Jurnalul complet al tuturor mesajelor trimise automat de platformă.</p>
         </div>
+        <button
+          type="button"
+          onClick={fetchLogs}
+          disabled={loading}
+          className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+        >
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          <span>Reîmprospătează</span>
+        </button>
       </div>
 
       {/* FILTER BAR */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center gap-4">
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-3 sm:gap-4">
         <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text"
             placeholder="Caută după email, subiect sau tip..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:outline-none focus:border-[#e32f8c] transition-colors"
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 text-base sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c] transition-colors"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 md:flex items-center gap-1 p-1 bg-slate-100 rounded-xl shrink-0">
+          {[
+            { id: 'all', label: `Toate (${logs.length})` },
+            { id: 'sent', label: 'Trimise' },
+            { id: 'failed', label: 'Erori' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setStatusFilter(tab.id as 'all' | 'sent' | 'failed')}
+              className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap cursor-pointer ${
+                statusFilter === tab.id
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* LOGS LIST / TABLE */}
+      <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-sm overflow-hidden">
+        {/* MOBILE CARDS VIEW */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {loading ? (
+            <div className="p-8 text-center text-slate-400 text-sm">
+              <Clock className="w-6 h-6 animate-spin mx-auto mb-2" />
+              Se încarcă istoricul...
+            </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-sm font-medium">
+              Nu am găsit niciun email în istoric.
+            </div>
+          ) : (
+            filteredLogs.map(log => (
+              <div
+                key={log.id}
+                onClick={() => setSelectedLog(log)}
+                className="p-4 space-y-2.5 active:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  {getLogTypeBadge(log.type)}
+                  {log.status === 'sent' ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-[11px] font-bold shrink-0">
+                      <CheckCircle2 size={13} /> Trimis
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 rounded-lg text-[11px] font-bold shrink-0">
+                      <XCircle size={13} /> Eroare
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-sm font-bold text-slate-900 line-clamp-2 leading-snug">
+                  {log.subject}
+                </p>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-slate-500">
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700 min-w-0 truncate max-w-full">
+                    <Mail size={13} className="text-slate-400 shrink-0" />
+                    <span className="truncate">{log.recipient}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
+                    <Calendar size={12} />
+                    {new Date(log.created_at).toLocaleString('ro-RO')}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* DESKTOP TABLE VIEW */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -212,29 +309,29 @@ export default function EmailHistoryPage() {
 
       {/* PREVIEW MODAL */}
       {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">{selectedLog.subject}</h3>
-                <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
-                  Tris către <strong className="text-slate-700">{selectedLog.recipient}</strong>
-                  <span>•</span>
-                  {new Date(selectedLog.created_at).toLocaleString('ro-RO')}
+            <div className="flex items-start sm:items-center justify-between gap-3 p-4 sm:p-6 border-b border-slate-100 bg-slate-50">
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-black text-slate-900 break-words">{selectedLog.subject}</h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span>Trimis către <strong className="text-slate-700 break-all">{selectedLog.recipient}</strong></span>
+                  <span className="hidden sm:inline">•</span>
+                  <span>{new Date(selectedLog.created_at).toLocaleString('ro-RO')}</span>
                 </p>
               </div>
               <button 
                 onClick={() => setSelectedLog(null)}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-900 hover:border-slate-300 transition-all"
+                className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-900 hover:border-slate-300 transition-all cursor-pointer"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Modal Body (Preview) */}
-            <div className="flex-1 overflow-y-auto bg-slate-100 p-8 flex justify-center">
-              <div className="bg-white w-full max-w-[600px] shadow-sm rounded-lg overflow-hidden border border-slate-200" style={{ fontFamily: 'sans-serif' }}>
+            <div className="flex-1 overflow-y-auto overflow-x-auto bg-slate-100 p-2.5 sm:p-8 flex justify-center">
+              <div className="bg-white w-full max-w-[600px] shadow-sm rounded-lg overflow-hidden border border-slate-200 h-fit" style={{ fontFamily: 'sans-serif' }}>
                 {renderEmailPreview(selectedLog)}
               </div>
             </div>

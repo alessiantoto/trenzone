@@ -403,7 +403,7 @@ export default function AdminEmailsPage() {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { margin: 0; padding: 0; background: #fff; }
+            body { margin: 0; padding: 0; background: #fff; overflow-x: hidden; }
             .scale-wrapper {
               width: 600px;
               margin: 0 auto;
@@ -412,7 +412,7 @@ export default function AdminEmailsPage() {
               .scale-wrapper {
                 transform: scale(calc(100vw / 600));
                 transform-origin: top left;
-                width: 100%;
+                width: 600px;
               }
             }
           </style>
@@ -429,7 +429,7 @@ export default function AdminEmailsPage() {
       <div className="bg-slate-100 rounded-xl flex justify-center border border-slate-200 h-full overflow-hidden w-full relative">
         <iframe 
           srcDoc={iframeHtml} 
-          className="w-full h-[800px] border-0" 
+          className="w-full h-[520px] sm:h-[800px] border-0" 
           sandbox="allow-same-origin allow-scripts"
         />
       </div>
@@ -441,7 +441,7 @@ export default function AdminEmailsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+    <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-300 pb-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
@@ -516,7 +516,7 @@ export default function AdminEmailsPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <label className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-[#e32f8c] text-white text-xs font-bold text-center cursor-pointer transition-colors flex items-center justify-center gap-1.5">
+                  <label className="flex-1 min-h-[40px] py-2 px-3 rounded-xl bg-slate-900 hover:bg-[#e32f8c] text-white text-xs font-bold text-center cursor-pointer transition-colors flex items-center justify-center gap-1.5">
                     <Paperclip size={13} />
                     <span>
                       {isUploading
@@ -543,7 +543,7 @@ export default function AdminEmailsPage() {
                       onClick={() => handleRemoveProgramPdf(slot)}
                       disabled={isUploading}
                       title="Șterge PDF-ul definitiv"
-                      className="p-2 rounded-xl bg-white border border-red-200 hover:bg-red-50 text-red-600 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl bg-white border border-red-200 hover:bg-red-50 text-red-600 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -555,9 +555,31 @@ export default function AdminEmailsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
-        {/* Sidebar Templates */}
-        <div className="lg:col-span-1 space-y-2">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 lg:gap-8">
+        {/* Mobile Template Horizontal Selector */}
+        <div className="lg:hidden flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 hide-scrollbar">
+          {templates.map(tmpl => {
+            const isSelected = selectedId === tmpl.id;
+            return (
+              <button
+                key={tmpl.id}
+                type="button"
+                onClick={() => handleSelect(tmpl)}
+                className={`shrink-0 min-h-[44px] flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  isSelected
+                    ? 'bg-[#e32f8c] text-white shadow-md shadow-[#e32f8c]/20'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <Mail size={14} className="shrink-0" />
+                <span>{tmpl.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop Sidebar Templates */}
+        <div className="hidden lg:block lg:col-span-1 space-y-2">
           {templates.map(tmpl => {
             const isSelected = selectedId === tmpl.id;
             return (
@@ -582,18 +604,18 @@ export default function AdminEmailsPage() {
         </div>
 
         {/* Editor Area */}
-        <div className="lg:col-span-3 bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-slate-200/70 min-h-[600px] flex flex-col">
+        <div className="lg:col-span-3 min-w-0 bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-sm border border-slate-200/70 min-h-[540px] sm:min-h-[600px] flex flex-col">
           
           {selectedTemplate && (
             <>
               {/* Toolbar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-6 pb-5 sm:pb-6 border-b border-slate-100">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {/* Language switch */}
-                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
                     <button 
                       onClick={() => { setLang('ro'); setPreviewCurrency('RON'); }} 
-                      className={`px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
+                      className={`flex-1 sm:flex-none min-h-[40px] px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
                         lang === 'ro' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
@@ -601,7 +623,7 @@ export default function AdminEmailsPage() {
                     </button>
                     <button 
                       onClick={() => { setLang('en'); if (previewCurrency === 'RON') setPreviewCurrency('EUR'); }} 
-                      className={`px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
+                      className={`flex-1 sm:flex-none min-h-[40px] px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
                         lang === 'en' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
@@ -611,14 +633,14 @@ export default function AdminEmailsPage() {
 
                   {/* Preview currency switch */}
                   {viewMode === 'preview' && (
-                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                    <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
                       <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider pl-2 pr-1">Monedă:</span>
                       {(['RON', 'EUR', 'USD', 'GBP'] as const).map((curr) => (
                         <button
                           key={curr}
                           type="button"
                           onClick={() => setPreviewCurrency(curr)}
-                          className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          className={`flex-1 sm:flex-none min-h-[38px] px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                             previewCurrency === curr ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                           }`}
                         >
@@ -630,12 +652,12 @@ export default function AdminEmailsPage() {
 
                   {/* Multi-product simulator switcher (shown in Preview mode or review/order templates) */}
                   {viewMode === 'preview' && (
-                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                    <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
                       <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider pl-2 pr-1">Coș test:</span>
                       <button
                         type="button"
                         onClick={() => setPreviewItemCount(1)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        className={`flex-1 sm:flex-none min-h-[38px] px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                           previewItemCount === 1 ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                         }`}
                       >
@@ -644,21 +666,21 @@ export default function AdminEmailsPage() {
                       <button
                         type="button"
                         onClick={() => setPreviewItemCount(2)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        className={`flex-1 sm:flex-none min-h-[38px] px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                           previewItemCount === 2 ? 'bg-[#e32f8c] text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'
                         }`}
                       >
-                        2 Produse (Multi-produs)
+                        2 Produse
                       </button>
                     </div>
                   )}
                 </div>
                 
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                <div className="w-full sm:w-auto flex flex-wrap items-center justify-between sm:justify-end gap-2">
+                  <div className="flex bg-slate-100 p-1 rounded-xl flex-1 sm:flex-none">
                     <button 
                       onClick={() => setViewMode('edit')} 
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
+                      className={`flex-1 sm:flex-none min-h-[40px] flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
                         viewMode === 'edit' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
@@ -666,7 +688,7 @@ export default function AdminEmailsPage() {
                     </button>
                     <button 
                       onClick={() => setViewMode('preview')} 
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
+                      className={`flex-1 sm:flex-none min-h-[40px] flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
                         viewMode === 'preview' ? 'bg-white text-[#e32f8c] shadow-xs' : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
@@ -676,7 +698,7 @@ export default function AdminEmailsPage() {
                   <button 
                     onClick={handleSave} 
                     disabled={saving} 
-                    className="flex items-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md shadow-[#e32f8c]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md shadow-[#e32f8c]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
                     {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
                     <span>{saving ? 'Se salvează...' : 'Salvează'}</span>
@@ -686,22 +708,22 @@ export default function AdminEmailsPage() {
 
               {/* Editor Fields */}
               {viewMode === 'edit' ? (
-                <div className="space-y-6 flex-1">
+                <div className="space-y-5 sm:space-y-6 flex-1">
                   
                   {/* Dynamic Tags Helper */}
                   <div className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-slate-100 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-bold text-slate-500">Variabile disponibile (apasă pentru a insera în corp):</span>
+                    <span className="font-bold text-slate-500 w-full sm:w-auto">Variabile disponibile (apasă pentru a insera în corp):</span>
                     <button 
                       type="button" 
                       onClick={() => insertVariable(lang === 'ro' ? 'body_ro' : 'body_en', '{{name}}')}
-                      className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg font-mono font-bold text-slate-700 cursor-pointer transition-colors"
+                      className="min-h-[36px] px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg font-mono text-[11px] font-bold text-slate-700 cursor-pointer transition-colors whitespace-nowrap"
                     >
                       {`{{name}}`} (Nume client)
                     </button>
                     <button 
                       type="button" 
                       onClick={() => insertVariable(lang === 'ro' ? 'body_ro' : 'body_en', '{{id}}')}
-                      className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg font-mono font-bold text-slate-700 cursor-pointer transition-colors"
+                      className="min-h-[36px] px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg font-mono text-[11px] font-bold text-slate-700 cursor-pointer transition-colors whitespace-nowrap"
                     >
                       {`{{id}}`} (ID Comandă)
                     </button>
@@ -710,14 +732,14 @@ export default function AdminEmailsPage() {
                         <button 
                           type="button" 
                           onClick={() => insertVariable(lang === 'ro' ? 'body_ro' : 'body_en', '{{coupon}}')}
-                          className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg font-mono font-bold text-slate-700 cursor-pointer transition-colors"
+                          className="min-h-[36px] px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg font-mono text-[11px] font-bold text-slate-700 cursor-pointer transition-colors whitespace-nowrap"
                         >
                           {`{{coupon}}`} (Cod Cupon)
                         </button>
                         <button 
                           type="button" 
                           onClick={() => insertVariable(lang === 'ro' ? 'body_ro' : 'body_en', '{{value}}')}
-                          className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg font-mono font-bold text-slate-700 cursor-pointer transition-colors"
+                          className="min-h-[36px] px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg font-mono text-[11px] font-bold text-slate-700 cursor-pointer transition-colors whitespace-nowrap"
                         >
                           {`{{value}}`} (Valoare % / RON)
                         </button>
@@ -733,7 +755,7 @@ export default function AdminEmailsPage() {
                       type="text" 
                       value={(lang === 'ro' ? editedTemplate.subject_ro : editedTemplate.subject_en) || ''} 
                       onChange={(e) => handleChange(lang === 'ro' ? 'subject_ro' : 'subject_en', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-medium text-sm text-slate-900"
+                      className="w-full min-h-[44px] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-medium text-base sm:text-sm text-slate-900"
                     />
                   </div>
 
@@ -745,7 +767,7 @@ export default function AdminEmailsPage() {
                       type="text" 
                       value={(lang === 'ro' ? editedTemplate.heading_ro : editedTemplate.heading_en) || ''} 
                       onChange={(e) => handleChange(lang === 'ro' ? 'heading_ro' : 'heading_en', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-medium text-sm text-slate-900"
+                      className="w-full min-h-[44px] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-medium text-base sm:text-sm text-slate-900"
                     />
                   </div>
 
@@ -757,7 +779,7 @@ export default function AdminEmailsPage() {
                       rows={6}
                       value={(lang === 'ro' ? editedTemplate.body_ro : editedTemplate.body_en) || ''} 
                       onChange={(e) => handleChange(lang === 'ro' ? 'body_ro' : 'body_en', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-medium text-sm text-slate-900 resize-none leading-relaxed"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-medium text-base sm:text-sm text-slate-900 resize-none leading-relaxed"
                     />
                   </div>
 
@@ -775,7 +797,7 @@ export default function AdminEmailsPage() {
                       value={(lang === 'ro' ? editedTemplate.cta_ro : editedTemplate.cta_en) || ''} 
                       onChange={(e) => handleChange(lang === 'ro' ? 'cta_ro' : 'cta_en', e.target.value)}
                       placeholder="Ex: VEZI COMANDA"
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-medium text-sm text-slate-900"
+                      className="w-full min-h-[44px] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-medium text-base sm:text-sm text-slate-900"
                     />
                   </div>
 
@@ -812,9 +834,10 @@ export default function AdminEmailsPage() {
                   )}
                 </div>
               ) : (
-                <div className="flex-1 bg-slate-50 rounded-2xl p-4 overflow-hidden relative">
-                   <div className="absolute top-2 right-4 text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded shadow-xs border border-slate-100 z-10">
-                     Live Preview ({lang.toUpperCase()}) • {previewItemCount === 1 ? '1 Produs' : '2 Produse'}
+                <div className="flex-1 bg-slate-50 rounded-2xl p-2 sm:p-4 overflow-hidden flex flex-col gap-2">
+                   <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-1 text-[11px] font-bold text-slate-500">
+                     <span>Live Preview ({lang.toUpperCase()})</span>
+                     <span>{previewItemCount === 1 ? '1 Produs' : '2 Produse'} • {previewCurrency}</span>
                    </div>
                    {renderPreview()}
                 </div>

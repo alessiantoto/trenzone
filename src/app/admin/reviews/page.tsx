@@ -68,6 +68,7 @@ export default function ReviewsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'with_photos'>('all');
+  const [ratingFilter, setRatingFilter] = useState<'all' | '5' | '4' | 'low'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
@@ -105,6 +106,7 @@ export default function ReviewsPage() {
   const [isRatingDropdownOpen, setIsRatingDropdownOpen] = useState(false);
 
   const getReviewImages = (rev: any): string[] => extractReviewImages(rev);
+  const isVideoMediaUrl = (url: string) => /\.(mp4|mov|webm|m4v)(\?.*)?$/i.test(url);
 
   useEffect(() => {
     fetchData();
@@ -300,16 +302,20 @@ export default function ReviewsPage() {
 
       if (!matchesSearch) return false;
 
+      if (ratingFilter === '5' && rev.rating !== 5) return false;
+      if (ratingFilter === '4' && rev.rating !== 4) return false;
+      if (ratingFilter === 'low' && rev.rating > 3) return false;
+
       if (statusFilter === 'all') return true;
       if (statusFilter === 'with_photos') return getReviewImages(rev).length > 0;
       return rev.status === statusFilter;
     });
-  }, [reviews, searchQuery, statusFilter]);
+  }, [reviews, searchQuery, statusFilter, ratingFilter]);
 
   return (
-    <div className="p-3.5 sm:p-6 max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in pb-16 text-slate-900">
+    <div className="max-w-7xl mx-auto space-y-5 sm:space-y-8 animate-in fade-in pb-16 text-slate-900">
       
-      {/* 🌟 HEADER */}
+      {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-3.5">
           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#e32f8c]/10 text-[#008ba3] flex items-center justify-center shrink-0 shadow-xs">
@@ -330,7 +336,7 @@ export default function ReviewsPage() {
         </button>
       </div>
 
-      {/* 🔍 SEARCH & FILTER BAR */}
+      {/* SEARCH & FILTER BAR */}
       <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-sm space-y-3.5">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           
@@ -348,7 +354,7 @@ export default function ReviewsPage() {
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X size={14} />
               </button>
@@ -391,7 +397,7 @@ export default function ReviewsPage() {
         <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 hide-scrollbar">
           <button
             onClick={() => setStatusFilter('all')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
               statusFilter === 'all' 
                 ? 'bg-slate-900 text-white' 
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -405,7 +411,7 @@ export default function ReviewsPage() {
 
           <button
             onClick={() => setStatusFilter('pending')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
               statusFilter === 'pending' 
                 ? 'bg-amber-500 text-slate-950' 
                 : 'bg-amber-50 text-amber-800 hover:bg-amber-100/80 border border-amber-200/80'
@@ -420,7 +426,7 @@ export default function ReviewsPage() {
 
           <button
             onClick={() => setStatusFilter('approved')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
               statusFilter === 'approved' 
                 ? 'bg-emerald-600 text-white' 
                 : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100/80 border border-emerald-200/80'
@@ -435,7 +441,7 @@ export default function ReviewsPage() {
 
           <button
             onClick={() => setStatusFilter('rejected')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
               statusFilter === 'rejected' 
                 ? 'bg-red-600 text-white' 
                 : 'bg-red-50 text-red-800 hover:bg-red-100/80 border border-red-200/80'
@@ -450,7 +456,7 @@ export default function ReviewsPage() {
 
           <button
             onClick={() => setStatusFilter('with_photos')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
               statusFilter === 'with_photos' 
                 ? 'bg-[#e32f8c] text-slate-950' 
                 : 'bg-[#e32f8c]/10 text-[#008ba3] hover:bg-[#e32f8c]/20 border border-[#e32f8c]/30'
@@ -463,9 +469,34 @@ export default function ReviewsPage() {
             </span>
           </button>
         </div>
+
+        {/* Rating Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pt-1 border-t border-slate-100 hide-scrollbar">
+          <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1">Rating:</span>
+          {[
+            { id: 'all', label: 'Toate stelele' },
+            { id: '5', label: '5 stele' },
+            { id: '4', label: '4 stele' },
+            { id: 'low', label: '1–3 stele' },
+          ].map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setRatingFilter(opt.id as 'all' | '5' | '4' | 'low')}
+              className={`min-h-[36px] px-3 py-1 rounded-xl text-[11px] font-black whitespace-nowrap transition-all inline-flex items-center gap-1 cursor-pointer ${
+                ratingFilter === opt.id
+                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                  : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              {opt.id !== 'all' && <Star size={11} className="fill-amber-400 text-amber-400 shrink-0" />}
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* 📋 LIST CONTAINER */}
+      {/* LIST CONTAINER */}
       {loading ? (
         <div className="p-16 bg-white border border-slate-200/80 rounded-3xl flex flex-col items-center justify-center text-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-[#e32f8c]/10 text-[#008ba3] flex items-center justify-center animate-spin">
@@ -487,7 +518,7 @@ export default function ReviewsPage() {
         </div>
       ) : (
         <>
-          {/* 📱 MOBILE VIEW: RESPONSIVE CARDS (Always used on screens < md) */}
+          {/* MOBILE / CARDS VIEW */}
           <div className={`${desktopViewMode === 'cards' ? 'grid' : 'grid md:hidden'} grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5`}>
             {filteredReviews.map((rev) => {
               const reviewImages = getReviewImages(rev);
@@ -546,9 +577,9 @@ export default function ReviewsPage() {
                     </div>
 
                     {/* Rating & Product Info */}
-                    <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-100 rounded-xl">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-100 rounded-xl">
                       {/* Star Rating */}
-                      <div className="flex items-center gap-0.5 text-amber-400">
+                      <div className="flex items-center gap-0.5 text-amber-400 shrink-0">
                         {[...Array(5)].map((_, i) => (
                           <Star 
                             key={i} 
@@ -567,7 +598,7 @@ export default function ReviewsPage() {
                             <Package className="w-full h-full p-1 text-slate-400" />
                           )}
                         </div>
-                        <span className="text-xs font-bold text-slate-700 truncate max-w-[160px]">
+                        <span className="text-xs font-bold text-slate-700 truncate max-w-[180px]">
                           {prodName}
                         </span>
                       </div>
@@ -596,15 +627,15 @@ export default function ReviewsPage() {
                       )}
                     </div>
 
-                    {/* 📸 POZE REALE ATAȘATE DE CLIENT (PROMINENT & VISIBLE!) */}
+                    {/* POZE REALE ATASATE DE CLIENT */}
                     {reviewImages.length > 0 ? (
                       <div className="pt-2 border-t border-slate-100 space-y-2">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-1">
                           <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                             <ImageIcon size={13} className="text-[#008ba3]" />
-                            <span>Poze reale atașate ({reviewImages.length})</span>
+                            <span>Media atașată ({reviewImages.length})</span>
                           </span>
-                          <span className="text-[10px] text-slate-400 font-bold">Apasă pe poză pentru a mări</span>
+                          <span className="text-[10px] text-slate-400 font-bold">Apasă pentru a mări</span>
                         </div>
 
                         <div className="flex items-center gap-2.5 overflow-x-auto pb-1 hide-scrollbar">
@@ -613,13 +644,22 @@ export default function ReviewsPage() {
                               key={imgIdx}
                               onClick={() => openLightbox(reviewImages, imgIdx, rev.customer_name, prodName)}
                               className="group/img relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-slate-200 hover:border-[#e32f8c] overflow-hidden bg-slate-900 shrink-0 cursor-pointer transition-all shadow-xs hover:shadow-md hover:scale-105 active:scale-95"
-                              title="Apasă pentru a vedea poza mărită"
+                              title="Apasă pentru a vedea media mărită"
                             >
-                              <img 
-                                src={getOptimizedImageUrl(imgUrl)} 
-                                alt={`Poză recenzie ${imgIdx + 1}`} 
-                                className="w-full h-full object-cover group-hover/img:opacity-85 transition-opacity" 
-                              />
+                              {isVideoMediaUrl(imgUrl) ? (
+                                <video
+                                  src={imgUrl}
+                                  muted
+                                  playsInline
+                                  className="w-full h-full object-cover group-hover/img:opacity-85 transition-opacity"
+                                />
+                              ) : (
+                                <img 
+                                  src={getOptimizedImageUrl(imgUrl)} 
+                                  alt={`Poză recenzie ${imgIdx + 1}`} 
+                                  className="w-full h-full object-cover group-hover/img:opacity-85 transition-opacity" 
+                                />
+                              )}
                               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                                 <Maximize2 size={16} className="text-white drop-shadow-md" />
                               </div>
@@ -638,14 +678,14 @@ export default function ReviewsPage() {
 
                   </div>
 
-                  {/* ⚡ CARD ACTIONS (100% visible on Mobile & PC) */}
+                  {/* CARD ACTIONS */}
                   <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-1">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-[160px]">
                       {rev.status !== 'approved' && (
                         <button
                           type="button"
                           onClick={() => handleStatusChange(rev.id, 'approved')}
-                          className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                          className="flex-1 min-h-[40px] py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                         >
                           <CheckCircle2 size={14} />
                           <span>Aprobă</span>
@@ -656,7 +696,7 @@ export default function ReviewsPage() {
                         <button
                           type="button"
                           onClick={() => handleStatusChange(rev.id, 'rejected')}
-                          className={`py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          className={`min-h-[40px] py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                             rev.status === 'approved' 
                               ? 'bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-800' 
                               : 'flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs'
@@ -668,25 +708,27 @@ export default function ReviewsPage() {
                       )}
                     </div>
 
-                    {/* Edit & Delete Buttons */}
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(rev)}
-                      className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
-                      title="Editează recenzia (RO/EN & Poze)"
-                    >
-                      <Pencil size={14} />
-                      <span>Editează</span>
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Edit & Delete Buttons */}
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(rev)}
+                        className="min-h-[40px] py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                        title="Editează recenzia (RO/EN & Poze)"
+                      >
+                        <Pencil size={14} />
+                        <span>Editează</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setReviewToDelete(rev)}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer shrink-0"
-                      title="Șterge definitiv"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setReviewToDelete(rev)}
+                        className="min-h-[40px] min-w-[40px] p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+                        title="Șterge definitiv"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
 
                 </div>
@@ -694,9 +736,10 @@ export default function ReviewsPage() {
             })}
           </div>
 
-          {/* 💻 DESKTOP TABLE VIEW (Visible only when desktopViewMode === 'table' on screens >= md) */}
+          {/* DESKTOP TABLE VIEW */}
           {desktopViewMode === 'table' && (
             <div className="hidden md:block bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/80">
@@ -729,8 +772,9 @@ export default function ReviewsPage() {
                               {new Date(rev.created_at).toLocaleDateString('ro-RO')}
                             </span>
                             {rev.is_verified_buyer && (
-                              <span className="text-[9px] font-bold text-emerald-700 mt-0.5">
-                                ✓ Cumpărător verificat
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 mt-0.5">
+                                <CheckCircle2 size={11} className="shrink-0" />
+                                <span>Cumpărător verificat</span>
                               </span>
                             )}
                           </div>
@@ -865,26 +909,27 @@ export default function ReviewsPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </>
       )}
 
-      {/* 🖼️ MULTI-PHOTO HIGH-RES LIGHTBOX MODAL */}
+      {/* MULTI-PHOTO HIGH-RES LIGHTBOX MODAL */}
       {lightbox && (
         <div 
-          className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200 select-none"
+          className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-6 animate-in fade-in duration-200 select-none"
           onClick={() => setLightbox(null)}
         >
           <div 
-            className="relative max-w-4xl w-full bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col items-center max-h-[92vh]"
+            className="relative max-w-4xl w-full bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col items-center max-h-[92vh]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top Bar */}
-            <div className="w-full flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-800 bg-slate-950/70 text-white">
+            <div className="w-full flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-800 bg-slate-950/70 text-white">
               <div className="min-w-0 pr-2">
                 <p className="text-xs sm:text-sm font-black truncate">
-                  Poză recenzie • {lightbox.customerName}
+                  Media recenzie • {lightbox.customerName}
                 </p>
                 <p className="text-[11px] text-[#e32f8c] truncate">
                   {lightbox.productName} ({lightbox.currentIndex + 1} din {lightbox.images.length})
@@ -896,14 +941,14 @@ export default function ReviewsPage() {
                   href={lightbox.images[lightbox.currentIndex]} 
                   target="_blank" 
                   rel="noreferrer" 
-                  className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+                  className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
                   title="Deschide în tab nou la rezoluție maximă"
                 >
                   <ExternalLink size={16} />
                 </a>
                 <button
                   onClick={() => setLightbox(null)}
-                  className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+                  className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
                   title="Închide (Esc)"
                 >
                   <X size={18} />
@@ -912,7 +957,7 @@ export default function ReviewsPage() {
             </div>
 
             {/* Main Image Display with Navigation Arrows */}
-            <div className="relative p-2 sm:p-4 flex-1 flex items-center justify-center w-full min-h-[300px] max-h-[70vh] bg-black/40 overflow-hidden">
+            <div className="relative p-2 sm:p-4 flex-1 flex items-center justify-center w-full min-h-[260px] sm:min-h-[300px] max-h-[70vh] bg-black/40 overflow-hidden">
               {lightbox.images.length > 1 && (
                 <button
                   type="button"
@@ -920,18 +965,28 @@ export default function ReviewsPage() {
                     ...lightbox,
                     currentIndex: (lightbox.currentIndex - 1 + lightbox.images.length) % lightbox.images.length
                   })}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors cursor-pointer border border-white/10 shadow-lg"
+                  className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/65 hover:bg-black/85 text-white flex items-center justify-center transition-colors cursor-pointer border border-white/10 shadow-lg"
                   title="Poza anterioară (Săgeată stânga)"
                 >
                   <ChevronLeft size={22} />
                 </button>
               )}
 
-              <img 
-                src={getOptimizedImageUrl(lightbox.images[lightbox.currentIndex])} 
-                alt="Poză recenzie mărită" 
-                className="max-w-full max-h-[66vh] object-contain rounded-2xl shadow-xl border border-white/5 animate-in zoom-in-95 duration-150" 
-              />
+              {isVideoMediaUrl(lightbox.images[lightbox.currentIndex]) ? (
+                <video
+                  src={lightbox.images[lightbox.currentIndex]}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-w-full max-h-[64vh] rounded-2xl shadow-xl border border-white/5"
+                />
+              ) : (
+                <img 
+                  src={getOptimizedImageUrl(lightbox.images[lightbox.currentIndex])} 
+                  alt="Poză recenzie mărită" 
+                  className="max-w-full max-h-[64vh] object-contain rounded-2xl shadow-xl border border-white/5 animate-in zoom-in-95 duration-150" 
+                />
+              )}
 
               {lightbox.images.length > 1 && (
                 <button
@@ -969,7 +1024,7 @@ export default function ReviewsPage() {
         </div>
       )}
 
-      {/* ⚠️ DELETE CONFIRMATION MODAL */}
+      {/* DELETE CONFIRMATION MODAL */}
       {reviewToDelete && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
@@ -994,14 +1049,14 @@ export default function ReviewsPage() {
               <button
                 type="button"
                 onClick={() => setReviewToDelete(null)}
-                className="px-4 py-2.5 font-bold text-xs sm:text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                className="min-h-[44px] px-4 py-2.5 font-bold text-xs sm:text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
               >
                 Anulează
               </button>
               <button
                 type="button"
                 onClick={() => handleDelete(reviewToDelete.id)}
-                className="px-4 py-2.5 font-black text-xs sm:text-sm text-white bg-red-600 hover:bg-red-700 active:scale-95 rounded-xl transition-all flex items-center gap-1.5 shadow-sm shadow-red-500/20 cursor-pointer"
+                className="min-h-[44px] px-4 py-2.5 font-black text-xs sm:text-sm text-white bg-red-600 hover:bg-red-700 active:scale-95 rounded-xl transition-all flex items-center gap-1.5 shadow-sm shadow-red-500/20 cursor-pointer"
               >
                 <Trash2 size={15} />
                 <span>Șterge Definitiv</span>
@@ -1011,7 +1066,7 @@ export default function ReviewsPage() {
         </div>
       )}
 
-      {/* ➕ / ✏️ ADD OR EDIT BILINGUAL REVIEW MODAL */}
+      {/* ADD OR EDIT BILINGUAL REVIEW MODAL */}
       {isAddModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200"

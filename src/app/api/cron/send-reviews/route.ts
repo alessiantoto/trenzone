@@ -59,10 +59,11 @@ export async function GET(request: Request) {
           order.carrier_metadata?.locale ||
           (order as any).locale ||
           (order.addr_country && String(order.addr_country).toUpperCase() !== 'RO' ? 'en' : 'ro');
+        const fullName = `${order.customer_firstname || ''} ${order.customer_lastname || ''}`.trim() || order.customer_name || '';
         const orderData = {
-          id: order.id,
+          id: order.carrier_metadata?.order_number || order.id,
           locale: orderLocale,
-          customer: { name: order.customer_name || order.customer_firstname || 'TrenZone' },
+          customer: { name: fullName },
           items: typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || [])
         };
 

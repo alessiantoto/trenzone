@@ -1,7 +1,5 @@
 'use server';
 
-import fs from 'fs';
-import path from 'path';
 import { isAdminAuthorized } from './admin-auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { uploadToR2, deleteFromR2, getR2PublicBaseUrl } from '@/lib/r2';
@@ -16,6 +14,7 @@ import {
   isDigitalProgramItem,
   isDigitalBundleItem,
   hasAnyDigitalProgram,
+  resolveOrderEmailLocale,
   resolveOrderedPrograms,
   sanitizeProgramSlug,
   PROGRAM_SLUGS,
@@ -23,6 +22,7 @@ import {
 } from '@/lib/programs';
 import { getCanonicalOrderNumber } from '@/utils/admin-helpers';
 import { sendProgramDeliveryEmail } from '@/lib/resend-service';
+import { dispatchWaitingProgramOrders, hasPdfSlotAvailable } from '@/lib/program-delivery-queue';
 import { getProductsServer } from './products';
 
 export interface AdminProgramPdfSlot {
@@ -202,6 +202,8 @@ export async function uploadProgramPdfAction(formData: FormData): Promise<{
   success: boolean;
   slot?: ProgramFileSlot;
   url?: string;
+  autoDispatchedCount?: number;
+  autoFailedCount?: number;
   error?: string;
 }> {
   const isAuthorized = await isAdminAuthorized();
@@ -227,10 +229,17 @@ export async function uploadProgramPdfAction(formData: FormData): Promise<{
       await deleteProgramStorageFileByUrl(previousUrl);
     }
     await cleanupOrphanSlotFiles(slot, customUrl);
+    const waitingDispatch = await dispatchWaitingProgramOrders({ triggerSlot: slot });
     revalidatePath('/admin/emails');
     revalidatePath('/admin/products');
     revalidatePath('/admin/programs');
-    return { success: true, slot, url: customUrl };
+    return {
+      success: true,
+      slot,
+      url: customUrl,
+      autoDispatchedCount: waitingDispatch.sentCount,
+      autoFailedCount: waitingDispatch.failedCount,
+    };
   }
 
   const pdfFile = formData.get('file') as File | null;
@@ -284,10 +293,18 @@ export async function uploadProgramPdfAction(formData: FormData): Promise<{
     }
     await cleanupOrphanSlotFiles(slot, uploadedUrl);
 
+    const waitingDispatch = await dispatchWaitingProgramOrders({ triggerSlot: slot });
+
     revalidatePath('/admin/emails');
     revalidatePath('/admin/products');
     revalidatePath('/admin/programs');
-    return { success: true, slot, url: uploadedUrl };
+    return {
+      success: true,
+      slot,
+      url: uploadedUrl,
+      autoDispatchedCount: waitingDispatch.sentCount,
+      autoFailedCount: waitingDispatch.failedCount,
+    };
   } catch (err: any) {
     return {
       success: false,
@@ -329,19 +346,6 @@ export async function removeProgramPdfSlotAction(slot: ProgramFileSlot): Promise
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Eroare la ștergerea slotului PDF.' };
-  }
-}
-
-function hasPdfSlotAvailable(slot: string, storedFiles: StoredProgramFiles): boolean {
-  const customUrl = storedFiles?.[slot];
-  if (customUrl && typeof customUrl === 'string' && customUrl.startsWith('http')) {
-    return true;
-  }
-  try {
-    const localPath = path.join(process.cwd(), 'public', 'programs', `${slot}.pdf`);
-    return fs.existsSync(localPath);
-  } catch {
-    return false;
   }
 }
 
@@ -448,14 +452,8 @@ export async function getAdminProgramOrdersAction(): Promise<{
       const hasDigital = hasAnyDigitalProgram(items) || o.carrier_metadata?.is_digital_only === true;
       if (!hasDigital) continue;
 
-      const orderLocale: 'ro' | 'en' = String(
-        o.carrier_metadata?.locale || o.locale || 'ro'
-      )
-        .toLowerCase()
-        .startsWith('en')
-        ? 'en'
-        : 'ro';
-
+      const initialResolved = resolveOrderedPrograms(items, 'ro');
+      const orderLocale = resolveOrderEmailLocale(o, initialResolved);
       const resolved = resolveOrderedPrograms(items, orderLocale);
       if (resolved.length === 0) continue;
 
@@ -558,18 +556,10 @@ export async function sendManualProgramEmailAction(
       return { success: false, error: 'Comanda nu are o adresă de email validă.' };
     }
 
-    const orderLocale: 'ro' | 'en' = String(
-      order.carrier_metadata?.locale || order.locale || 'ro'
-    )
-      .toLowerCase()
-      .startsWith('en')
-      ? 'en'
-      : 'ro';
-
-    const orderedPrograms = resolveOrderedPrograms(
-      Array.isArray(order.items) ? order.items : [],
-      orderLocale
-    );
+    const orderItems = Array.isArray(order.items) ? order.items : [];
+    const initialPrograms = resolveOrderedPrograms(orderItems, 'ro');
+    const orderLocale = resolveOrderEmailLocale(order, initialPrograms);
+    const orderedPrograms = resolveOrderedPrograms(orderItems, orderLocale);
 
     if (orderedPrograms.length === 0) {
       return { success: false, error: 'Comanda nu conține niciun program digital.' };

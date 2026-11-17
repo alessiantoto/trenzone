@@ -284,7 +284,11 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
       const res = await uploadAdminProgramPdf(slot, file);
       if (res.success && res.url) {
         setProgramFiles((prev) => ({ ...prev, [slot]: res.url! }));
-        toast.success(`PDF-ul (${slot.toUpperCase()}) a fost atașat cu succes!`);
+        const autoNote =
+          res.autoDispatchedCount && res.autoDispatchedCount > 0
+            ? ` (${res.autoDispatchedCount} comenzi în așteptare trimise automat!)`
+            : '';
+        toast.success(`PDF-ul (${slot.toUpperCase()}) a fost atașat cu succes${autoNote}`);
       } else {
         toast.error(res.error || "Eroare la încărcarea PDF-ului.");
       }

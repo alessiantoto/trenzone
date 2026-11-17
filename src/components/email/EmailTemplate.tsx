@@ -65,30 +65,36 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
 }) => {
   const isEn = locale === 'en';
   
+  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
+  const safeOrderId = String(orderId || '');
+  const applyPlaceholders = (text: string) =>
+    text
+      .replaceAll('{{name}}', firstCustomerName)
+      .replaceAll('{{id}}', safeOrderId)
+      .replace(/,\s*([.!?])/g, '$1')
+      .replace(/\s+,/g, ',');
+
   const headingText = isEn ? templateData?.heading_en : templateData?.heading_ro;
   const bodyText = isEn ? templateData?.body_en : templateData?.body_ro;
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
 
   const defaultWelcome = isPreorder
-    ? (isEn ? "Pre-order Confirmed!" : "Precomandă Confirmată!")
-    : (isEn ? "Hi, {{name}}!" : "Salut, {{name}}!");
+    ? (isEn ? "Pre-order confirmed" : "Precomandă confirmată")
+    : firstCustomerName
+      ? (isEn ? "Hi, {{name}}!" : "Salut, {{name}}!")
+      : (isEn ? "Hi!" : "Salut!");
 
   const defaultBody = isPreorder
     ? (isEn
-        ? "Your spot in the new production batch is 100% secured! Thank you for your support. You will receive automatic email updates as soon as your pre-order enters fulfillment dispatch."
-        : "Locul tău din noul lot de producție este 100% garantat și rezervat! Îți mulțumim pentru încredere și răbdare. Vei primi actualizări automate pe email imediat ce comanda ta intră în etapa de expediere.")
+        ? "We have reserved your items in our upcoming production batch. Thank you for your patience — we will email you as soon as your order enters fulfillment."
+        : "Am rezervat produsele tale din următorul lot de producție. Îți mulțumim pentru răbdare — vei primi automat un email imediat ce comanda intră în pregătire pentru livrare.")
     : (isEn
-        ? "Thank you for your purchase and for being part of the TrenZone family! We cannot wait for you to enjoy your new gear."
-        : "Ești acum oficial parte din familia TrenZone. Ne bucurăm că ai ales performanța și abia așteptăm să te bucuri de noile tale produse!");
+        ? "Thank you for your order! We are getting your items ready and will email you as soon as everything is handed over to the courier."
+        : "Îți mulțumim pentru comandă! Pregătim produsele tale și revenim pe email cu datele de livrare imediat ce coletul pleacă spre tine.");
 
   const defaultCta = isPreorder
     ? (isEn ? "VIEW PRE-ORDER" : "DETALII PRECOMANDĂ")
     : (isEn ? "VIEW TRACKING" : "URMĂREȘTE LIVRAREA");
-
-  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
-  const safeOrderId = String(orderId || '');
-  const applyPlaceholders = (text: string) =>
-    text.replaceAll('{{name}}', firstCustomerName).replaceAll('{{id}}', safeOrderId);
 
   const safeWelcome = applyPlaceholders(headingText || defaultWelcome);
   const safeBody = applyPlaceholders(bodyText || defaultBody);

@@ -106,17 +106,28 @@ export async function GET(request: Request) {
       }
 
       // Send the email
-      const locale = (!session.country || session.country === 'RO') ? 'ro' : 'en';
-      const customerName = session.first_name || (locale === 'en' ? 'Friend' : 'Prieten');
+      const rawSessionLocale = String((session as any).locale || (session as any).metadata?.locale || '').toLowerCase();
+      const locale: 'ro' | 'en' = rawSessionLocale.startsWith('en')
+        ? 'en'
+        : rawSessionLocale.startsWith('ro')
+          ? 'ro'
+          : (!session.country || session.country === 'RO')
+            ? 'ro'
+            : 'en';
+      const customerName = String(session.first_name || '').trim();
+      const firstName = customerName ? customerName.split(/\s+/)[0] : '';
       const baseSubject = locale === 'en' ? templateToUse.subject_en : templateToUse.subject_ro;
-      const default24hSubject = locale === 'en' ? 'You left items in your cart!' : 'Ai lăsat produse în coș!';
-      const finalSubject = (emailType === '72h'
-        ? (locale === 'en' ? `Here is your ${couponValue72h}% discount for your cart!` : `Ai ${couponValue72h}% reducere pentru produsele din coș!`)
-        : (baseSubject || default24hSubject)
-      )
-        .replace('{{name}}', customerName.split(' ')[0])
-        .replace('{{coupon}}', couponCode72h)
-        .replace('{{value}}', String(couponValue72h));
+      const default24hSubject = locale === 'en' ? 'You left items in your TrenZone cart' : 'Ai lăsat produse în coșul tău TrenZone';
+      const default72hSubject = locale === 'en'
+        ? `Final reminder for your cart — ${couponValue72h}% off with ${couponCode72h}`
+        : `Ultim memento pentru coșul tău — ${couponValue72h}% reducere cu ${couponCode72h}`;
+      const finalSubject = (baseSubject || (emailType === '72h' ? default72hSubject : default24hSubject))
+        .replace(/\{\{name\}\}/g, firstName)
+        .replace(/\{\{coupon\}\}/g, couponCode72h)
+        .replace(/\{\{value\}\}/g, String(couponValue72h))
+        .replace(/,\s*([.!?])/g, '$1')
+        .replace(/\s+,/g, ',')
+        .trim();
 
       let parsedItems = session.items || [];
       if (typeof parsedItems === 'string') {

@@ -127,6 +127,35 @@ export function hasAnyDigitalProgram(items: any[]): boolean {
 }
 
 /**
+ * Resolves the customer email language ('ro' | 'en') for an order consistently.
+ * Priority: explicit checkout locale -> country fallback when non-RO -> variant language of ordered programs -> 'ro'.
+ */
+export function resolveOrderEmailLocale(
+  order: any,
+  orderedPrograms?: Array<{ lang: ProgramLanguage }>
+): ProgramLanguage {
+  const explicitRaw = String(
+    order?.carrier_metadata?.locale || order?.locale || ''
+  )
+    .trim()
+    .toLowerCase();
+
+  if (explicitRaw.startsWith('en')) return 'en';
+  if (explicitRaw.startsWith('ro')) return 'ro';
+
+  const countryRaw = String(order?.addr_country || '').trim().toUpperCase();
+  if (countryRaw && countryRaw !== 'RO' && countryRaw !== 'ROMANIA') {
+    return 'en';
+  }
+
+  if (orderedPrograms && orderedPrograms.length > 0 && orderedPrograms.every((p) => p.lang === 'en')) {
+    return 'en';
+  }
+
+  return 'ro';
+}
+
+/**
  * Extracts which digital programs ('food-plan', 'training-program', 'bench-program') and which language ('ro' | 'en')
  * were ordered in a given cart/order items list.
  */

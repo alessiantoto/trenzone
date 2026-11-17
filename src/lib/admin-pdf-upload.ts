@@ -15,7 +15,14 @@ const SERVER_ACTION_SAFE_BYTES = 3.8 * 1024 * 1024; // Stay under Vercel's 4.5 M
 export async function uploadAdminProgramPdf(
   slot: ProgramFileSlot,
   file: File
-): Promise<{ success: boolean; slot?: ProgramFileSlot; url?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  slot?: ProgramFileSlot;
+  url?: string;
+  autoDispatchedCount?: number;
+  autoFailedCount?: number;
+  error?: string;
+}> {
   const ext = (file.name.split('.').pop() || '').toLowerCase();
   if (ext !== 'pdf' && file.type !== 'application/pdf') {
     return { success: false, error: 'Format invalid. Sunt acceptate doar fișiere .PDF.' };

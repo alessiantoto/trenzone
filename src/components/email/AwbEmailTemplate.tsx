@@ -33,19 +33,24 @@ export const AwbEmailTemplate: React.FC<Readonly<AwbEmailTemplateProps>> = ({
 }) => {
   const isEn = locale === 'en';
   
-  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || (isEn ? 'Champion' : 'Campionule');
+  const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
   const safeOrderId = String(orderId || '');
   const replaceVars = (text: string) =>
-    text.replaceAll('{{name}}', firstCustomerName).replaceAll('{{id}}', safeOrderId);
+    text
+      .replaceAll('{{name}}', firstCustomerName)
+      .replaceAll('{{id}}', safeOrderId)
+      .replace(/\s+,/g, ',');
 
-  const safeWelcome = replaceVars(isEn ? "Hi, {{name}}!" : "Salut, {{name}}!");
+  const safeWelcome = firstCustomerName
+    ? (isEn ? `Hi, ${firstCustomerName}!` : `Salut, ${firstCustomerName}!`)
+    : (isEn ? 'Hi!' : 'Salut!');
   
   const headingText = isEn ? templateData?.heading_en : templateData?.heading_ro;
   const bodyText = isEn ? templateData?.body_en : templateData?.body_ro;
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
 
-  const safeHeading = replaceVars(headingText || (isEn ? "Your Order is on the Way!" : "Comanda ta este pe drum!"));
-  const safeBody = replaceVars(bodyText || (isEn ? "Great news! Your order has been handed over to the courier and is now on its way to you." : "Vești bune! Comanda ta a fost predată curierului și se îndreaptă spre tine."));
+  const safeHeading = replaceVars(headingText || (isEn ? "Your order is on the way" : "Comanda ta este pe drum"));
+  const safeBody = replaceVars(bodyText || (isEn ? "Great news — your package has been handed over to the courier and is heading your way." : "Coletul tău a fost predat curierului și este în drum spre tine."));
   const safeCta = ctaText || (isEn ? "TRACK YOUR ORDER" : "URMĂREȘTE LIVRAREA");
 
   const staticTranslations = isEn ? {

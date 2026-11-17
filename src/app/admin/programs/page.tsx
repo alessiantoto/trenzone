@@ -200,7 +200,11 @@ export default function AdminProgramsPage() {
     try {
       const res = await uploadAdminProgramPdf(slot, file);
       if (res.success) {
-        toast.success(`PDF încărcat pentru ${slot}!`);
+        const autoNote =
+          res.autoDispatchedCount && res.autoDispatchedCount > 0
+            ? ` (${res.autoDispatchedCount} clienți în așteptare notificați automat!)`
+            : '';
+        toast.success(`PDF încărcat pentru ${slot}${autoNote}`);
         await loadData();
       } else {
         toast.error(res.error || 'Eroare la încărcarea PDF-ului.');

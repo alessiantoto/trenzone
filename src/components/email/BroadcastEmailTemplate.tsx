@@ -31,7 +31,7 @@ export const BroadcastEmailTemplate: React.FC<Readonly<BroadcastEmailTemplatePro
   
   return (
     <BaseEmailLayout locale={locale} baseUrl={baseUrl} userEmail={userEmail}>
-      {/* 📸 HEADER IMAGE (OPȚIONAL) */}
+      {/* Header Image (Optional) */}
       {imageUrl && (
         <div style={{ padding: '0', textAlign: 'center', backgroundColor: '#111' }}>
           <img 
@@ -48,7 +48,7 @@ export const BroadcastEmailTemplate: React.FC<Readonly<BroadcastEmailTemplatePro
         </div>
       )}
 
-      {/* 📝 CONTENT AREA */}
+      {/* Content Area */}
       <div style={{ padding: '50px 30px', textAlign: 'center' }}>
         <h1 style={{ 
           fontSize: '32px', 
@@ -72,7 +72,7 @@ export const BroadcastEmailTemplate: React.FC<Readonly<BroadcastEmailTemplatePro
           fontWeight: '500'
         }} dangerouslySetInnerHTML={{ __html: message.replace(/\n/g, '<br />') }} />
 
-        {/* 🚀 CALL TO ACTION */}
+        {/* Call to Action */}
         {ctaText && ctaLink && (
           <div style={{ marginTop: '50px', marginBottom: '20px' }}>
             <a href={ctaLink} style={{

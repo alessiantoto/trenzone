@@ -113,7 +113,11 @@ export default function AdminEmailsPage() {
       const uploadedUrl = res.url;
       if (res.success && uploadedUrl) {
         setProgramFiles((prev) => ({ ...prev, [slot]: uploadedUrl }));
-        toast.success('Fișierul PDF a fost atașat cu succes!');
+        const autoNote =
+          res.autoDispatchedCount && res.autoDispatchedCount > 0
+            ? ` (${res.autoDispatchedCount} comenzi în așteptare trimise automat!)`
+            : '';
+        toast.success(`Fișierul PDF a fost atașat cu succes${autoNote}`);
       } else {
         toast.error(res.error || 'Eroare la încărcarea PDF-ului.');
       }

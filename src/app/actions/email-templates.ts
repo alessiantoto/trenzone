@@ -36,29 +36,43 @@ export interface EmailTemplate {
 const DEFAULT_PROGRAM_TEMPLATES: EmailTemplate[] = [
   {
     id: 'program-delivery',
-    name: 'Livrare Programe Digitale (Food Plan & Bench Program PDF)',
-    subject_ro: 'Programele tale digitale sunt gata de descărcare — Comanda #{{order_id}}',
-    subject_en: 'Your digital programs are ready to download — Order #{{order_id}}',
-    heading_ro: 'PROGRAMELE TALE DIGITALE SUNT GATA',
+    name: 'Livrare Programe Digitale (Cu PDF)',
+    subject_ro: 'Programele tale digitale sunt gata — Comanda #{{order_id}}',
+    subject_en: 'Your digital programs are ready — Order #{{order_id}}',
+    heading_ro: 'PROGRAMELE TALE SUNT GATA',
     heading_en: 'YOUR DIGITAL PROGRAMS ARE READY',
     body_ro:
-      'Îți mulțumim pentru comandă, {{name}}. Programele tale digitale în format PDF sunt atașate direct la acest email și pot fi descărcate oricând folosind butoanele de mai jos.',
+      'Mulțumim pentru comandă, {{name}}. Găsești fișierele PDF atașate direct la acest email și le poți descărca oricând din linkurile de mai jos.',
     body_en:
-      'Thank you for your order, {{name}}. Your official PDF program(s) are attached directly to this email and can also be downloaded anytime using the links below.',
+      'Thank you for your order, {{name}}. Your PDF files are attached directly to this email and you can also download them anytime using the buttons below.',
     cta_ro: 'DESCARCĂ PDF',
     cta_en: 'DOWNLOAD PDF',
   },
   {
+    id: 'program-pending',
+    name: 'Confirmare Program Digital (Fără PDF / În Curând)',
+    subject_ro: 'Comanda #{{order_id}} confirmată — programele tale urmează',
+    subject_en: 'Order #{{order_id}} confirmed — your programs are on the way',
+    heading_ro: 'COMANDĂ CONFIRMATĂ · URMEAZĂ',
+    heading_en: 'ORDER CONFIRMED · ON THE WAY',
+    body_ro:
+      'Mulțumim pentru comandă, {{name}}. Am înregistrat achiziția ta pentru programele de mai jos. Pregătim versiunile finale PDF și ți le trimitem automat pe această adresă imediat ce sunt gata.',
+    body_en:
+      'Thank you for your order, {{name}}. Your digital program purchase is confirmed. We are finalizing the PDF files and will send them automatically to this email address as soon as they are ready.',
+    cta_ro: 'VEZI PROGRAMELE',
+    cta_en: 'VIEW PROGRAMS',
+  },
+  {
     id: 'program-marketing',
-    name: 'Marketing & Recomandare Programe Digitale (Food Plan + Bench Program)',
-    subject_ro: 'Programe Digitale Oficiale: Food Plan & Bench Program (PDF)',
-    subject_en: 'Official Digital Programs: Food Plan & Bench Program (PDF)',
+    name: 'Marketing & Recomandare Programe Digitale (PDF)',
+    subject_ro: 'Programe Digitale Oficiale: Food Plan, Training & Bench Program (PDF)',
+    subject_en: 'Official Digital Programs: Food Plan, Training & Bench Program (PDF)',
     heading_ro: 'PROGRAME DIGITALE OFICIALE',
     heading_en: 'OFFICIAL DIGITAL PROGRAMS',
     body_ro:
-      'Salut {{name}}, pe lângă echipamentul de sală, descoperă ghidurile oficiale în format PDF: Food Plan (10 capitole + meniuri gata făcute) și Bench Program (protocol de 8 săptămâni pentru forță la piept), disponibile în Română și Engleză.',
+      'Salut {{name}}, pe lângă echipamentul de sală, descoperă ghidurile oficiale în format PDF: Food Plan, Training Program și Bench Program, disponibile în Română și Engleză.',
     body_en:
-      'Hi {{name}}, alongside your strength gear, discover our official PDF guides: Food Plan (10 chapters + sample meal plans) and Bench Program (8-week strength protocol), available in English and Romanian.',
+      'Hi {{name}}, alongside your training gear, explore our official PDF guides: Food Plan, Training Program, and Bench Program, available in English and Romanian.',
     cta_ro: 'VEZI PROGRAMELE',
     cta_en: 'VIEW PROGRAMS',
   },

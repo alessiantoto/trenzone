@@ -123,8 +123,8 @@ export async function sendWelcomeEmail(
     const couponValue = couponData?.value ?? 5;
 
     const defaultSubject = locale === 'en' 
-      ? `Welcome to the TrenZone Crew! Here's your gift...`
-      : `Bun venit în Echipa TrenZone! Iată cadoul tău...`;
+      ? `Welcome to TrenZone — here is your discount code`
+      : `Bun venit la TrenZone — iată codul tău de reducere`;
       
     const subject = template ? (locale === 'en' ? template.subject_en : template.subject_ro) || defaultSubject : defaultSubject;
 
@@ -252,11 +252,11 @@ export async function sendOrderConfirmationEmail(
 
     const defaultSubject = isPreorderOrder
       ? (locale === 'en' 
-          ? `Pre-order #${orderData.id} Confirmed - Spot Reserved! ⏳`
-          : `Precomanda ta TrenZone #${orderData.id} a fost confirmată! ⏳`)
+          ? `Pre-order #${orderData.id} confirmed — TrenZone`
+          : `Precomanda ta TrenZone #${orderData.id} este confirmată`)
       : (locale === 'en' 
-          ? `Order #${orderData.id} Confirmed - Welcome to the TrenZone family!`
-          : `Comanda ta TrenZone #${orderData.id} a fost confirmată!`);
+          ? `Order #${orderData.id} confirmed — TrenZone`
+          : `Comanda ta TrenZone #${orderData.id} a fost confirmată`);
       
     const subject = template ? (locale === 'en' ? template.subject_en : template.subject_ro)?.replace('{{id}}', orderData.id) || defaultSubject : defaultSubject;
 
@@ -326,12 +326,12 @@ export async function sendOrderConfirmationEmail(
 
 
       replyTo: 'trenzone483@gmail.com',
-      subject: IS_DEV ? `[TEST → ${to}] ${subject}` : subject,
+      subject: IS_DEV ? `[TEST -> ${to}] ${subject}` : subject,
       react: (
         <EmailTemplate
           orderId={String(orderData.id || '')}
           baseUrl={getSiteUrl()}
-          customerName={orderData.customer?.name || `${orderData.customer?.firstName || ''} ${orderData.customer?.lastName || ''}`.trim() || 'TrenZone'}
+          customerName={orderData.customer?.name || `${orderData.customer?.firstName || ''} ${orderData.customer?.lastName || ''}`.trim()}
           totalAmount={Number(orderData.total).toFixed(2)}
           locale={locale}
           currency={orderCurrency}
@@ -456,8 +456,8 @@ export async function sendReviewEmail(
     const { data: template } = await supabaseAdmin.from('email_templates').select('*').eq('id', 'review-request').single();
     
     const defaultSubject = orderData.locale === 'en' 
-      ? `How was your experience, Champion?`
-      : `Cum a fost experiența ta, Campionule?`;
+      ? `How are you enjoying your TrenZone order?`
+      : `Cum ți se pare comanda ta TrenZone?`;
       
     const subject = template ? (orderData.locale === 'en' ? template.subject_en : template.subject_ro) || defaultSubject : defaultSubject;
 
@@ -469,7 +469,7 @@ export async function sendReviewEmail(
       react: (
         <ReviewEmailTemplate
           orderId={String(orderData.id || '')}
-          customerName={orderData.customer?.name || orderData.customer_name || 'Client'}
+          customerName={orderData.customer?.name || orderData.customer_name || ''}
           locale={String(orderData.locale || '').toLowerCase().startsWith('en') ? 'en' : 'ro'}
           baseUrl={getSiteUrl()}
           items={orderData.items}
@@ -530,7 +530,7 @@ export async function sendAwbTrackingEmail(
         <AwbEmailTemplate
           orderId={String(orderData.id || '')}
           baseUrl={getSiteUrl()}
-          customerName={orderData.customer?.name || `${orderData.customer?.firstName || ''} ${orderData.customer?.lastName || ''}`.trim() || 'TrenZone'}
+          customerName={orderData.customer?.name || `${orderData.customer?.firstName || ''} ${orderData.customer?.lastName || ''}`.trim()}
           trackingNumber={trackingNumber}
           courier={courier}
           locale={locale}
@@ -989,7 +989,7 @@ export async function sendProgramDeliveryEmail(
   const customerName =
     orderData.customer?.firstName ||
     orderData.customer?.name ||
-    (locale === 'en' ? 'Champion' : 'Campionule');
+    '';
   const orderId = String(orderData.id || '');
   const baseUrl = getSiteUrl();
   const trigger: 'auto' | 'manual' = options?.trigger || 'auto';
@@ -1073,11 +1073,11 @@ export async function sendProgramDeliveryEmail(
     const defaultSubject =
       effectiveMode === 'pending'
         ? locale === 'en'
-          ? `⏳ Order #${orderId} confirmed — Your Digital Programs are coming soon!`
-          : `⏳ Comanda #${orderId} confirmată — Programele tale urmează curând!`
+          ? `Order #${orderId} confirmed — your digital programs are on the way`
+          : `Comanda #${orderId} confirmată — programele tale urmează`
         : locale === 'en'
-          ? `📚 Your Vlad Tren Digital Programs are ready! (Order #${orderId})`
-          : `📚 Programele tale digitale Vlad Tren sunt gata! (Comanda #${orderId})`;
+          ? `Your Vlad Tren digital programs are ready (Order #${orderId})`
+          : `Programele tale digitale Vlad Tren sunt gata (Comanda #${orderId})`;
 
     const rawSubject = template
       ? (locale === 'en' ? template.subject_en : template.subject_ro) || defaultSubject

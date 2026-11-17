@@ -39,14 +39,18 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
   const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
   const safeOrderId = String(orderId || '');
   const replaceVars = (text: string) =>
-    text.replaceAll('{{name}}', firstCustomerName).replaceAll('{{id}}', safeOrderId);
+    text
+      .replaceAll('{{name}}', firstCustomerName)
+      .replaceAll('{{id}}', safeOrderId)
+      .replace(/\s+,/g, ',')
+      .replace(/,\s*([.!?])/g, '$1');
 
   const defaultHeading = isEn ? "HOW WAS YOUR EXPERIENCE?" : "CUM A FOST EXPERIENȚA TA?";
   const safeHeading = replaceVars(headingText || defaultHeading);
 
   const defaultBody = isEn
-    ? "We would love to hear how your new gear feels under heavy training. Your review helps us and the community, and it only takes a few seconds."
-    : "Ne-ar ajuta enorm dacă ne-ai lăsa câteva cuvinte despre cum se simte noul tău echipament la antrenament. Părerea ta contează pentru întreaga comunitate de forță.";
+    ? "We hope you are already putting your order to good use. If you have 30 seconds, let us know how everything feels — your honest feedback helps us improve and helps others choose."
+    : "Sperăm că te bucuri deja de produsele comandate. Dacă ai 30 de secunde, lasă-ne câteva cuvinte despre experiența ta — părerea ta sinceră ne ajută să fim mai buni și îi ghidează pe ceilalți clienți.";
   const safeBody = replaceVars(bodyText || defaultBody);
 
   // Scale texts (Dislike / Love it)
@@ -109,7 +113,7 @@ export const ReviewEmailTemplate: React.FC<Readonly<ReviewEmailTemplateProps>> =
 
         {/* Personalized greeting & body */}
         <p style={{ fontSize: '16px', color: '#111827', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' }}>
-          {isEn ? "Hello" : "Salut"} {customerName},
+          {firstCustomerName ? `${isEn ? 'Hi' : 'Salut'}, ${firstCustomerName},` : `${isEn ? 'Hi,' : 'Salut,'}`}
         </p>
         <p style={{ fontSize: '15px', color: '#4b5563', lineHeight: '1.6', marginBottom: isMultiProduct ? '35px' : '40px', textAlign: 'center', maxWidth: '520px', margin: '0 auto 35px' }}>
           {safeBody}

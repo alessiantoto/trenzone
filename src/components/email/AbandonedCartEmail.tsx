@@ -43,16 +43,16 @@ export const AbandonedCartEmail: React.FC<Readonly<AbandonedCartEmailProps>> = (
   const ctaText = isEn ? templateData?.cta_en : templateData?.cta_ro;
 
   const firstCustomerName = (customerName || '').trim().split(/\s+/)[0] || '';
-  const safeHeading = (headingText || (isEn ? "You left your gear behind!" : "Ți-ai uitat produsele!")).replace('{{name}}', firstCustomerName);
-  
-  let safeBody = (bodyText || (isEn ? "We noticed you left some items in your cart. Complete your order now." : "Am observat că ai adăugat produse excelente în coș, dar nu ai finalizat comanda."))
-    .replace('{{name}}', firstCustomerName);
-    
-  if (couponCode) {
-    safeBody = safeBody
-      .replace('{{coupon}}', couponCode)
-      .replace('{{value}}', String(couponValue));
-  }
+  const cleanCartCopy = (text: string) =>
+    text
+      .replaceAll('{{name}}', firstCustomerName)
+      .replaceAll('{{coupon}}', couponCode || '')
+      .replaceAll('{{value}}', String(couponValue ?? ''))
+      .replace(/,\s*([.!?])/g, '$1')
+      .replace(/\s+,/g, ',');
+
+  const safeHeading = cleanCartCopy(headingText || (isEn ? "Your items are waiting in your cart" : "Produsele tale te așteaptă în coș"));
+  const safeBody = cleanCartCopy(bodyText || (isEn ? "It looks like you did not finish checking out, so we kept your cart saved for whenever you are ready." : "Am observat că nu ai apucat să finalizezi comanda, așa că ți-am păstrat produsele în coș pentru când ești gata să continui."));
   
   const safeCta = ctaText || (isEn ? "COMPLETE ORDER" : "FINALIZEAZĂ COMANDA");
 

@@ -87,6 +87,15 @@ export async function GET(request: Request) {
     results.scratchCleanup = { error: err.message };
   }
 
+  // 7. Auto-deliver waiting digital program orders whose PDFs are now uploaded
+  try {
+    const { dispatchWaitingProgramOrders } = await import('@/lib/program-delivery-queue');
+    results.waitingProgramDeliveries = await dispatchWaitingProgramOrders({ limit: 35 });
+  } catch (err: any) {
+    console.error('[CRON DAILY] Waiting program delivery error:', err);
+    results.waitingProgramDeliveries = { error: err.message };
+  }
+
   return NextResponse.json({ success: true, results });
 }
 

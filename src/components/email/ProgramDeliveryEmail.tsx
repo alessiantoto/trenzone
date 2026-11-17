@@ -80,15 +80,15 @@ export const ProgramDeliveryEmail: React.FC<ProgramDeliveryEmailProps> = ({
 
   const defaultIntro = isMarketing
     ? isEn
-      ? `Hi ${firstCustomerName}, alongside your strength gear, discover our official PDF guides: Food Plan, Training Program & Bench Program, available in English and Romanian.`
-      : `Salut ${firstCustomerName}, pe lângă echipamentul de sală, descoperă ghidurile oficiale în format PDF: Food Plan, Training Program și Bench Program, disponibile în Engleză și Română.`
+      ? `${firstCustomerName ? `Hi ${firstCustomerName}, alongside` : 'Alongside'} your training gear, explore our official PDF guides: Food Plan, Training Program & Bench Program — available in English and Romanian.`
+      : `${firstCustomerName ? `Salut ${firstCustomerName}, pe` : 'Pe'} lângă echipamentul de sală, descoperă ghidurile oficiale în format PDF: Food Plan, Training Program și Bench Program, disponibile în Română și Engleză.`
     : isPending
       ? isEn
-        ? `Thank you for your order, ${firstCustomerName}! We have confirmed your purchase of the digital program(s) below. The final PDF files are currently being prepared and will arrive automatically on this email very soon.`
-        : `Îți mulțumim pentru comandă, ${firstCustomerName}! Am înregistrat achiziția ta pentru programele digitale de mai jos. Fișierele PDF finale sunt în curs de pregătire și le vei primi automat pe acest email în cel mai scurt timp.`
+        ? `${firstCustomerName ? `Thank you for your order, ${firstCustomerName}.` : 'Thank you for your order.'} We have confirmed your digital program purchase below. We are finalizing the PDF files and will send them straight to this email address as soon as they are ready.`
+        : `${firstCustomerName ? `Mulțumim pentru comandă, ${firstCustomerName}.` : 'Mulțumim pentru comandă.'} Am înregistrat achiziția ta pentru programele de mai jos. Pregătim versiunile finale PDF și ți le trimitem automat pe această adresă imediat ce sunt gata.`
       : isEn
-        ? `Thank you for your order, ${firstCustomerName}. Your official PDF program(s) are attached directly to this email and can also be downloaded anytime using the links below.`
-        : `Îți mulțumim pentru comandă, ${firstCustomerName}. Programele tale digitale în format PDF sunt atașate direct la acest email și pot fi descărcate oricând folosind butoanele de mai jos.`;
+        ? `${firstCustomerName ? `Thank you for your order, ${firstCustomerName}.` : 'Thank you for your order.'} Your PDF program files are attached directly to this email and can also be downloaded anytime using the links below.`
+        : `${firstCustomerName ? `Mulțumim pentru comandă, ${firstCustomerName}.` : 'Mulțumim pentru comandă.'} Fișierele PDF ale programelor tale sunt atașate direct la acest email și le poți descărca oricând din butoanele de mai jos.`;
 
   const defaultCta = isMarketing
     ? isEn
@@ -102,18 +102,17 @@ export const ProgramDeliveryEmail: React.FC<ProgramDeliveryEmailProps> = ({
         ? 'DOWNLOAD PDF'
         : 'DESCARCĂ PDF';
 
-  const heading = (customContent?.heading || defaultHeading)
-    .replace(/\{\{name\}\}/g, firstCustomerName)
-    .replace(/\{\{order_id\}\}/g, orderId)
-    .replace(/\{\{id\}\}/g, orderId);
-  const subheading = (customContent?.subheading || defaultSubheading)
-    .replace(/\{\{name\}\}/g, firstCustomerName)
-    .replace(/\{\{order_id\}\}/g, orderId)
-    .replace(/\{\{id\}\}/g, orderId);
-  const intro = (customContent?.body_intro || defaultIntro)
-    .replace(/\{\{name\}\}/g, firstCustomerName)
-    .replace(/\{\{order_id\}\}/g, orderId)
-    .replace(/\{\{id\}\}/g, orderId);
+  const cleanPlaceholders = (text: string) =>
+    text
+      .replace(/\{\{name\}\}/g, firstCustomerName)
+      .replace(/\{\{order_id\}\}/g, orderId)
+      .replace(/\{\{id\}\}/g, orderId)
+      .replace(/,\s*([.!?])/g, '$1')
+      .replace(/\s+([.!?])/g, '$1');
+
+  const heading = cleanPlaceholders(customContent?.heading || defaultHeading);
+  const subheading = cleanPlaceholders(customContent?.subheading || defaultSubheading);
+  const intro = cleanPlaceholders(customContent?.body_intro || defaultIntro);
   const ctaText = customContent?.cta_text || defaultCta;
 
   return (

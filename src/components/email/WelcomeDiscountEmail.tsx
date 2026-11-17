@@ -53,8 +53,8 @@ export const WelcomeDiscountEmail: React.FC<Readonly<WelcomeDiscountEmailProps>>
   const safeBody = replaceVars(
     bodyText ||
       (isEn
-        ? "We are thrilled to have you in our community. At TrenZone, we don't just engineer heavy-duty strength gear; we back every lift, PR, and training session built without compromises."
-        : "Ne bucurăm că te-ai alăturat comunității noastre. La TrenZone, nu creăm doar echipamente de forță construite pentru sarcini extreme, ci susținem fiecare PR și fiecare antrenament dus la limită.")
+        ? "Thank you for joining TrenZone. Use the code below on your order and stay close for new releases and updates."
+        : "Mulțumim că te-ai înscris la TrenZone. Folosește codul de mai jos la comandă și rămâi aproape pentru noutăți și lansări.")
   );
   const safeCta = ctaText || (isEn ? "VIEW THE STORE" : "VEZI MAGAZINUL");
   const discountTitle = isEn ? "YOUR DISCOUNT CODE" : "CODUL TĂU DE REDUCERE";

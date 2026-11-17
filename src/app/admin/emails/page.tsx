@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, Save, RefreshCw, Eye, Code, Languages, ChevronDown, Paperclip, CheckCircle2, ExternalLink, FileText } from 'lucide-react';
-import { LanguageFlagSvg } from '@/components/programs/LanguageFlagSvg';
+import { Mail, Save, RefreshCw, Eye, Code, Languages, ChevronDown, Paperclip, CheckCircle2, ExternalLink, FileText, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { updateEmailTemplate, EmailTemplate as DBEmailTemplate } from '@/app/actions/email-templates';
-import { getProgramFilesAction, type AdminProgramPdfSlot } from '@/app/actions/programs';
+import { LanguageFlagSvg } from '@/components/programs/LanguageFlagSvg';
+import { getProgramFilesAction, removeProgramPdfSlotAction, type AdminProgramPdfSlot } from '@/app/actions/programs';
 import { uploadAdminProgramPdf } from '@/lib/admin-pdf-upload';
+import { extractProgramPdfDisplayName } from '@/lib/program-pdf-display';
 import type { ProgramFileSlot, StoredProgramFiles } from '@/lib/program-pdf-generator';
 import { updateSiteSetting } from '@/app/actions/settings';
 import toast from 'react-hot-toast';
@@ -118,6 +119,27 @@ export default function AdminEmailsPage() {
       }
     } catch (err: any) {
       toast.error(err?.message || 'Eroare la încărcarea PDF-ului.');
+    } finally {
+      setUploadingSlot(null);
+    }
+  };
+
+  const handleRemoveProgramPdf = async (slot: ProgramFileSlot) => {
+    setUploadingSlot(slot);
+    try {
+      const res = await removeProgramPdfSlotAction(slot);
+      if (res.success) {
+        setProgramFiles((prev) => {
+          const next = { ...prev };
+          delete next[slot];
+          return next;
+        });
+        toast.success('PDF-ul a fost șters complet!');
+      } else {
+        toast.error(res.error || 'Nu s-a putut șterge PDF-ul.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la ștergere.');
     } finally {
       setUploadingSlot(null);
     }
@@ -463,18 +485,28 @@ export default function AdminEmailsPage() {
                     <span>{isEnglish ? 'English (PDF)' : 'Română (PDF)'}</span>
                   </div>
                   {attachedUrl ? (
-                    <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                      <CheckCircle2 size={13} />
-                      <span>PDF Atașat</span>
-                      <a
-                        href={attachedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-1 inline-flex items-center gap-0.5 text-slate-500 hover:text-slate-900 underline"
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-emerald-600">
+                        <span className="inline-flex items-center gap-1">
+                          <CheckCircle2 size={13} />
+                          <span>PDF Atașat</span>
+                        </span>
+                        <a
+                          href={attachedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-slate-600 hover:text-slate-900 underline"
+                        >
+                          <span>Vezi PDF</span>
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                      <div
+                        title={extractProgramPdfDisplayName(attachedUrl)}
+                        className="text-[11px] font-mono font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1 truncate"
                       >
-                        <span>Vezi</span>
-                        <ExternalLink size={11} />
-                      </a>
+                        {extractProgramPdfDisplayName(attachedUrl)}
+                      </div>
                     </div>
                   ) : (
                     <div className="text-[11px] font-semibold text-amber-600">
@@ -483,27 +515,40 @@ export default function AdminEmailsPage() {
                   )}
                 </div>
 
-                <label className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-[#e32f8c] text-white text-xs font-bold text-center cursor-pointer transition-colors flex items-center justify-center gap-1.5">
-                  <Paperclip size={13} />
-                  <span>
-                    {isUploading
-                      ? 'Se încarcă...'
-                      : attachedUrl
-                      ? 'Schimbă PDF-ul'
-                      : 'Atașează PDF'}
-                  </span>
-                  <input
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    disabled={isUploading}
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] || null;
-                      if (f) handleUploadProgramPdf(slot, f);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-[#e32f8c] text-white text-xs font-bold text-center cursor-pointer transition-colors flex items-center justify-center gap-1.5">
+                    <Paperclip size={13} />
+                    <span>
+                      {isUploading
+                        ? 'Se încarcă...'
+                        : attachedUrl
+                        ? 'Schimbă PDF-ul'
+                        : 'Atașează PDF'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      disabled={isUploading}
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        if (f) handleUploadProgramPdf(slot, f);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {attachedUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveProgramPdf(slot)}
+                      disabled={isUploading}
+                      title="Șterge PDF-ul definitiv"
+                      className="p-2 rounded-xl bg-white border border-red-200 hover:bg-red-50 text-red-600 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

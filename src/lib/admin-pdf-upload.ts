@@ -32,7 +32,7 @@ export async function uploadAdminProgramPdf(
     }
   }
 
-  const signed = await createProgramPdfSignedUploadAction(slot);
+  const signed = await createProgramPdfSignedUploadAction(slot, file.name);
   if (!signed.success || !signed.path || !signed.token || !signed.publicUrl) {
     return { success: false, error: signed.error || 'Nu s-a putut inițializa încărcarea PDF.' };
   }

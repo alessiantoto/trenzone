@@ -19,8 +19,9 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { uploadProductImage } from "@/app/actions/admin-products";
-import { getProgramFilesAction } from "@/app/actions/programs";
+import { getProgramFilesAction, removeProgramPdfSlotAction } from "@/app/actions/programs";
 import { uploadAdminProgramPdf } from "@/lib/admin-pdf-upload";
+import { extractProgramPdfDisplayName } from "@/lib/program-pdf-display";
 import { LanguageFlagSvg } from "@/components/programs/LanguageFlagSvg";
 import { isDigitalProgramId, PROGRAM_SLUGS, PROGRAM_UUIDS, sanitizeProgramSlug } from "@/lib/programs";
 import {
@@ -160,6 +161,27 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
       }
     } catch (err: any) {
       toast.error(err?.message || "Eroare la încărcarea PDF-ului.");
+    } finally {
+      setUploadingPdfSlot(null);
+    }
+  };
+
+  const handlePdfRemove = async (slot: string) => {
+    setUploadingPdfSlot(slot);
+    try {
+      const res = await removeProgramPdfSlotAction(slot);
+      if (res.success) {
+        setProgramFiles((prev) => {
+          const next = { ...prev };
+          delete next[slot];
+          return next;
+        });
+        toast.success(`PDF-ul (${slot.toUpperCase()}) a fost șters complet.`);
+      } else {
+        toast.error(res.error || "Nu s-a putut șterge PDF-ul.");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Eroare la ștergerea PDF-ului.");
     } finally {
       setUploadingPdfSlot(null);
     }
@@ -408,55 +430,76 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
                         <LanguageFlagSvg isEnglish={lang === "en"} className="w-[18px] h-[12px] shrink-0" />
                         <span className="truncate">{label}</span>
                       </div>
-                      <div className="mt-1 flex items-center gap-2">
+                      <div className="mt-1 space-y-1">
                         {currentUrl ? (
                           <>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                              <Check size={11} /> PDF Atașat
-                            </span>
-                            <a
-                              href={currentUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] font-bold text-[#a855f7] hover:underline inline-flex items-center gap-1"
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                <Check size={11} /> PDF Atașat
+                              </span>
+                              <a
+                                href={currentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] font-bold text-[#a855f7] hover:underline inline-flex items-center gap-1"
+                              >
+                                <span>Vezi PDF</span>
+                                <ExternalLink size={11} />
+                              </a>
+                            </div>
+                            <div
+                              title={extractProgramPdfDisplayName(currentUrl)}
+                              className="text-[11px] font-mono font-semibold text-slate-700 truncate max-w-[260px]"
                             >
-                              <span>Vezi PDF</span>
-                              <ExternalLink size={11} />
-                            </a>
+                              {extractProgramPdfDisplayName(currentUrl)}
+                            </div>
                           </>
                         ) : (
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md inline-block">
                             Niciun PDF încărcat încă
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <label className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-[#a855f7] text-white text-[11px] font-black uppercase tracking-wider cursor-pointer transition-colors">
-                      {isUploadingThis ? (
-                        <Loader2 size={13} className="animate-spin" />
-                      ) : (
-                        <Upload size={13} />
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-[#a855f7] text-white text-[11px] font-black uppercase tracking-wider cursor-pointer transition-colors">
+                        {isUploadingThis ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Upload size={13} />
+                        )}
+                        <span>
+                          {isUploadingThis
+                            ? "Se urcă..."
+                            : currentUrl
+                              ? "Schimbă PDF"
+                              : "Atașează PDF"}
+                        </span>
+                        <input
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          className="hidden"
+                          disabled={isUploadingThis}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handlePdfUpload(slot, f);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      {currentUrl && (
+                        <button
+                          type="button"
+                          onClick={() => handlePdfRemove(slot)}
+                          disabled={isUploadingThis}
+                          title="Șterge PDF definitiv"
+                          className="p-2 rounded-xl bg-white border border-red-200 hover:bg-red-50 text-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       )}
-                      <span>
-                        {isUploadingThis
-                          ? "Se urcă..."
-                          : currentUrl
-                            ? "Schimbă PDF"
-                            : "Atașează PDF"}
-                      </span>
-                      <input
-                        type="file"
-                        accept=".pdf,application/pdf"
-                        className="hidden"
-                        disabled={isUploadingThis}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) handlePdfUpload(slot, f);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
+                    </div>
                   </div>
                 );
               })}

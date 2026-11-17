@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { isAdminAuthorized } from './admin-auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { uploadToR2, getR2PublicBaseUrl } from '@/lib/r2';
+import { uploadToR2, deleteFromR2, getR2PublicBaseUrl } from '@/lib/r2';
 import { revalidatePath } from 'next/cache';
 import {
   getStoredProgramFiles,
@@ -33,6 +33,73 @@ export interface AdminProgramPdfSlot {
 }
 
 const VALID_SLOT_REGEX = /^[a-z0-9][a-z0-9-]{1,100}-(ro|en)$/;
+
+function buildProgramPdfStorageKey(slot: string, originalFileName?: string | null): string {
+  const cleanBase = String(originalFileName || '')
+    .replace(/\.pdf$/i, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  const ts = Date.now();
+  return cleanBase
+    ? `programs/${slot}-${ts}__${cleanBase}.pdf`
+    : `programs/${slot}-${ts}.pdf`;
+}
+
+async function deleteProgramStorageFileByUrl(url: string | undefined | null): Promise<void> {
+  if (!url || typeof url !== 'string' || !url.startsWith('http')) return;
+  try {
+    const cleanUrl = url.split('?')[0].split('#')[0];
+    const r2Base = getR2PublicBaseUrl();
+
+    if ((r2Base && cleanUrl.startsWith(r2Base)) || cleanUrl.includes('.r2.dev/')) {
+      let key = cleanUrl;
+      if (r2Base && cleanUrl.startsWith(r2Base)) {
+        key = cleanUrl.slice(r2Base.length).replace(/^\/+/, '');
+      } else {
+        const idx = cleanUrl.indexOf('.r2.dev/');
+        if (idx !== -1) key = cleanUrl.slice(idx + '.r2.dev/'.length);
+      }
+      if (key) {
+        await deleteFromR2(key).catch(() => {});
+      }
+      return;
+    }
+
+    const supaMarker = '/storage/v1/object/public/products/';
+    const supaIdx = cleanUrl.indexOf(supaMarker);
+    if (supaIdx !== -1) {
+      const relativePath = decodeURIComponent(cleanUrl.slice(supaIdx + supaMarker.length)).replace(/^\/+/, '');
+      if (relativePath) {
+        await supabaseAdmin.storage.from('products').remove([relativePath]).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('[PROGRAM PDF] Failed deleting previous storage asset:', err);
+  }
+}
+
+async function cleanupOrphanSlotFiles(slot: string, keepUrl: string | null): Promise<void> {
+  try {
+    const { data: listed } = await supabaseAdmin.storage
+      .from('products')
+      .list('programs', { limit: 100 });
+    if (!listed || listed.length === 0) return;
+
+    const keepFile = keepUrl ? keepUrl.split('?')[0].split('#')[0].split('/').pop() : null;
+    const prefix = `${slot}-`;
+    const toRemove = listed
+      .map((f) => f.name)
+      .filter((name) => name.startsWith(prefix) && name !== keepFile)
+      .map((name) => `programs/${name}`);
+
+    if (toRemove.length > 0) {
+      await supabaseAdmin.storage.from('products').remove(toRemove).catch(() => {});
+    }
+  } catch {}
+}
 
 export async function getProgramFilesAction(): Promise<{
   success: boolean;
@@ -87,7 +154,10 @@ export async function getProgramFilesAction(): Promise<{
   return { success: true, files, slots };
 }
 
-export async function createProgramPdfSignedUploadAction(slot: ProgramFileSlot): Promise<{
+export async function createProgramPdfSignedUploadAction(
+  slot: ProgramFileSlot,
+  originalFileName?: string
+): Promise<{
   success: boolean;
   path?: string;
   token?: string;
@@ -104,7 +174,7 @@ export async function createProgramPdfSignedUploadAction(slot: ProgramFileSlot):
     return { success: false, error: 'Slot invalid pentru programul digital.' };
   }
 
-  const fileName = `programs/${cleanSlot}-${Date.now()}.pdf`;
+  const fileName = buildProgramPdfStorageKey(cleanSlot, originalFileName);
   const { data, error } = await supabaseAdmin.storage
     .from('products')
     .createSignedUploadUrl(fileName, { upsert: true });
@@ -144,12 +214,19 @@ export async function uploadProgramPdfAction(formData: FormData): Promise<{
     return { success: false, error: 'Slot invalid pentru programul digital.' };
   }
 
+  const existingFiles = await getStoredProgramFiles();
+  const previousUrl = existingFiles[slot];
+
   const customUrl = String(formData.get('customUrl') || '').trim();
   if (customUrl && customUrl.startsWith('http')) {
     const saved = await saveStoredProgramFiles({ [slot]: customUrl });
     if (!saved) {
       return { success: false, error: 'Nu s-a putut salva link-ul PDF în store_settings.' };
     }
+    if (previousUrl && previousUrl !== customUrl) {
+      await deleteProgramStorageFileByUrl(previousUrl);
+    }
+    await cleanupOrphanSlotFiles(slot, customUrl);
     revalidatePath('/admin/emails');
     revalidatePath('/admin/products');
     revalidatePath('/admin/programs');
@@ -168,7 +245,7 @@ export async function uploadProgramPdfAction(formData: FormData): Promise<{
 
   const bytes = await pdfFile.arrayBuffer();
   const buffer = Buffer.from(bytes);
-  const fileName = `programs/${slot}-${Date.now()}.pdf`;
+  const fileName = buildProgramPdfStorageKey(slot, pdfFile.name);
   const r2Base = getR2PublicBaseUrl();
 
   let uploadedUrl = '';
@@ -198,8 +275,14 @@ export async function uploadProgramPdfAction(formData: FormData): Promise<{
 
     const saved = await saveStoredProgramFiles({ [slot]: uploadedUrl });
     if (!saved) {
+      await deleteProgramStorageFileByUrl(uploadedUrl);
       return { success: false, error: 'PDF-ul a fost urcat, dar nu s-a putut salva în store_settings.' };
     }
+
+    if (previousUrl && previousUrl !== uploadedUrl) {
+      await deleteProgramStorageFileByUrl(previousUrl);
+    }
+    await cleanupOrphanSlotFiles(slot, uploadedUrl);
 
     revalidatePath('/admin/emails');
     revalidatePath('/admin/products');
@@ -216,11 +299,12 @@ export async function uploadProgramPdfAction(formData: FormData): Promise<{
 export async function removeProgramPdfSlotAction(slot: ProgramFileSlot): Promise<{ success: boolean; error?: string }> {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) return { success: false, error: 'Neautorizat.' };
-  const cleanSlot = String(slot || '').trim().toLowerCase();
+  const cleanSlot = String(slot || '').trim().toLowerCase() as ProgramFileSlot;
   if (!VALID_SLOT_REGEX.test(cleanSlot)) return { success: false, error: 'Slot invalid.' };
 
   try {
     const existing = await getStoredProgramFiles();
+    const removedUrl = existing[cleanSlot];
     const next = { ...existing };
     delete next[cleanSlot];
     const { error } = await supabaseAdmin
@@ -233,6 +317,12 @@ export async function removeProgramPdfSlotAction(slot: ProgramFileSlot): Promise
         { onConflict: 'key' }
       );
     if (error) return { success: false, error: error.message };
+
+    if (removedUrl) {
+      await deleteProgramStorageFileByUrl(removedUrl);
+    }
+    await cleanupOrphanSlotFiles(cleanSlot, null);
+
     revalidatePath('/admin/emails');
     revalidatePath('/admin/products');
     revalidatePath('/admin/programs');

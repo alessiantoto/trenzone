@@ -30,6 +30,8 @@ import {
   type AdminProgramPdfSlot,
 } from '@/app/actions/programs';
 import { uploadAdminProgramPdf } from '@/lib/admin-pdf-upload';
+import { extractProgramPdfDisplayName } from '@/lib/program-pdf-display';
+import { LanguageFlagSvg } from '@/components/programs/LanguageFlagSvg';
 import type { StoredProgramFiles, ProgramFileSlot } from '@/lib/program-pdf-generator';
 
 type FilterTab = 'all' | 'needs_attention' | 'ready_to_send' | 'delivered';
@@ -304,9 +306,17 @@ export default function AdminProgramsPage() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-xs font-black text-slate-900">{s.label}</div>
-                      <div className="text-[11px] font-mono text-slate-500 mt-0.5">{s.slot}</div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-slate-900 flex-wrap">
+                        <FileText size={13} className="text-slate-500 shrink-0" />
+                        <span>{s.programTitle}</span>
+                        <span className="text-slate-300">—</span>
+                        <LanguageFlagSvg isEnglish={s.lang === 'en'} className="w-[18px] h-[12px] shrink-0" />
+                        <span>{s.lang === 'en' ? 'English' : 'Română'}</span>
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-600 mt-1 truncate" title={uploadedUrl ? extractProgramPdfDisplayName(uploadedUrl) : s.slot}>
+                        {uploadedUrl ? extractProgramPdfDisplayName(uploadedUrl) : s.slot}
+                      </div>
                     </div>
                     {hasPdf ? (
                       <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">

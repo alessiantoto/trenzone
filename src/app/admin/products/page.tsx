@@ -2,7 +2,7 @@
 
 import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Plus, Package, Image as ImageIcon, X, Save, Trash2, ChevronDown, Check, Search, ExternalLink, Edit, Sparkles, Eye } from 'lucide-react';
+import { Plus, Package, Image as ImageIcon, X, Save, Trash2, ChevronDown, Check, Search, ExternalLink, Edit, Eye } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { deleteProductServer } from '@/app/actions/products';

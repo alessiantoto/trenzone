@@ -31,7 +31,37 @@ export async function GET(request: Request) {
     }
 
     console.log('[CRON FULFILLMENT] Executing 08:00 AM dispatch to:', settings.email);
-    const result = await dispatchOrdersToFulfillment({ trigger: 'scheduled_8am' });
+    const result = await dispatchOrdersToFulfillment({
+      trigger: 'scheduled_8am',
+      forceResend: false,
+      allowUnreleasedPreorderOverride: false,
+    });
+
+    if (result.excludedPreorders && result.excludedPreorders > 0) {
+      console.log(
+        `[CRON FULFILLMENT] Safely held back ${result.excludedPreorders} active preorder(s) (${result.excludedMixedPreorders || 0} mixed):`,
+        result.skippedPreorderOrderIds || []
+      );
+    }
+
+    if (result.busy) {
+      return NextResponse.json({
+        success: false,
+        skipped: true,
+        busy: true,
+        timestamp: new Date().toISOString(),
+        result,
+      }, { status: 409 });
+    }
+
+    if (!result.success) {
+      return NextResponse.json({
+        success: false,
+        timestamp: new Date().toISOString(),
+        error: result.error || 'Fulfillment dispatch failed',
+        result,
+      }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,

@@ -3,16 +3,58 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isAdminAuthorized } from './admin-auth';
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { 
-  FulfillmentSettings, 
-  FulfillmentDispatchLog, 
-  FulfillmentOrderSummary, 
-  FulfillmentItemSummary 
+import {
+  FulfillmentSettings,
+  FulfillmentDispatchLog,
+  FulfillmentOrderSummary,
+  FulfillmentItemSummary
 } from '@/types/fulfillment';
 import { sendFulfillmentDispatchEmail, buildFulfillmentDispatchSubject } from '@/lib/resend-service';
 import { getSingleFlavorImage } from '@/lib/product-images';
 import { getCanonicalOrderNumber } from '@/utils/admin-helpers';
+import { isDigitalOnlyCart, isDigitalProgramItem } from '@/lib/programs';
+import { isItemSnapshotPreorder } from '@/utils/order-search';
 import { headers } from 'next/headers';
+
+export interface FulfillmentQueueOverview {
+  pendingOrders: FulfillmentOrderSummary[];
+  templatePreviewOrders: FulfillmentOrderSummary[];
+  isSamplePreview: boolean;
+  isHistoricalPreview: boolean;
+  excludedPreorders: number;
+  excludedMixedPreorders: number;
+  skippedPreorderOrderIds: string[];
+  excludedDigital: number;
+  excludedAlreadyDispatched: number;
+  excludedUnpaidOrInvalid: number;
+}
+
+export interface FulfillmentDispatchResult {
+  success: boolean;
+  count?: number;
+  batchId?: string;
+  recipient?: string;
+  secondaryRecipient?: string | null;
+  subject?: string;
+  sentAt?: string;
+  message?: string;
+  error?: string;
+  busy?: boolean;
+  excludedPreorders?: number;
+  excludedMixedPreorders?: number;
+  skippedPreorderOrderIds?: string[];
+  excludedDigital?: number;
+  excludedAlreadyDispatched?: number;
+  excludedUnpaidOrInvalid?: number;
+  reconciliationWarning?: string;
+}
+
+const DISPATCH_LOCK_KEY = 'fulfillment_dispatch_lock';
+const RECONCILIATION_LOG_KEY = 'fulfillment_reconciliation_logs';
+const DISPATCH_LOCK_TTL_MS = 90_000;
+
+// In-process mutex on top of the distributed DB CAS lock for same-instance bursts
+let activeProcessDispatchPromise: Promise<FulfillmentDispatchResult> | null = null;
 
 async function isAdminOrCronAuthorized(): Promise<boolean> {
   if (await isAdminAuthorized()) return true;
@@ -38,6 +80,33 @@ const DEFAULT_SETTINGS: FulfillmentSettings = {
   last_dispatched_at: null,
   notes: 'TCE Holding Curierat & Logistică'
 };
+
+const NON_FULFILLABLE_STATUSES = new Set([
+  'cancelled',
+  'anulata',
+  'refunded',
+  'returned',
+  'returnata',
+  'failed',
+  'delivered',
+  'livrat',
+  'shipped',
+  'expediata',
+  'in_transit',
+  'completed',
+]);
+
+const UNPAID_STATUSES = new Set([
+  'pending',
+  'unpaid',
+  'awaiting_payment',
+  'requires_payment',
+  'requires_payment_method',
+  'payment_failed',
+  'incomplete',
+]);
+
+const CARD_PAYMENT_METHODS = new Set(['online', 'card', 'stripe']);
 
 /**
  * Get current fulfillment settings from store_settings
@@ -98,7 +167,6 @@ export async function updateFulfillmentSettings(partial: Partial<FulfillmentSett
     throw new Error(error.message);
   }
 
-  // Also sync manual_shipping_enabled to global_settings if needed
   try {
     revalidateTag('global_settings', 'max');
     revalidatePath('/admin/orders');
@@ -116,6 +184,10 @@ export async function getFulfillmentHistory(): Promise<FulfillmentDispatchLog[]>
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) return [];
 
+  return readFulfillmentHistoryInternal();
+}
+
+async function readFulfillmentHistoryInternal(): Promise<FulfillmentDispatchLog[]> {
   try {
     const { data, error } = await supabaseAdmin
       .from('store_settings')
@@ -127,8 +199,7 @@ export async function getFulfillmentHistory(): Promise<FulfillmentDispatchLog[]>
       return [];
     }
 
-    // Sort descending by sent_at
-    return (data.value as FulfillmentDispatchLog[]).sort((a, b) => 
+    return (data.value as FulfillmentDispatchLog[]).sort((a, b) =>
       new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
     );
   } catch (err) {
@@ -148,7 +219,11 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
   const formattedTotal = `${totalAmount.toFixed(2)} ${rawCurrency}`;
 
   const rawItems = Array.isArray(order.items) ? order.items : [];
-  const items: FulfillmentItemSummary[] = rawItems.map((item: any) => {
+  // For orders containing both physical items and digital PDFs, exclude digital items from warehouse picking
+  const physicalItems = rawItems.filter((item: any) => !isDigitalProgramItem(item));
+  const itemsToFormat = physicalItems.length > 0 ? physicalItems : rawItems;
+
+  const items: FulfillmentItemSummary[] = itemsToFormat.map((item: any) => {
     let name = 'Produs';
     if (item && typeof item.name === 'object' && item.name !== null) {
       name = item.name['ro'] || item.name['en'] || 'Produs';
@@ -170,8 +245,7 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
     if (typeof image === 'string') {
       image = image.replace(/^https?:\/\/(www\.)?trenzone\.ro/, '');
     }
-    
-    // Smart image resolution for store products
+
     if (!image || String(image).includes('placeholder')) {
       const lower = `${name} ${variantStr}`.toLowerCase();
       if (lower.includes('x10')) {
@@ -247,23 +321,196 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
   };
 }
 
-function isOrderPreorder(order: any): boolean {
-  if (order.status === 'preorder' || order.carrier_metadata?.is_preorder) {
-    return true;
-  }
-  const rawItems = Array.isArray(order.items) ? order.items : [];
-  return rawItems.some((item: any) => {
-    if (item?.stock_status === 'preorder' || item?.is_preorder) return true;
-    if (item?.selectedVariant?.stock_status === 'preorder') return true;
-    const vName = typeof item?.selectedVariant?.name === 'object'
-      ? item.selectedVariant.name.ro || item.selectedVariant.name.en || ''
-      : String(item?.selectedVariant?.name || item?.variant || '');
-    return vName.toLowerCase().includes('precomand') || vName.toLowerCase().includes('pre-order');
-  });
+interface OrderFulfillmentClassification {
+  alreadyDispatched: boolean;
+  hasAwb: boolean;
+  isNonFulfillableStatus: boolean;
+  isUnpaidCard: boolean;
+  isDigitalOnly: boolean;
+  hasPreorderItems: boolean;
+  isMixedPreorder: boolean;
+  isExplicitlyReleasedPreorder: boolean;
+  isUnreleasedPreorder: boolean;
+  isEligibleDefault: boolean;
 }
 
 /**
- * Get orders ready for fulfillment (filters out already dispatched orders to prevent duplicates and holds back preorders)
+ * Classifies an order's eligibility for warehouse fulfillment dispatch.
+ * Enforces strict safety against:
+ * - Unreleased pure & mixed preorders
+ * - Digital-only orders
+ * - Unpaid card / failed / cancelled / refunded / returned / shipped / delivered orders
+ * - Already-AWB and already-dispatched orders
+ */
+function classifyOrderForFulfillment(order: any): OrderFulfillmentClassification {
+  const status = String(order?.status || '').trim().toLowerCase();
+  const paymentMethod = String(order?.payment_method || '').trim().toLowerCase();
+  const meta = (order?.carrier_metadata && typeof order.carrier_metadata === 'object')
+    ? order.carrier_metadata
+    : {};
+  const rawItems = Array.isArray(order?.items) ? order.items : [];
+
+  const alreadyDispatched = Boolean(meta.fulfillment_dispatched_at);
+  const hasAwb = Boolean(order?.tracking_number && String(order.tracking_number).trim());
+  const isNonFulfillableStatus = NON_FULFILLABLE_STATUSES.has(status);
+
+  const metaPaymentStatus = String(meta.payment_status || '').trim().toLowerCase();
+  const isUnpaidCard =
+    UNPAID_STATUSES.has(status) ||
+    (CARD_PAYMENT_METHODS.has(paymentMethod) && (
+      metaPaymentStatus === 'unpaid' ||
+      metaPaymentStatus === 'failed' ||
+      metaPaymentStatus === 'pending' ||
+      meta.paid === false
+    ));
+
+  const isDigitalOnly =
+    Boolean(meta.is_digital_only === true) ||
+    rawItems.length === 0 ||
+    isDigitalOnlyCart(rawItems);
+
+  const hasPreorderItems =
+    status === 'preorder' ||
+    meta.is_preorder === true ||
+    rawItems.some((item: any) => isItemSnapshotPreorder(item));
+
+  const hasInStockPhysicalItems = rawItems.some(
+    (item: any) => !isItemSnapshotPreorder(item) && !isDigitalProgramItem(item)
+  );
+  const isMixedPreorder = hasPreorderItems && hasInStockPhysicalItems;
+
+  const isExplicitlyReleasedPreorder =
+    status !== 'preorder' &&
+    (meta.preorder_released === true || Boolean(meta.preorder_released_at));
+
+  const isUnreleasedPreorder = hasPreorderItems && !isExplicitlyReleasedPreorder;
+
+  const isEligibleDefault =
+    !alreadyDispatched &&
+    !hasAwb &&
+    !isNonFulfillableStatus &&
+    !isUnpaidCard &&
+    !isDigitalOnly &&
+    !isUnreleasedPreorder;
+
+  return {
+    alreadyDispatched,
+    hasAwb,
+    isNonFulfillableStatus,
+    isUnpaidCard,
+    isDigitalOnly,
+    hasPreorderItems,
+    isMixedPreorder,
+    isExplicitlyReleasedPreorder,
+    isUnreleasedPreorder,
+    isEligibleDefault,
+  };
+}
+
+interface EvaluatedOrdersResult {
+  readyRawOrders: any[];
+  excludedPreorders: number;
+  excludedMixedPreorders: number;
+  skippedPreorderOrderIds: string[];
+  excludedDigital: number;
+  excludedAlreadyDispatched: number;
+  excludedUnpaidOrInvalid: number;
+}
+
+async function evaluateFulfillmentOrders(options?: {
+  orderIds?: string[];
+  includeAlreadyDispatched?: boolean;
+  includePreorders?: boolean;
+}): Promise<EvaluatedOrdersResult> {
+  let query = supabaseAdmin
+    .from('orders')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (options?.orderIds && options.orderIds.length > 0) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuids = Array.from(new Set(options.orderIds.filter(id => uuidRegex.test(id))));
+    if (uuids.length === 0) {
+      return {
+        readyRawOrders: [],
+        excludedPreorders: 0,
+        excludedMixedPreorders: 0,
+        skippedPreorderOrderIds: [],
+        excludedDigital: 0,
+        excludedAlreadyDispatched: 0,
+        excludedUnpaidOrInvalid: 0,
+      };
+    }
+    query = query.in('id', uuids);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) {
+    return {
+      readyRawOrders: [],
+      excludedPreorders: 0,
+      excludedMixedPreorders: 0,
+      skippedPreorderOrderIds: [],
+      excludedDigital: 0,
+      excludedAlreadyDispatched: 0,
+      excludedUnpaidOrInvalid: 0,
+    };
+  }
+
+  const readyRawOrders: any[] = [];
+  const seenIds = new Set<string>();
+  let excludedPreorders = 0;
+  let excludedMixedPreorders = 0;
+  const skippedPreorderOrderIds: string[] = [];
+  let excludedDigital = 0;
+  let excludedAlreadyDispatched = 0;
+  let excludedUnpaidOrInvalid = 0;
+
+  for (const order of data) {
+    if (!order?.id || seenIds.has(order.id)) continue;
+    seenIds.add(order.id);
+
+    const cls = classifyOrderForFulfillment(order);
+
+    // Hard safety gates (never bypassed even with explicit orderIds)
+    if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.hasAwb) {
+      excludedUnpaidOrInvalid++;
+      continue;
+    }
+
+    if (cls.isDigitalOnly) {
+      excludedDigital++;
+      continue;
+    }
+
+    if (!options?.includeAlreadyDispatched && cls.alreadyDispatched) {
+      excludedAlreadyDispatched++;
+      continue;
+    }
+
+    if (!options?.includePreorders && cls.isUnreleasedPreorder) {
+      excludedPreorders++;
+      if (cls.isMixedPreorder) excludedMixedPreorders++;
+      skippedPreorderOrderIds.push(getCanonicalOrderNumber(order));
+      continue;
+    }
+
+    readyRawOrders.push(order);
+  }
+
+  return {
+    readyRawOrders,
+    excludedPreorders,
+    excludedMixedPreorders,
+    skippedPreorderOrderIds,
+    excludedDigital,
+    excludedAlreadyDispatched,
+    excludedUnpaidOrInvalid,
+  };
+}
+
+/**
+ * Get orders ready for fulfillment (filters out already dispatched orders, digital-only, unpaid/cancelled/AWB, and unreleased preorders)
  */
 export async function getFulfillmentOrdersReady(
   orderIds?: string[],
@@ -273,42 +520,13 @@ export async function getFulfillmentOrdersReady(
     const isAuthorized = await isAdminOrCronAuthorized();
     if (!isAuthorized) return [];
 
-    let query = supabaseAdmin
-      .from('orders')
-      .select('*')
-      .not('status', 'in', '("cancelled","refunded","returned")')
-      .order('created_at', { ascending: false });
-
-    if (orderIds && orderIds.length > 0) {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      const uuids = orderIds.filter(id => uuidRegex.test(id));
-      if (uuids.length > 0) {
-        query = query.in('id', uuids);
-      }
-    }
-
-    const { data, error } = await query;
-    if (error || !data) return [];
-
-    // Filter to strictly prevent duplicate dispatches and premature preorder dispatching
-    const filtered = data.filter(order => {
-      // If specific order IDs were explicitly requested by admin, let them through
-      if (orderIds && orderIds.length > 0) return true;
-
-      // Duplicate prevention: if already dispatched to fulfillment, skip it!
-      if (!options?.includeAlreadyDispatched && order.carrier_metadata?.fulfillment_dispatched_at) {
-        return false;
-      }
-
-      // Preorders stay in waiting queue until production batch arrives
-      if (!options?.includePreorders && isOrderPreorder(order)) {
-        return false;
-      }
-
-      return true;
+    const evaluated = await evaluateFulfillmentOrders({
+      orderIds,
+      includeAlreadyDispatched: options?.includeAlreadyDispatched,
+      includePreorders: options?.includePreorders,
     });
 
-    return filtered.map(formatOrderForFulfillment);
+    return evaluated.readyRawOrders.map(formatOrderForFulfillment);
   } catch (err) {
     console.error('Error in getFulfillmentOrdersReady:', err);
     return [];
@@ -316,37 +534,46 @@ export async function getFulfillmentOrdersReady(
 }
 
 /**
- * Get count of orders waiting for fulfillment vs already dispatched
+ * Get count of orders waiting for fulfillment vs already dispatched (and held preorders)
  */
-export async function getFulfillmentPendingCount(): Promise<{ pendingCount: number; dispatchedCount: number }> {
+export async function getFulfillmentPendingCount(): Promise<{
+  pendingCount: number;
+  dispatchedCount: number;
+  heldPreorderCount: number;
+}> {
   const isAuthorized = await isAdminAuthorized();
-  if (!isAuthorized) return { pendingCount: 0, dispatchedCount: 0 };
+  if (!isAuthorized) return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0 };
 
   try {
     const { data } = await supabaseAdmin
       .from('orders')
-      .select('id, status, carrier_metadata, items')
-      .not('status', 'in', '("cancelled","refunded","returned")');
+      .select('id, status, payment_method, tracking_number, carrier_metadata, items');
 
-    if (!data) return { pendingCount: 0, dispatchedCount: 0 };
+    if (!data) return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0 };
 
     let pendingCount = 0;
     let dispatchedCount = 0;
+    let heldPreorderCount = 0;
 
     for (const o of data) {
-      if (o.carrier_metadata?.fulfillment_dispatched_at) {
+      const cls = classifyOrderForFulfillment(o);
+      if (cls.alreadyDispatched) {
         dispatchedCount++;
-      } else {
-        // Only count as pending fulfillment if it's not a pre-order waiting on production
-        if (!isOrderPreorder(o)) {
-          pendingCount++;
-        }
+        continue;
       }
+      if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.hasAwb || cls.isDigitalOnly) {
+        continue;
+      }
+      if (cls.isUnreleasedPreorder) {
+        heldPreorderCount++;
+        continue;
+      }
+      pendingCount++;
     }
 
-    return { pendingCount, dispatchedCount };
-  } catch (err) {
-    return { pendingCount: 0, dispatchedCount: 0 };
+    return { pendingCount, dispatchedCount, heldPreorderCount };
+  } catch {
+    return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0 };
   }
 }
 
@@ -424,30 +651,10 @@ export async function generateFulfillmentCsv(orders: FulfillmentOrderSummary[]):
     }
   }
 
-  // Prepend UTF-8 BOM so Excel opens it with proper diacritics
   return '\uFEFF' + rows.join('\r\n');
 }
 
-/**
- * Provide sample preview orders with real store products & images, split by country
- */
-export async function getFulfillmentPreviewOrders(options?: { includeAlreadyDispatched?: boolean }): Promise<FulfillmentOrderSummary[]> {
-  const isAuthorized = await isAdminOrCronAuthorized();
-  if (!isAuthorized) return [];
-
-  // First check if there are pending orders that haven't been dispatched yet
-  const pendingOrders = await getFulfillmentOrdersReady(undefined, { includeAlreadyDispatched: false });
-  if (pendingOrders.length > 0) {
-    return pendingOrders;
-  }
-
-  // If no pending orders, check if there are any orders in the DB (including dispatched) so preview template is populated
-  const anyOrders = await getFulfillmentOrdersReady(undefined, { includeAlreadyDispatched: true });
-  if (anyOrders.length > 0) {
-    return anyOrders.slice(0, 10);
-  }
-
-  // High-fidelity sample orders with real store products (X10 Elbow Wraps, X5 Elbow Wraps) and actual Supabase images
+function getSamplePreviewOrders(): FulfillmentOrderSummary[] {
   return [
     {
       id: 'TZ-2026-1041',
@@ -547,6 +754,82 @@ export async function getFulfillmentPreviewOrders(options?: { includeAlreadyDisp
 }
 
 /**
+ * Full queue overview for FulfillmentModal (separating genuine pending orders from template preview fallback and held preorders)
+ */
+export async function getFulfillmentQueueOverview(): Promise<FulfillmentQueueOverview> {
+  const isAuthorized = await isAdminOrCronAuthorized();
+  if (!isAuthorized) {
+    return {
+      pendingOrders: [],
+      templatePreviewOrders: [],
+      isSamplePreview: false,
+      isHistoricalPreview: false,
+      excludedPreorders: 0,
+      excludedMixedPreorders: 0,
+      skippedPreorderOrderIds: [],
+      excludedDigital: 0,
+      excludedAlreadyDispatched: 0,
+      excludedUnpaidOrInvalid: 0,
+    };
+  }
+
+  const evaluated = await evaluateFulfillmentOrders();
+  const pendingOrders = evaluated.readyRawOrders.map(formatOrderForFulfillment);
+
+  if (pendingOrders.length > 0) {
+    return {
+      pendingOrders,
+      templatePreviewOrders: pendingOrders,
+      isSamplePreview: false,
+      isHistoricalPreview: false,
+      excludedPreorders: evaluated.excludedPreorders,
+      excludedMixedPreorders: evaluated.excludedMixedPreorders,
+      skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
+      excludedDigital: evaluated.excludedDigital,
+      excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
+      excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+    };
+  }
+
+  const anyOrders = await getFulfillmentOrdersReady(undefined, { includeAlreadyDispatched: true });
+  if (anyOrders.length > 0) {
+    return {
+      pendingOrders: [],
+      templatePreviewOrders: anyOrders.slice(0, 10),
+      isSamplePreview: false,
+      isHistoricalPreview: true,
+      excludedPreorders: evaluated.excludedPreorders,
+      excludedMixedPreorders: evaluated.excludedMixedPreorders,
+      skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
+      excludedDigital: evaluated.excludedDigital,
+      excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
+      excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+    };
+  }
+
+  return {
+    pendingOrders: [],
+    templatePreviewOrders: getSamplePreviewOrders(),
+    isSamplePreview: true,
+    isHistoricalPreview: false,
+    excludedPreorders: evaluated.excludedPreorders,
+    excludedMixedPreorders: evaluated.excludedMixedPreorders,
+    skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
+    excludedDigital: evaluated.excludedDigital,
+    excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
+    excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+  };
+}
+
+/**
+ * Provide preview orders with real store products & images, split by country
+ */
+export async function getFulfillmentPreviewOrders(): Promise<FulfillmentOrderSummary[]> {
+  const overview = await getFulfillmentQueueOverview();
+  return overview.templatePreviewOrders;
+}
+
+/**
  * Helper to compute high-clarity subject line for preview or client display
  */
 export async function getFulfillmentFormattedSubject(
@@ -571,13 +854,246 @@ export async function getFulfillmentFormattedSubject(
 }
 
 /**
+ * Explicitly release active preorder(s) into the fulfillment processing queue once stock has arrived.
+ */
+export async function releasePreorderForFulfillmentAction(orderIds: string[]) {
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) return { success: false, error: 'Neautorizat' };
+
+  if (!Array.isArray(orderIds) || orderIds.length === 0) {
+    return { success: false, error: 'Nu a fost selectată nicio comandă.' };
+  }
+
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const uuids = Array.from(new Set(orderIds.filter(id => uuidRegex.test(id))));
+  if (uuids.length === 0) {
+    return { success: false, error: 'ID-uri de comandă invalide.' };
+  }
+
+  try {
+    const { data: rows, error } = await supabaseAdmin
+      .from('orders')
+      .select('id, status, payment_method, tracking_number, carrier_metadata, items, payment_intent_id, receipt_url')
+      .in('id', uuids);
+
+    if (error || !rows || rows.length === 0) {
+      return { success: false, error: error?.message || 'Comenzile nu au fost găsite.' };
+    }
+
+    const releasedAt = new Date().toISOString();
+    const releasedOrderNumbers: string[] = [];
+
+    for (const row of rows) {
+      const cls = classifyOrderForFulfillment(row);
+      if (cls.isNonFulfillableStatus || cls.isUnpaidCard) continue;
+
+      const currentMeta = (row.carrier_metadata && typeof row.carrier_metadata === 'object')
+        ? row.carrier_metadata
+        : {};
+
+      const nextStatus = row.status === 'preorder' ? 'processing' : row.status;
+      const { error: updErr } = await supabaseAdmin
+        .from('orders')
+        .update({
+          status: nextStatus,
+          updated_at: releasedAt,
+          carrier_metadata: {
+            ...currentMeta,
+            preorder_released: true,
+            preorder_released_at: releasedAt,
+            preorder_released_by: 'admin',
+          }
+        })
+        .eq('id', row.id);
+
+      if (!updErr) {
+        releasedOrderNumbers.push(getCanonicalOrderNumber(row));
+      }
+    }
+
+    revalidatePath('/admin/orders');
+    revalidatePath('/admin/preorders');
+
+    return {
+      success: releasedOrderNumbers.length > 0,
+      releasedCount: releasedOrderNumbers.length,
+      releasedOrderNumbers,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Eroare la eliberarea precomenzii.' };
+  }
+}
+
+async function acquireDistributedDispatchLock(trigger: 'manual' | 'scheduled_8am'): Promise<{
+  acquired: boolean;
+  token?: string;
+  reason?: string;
+}> {
+  const nowMs = Date.now();
+  const lockToken = `lock_${nowMs}_${Math.random().toString(36).slice(2, 10)}`;
+  const newLockValue = {
+    locked: true,
+    token: lockToken,
+    trigger,
+    locked_at: new Date(nowMs).toISOString(),
+    expires_at: new Date(nowMs + DISPATCH_LOCK_TTL_MS).toISOString(),
+  };
+
+  const { data: existingRow, error: readErr } = await supabaseAdmin
+    .from('store_settings')
+    .select('value')
+    .eq('key', DISPATCH_LOCK_KEY)
+    .maybeSingle();
+
+  if (readErr) {
+    return { acquired: false, reason: `Eroare citire lock fulfillment: ${readErr.message}` };
+  }
+
+  if (!existingRow) {
+    const { error: insertErr } = await supabaseAdmin
+      .from('store_settings')
+      .insert({ key: DISPATCH_LOCK_KEY, value: newLockValue });
+
+    if (insertErr) {
+      return {
+        acquired: false,
+        reason: 'O altă expediere către fulfillment a început chiar acum. Reîncearcă în câteva secunde.',
+      };
+    }
+    return { acquired: true, token: lockToken };
+  }
+
+  const prevVal = (existingRow.value && typeof existingRow.value === 'object') ? existingRow.value : {};
+  const prevExpiresMs = prevVal.expires_at ? new Date(prevVal.expires_at).getTime() : 0;
+  if (prevVal.locked === true && Number.isFinite(prevExpiresMs) && prevExpiresMs > nowMs) {
+    return {
+      acquired: false,
+      reason: 'O expediere către fulfillment este deja în curs de procesare. Te rugăm să aștepți finalizarea ei.',
+    };
+  }
+
+  // Optimistic CAS update keyed on previous token so two concurrent workers cannot both acquire
+  let casQuery = supabaseAdmin
+    .from('store_settings')
+    .update({ value: newLockValue })
+    .eq('key', DISPATCH_LOCK_KEY);
+
+  if (typeof prevVal.token === 'string' && prevVal.token.length > 0) {
+    casQuery = casQuery.filter('value->>token', 'eq', prevVal.token);
+  } else {
+    casQuery = casQuery.is('value->>token', null);
+  }
+
+  const { data: casUpdated, error: casErr } = await casQuery.select('key').maybeSingle();
+  if (casErr || !casUpdated) {
+    return {
+      acquired: false,
+      reason: 'O altă expediere către fulfillment este deja în curs. Reîncearcă în câteva secunde.',
+    };
+  }
+
+  return { acquired: true, token: lockToken };
+}
+
+async function releaseDistributedDispatchLock(lockToken: string): Promise<void> {
+  try {
+    const releasedToken = `released_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await supabaseAdmin
+      .from('store_settings')
+      .update({
+        value: {
+          locked: false,
+          token: releasedToken,
+          released_at: new Date().toISOString(),
+        }
+      })
+      .eq('key', DISPATCH_LOCK_KEY)
+      .filter('value->>token', 'eq', lockToken);
+  } catch (err) {
+    console.error('[FULFILLMENT LOCK] Failed to release lock:', err);
+  }
+}
+
+async function appendFulfillmentHistoryLog(logEntry: FulfillmentDispatchLog): Promise<void> {
+  try {
+    const history = await readFulfillmentHistoryInternal();
+    const updatedHistory = [logEntry, ...history].slice(0, 50);
+    await supabaseAdmin
+      .from('store_settings')
+      .upsert({
+        key: 'fulfillment_history',
+        value: updatedHistory
+      });
+  } catch (err) {
+    console.error('[FULFILLMENT HISTORY] Failed to persist log entry:', err);
+  }
+}
+
+async function recordCriticalReconciliationAlert(params: {
+  batchId: string;
+  sentAt: string;
+  recipient: string;
+  failedUpdates: Array<{ uuid: string; displayId: string; error: string }>;
+  totalDispatchedCount: number;
+}): Promise<void> {
+  const summaryMsg = `CRITICAL RECONCILIATION: Email batch ${params.batchId} (${params.totalDispatchedCount} orders) succeeded to ${params.recipient}, but ${params.failedUpdates.length} order DB updates failed: ${params.failedUpdates.map(f => `${f.displayId}(${f.uuid}): ${f.error}`).join('; ')}`;
+  console.error('[FULFILLMENT RECONCILIATION]', summaryMsg);
+
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from('store_settings')
+      .select('value')
+      .eq('key', RECONCILIATION_LOG_KEY)
+      .maybeSingle();
+    const prev = Array.isArray(existing?.value) ? existing.value : [];
+    const next = [
+      {
+        batch_id: params.batchId,
+        sent_at: params.sentAt,
+        recipient: params.recipient,
+        failed_updates: params.failedUpdates,
+        total_orders: params.totalDispatchedCount,
+      },
+      ...prev,
+    ].slice(0, 50);
+
+    await supabaseAdmin
+      .from('store_settings')
+      .upsert({ key: RECONCILIATION_LOG_KEY, value: next });
+  } catch (err) {
+    console.error('[FULFILLMENT RECONCILIATION] Failed saving store_settings alert:', err);
+  }
+
+  try {
+    await supabaseAdmin.from('email_logs').insert([{
+      recipient: params.recipient,
+      subject: `[RECONCILIATION REQUIRED] Batch ${params.batchId}`,
+      type: 'fulfillment-reconciliation',
+      status: 'failed',
+      error_message: summaryMsg,
+      metadata: {
+        batch_id: params.batchId,
+        sent_at: params.sentAt,
+        failed_updates: params.failedUpdates,
+        total_orders: params.totalDispatchedCount,
+      }
+    }]);
+  } catch (err) {
+    console.error('[FULFILLMENT RECONCILIATION] Failed saving email_logs alert:', err);
+  }
+}
+
+/**
  * Dispatch orders to fulfillment center email (manual or automated cron)
+ * Protected by in-process mutex + distributed DB CAS lock + atomic claim + reconciliation logging.
  */
 export async function dispatchOrdersToFulfillment(options?: {
   orderIds?: string[];
   notes?: string;
   trigger?: 'manual' | 'scheduled_8am';
-}) {
+  forceResend?: boolean;
+  allowUnreleasedPreorderOverride?: boolean;
+}): Promise<FulfillmentDispatchResult> {
   const trigger = options?.trigger || 'manual';
 
   const isAuthorized = trigger === 'manual'
@@ -587,142 +1103,267 @@ export async function dispatchOrdersToFulfillment(options?: {
     return { success: false, error: 'Neautorizat' };
   }
 
-  const settings = await getFulfillmentSettings();
-  if (!settings.email || !settings.email.trim()) {
+  // Cron must NEVER bypass duplicate protection or preorder hold
+  const allowForceResend = trigger === 'manual' && Boolean(options?.forceResend);
+  const allowPreorderOverride = trigger === 'manual' && Boolean(options?.allowUnreleasedPreorderOverride);
+
+  if (activeProcessDispatchPromise) {
     return {
       success: false,
-      error: 'Adresa de email a centrului de fulfillment nu este setată! Te rugăm să o configurezi mai întâi.'
-    };
-  }
-
-  // Get orders to dispatch
-  let orders = await getFulfillmentOrdersReady(options?.orderIds);
-
-  // If no new orders exist (or all already dispatched), we don't send duplicate lists
-  if (orders.length === 0) {
-    return {
-      success: true,
+      busy: true,
       count: 0,
-      message: 'Toate comenzile active au fost deja transmise către fulfillment. Nu există comenzi noi de trimis (protecție anti-duplicate activă).'
+      error: 'O expediere către fulfillment este deja în curs. Te rugăm să aștepți finalizarea ei.',
     };
   }
 
-  const sentAt = new Date().toISOString();
-  const dateStr = sentAt.split('T')[0];
-
-  const totalItems = orders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + (Number(i.quantity) || 1), 0), 0);
-  const roCount = orders.filter(o => {
-    const c = (o.country || 'RO').trim().toUpperCase();
-    return c === 'RO' || c === 'ROMANIA' || c === 'ROMÂNIA';
-  }).length;
-  const intCount = orders.length - roCount;
-
-  const subject = buildFulfillmentDispatchSubject({
-    ordersCount: orders.length,
-    totalItemsCount: totalItems,
-    sentAt,
-    trigger,
-    roCount,
-    intCount
-  });
-
-  // Generate CSV attachment
-  const csvContent = await generateFulfillmentCsv(orders);
-  const csvFilename = `comenzi_trenzone_${dateStr}.csv`;
-
-  // Send email via Resend with CSV attachment and CC to secondary verification email
-  const emailRes = await sendFulfillmentDispatchEmail(settings.email.trim(), {
-    orders,
-    sentAt,
-    trigger,
-    notes: options?.notes || settings.notes,
-    csvContent,
-    csvFilename,
-    secondaryEmail: settings.secondary_email?.trim() || undefined,
-    subject
-  });
-
-  if (!emailRes.success) {
-    return {
-      success: false,
-      error: emailRes.error || 'Trimiterea emailului a eșuat.'
-    };
-  }
-
-  // Record in fulfillment history
-  const logEntry: FulfillmentDispatchLog = {
-    id: `disp_${Date.now()}`,
-    sent_at: sentAt,
-    recipient_email: settings.email.trim(),
-    secondary_email: settings.secondary_email?.trim() || undefined,
-    subject,
-    trigger,
-    order_count: orders.length,
-    orders,
-    status: 'sent'
-  };
-
-  try {
-    const history = await getFulfillmentHistory();
-    // Keep last 50 dispatches in store_settings
-    const updatedHistory = [logEntry, ...history].slice(0, 50);
-
-    await supabaseAdmin
-      .from('store_settings')
-      .upsert({
-        key: 'fulfillment_history',
-        value: updatedHistory
-      });
-
-    // Update last_dispatched_at in fulfillment settings
-    await supabaseAdmin
-      .from('store_settings')
-      .upsert({
-        key: 'fulfillment_settings',
-        value: {
-          ...settings,
-          last_dispatched_at: sentAt
-        }
-      });
-
-    // Mark orders with fulfillment_dispatched_at in carrier_metadata
-    const orderUuids = orders.map(o => o.supabaseId).filter(Boolean);
-    if (orderUuids.length > 0) {
-      for (const uuid of orderUuids) {
-        // Fetch current carrier_metadata and update
-        const { data: oData } = await supabaseAdmin
-          .from('orders')
-          .select('carrier_metadata')
-          .eq('id', uuid)
-          .maybeSingle();
-
-        const currentMeta = oData?.carrier_metadata || {};
-        await supabaseAdmin
-          .from('orders')
-          .update({
-            carrier_metadata: {
-              ...currentMeta,
-              fulfillment_dispatched_at: sentAt,
-              fulfillment_dispatched_to: settings.email.trim(),
-              fulfillment_dispatch_id: logEntry.id
-            }
-          })
-          .eq('id', uuid);
-      }
+  const runPromise = (async (): Promise<FulfillmentDispatchResult> => {
+    const lockRes = await acquireDistributedDispatchLock(trigger);
+    if (!lockRes.acquired || !lockRes.token) {
+      return {
+        success: false,
+        busy: true,
+        count: 0,
+        error: lockRes.reason || 'Expedierea este blocată temporar de un alt proces activ.',
+      };
     }
-  } catch (logErr) {
-    console.error('Error logging fulfillment dispatch to DB:', logErr);
+
+    try {
+      const settings = await getFulfillmentSettings();
+      if (!settings.email || !settings.email.trim()) {
+        return {
+          success: false,
+          error: 'Adresa de email a centrului de fulfillment nu este setată! Te rugăm să o configurezi mai întâi.'
+        };
+      }
+
+      // Re-query eligible orders inside the lock so stale snapshots cannot cause duplicates or lost orders
+      const evaluated = await evaluateFulfillmentOrders({
+        orderIds: options?.orderIds,
+        includeAlreadyDispatched: allowForceResend,
+        includePreorders: allowPreorderOverride,
+      });
+
+      const orders = evaluated.readyRawOrders.map(formatOrderForFulfillment);
+
+      if (orders.length === 0) {
+        const preorderNote = evaluated.excludedPreorders > 0
+          ? ` ${evaluated.excludedPreorders} ${evaluated.excludedPreorders === 1 ? 'precomandă activă a fost reținută' : 'precomenzi active au fost reținute'} (nu se trimit până la eliberarea stocului).`
+          : '';
+        return {
+          success: true,
+          count: 0,
+          excludedPreorders: evaluated.excludedPreorders,
+          excludedMixedPreorders: evaluated.excludedMixedPreorders,
+          skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
+          excludedDigital: evaluated.excludedDigital,
+          excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
+          excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+          message: `Toate comenzile active eligibile au fost deja transmise către fulfillment. Nu există comenzi noi de trimis (protecție anti-duplicate activă).${preorderNote}`
+        };
+      }
+
+      const sentAt = new Date().toISOString();
+      const dateStr = sentAt.split('T')[0];
+      const batchId = `disp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+      const totalItems = orders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + (Number(i.quantity) || 1), 0), 0);
+      const roCount = orders.filter(o => {
+        const c = (o.country || 'RO').trim().toUpperCase();
+        return c === 'RO' || c === 'ROMANIA' || c === 'ROMÂNIA';
+      }).length;
+      const intCount = orders.length - roCount;
+
+      const subject = buildFulfillmentDispatchSubject({
+        ordersCount: orders.length,
+        totalItemsCount: totalItems,
+        sentAt,
+        trigger,
+        roCount,
+        intCount
+      });
+
+      const csvContent = await generateFulfillmentCsv(orders);
+      const csvFilename = `comenzi_trenzone_${dateStr}.csv`;
+
+      // Send email ONLY after acquiring lock and before marking orders as dispatched
+      const emailRes = await sendFulfillmentDispatchEmail(settings.email.trim(), {
+        orders,
+        sentAt,
+        trigger,
+        notes: options?.notes || settings.notes,
+        csvContent,
+        csvFilename,
+        secondaryEmail: settings.secondary_email?.trim() || undefined,
+        subject
+      });
+
+      if (!emailRes.success) {
+        await appendFulfillmentHistoryLog({
+          id: batchId,
+          sent_at: sentAt,
+          recipient_email: settings.email.trim(),
+          secondary_email: settings.secondary_email?.trim() || undefined,
+          subject,
+          trigger,
+          order_count: orders.length,
+          orders,
+          status: 'failed',
+          error_message: emailRes.error || 'Trimiterea emailului a eșuat.',
+        });
+
+        return {
+          success: false,
+          count: 0,
+          batchId,
+          excludedPreorders: evaluated.excludedPreorders,
+          excludedMixedPreorders: evaluated.excludedMixedPreorders,
+          skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
+          excludedDigital: evaluated.excludedDigital,
+          excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
+          excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+          error: emailRes.error || 'Trimiterea emailului a eșuat.'
+        };
+      }
+
+      // Email succeeded — atomically claim/mark dispatched orders and track any DB update failures for reconciliation
+      const failedDbUpdates: Array<{ uuid: string; displayId: string; error: string }> = [];
+
+      for (const rawOrder of evaluated.readyRawOrders) {
+        const uuid = rawOrder.id;
+        const displayId = getCanonicalOrderNumber(rawOrder);
+        let updatedOk = false;
+        let lastErr = '';
+
+        for (let attempt = 0; attempt < 2 && !updatedOk; attempt++) {
+          const { data: freshOrder, error: fetchErr } = await supabaseAdmin
+            .from('orders')
+            .select('id, carrier_metadata')
+            .eq('id', uuid)
+            .maybeSingle();
+
+          if (fetchErr || !freshOrder) {
+            lastErr = fetchErr?.message || 'Order not found during post-dispatch claim';
+            continue;
+          }
+
+          const currentMeta = (freshOrder.carrier_metadata && typeof freshOrder.carrier_metadata === 'object')
+            ? freshOrder.carrier_metadata
+            : {};
+
+          if (!allowForceResend && currentMeta.fulfillment_dispatched_at) {
+            updatedOk = true;
+            break;
+          }
+
+          const nextMeta = {
+            ...currentMeta,
+            fulfillment_dispatched_at: sentAt,
+            fulfillment_dispatched_to: settings.email.trim(),
+            fulfillment_dispatch_id: batchId,
+            fulfillment_batch_id: batchId,
+          };
+
+          let updateQuery = supabaseAdmin
+            .from('orders')
+            .update({
+              carrier_metadata: nextMeta,
+              updated_at: sentAt,
+            })
+            .eq('id', uuid);
+
+          if (!allowForceResend) {
+            updateQuery = updateQuery.is('carrier_metadata->>fulfillment_dispatched_at', null);
+          }
+
+          const { data: claimedRow, error: updateErr } = await updateQuery.select('id').maybeSingle();
+          if (!updateErr && claimedRow) {
+            updatedOk = true;
+          } else {
+            lastErr = updateErr?.message || 'Atomic claim returned 0 rows';
+            if (attempt === 0) {
+              await new Promise(resolve => setTimeout(resolve, 250));
+            }
+          }
+        }
+
+        if (!updatedOk) {
+          failedDbUpdates.push({ uuid, displayId, error: lastErr || 'Unknown DB error' });
+        }
+      }
+
+      const reconciliationWarning = failedDbUpdates.length > 0
+        ? `Atenție: Emailul a fost trimis (${orders.length} comenzi), dar ${failedDbUpdates.length} comenzi nu au putut fi marcate în DB (${failedDbUpdates.map(f => f.displayId).join(', ')}). Verifică logurile de reconciliere!`
+        : undefined;
+
+      if (failedDbUpdates.length > 0) {
+        await recordCriticalReconciliationAlert({
+          batchId,
+          sentAt,
+          recipient: settings.email.trim(),
+          failedUpdates: failedDbUpdates,
+          totalDispatchedCount: orders.length,
+        });
+      }
+
+      await appendFulfillmentHistoryLog({
+        id: batchId,
+        sent_at: sentAt,
+        recipient_email: settings.email.trim(),
+        secondary_email: settings.secondary_email?.trim() || undefined,
+        subject,
+        trigger,
+        order_count: orders.length,
+        orders,
+        status: 'sent',
+        error_message: reconciliationWarning,
+      });
+
+      try {
+        await supabaseAdmin
+          .from('store_settings')
+          .upsert({
+            key: 'fulfillment_settings',
+            value: {
+              ...settings,
+              last_dispatched_at: sentAt
+            }
+          });
+      } catch (settingsErr) {
+        console.error('Error updating fulfillment_settings.last_dispatched_at:', settingsErr);
+      }
+
+      try {
+        revalidatePath('/admin/orders');
+        revalidatePath('/admin/settings');
+      } catch (_) {}
+
+      return {
+        success: true,
+        count: orders.length,
+        batchId,
+        recipient: settings.email.trim(),
+        secondaryRecipient: settings.secondary_email?.trim() || null,
+        subject,
+        sentAt,
+        excludedPreorders: evaluated.excludedPreorders,
+        excludedMixedPreorders: evaluated.excludedMixedPreorders,
+        skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
+        excludedDigital: evaluated.excludedDigital,
+        excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
+        excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+        reconciliationWarning,
+      };
+    } finally {
+      await releaseDistributedDispatchLock(lockRes.token);
+    }
+  })();
+
+  activeProcessDispatchPromise = runPromise;
+  try {
+    return await runPromise;
+  } finally {
+    if (activeProcessDispatchPromise === runPromise) {
+      activeProcessDispatchPromise = null;
+    }
   }
-
-  revalidatePath('/admin/orders');
-  revalidatePath('/admin/settings');
-
-  return {
-    success: true,
-    count: orders.length,
-    recipient: settings.email.trim(),
-    secondaryRecipient: settings.secondary_email?.trim() || null,
-    subject,
-    sentAt
-  };
 }

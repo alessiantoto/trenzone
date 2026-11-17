@@ -42,7 +42,7 @@ export function EliteFrame() {
 
   const items = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
-    { name: 'Web Analytics', icon: <Activity size={20} />, path: '/admin?tab=web-analytics' },
+    { name: 'Web Analytics', icon: <Activity size={20} />, path: '/admin/analytics' },
     { name: 'Comenzi', icon: <ShoppingBag size={20} />, path: '/admin/orders' },
     { name: 'Programe Vândute', icon: <BookOpen size={20} />, path: '/admin/programs' },
     { name: 'Precomenzi', icon: <Clock size={20} />, path: '/admin/preorders' },
@@ -116,7 +116,9 @@ export function EliteFrame() {
 
         <nav className="flex-1 p-4 space-y-1 mt-4 overflow-y-auto scrollbar-hide">
           {items.map((item) => {
-            const active = pathname === item.path;
+            const active = item.path === '/admin'
+              ? pathname === '/admin'
+              : pathname === item.path || pathname.startsWith(`${item.path}/`);
             return (
               <Link 
                 key={item.name} 

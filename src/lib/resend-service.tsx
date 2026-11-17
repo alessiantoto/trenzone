@@ -769,7 +769,7 @@ export async function sendAffiliateUpdateEmail(
 
 /**
  * BUILD HIGH-CLARITY FULFILLMENT EMAIL SUBJECT LINE
- * Example: "[TrenZone] 📦 Comenzi de Expediat — 01.11.2026 • 7 Comenzi (12 Articole) • 🇷🇴 5 RO · 🇪🇺 2 INT [08:00 AM]"
+ * Example: "[TrenZone] Comenzi de Expediat — 01.11.2026 • 7 Comenzi (12 Articole) • 🇷🇴 5 RO · 🇪🇺 2 INT [08:00 AM]"
  */
 export function buildFulfillmentDispatchSubject(params: {
   ordersCount: number;
@@ -802,7 +802,7 @@ export function buildFulfillmentDispatchSubject(params: {
   const orderWord = params.ordersCount === 1 ? 'comandă' : 'comenzi';
   const itemWord = params.totalItemsCount === 1 ? 'articol' : 'articole';
 
-  return `[TrenZone] 📦 Comenzi de Expediat — ${dateStr} • ${params.ordersCount} ${orderWord} (${params.totalItemsCount} ${itemWord})${countryPart} [${triggerLabel}]`;
+  return `[TrenZone] Comenzi de Expediat — ${dateStr} • ${params.ordersCount} ${orderWord} (${params.totalItemsCount} ${itemWord})${countryPart} [${triggerLabel}]`;
 }
 
 /**

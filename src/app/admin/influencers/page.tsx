@@ -28,7 +28,6 @@ import {
   ArrowUp, 
   ArrowDown, 
   Play, 
-  Sparkles, 
   Eye, 
   Film, 
   User, 
@@ -414,12 +413,12 @@ export default function AdminInfluencersPage() {
         </div>
       </div>
 
-      {/* 🎯 SETĂRI CLIPURI PENTRU PAGINILE DE PROGRAME DIGITALE */}
+      {/* SETĂRI CLIPURI PENTRU PAGINILE DE PROGRAME DIGITALE */}
       <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-purple-200/80 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <Sparkles size={18} className="text-[#e32f8c]" />
+              <Film size={18} className="text-[#e32f8c]" />
               <h2 className="font-heading font-black text-base sm:text-lg text-slate-900">
                 Clipuri Video pe Paginile de Programe Digitale
               </h2>

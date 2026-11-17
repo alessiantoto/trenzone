@@ -9,7 +9,6 @@ import Link from "next/link";
 import { GeneralInfoTab } from "../../components/product-editor/GeneralInfoTab";
 import { VariantsEditor } from "../../components/product-editor/VariantsEditor";
 import { ImageManager } from "../../components/product-editor/ImageManager";
-import { EliteFrame } from "../../components/EliteFrame";
 import toast from 'react-hot-toast';
 
 export default function ProductEditorPage() {
@@ -115,76 +114,77 @@ export default function ProductEditorPage() {
   const productName = typeof product.name === 'object' ? product.name.ro : product.name;
 
   return (
-      <div className="max-w-5xl mx-auto space-y-6 pb-20 mt-4 md:mt-8 px-4 md:px-0">
+      <div className="max-w-5xl mx-auto space-y-5 sm:space-y-6 pb-8 sm:pb-16 mt-1 sm:mt-4">
         
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
             <Link 
               href="/admin/products"
-              className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
+              className="w-11 h-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm shrink-0"
               title="Înapoi la lista de produse"
             >
               <ArrowLeft size={20} />
             </Link>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-slate-900">{productName}</h1>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-black ${product.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 break-words leading-tight">{productName}</h1>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] uppercase font-black shrink-0 ${product.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                   {product.is_active ? 'Activ' : 'Ciornă'}
                 </span>
               </div>
-              <p className="text-sm text-slate-500 font-medium">/{product.slug}</p>
+              <p className="text-xs sm:text-sm text-slate-500 font-mono truncate mt-0.5">/{product.slug}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 shrink-0">
             <a
               href={`/ro/product/${product.slug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="h-12 px-4 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-xs flex items-center gap-2 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+              className="min-h-[44px] px-3 sm:px-4 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
               title="Deschide în magazin"
             >
-              <ExternalLink size={16} /> Vezi în Magazin
+              <ExternalLink size={15} className="shrink-0" />
+              <span className="truncate">Vezi în Magazin</span>
             </a>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="h-12 px-6 rounded-xl bg-[#e32f8c] text-black font-black flex items-center gap-2 hover:bg-[#c41a72] transition-all disabled:opacity-50 shadow-sm"
+              className="min-h-[44px] px-3 sm:px-6 rounded-xl bg-[#e32f8c] text-black font-black text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-[#c41a72] transition-all disabled:opacity-50 shadow-sm cursor-pointer"
             >
-              {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-              Salvează Modificările
+              {saving ? <Loader2 size={17} className="animate-spin shrink-0" /> : <Save size={17} className="shrink-0" />}
+              <span className="truncate">Salvează Modificările</span>
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1 sm:gap-2 border-b border-slate-200 overflow-x-auto pb-0.5">
           <button
             onClick={() => setActiveTab('general')}
-            className={`px-6 py-4 text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${activeTab === 'general' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+            className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'general' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
           >
             Informații Generale
           </button>
           {product.variants && (
             <button
               onClick={() => setActiveTab('variants')}
-              className={`px-6 py-4 text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${activeTab === 'variants' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+              className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'variants' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
             >
               Variante
             </button>
           )}
           <button
             onClick={() => setActiveTab('images')}
-            className={`px-6 py-4 text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${activeTab === 'images' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+            className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'images' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
           >
             Imagini
           </button>
         </div>
 
         {/* Content */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
           {activeTab === 'general' && (
             <GeneralInfoTab product={product} onChange={handleChange} />
           )}
@@ -196,6 +196,31 @@ export default function ProductEditorPage() {
           {activeTab === 'images' && (
             <ImageManager product={product} onChange={handleChange} />
           )}
+        </div>
+
+        {/* Mobile Sticky Bottom Save Bar */}
+        <div className="sm:hidden sticky bottom-2 z-20 pt-1">
+          <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-2 shadow-lg flex items-center gap-2">
+            <a
+              href={`/ro/product/${product.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-11 w-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0 hover:bg-slate-200 transition-colors"
+              title="Vezi în magazin"
+              aria-label="Vezi în magazin"
+            >
+              <ExternalLink size={17} />
+            </a>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 h-11 px-4 rounded-xl bg-[#e32f8c] text-black font-black text-sm flex items-center justify-center gap-2 hover:bg-[#c41a72] transition-all disabled:opacity-50 shadow-sm cursor-pointer"
+            >
+              {saving ? <Loader2 size={17} className="animate-spin shrink-0" /> : <Save size={17} className="shrink-0" />}
+              <span>{saving ? 'Se salvează...' : 'Salvează Modificările'}</span>
+            </button>
+          </div>
         </div>
       </div>
   );

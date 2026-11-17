@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Tag, Loader2, Save, Image as ImageIcon, Upload, Settings, X, Crop as CropIcon,
   Calendar, Ticket, ChevronDown, ChevronLeft, ChevronRight, Clock,
-  Smartphone, Monitor, Eye, Sparkles, Percent
+  Smartphone, Monitor, Eye, Percent
 } from 'lucide-react';
 import { updateSiteSetting, uploadPromoImage, deletePromoImage } from '@/app/actions/settings';
 import Image from 'next/image';
@@ -343,7 +343,7 @@ export default function PromoSettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-[#e32f8c]/10 border border-[#e32f8c]/20 flex items-center justify-center text-[#e32f8c] shrink-0">
-            <Sparkles size={22} />
+            <Percent size={22} />
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Popup Promoțional Scratch & Win</h1>
@@ -390,20 +390,22 @@ export default function PromoSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, mode: 'scratch' })}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-black border transition-all ${
+                  className={`px-3 py-2.5 rounded-xl text-xs font-black border transition-all inline-flex items-center justify-center gap-1.5 ${
                     settings.mode === 'scratch' ? 'bg-[#e32f8c] text-black border-[#e32f8c]' : 'bg-slate-50 text-slate-600 border-slate-200'
                   }`}
                 >
-                  🎟️ Răzuire (3–7% Unic)
+                  <Ticket size={13} />
+                  <span>Răzuire (3–7% Unic)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, mode: 'newsletter' })}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-black border transition-all ${
+                  className={`px-3 py-2.5 rounded-xl text-xs font-black border transition-all inline-flex items-center justify-center gap-1.5 ${
                     settings.mode === 'newsletter' ? 'bg-[#e32f8c] text-black border-[#e32f8c]' : 'bg-slate-50 text-slate-600 border-slate-200'
                   }`}
                 >
-                  ✉️ Newsletter Cupon Fix
+                  <Tag size={13} />
+                  <span>Newsletter Cupon Fix</span>
                 </button>
               </div>
             </div>

@@ -29,7 +29,6 @@ import {
   MapPin, 
   CreditCard, 
   Banknote, 
-  Sparkles, 
   Gift, 
   Tag, 
   Maximize2, 
@@ -48,6 +47,8 @@ import { deleteOrderAction, updateOrderShippingAction, updateOrderStatusAction }
 import { generateManualAwbAction, deleteAwbAction, syncAllTrackingAction } from '@/app/actions/awb';
 import { emitOblioInvoiceAction } from '@/app/actions/invoices';
 import { syncRecentStripeOrdersAction } from '@/app/actions/admin-orders';
+import { releasePreorderForFulfillmentAction } from '@/app/actions/admin-fulfillment';
+import { isDigitalOnlyCart } from '@/lib/programs';
 import {
   classifyOrderHistoricalOrActivePreorder,
   classifyOrderIsActivePreorder,
@@ -56,7 +57,7 @@ import {
 } from '@/utils/order-search';
 import { FulfillmentModal } from './FulfillmentModal';
 
-// 🌟 Modern Custom Checkbox Component
+// Modern Custom Checkbox Component
 function ModernCheckbox({ 
   checked, 
   onChange, 
@@ -494,6 +495,33 @@ function OrdersPageContent() {
     });
   };
 
+  const confirmReleasePreorder = (orderId: string, displayId?: string) => {
+    setPopup({
+      isOpen: true,
+      type: 'confirm',
+      variant: 'primary',
+      title: 'Eliberează Precomandă pentru Expediere',
+      message: `Confirmi că stocul a sosit pentru precomanda ${displayId || orderId}?\n\nComanda va fi trecută în statusul "În procesare" și va intra în coada de expediere către Centrul de Fulfillment.`,
+      confirmText: 'Da, eliberează pt. expediere',
+      cancelText: 'Renunță',
+      onConfirm: async () => {
+        setPopup(p => ({ ...p, isOpen: false }));
+        const toastId = toast.loading('Se eliberează precomanda pentru expediere...');
+        try {
+          const res = await releasePreorderForFulfillmentAction([orderId]);
+          if (res.success) {
+            toast.success('Precomanda a fost eliberată și mutată în coada de expediere!', { id: toastId });
+            await fetchOrders();
+          } else {
+            toast.error(`Eroare: ${res.error || 'Nu s-a putut elibera precomanda.'}`, { id: toastId });
+          }
+        } catch (err: any) {
+          toast.error('Eroare la eliberarea precomenzii.', { id: toastId });
+        }
+      }
+    });
+  };
+
   const executeUpdateOrderStatus = async (orderId: string, newStatus: string, successMsg: string) => {
     setPopup(p => ({ ...p, isOpen: false }));
     const toastId = toast.loading('Se actualizează statusul comenzii...');
@@ -919,6 +947,12 @@ function OrdersPageContent() {
       .map(([value, label]) => ({ value, label }));
   }, [orders]);
 
+  const isOrderHeldAsActivePreorder = useCallback((o: any) => {
+    const isReleased = o.status !== 'preorder' && Boolean(o.carrierMetadata?.preorder_released || o.carrierMetadata?.preorder_released_at);
+    if (isReleased) return false;
+    return classifyOrderIsActivePreorder(o, trackingStatus);
+  }, [trackingStatus]);
+
   // Filter calculations
   const filteredOrders = useMemo(() => {
     const hasSearch = searchQuery.trim().length > 0;
@@ -932,7 +966,7 @@ function OrdersPageContent() {
       }
 
       let matchesStatus = true;
-      const isActivePreorderBucket = classifyOrderIsActivePreorder(o, trackingStatus);
+      const isActivePreorderBucket = isOrderHeldAsActivePreorder(o);
 
       if (hasSearch) {
         // Never hide search results behind tabs or months
@@ -958,7 +992,8 @@ function OrdersPageContent() {
       } else if (statusFilter === 'fulfillment_sent') {
         matchesStatus = Boolean(o.fulfillmentDispatchedAt) && !isActivePreorderBucket;
       } else if (statusFilter === 'fulfillment_pending') {
-        matchesStatus = !o.fulfillmentDispatchedAt && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded' && !isActivePreorderBucket;
+        const isDigitalOnly = Boolean(o.carrierMetadata?.is_digital_only) || (Array.isArray(o.items) && o.items.length > 0 && isDigitalOnlyCart(o.items));
+        matchesStatus = !o.fulfillmentDispatchedAt && !o.trackingNumber && !isDigitalOnly && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'failed' && o.status !== 'delivered' && o.status !== 'shipped' && !isActivePreorderBucket;
       }
 
       let matchesPayment = true;
@@ -968,11 +1003,11 @@ function OrdersPageContent() {
 
       return matchesSearch && matchesMonth && matchesStatus && matchesPayment;
     });
-  }, [orders, searchQuery, monthFilter, statusFilter, paymentFilter, trackingStatus]);
+  }, [orders, searchQuery, monthFilter, statusFilter, paymentFilter, trackingStatus, isOrderHeldAsActivePreorder]);
 
   // Status counts for quick filter pills
   const counts = useMemo(() => {
-    const isActivePre = (o: any) => classifyOrderIsActivePreorder(o, trackingStatus);
+    const isActivePre = (o: any) => isOrderHeldAsActivePreorder(o);
     const total = orders.filter(o => !isActivePre(o)).length;
     const pendingAwb = orders.filter(o => !isActivePre(o) && !o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled').length;
     const generatedAwb = orders.filter(o => !isActivePre(o) && !!o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled').length;
@@ -984,14 +1019,17 @@ function OrdersPageContent() {
     const preorder = orders.filter(o => classifyOrderHistoricalOrActivePreorder(o)).length;
     const activePreorder = orders.filter(o => isActivePre(o)).length;
     const fulfillmentSent = orders.filter(o => !isActivePre(o) && Boolean(o.fulfillmentDispatchedAt)).length;
-    const fulfillmentPending = orders.filter(o => !isActivePre(o) && !o.fulfillmentDispatchedAt && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded').length;
+    const fulfillmentPending = orders.filter(o => {
+      const isDigitalOnly = Boolean(o.carrierMetadata?.is_digital_only) || (Array.isArray(o.items) && o.items.length > 0 && isDigitalOnlyCart(o.items));
+      return !isActivePre(o) && !o.fulfillmentDispatchedAt && !o.trackingNumber && !isDigitalOnly && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'failed' && o.status !== 'delivered' && o.status !== 'shipped';
+    }).length;
     return { total, pendingAwb, generatedAwb, printed, notPrinted, delivered, returned, cancelled, preorder, activePreorder, fulfillmentSent, fulfillmentPending };
-  }, [orders, trackingStatus]);
+  }, [orders, trackingStatus, isOrderHeldAsActivePreorder]);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-5 pb-24 text-slate-900 animate-in fade-in duration-500 overflow-x-hidden">
       
-      {/* 🌟 HEADER & SUMMARY */}
+      {/* HEADER & SUMMARY */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2.5">
@@ -1104,12 +1142,12 @@ function OrdersPageContent() {
         </div>
       )}
 
-      {/* 🔔 BANNERE PREVENTIVE COMENZI ÎN PRECOMENZI / DE GENERAT */}
+      {/* BANNERE PREVENTIVE COMENZI ÎN PRECOMENZI / DE GENERAT */}
       {counts.activePreorder > 0 && statusFilter !== 'preorder' && !searchQuery.trim() && (
         <div className="bg-violet-50 border border-violet-200 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-xs">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
-              <Sparkles size={16} />
+              <Clock size={16} />
             </div>
             <p className="text-xs text-violet-900 font-semibold">
               Există <span className="font-black">{counts.activePreorder}</span> {counts.activePreorder === 1 ? 'precomandă activă neexpediată' : 'precomenzi active neexpediate'} în tab-ul <span className="font-black">Precomenzi</span> (separate de comenzile de stoc).
@@ -1143,7 +1181,7 @@ function OrdersPageContent() {
         </div>
       )}
 
-      {/* 🚀 QUICK STATUS FILTERS (Balanced 3x2 Grid on Mobile, 6 Cols on Desktop) */}
+      {/* QUICK STATUS FILTERS (Balanced 3x2 Grid on Mobile, 6 Cols on Desktop) */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 w-full">
         <button
           onClick={() => setStatusFilter('all')}
@@ -1538,6 +1576,8 @@ function OrdersPageContent() {
             const isReturned = order.status === 'returned' || order.status === 'refunded';
             const isCancelled = order.status === 'cancelled';
             const isCod = order.paymentMethod === 'cod';
+            const isHeldPreorder = isOrderHeldAsActivePreorder(order);
+            const isDigitalOnly = Boolean(order.carrierMetadata?.is_digital_only) || (Array.isArray(order.items) && order.items.length > 0 && isDigitalOnlyCart(order.items));
 
             return (
               <div 
@@ -1595,7 +1635,7 @@ function OrdersPageContent() {
                   <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                     {/* Badges container */}
                     <div className="flex items-center flex-wrap gap-1.5">
-                      {/* ⚡ PROCESARE RAPIDĂ BADGE - PROMINENT & HIGH VISIBILITY */}
+                      {/* PROCESARE RAPIDĂ BADGE - PROMINENT & HIGH VISIBILITY */}
                       {order.priorityProcessing && !isCancelled && (
                         <span 
                           className="inline-flex items-center gap-1.5 h-6 px-3 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-sm ring-2 ring-amber-300/80 shrink-0" 
@@ -1606,7 +1646,7 @@ function OrdersPageContent() {
                         </span>
                       )}
 
-                      {/* 📦 TRIMIS LA FULFILLMENT BADGE */}
+                      {/* TRIMIS LA FULFILLMENT / PRECOMANDĂ REȚINUTĂ BADGE */}
                       {order.fulfillmentDispatchedAt ? (
                         <span 
                           className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-300 shadow-2xs shrink-0" 
@@ -1615,7 +1655,15 @@ function OrdersPageContent() {
                           <Truck size={11} className="text-indigo-600 shrink-0" />
                           <span>TRIMIS FULFILLMENT</span>
                         </span>
-                      ) : manualShippingEnabled && !isCancelled && !isReturned && (
+                      ) : isHeldPreorder && !isCancelled && !isReturned ? (
+                        <span 
+                          className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-violet-50 text-violet-800 border border-violet-200 shadow-2xs shrink-0" 
+                          title="Precomandă activă reținută — nu se trimite automat către fulfillment până la eliberarea stocului"
+                        >
+                          <Clock size={11} className="text-violet-600 shrink-0" />
+                          <span>REȚINUT (PRECOMANDĂ)</span>
+                        </span>
+                      ) : manualShippingEnabled && !isCancelled && !isReturned && !isDelivered && !isDigitalOnly && !order.trackingNumber && order.status !== 'failed' && (
                         <span 
                           className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs shrink-0" 
                           title="Comandă nouă în așteptare de expediere către centrul de fulfillment"
@@ -1855,6 +1903,18 @@ function OrdersPageContent() {
                         <span>{order.items?.length || 0} {order.items?.length === 1 ? 'produs' : 'produse'}</span>
                         {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                       </button>
+
+                      {/* Release Preorder for Fulfillment button */}
+                      {isHeldPreorder && !isCancelled && !isReturned && !order.fulfillmentDispatchedAt && (
+                        <button
+                          onClick={() => confirmReleasePreorder(order.supabaseId || order.id, order.id)}
+                          className="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-800 border border-violet-200 cursor-pointer"
+                          title="Marchează stocul ca sosit și mută precomanda în coada de expediere către fulfillment"
+                        >
+                          <Package size={13} className="text-violet-600" />
+                          <span>Eliberează pt. Expediere</span>
+                        </button>
+                      )}
 
                       {/* Cancel / Reactivate Order button */}
                       {isCancelled ? (
@@ -2326,7 +2386,7 @@ function OrdersPageContent() {
                             {/* Extras: Priority Processing Banner */}
                             {order.priorityProcessing && (
                               <div className="p-2.5 rounded-lg bg-[#e32f8c]/10 border border-[#e32f8c]/30 flex items-center gap-2 text-[#009bb3]">
-                                <Sparkles size={14} className="shrink-0" />
+                                <Zap size={14} className="shrink-0" />
                                 <span className="text-xs font-black uppercase tracking-wider">Procesare Prioritară Inclusă</span>
                               </div>
                             )}
@@ -2590,7 +2650,7 @@ function OrdersPageContent() {
         )}
       </AnimatePresence>
 
-      {/* 🚀 FLOATING BULK ACTION BAR */}
+      {/* FLOATING BULK ACTION BAR */}
       <AnimatePresence>
         {selectedOrders.length > 0 && (
           <motion.div
@@ -2717,7 +2777,7 @@ function OrdersPageContent() {
         )}
       </AnimatePresence>
 
-      {/* 📦 Centru Fulfillment Modal */}
+      {/* Centru Fulfillment Modal */}
       <FulfillmentModal
         isOpen={showFulfillmentModal}
         onClose={() => setShowFulfillmentModal(false)}
@@ -2725,6 +2785,7 @@ function OrdersPageContent() {
           setFulfillmentSettings(updatedSettings);
           setManualShippingEnabled(Boolean(updatedSettings.manual_shipping_enabled));
         }}
+        onDispatched={fetchOrders}
         totalOrdersCount={orders.length}
       />
     </div>

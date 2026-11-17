@@ -25,7 +25,6 @@ import {
   DollarSign,
   Award,
   Clock,
-  Sparkles,
   Layers,
   Pencil,
   Trash2,
@@ -172,7 +171,7 @@ function AffiliatePortalView({
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-[#e32f8c] text-[10px] font-black uppercase tracking-widest mb-1.5">
-              <Sparkles size={12} />
+              <Award size={12} />
               <span>Panou Afiliat Partener • TrenZone</span>
             </div>
             <h3 className="text-xl sm:text-2xl font-black tracking-tight">{affiliate.name}</h3>

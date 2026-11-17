@@ -23,7 +23,6 @@ import {
   Check,
   Copy,
   CheckCheck,
-  Sparkles,
   AlertTriangle,
   RotateCcw,
   Truck,
@@ -1287,7 +1286,7 @@ export default function CouponsPage() {
                       }}
                       className="text-[10px] font-black text-[#008ba3] hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      <Sparkles size={11} /> Generează Cod
+                      <RotateCcw size={11} /> Generează Cod
                     </button>
                   </div>
                   <input 

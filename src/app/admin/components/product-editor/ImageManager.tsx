@@ -154,8 +154,8 @@ export function ImageManager({ product, onChange }: ImageManagerProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
           <h3 className="text-lg font-black text-slate-900">Imagini Produs</h3>
           <p className="text-sm text-slate-500 font-medium">Formatează automat imaginile la aspect 1:1</p>
         </div>
@@ -167,48 +167,56 @@ export function ImageManager({ product, onChange }: ImageManagerProps) {
           onChange={handleFileSelect}
         />
         <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="h-10 px-4 rounded-xl bg-[#e32f8c] text-black text-sm font-bold flex items-center gap-2 hover:bg-[#c41a72] transition-colors disabled:opacity-50"
+          className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] px-4 rounded-xl bg-[#e32f8c] text-black text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#c41a72] transition-colors disabled:opacity-50 cursor-pointer shrink-0"
         >
           {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} 
           Încarcă Imagine
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {images.map((img, idx) => (
           <div key={idx} className="relative group aspect-square rounded-2xl border-2 border-slate-200 overflow-hidden bg-slate-50">
-            <Image src={img} alt={`Product ${idx}`} fill sizes="200px" className="object-cover" />
+            <Image src={img} alt={`Product ${idx}`} fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover" />
             
             {/* Overlay controls */}
-            <div className="absolute inset-0 bg-slate-900/45 [@media(hover:hover)]:bg-slate-900/60 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] [@media(hover:hover)]:backdrop-blur-sm">
-              <div className="flex items-center gap-2">
+            <div className="absolute inset-0 bg-slate-900/45 [@media(hover:hover)]:bg-slate-900/60 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] [@media(hover:hover)]:backdrop-blur-sm p-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button 
+                  type="button"
                   onClick={() => handleMoveImage(idx, 'up')}
                   disabled={idx === 0}
-                  className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors disabled:opacity-30 disabled:hover:bg-white/20 disabled:hover:text-white"
+                  title="Mută înainte"
+                  className="w-9 h-9 rounded-lg bg-white/25 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors disabled:opacity-30 disabled:hover:bg-white/25 disabled:hover:text-white cursor-pointer"
                 >
                   <MoveUp size={16} />
                 </button>
                 <button 
+                  type="button"
                   onClick={() => handleEditImage(idx, img)}
-                  className="w-8 h-8 rounded-lg bg-[#e32f8c]/80 text-black flex items-center justify-center hover:bg-[#e32f8c] transition-colors"
+                  className="w-9 h-9 rounded-lg bg-[#e32f8c]/90 text-black flex items-center justify-center hover:bg-[#e32f8c] transition-colors cursor-pointer"
                   title="Decupează imaginea"
                 >
                   <Crop size={16} />
                 </button>
                 <button 
+                  type="button"
                   onClick={() => handleMoveImage(idx, 'down')}
                   disabled={idx === images.length - 1}
-                  className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors disabled:opacity-30 disabled:hover:bg-white/20 disabled:hover:text-white"
+                  title="Mută după"
+                  className="w-9 h-9 rounded-lg bg-white/25 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors disabled:opacity-30 disabled:hover:bg-white/25 disabled:hover:text-white cursor-pointer"
                 >
                   <MoveDown size={16} />
                 </button>
               </div>
               <button 
+                type="button"
                 onClick={() => handleRemoveImage(idx)}
-                className="w-8 h-8 rounded-lg bg-red-500/80 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
+                title="Șterge imaginea"
+                className="w-9 h-9 rounded-lg bg-red-500/90 text-white flex items-center justify-center hover:bg-red-500 transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -225,7 +233,7 @@ export function ImageManager({ product, onChange }: ImageManagerProps) {
         ))}
 
         {images.length === 0 && (
-          <div className="col-span-full text-center p-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-300">
+          <div className="col-span-full text-center p-10 sm:p-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-300">
             <p className="text-sm font-bold text-slate-500">Nicio imagine adăugată.</p>
           </div>
         )}
@@ -238,7 +246,7 @@ export function ImageManager({ product, onChange }: ImageManagerProps) {
             <p className="text-sm text-slate-500 font-medium">Poze specifice pentru fiecare culoare sau mărime în parte</p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {product.variants!.options.map((opt: any, idx: number) => {
               const nameRO = typeof opt.name === 'object' ? opt.name.ro : opt.name;
               
@@ -253,7 +261,7 @@ export function ImageManager({ product, onChange }: ImageManagerProps) {
                     <>
                       <img src={getOptimizedImageUrl(opt.image)} alt={nameRO} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-slate-900/45 [@media(hover:hover)]:bg-slate-900/60 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px] [@media(hover:hover)]:backdrop-blur-sm">
-                        <label className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors cursor-pointer">
+                        <label className="w-9 h-9 rounded-lg bg-white/25 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors cursor-pointer">
                           <Upload size={16} />
                           <input 
                             type="file" 
@@ -263,15 +271,17 @@ export function ImageManager({ product, onChange }: ImageManagerProps) {
                           />
                         </label>
                         <button 
+                          type="button"
                           onClick={() => handleRemoveVariantImage(idx)}
-                          className="w-8 h-8 rounded-lg bg-red-500/80 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
+                          title="Șterge imagine variantă"
+                          className="w-9 h-9 rounded-lg bg-red-500/90 text-white flex items-center justify-center hover:bg-red-500 transition-colors cursor-pointer"
                         >
                           <X size={16} />
                         </button>
                       </div>
                     </>
                   ) : (
-                    <label className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-[#e32f8c] hover:bg-slate-100 transition-colors cursor-pointer">
+                    <label className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-[#e32f8c] hover:bg-slate-100 transition-colors cursor-pointer pb-7">
                       <ImageIcon size={24} />
                       <span className="text-xs font-bold">Adaugă Poză</span>
                       <input 

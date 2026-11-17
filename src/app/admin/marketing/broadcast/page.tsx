@@ -6,7 +6,7 @@ import {
   Mail, Send, Users, Plus, Image as ImageIcon, Link as LinkIcon, 
   AlertTriangle, Loader2, CheckSquare, Square, 
   Search, Trash2, X, BellRing, Eye, Download, Filter, 
-  Sparkles, RefreshCw, Smartphone, Monitor, Check, ShieldCheck, ShoppingBag
+  RefreshCw, Smartphone, Monitor, Check, ShieldCheck, ShoppingBag
 } from 'lucide-react';
 import { 
   sendMarketingCampaign, 
@@ -75,7 +75,7 @@ export default function BroadcastMarketingPage() {
   // Campaign Form State
   const [formData, setFormData] = useState<CampaignFormData>({
     subject: '',
-    title: 'Noutăți TrenZone 🏆',
+    title: 'Noutăți TrenZone',
     message: 'Salutare, Campionule!\n\nAvem noutăți importante pentru antrenamentele tale. Descoperă cele mai noi echipamente concepute pentru rezistență extremă și performanță maximă.',
     ctaText: 'Descoperă Echipamentele',
     ctaLink: 'https://www.trenzone.fit/ro/shop',
@@ -202,7 +202,7 @@ export default function BroadcastMarketingPage() {
         toast.success(`Campanie expediată cu succes către ${result.recipientCount} destinatari!`, { duration: 5000 });
         setFormData({
           subject: '',
-          title: 'Noutăți TrenZone 🏆',
+          title: 'Noutăți TrenZone',
           message: 'Salutare, Campionule!\n\nAvem noutăți importante pentru tine...',
           ctaText: 'Descoperă Echipamentele',
           ctaLink: 'https://www.trenzone.fit/ro/shop',
@@ -586,7 +586,7 @@ export default function BroadcastMarketingPage() {
               : 'bg-white text-[#e32f8c] hover:bg-[#e32f8c]/5 border border-[#e32f8c]/30'
           }`}
         >
-          <Sparkles size={15} /> Editor Campanie Nouă
+          <Plus size={15} /> Editor Campanie Nouă
         </button>
       </div>
 
@@ -596,7 +596,7 @@ export default function BroadcastMarketingPage() {
       {activeTab === 'campaigns' && (
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
           {campaigns.length === 0 ? (
-            /* ✨ RICH EMPTY STATE */
+            /* RICH EMPTY STATE */
             <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center max-w-2xl mx-auto shadow-sm">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#e32f8c] to-purple-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-[#e32f8c]/30 mb-5">
                 <Send size={30} />
@@ -926,7 +926,7 @@ export default function BroadcastMarketingPage() {
             <div className="flex items-center justify-between border-b border-slate-100 pb-5">
               <div>
                 <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Sparkles className="text-[#e32f8c]" size={18} /> Configurator Campanie
+                  <Mail className="text-[#e32f8c]" size={18} /> Configurator Campanie
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">Definește audiența țintă și personalizează conținutul emailului.</p>
               </div>
@@ -938,7 +938,7 @@ export default function BroadcastMarketingPage() {
               </button>
             </div>
 
-            {/* 🎯 STEP 1: AUDIENCE SELECTOR CARDS */}
+            {/* STEP 1: AUDIENCE SELECTOR CARDS */}
             <div className="space-y-3">
               <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center justify-between">
                 <span>1. Selectează Audiența Țintă</span>
@@ -958,7 +958,9 @@ export default function BroadcastMarketingPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-black uppercase text-slate-900">🌐 Toți</span>
+                    <span className="text-xs font-black uppercase text-slate-900 inline-flex items-center gap-1.5">
+                      <Users size={13} className="text-slate-700" /> Toți
+                    </span>
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-900 text-white">
                       {stats.totalAudience}
                     </span>
@@ -978,7 +980,9 @@ export default function BroadcastMarketingPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-black uppercase text-slate-900">📬 Doar Abonați</span>
+                    <span className="text-xs font-black uppercase text-slate-900 inline-flex items-center gap-1.5">
+                      <Mail size={13} className="text-[#e32f8c]" /> Doar Abonați
+                    </span>
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-[#e32f8c] text-white">
                       {stats.subscribersCount}
                     </span>
@@ -998,7 +1002,9 @@ export default function BroadcastMarketingPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-black uppercase text-slate-900">🛍️ Doar Clienți</span>
+                    <span className="text-xs font-black uppercase text-slate-900 inline-flex items-center gap-1.5">
+                      <ShoppingBag size={13} className="text-purple-600" /> Doar Clienți
+                    </span>
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-purple-600 text-white">
                       {stats.customersCount}
                     </span>
@@ -1018,7 +1024,9 @@ export default function BroadcastMarketingPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-black uppercase text-slate-900">🎯 Manual</span>
+                    <span className="text-xs font-black uppercase text-slate-900 inline-flex items-center gap-1.5">
+                      <CheckSquare size={13} className="text-amber-600" /> Manual
+                    </span>
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-white">
                       {customRecipients.length}
                     </span>
@@ -1038,7 +1046,9 @@ export default function BroadcastMarketingPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-black uppercase text-slate-900">🧪 Test Admin</span>
+                    <span className="text-xs font-black uppercase text-slate-900 inline-flex items-center gap-1.5">
+                      <ShieldCheck size={13} className="text-indigo-600" /> Test Admin
+                    </span>
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-indigo-600 text-white">
                       1
                     </span>
@@ -1157,7 +1167,7 @@ export default function BroadcastMarketingPage() {
                     type="text"
                     value={formData.subject}
                     onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    placeholder="Ex: 🔥 Noua Colecție Heavy-Duty X10 a sosit!"
+                    placeholder="Ex: Noua Colecție Heavy-Duty X10 a sosit!"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-bold focus:outline-none focus:border-[#e32f8c] focus:bg-white transition-all"
                   />
                 </div>

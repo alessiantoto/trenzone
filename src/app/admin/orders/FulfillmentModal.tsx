@@ -22,7 +22,7 @@ import {
   ExternalLink,
   ShieldCheck,
   RefreshCw,
-  Sparkles,
+  Package,
   Download,
   FileSpreadsheet
 } from 'lucide-react';
@@ -33,8 +33,9 @@ import {
   updateFulfillmentSettings, 
   getFulfillmentHistory, 
   dispatchOrdersToFulfillment,
-  getFulfillmentPreviewOrders,
-  generateFulfillmentCsv
+  getFulfillmentQueueOverview,
+  generateFulfillmentCsv,
+  type FulfillmentQueueOverview
 } from '@/app/actions/admin-fulfillment';
 import { FulfillmentSettings, FulfillmentDispatchLog, FulfillmentOrderSummary } from '@/types/fulfillment';
 
@@ -42,6 +43,7 @@ interface FulfillmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSettingsUpdated?: (settings: FulfillmentSettings) => void;
+  onDispatched?: () => void;
   totalOrdersCount: number;
 }
 
@@ -49,6 +51,7 @@ export function FulfillmentModal({
   isOpen,
   onClose,
   onSettingsUpdated,
+  onDispatched,
   totalOrdersCount
 }: FulfillmentModalProps) {
   const [activeTab, setActiveTab] = useState<'config' | 'template' | 'history'>('config');
@@ -78,9 +81,35 @@ export function FulfillmentModal({
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
-  // Preview state
-  const [previewOrders, setPreviewOrders] = useState<FulfillmentOrderSummary[]>([]);
+  // Queue & preview state
+  const [queueOverview, setQueueOverview] = useState<FulfillmentQueueOverview>({
+    pendingOrders: [],
+    templatePreviewOrders: [],
+    isSamplePreview: false,
+    isHistoricalPreview: false,
+    excludedPreorders: 0,
+    excludedMixedPreorders: 0,
+    skippedPreorderOrderIds: [],
+    excludedDigital: 0,
+    excludedAlreadyDispatched: 0,
+    excludedUnpaidOrInvalid: 0,
+  });
   const [loadingPreview, setLoadingPreview] = useState(false);
+
+  const previewOrders = queueOverview.templatePreviewOrders;
+  const pendingOrders = queueOverview.pendingOrders;
+
+  const refreshQueueOverview = async () => {
+    setLoadingPreview(true);
+    try {
+      const overview = await getFulfillmentQueueOverview();
+      setQueueOverview(overview);
+    } catch (err) {
+      console.error('Error loading fulfillment queue overview:', err);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
   // Load initial settings
   const loadData = async () => {
@@ -118,11 +147,7 @@ export function FulfillmentModal({
     }
 
     if (activeTab === 'template' || activeTab === 'config') {
-      setLoadingPreview(true);
-      getFulfillmentPreviewOrders()
-        .then(data => setPreviewOrders(data))
-        .catch(err => console.error(err))
-        .finally(() => setLoadingPreview(false));
+      refreshQueueOverview();
     }
   }, [activeTab, isOpen]);
 
@@ -187,9 +212,17 @@ export function FulfillmentModal({
   };
 
   // Download CSV file directly
-  const handleDownloadCsv = async () => {
+  const handleDownloadCsv = async (mode: 'pending' | 'preview' = 'pending') => {
     try {
-      const ordersToExport = previewOrders.length > 0 ? previewOrders : await getFulfillmentPreviewOrders();
+      const overview = pendingOrders.length > 0 ? queueOverview : await getFulfillmentQueueOverview();
+      const ordersToExport = mode === 'preview'
+        ? overview.templatePreviewOrders
+        : overview.pendingOrders;
+
+      if (ordersToExport.length === 0) {
+        toast.error('Nu există comenzi eligibile în așteptare pentru export CSV.');
+        return;
+      }
       const csvData = await generateFulfillmentCsv(ordersToExport);
       const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -222,20 +255,28 @@ export function FulfillmentModal({
       });
 
       if (res.success) {
-        if (res.count === 0) {
-          toast.success(res.message || 'Nu există comenzi noi de expediat.', { id: toastId });
+        if ((res.count || 0) === 0) {
+          toast.success(res.message || 'Nu există comenzi noi de expediat.', { id: toastId, duration: 5000 });
         } else {
+          const preorderSuffix = res.excludedPreorders && res.excludedPreorders > 0
+            ? ` (${res.excludedPreorders} precomenzi active reținute)`
+            : '';
           toast.success(
-            `✓ ${res.count} comenzi au fost transmise către ${res.recipient}${res.secondaryRecipient ? ` (CC: ${res.secondaryRecipient})` : ''}!`,
+            `${res.count} comenzi au fost transmise către ${res.recipient}${res.secondaryRecipient ? ` (CC: ${res.secondaryRecipient})` : ''}${preorderSuffix}!`,
             {
               id: toastId,
               duration: 5000
             }
           );
+          if (res.reconciliationWarning) {
+            toast.error(res.reconciliationWarning, { duration: 9000 });
+          }
           setSettings(prev => ({ ...prev, last_dispatched_at: res.sentAt || new Date().toISOString() }));
           setDispatchNotes('');
           getFulfillmentHistory().then(setHistory);
+          if (onDispatched) onDispatched();
         }
+        refreshQueueOverview();
       } else {
         toast.error(`Eroare: ${res.error || 'Trimitere eșuată'}`, { id: toastId });
       }
@@ -280,7 +321,7 @@ export function FulfillmentModal({
     const orderWord = count === 1 ? 'comandă' : 'comenzi';
     const itemWord = totalItems === 1 ? 'articol' : 'articole';
 
-    return `[TrenZone] 📦 Comenzi de Expediat — ${dateStr} • ${count} ${orderWord} (${totalItems} ${itemWord})${countryPart} [${triggerLabel}]`;
+    return `[TrenZone] Comenzi de Expediat — ${dateStr} • ${count} ${orderWord} (${totalItems} ${itemWord})${countryPart} [${triggerLabel}]`;
   };
 
   const roOrders = previewOrders.filter(o => isRo(o.country));
@@ -326,7 +367,7 @@ export function FulfillmentModal({
         transition={{ duration: 0.2, ease: "easeOut" }}
         className="relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 z-10"
       >
-        {/* 🌟 LIGHT CLEAN MODAL HEADER (NO BLACK) */}
+        {/* LIGHT CLEAN MODAL HEADER (NO BLACK) */}
         <div className="p-4 sm:p-5 bg-white text-slate-900 flex items-center justify-between border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#e32f8c]/10 border border-[#e32f8c]/20 text-[#008ba3] flex items-center justify-center shrink-0">
@@ -351,12 +392,12 @@ export function FulfillmentModal({
 
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={handleDownloadCsv}
+              onClick={() => handleDownloadCsv('pending')}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs"
-              title="Descarcă tabelul comenzilor în format CSV pentru Excel"
+              title="Descarcă tabelul comenzilor eligibile în așteptare în format CSV pentru Excel"
             >
               <Download size={13} className="text-emerald-600" />
-              <span>Descarcă CSV</span>
+              <span>Descarcă CSV ({pendingOrders.length})</span>
             </button>
 
             <button
@@ -369,7 +410,7 @@ export function FulfillmentModal({
           </div>
         </div>
 
-        {/* 🌟 TABS NAVIGATION */}
+        {/* TABS NAVIGATION */}
         <div className="px-4 sm:px-6 pt-3 bg-slate-50/80 border-b border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0">
           <button
             onClick={() => setActiveTab('config')}
@@ -413,14 +454,67 @@ export function FulfillmentModal({
           </button>
         </div>
 
-        {/* 🌟 TAB CONTENT (SCROLLABLE) */}
+        {/* TAB CONTENT (SCROLLABLE) */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar bg-slate-50/40">
           
-          {/* ═════════════════════════════════════════════════════════ */}
-          {/* TAB 1: CONFIGURARE & EXPEDIERE IMEDIATĂ                   */}
-          {/* ═════════════════════════════════════════════════════════ */}
+          {/* TAB 1: CONFIGURARE & EXPEDIERE IMEDIATĂ */}
           {activeTab === 'config' && (
             <div className="space-y-4 animate-in fade-in duration-200">
+
+              {/* Operational Queue Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Gata de Expediere</div>
+                  <div className="text-lg font-black text-emerald-700 mt-0.5">{pendingOrders.length}</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Precomenzi Reținute</div>
+                  <div className="text-lg font-black text-violet-700 mt-0.5">{queueOverview.excludedPreorders}</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Deja Trimise</div>
+                  <div className="text-lg font-black text-indigo-700 mt-0.5">{queueOverview.excludedAlreadyDispatched}</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Excluse (PDF/Anul./AWB)</div>
+                  <div className="text-lg font-black text-slate-600 mt-0.5">
+                    {queueOverview.excludedDigital + queueOverview.excludedUnpaidOrInvalid}
+                  </div>
+                </div>
+              </div>
+
+              {/* Explicit Preorder Hold Notice */}
+              {queueOverview.excludedPreorders > 0 && (
+                <div className="bg-violet-50 border border-violet-200 rounded-2xl p-4 flex items-start gap-3 text-xs text-violet-950 shadow-2xs">
+                  <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Clock size={17} />
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <strong className="text-xs font-black uppercase tracking-wider text-violet-950">
+                        Protecție Precomenzi Activă
+                      </strong>
+                      <span className="text-[10px] font-black bg-violet-200/80 text-violet-900 px-2 py-0.5 rounded-full">
+                        {queueOverview.excludedPreorders} {queueOverview.excludedPreorders === 1 ? 'comandă reținută' : 'comenzi reținute'}
+                      </span>
+                      {queueOverview.excludedMixedPreorders > 0 && (
+                        <span className="text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full">
+                          {queueOverview.excludedMixedPreorders} mixte (stoc + precomandă)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-violet-900/90 leading-relaxed">
+                      Precomenzile active (inclusiv comenzile mixte cu produse în stoc + precomandă) sunt excluse automat de la expedierea către depozit până când sunt eliberate manual după sosirea stocului.
+                    </p>
+                    {queueOverview.skippedPreorderOrderIds.length > 0 && (
+                      <p className="text-[11px] font-mono text-violet-800 pt-0.5">
+                        Reținute: {queueOverview.skippedPreorderOrderIds.slice(0, 8).join(', ')}
+                        {queueOverview.skippedPreorderOrderIds.length > 8 ? ` (+${queueOverview.skippedPreorderOrderIds.length - 8})` : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               
               {/* Status Alert for Manual Shipping */}
               <div className={`p-4 rounded-2xl border transition-all ${
@@ -570,11 +664,11 @@ export function FulfillmentModal({
                 </div>
               </div>
 
-              {/* 🌟 LIVE EMAIL SUBJECT CARD (EXCELLENT UI/UX) */}
+              {/* LIVE EMAIL SUBJECT CARD */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Sparkles size={15} className="text-[#e32f8c]" />
+                    <Mail size={15} className="text-[#e32f8c]" />
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
                       Format Subiect Email în Inbox (Claritate Maximă Depozit & Notificări)
                     </h4>
@@ -585,29 +679,29 @@ export function FulfillmentModal({
                 </div>
 
                 <div className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-inner text-xs font-mono font-bold text-slate-900 break-all select-all flex items-center justify-between gap-2">
-                  <span>{computeSubject(previewOrders, settings.auto_dispatch_enabled ? 'scheduled_8am' : 'manual')}</span>
+                  <span>{computeSubject(pendingOrders.length > 0 ? pendingOrders : previewOrders, settings.auto_dispatch_enabled ? 'scheduled_8am' : 'manual')}</span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 font-bold">
                   <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-700">
-                    <span>📅</span> Dată Calendaristică
+                    <Calendar size={11} className="text-slate-500" /> Dată Calendaristică
                   </span>
                   <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-700">
-                    <span>📦</span> Nr. Comenzi & Bucăți
+                    <Package size={11} className="text-slate-500" /> Nr. Comenzi & Bucăți
                   </span>
                   <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-700">
                     <span>🇷🇴/🇪🇺</span> Împărțire Țară (Sameday vs Packeta)
                   </span>
                   <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-700">
-                    <span>⏰</span> Marcaj Orar (08:00 AM / Manual)
+                    <Clock size={11} className="text-slate-500" /> Marcaj Orar (08:00 AM / Manual)
                   </span>
                   <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-700">
-                    <span>📎</span> Fișier CSV Atașat
+                    <FileSpreadsheet size={11} className="text-slate-500" /> Fișier CSV Atașat
                   </span>
                 </div>
               </div>
 
-              {/* 🛡️ ANTI-DUPLICATE PROTECTION NOTICE */}
+              {/* ANTI-DUPLICATE PROTECTION NOTICE */}
               <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-2xl p-4 flex items-start gap-3 text-xs text-indigo-950 shadow-2xs">
                 <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
                   <ShieldCheck size={18} />
@@ -622,12 +716,12 @@ export function FulfillmentModal({
                     </span>
                   </div>
                   <p className="text-[11px] text-indigo-900/90 leading-relaxed">
-                    Fiecare comandă transmisă către depozit este marcată automat în sistem cu data și ora expedierii. Comenzile deja transmise sunt excluse automat din emailurile viitoare (zilnice sau manuale) și sunt semnalizate în tabelul de comenzi cu eticheta <strong className="text-indigo-950 bg-white/70 px-1.5 py-0.5 rounded border border-indigo-200">📦 TRIMIS FULFILLMENT</strong>.
+                    Fiecare comandă transmisă către depozit este marcată automat în sistem cu data, ora și ID-ul lotului (cu blocare concurență între cron și manual). Comenzile deja transmise, cele digitale, neachitate sau cu AWB sunt excluse automat și semnalizate în tabel cu eticheta <strong className="text-indigo-950 bg-white/70 px-1.5 py-0.5 rounded border border-indigo-200">TRIMIS FULFILLMENT</strong>.
                   </p>
                 </div>
               </div>
 
-              {/* 🌟 IMMEDIATE DISPATCH & CSV EXPORT BOX (CLEAN LIGHT DESIGN - NO BLACK) */}
+              {/* IMMEDIATE DISPATCH & CSV EXPORT BOX */}
               <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
@@ -645,7 +739,7 @@ export function FulfillmentModal({
                 </div>
 
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Trimite instantaneu lista de comenzi active către centrul de fulfillment (inclusiv fișierul CSV atașat) sau descarcă direct fișierul tabelar pentru importul în softul WMS.
+                  Trimite instantaneu lista de comenzi fizice eligibile către centrul de fulfillment (inclusiv fișierul CSV atașat) sau descarcă direct fișierul tabelar pentru importul în softul WMS.
                 </p>
 
                 <div className="space-y-1.5">
@@ -680,11 +774,11 @@ export function FulfillmentModal({
 
                   <div className="flex items-center gap-2.5">
                     <button
-                      onClick={handleDownloadCsv}
+                      onClick={() => handleDownloadCsv('pending')}
                       className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                     >
                       <Download size={14} className="text-emerald-600" />
-                      <span>Descarcă CSV</span>
+                      <span>Descarcă CSV ({pendingOrders.length})</span>
                     </button>
 
                     <button
@@ -700,7 +794,7 @@ export function FulfillmentModal({
                       ) : (
                         <>
                           <Send size={14} />
-                          <span>Trimite Comenzile Acum</span>
+                          <span>Trimite Comenzile Acum ({pendingOrders.length})</span>
                         </>
                       )}
                     </button>
@@ -710,9 +804,7 @@ export function FulfillmentModal({
             </div>
           )}
 
-          {/* ═════════════════════════════════════════════════════════ */}
-          {/* TAB 2: PREVIZUALIZARE TEMPLATE EMAIL (LIGHT CLEAN THEME)   */}
-          {/* ═════════════════════════════════════════════════════════ */}
+          {/* TAB 2: PREVIZUALIZARE TEMPLATE EMAIL */}
           {activeTab === 'template' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white p-3.5 rounded-xl border border-slate-200 text-xs">
@@ -725,14 +817,24 @@ export function FulfillmentModal({
                     <ShieldCheck size={11} className="text-indigo-600" />
                     Protecție Anti-Duplicate Activată
                   </span>
+                  {queueOverview.isSamplePreview && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
+                      Date demonstrative (0 comenzi în așteptare)
+                    </span>
+                  )}
+                  {queueOverview.isHistoricalPreview && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full">
+                      Previzualizare comenzi anterioare (0 noi în așteptare)
+                    </span>
+                  )}
                 </div>
 
                 <button
-                  onClick={handleDownloadCsv}
+                  onClick={() => handleDownloadCsv(pendingOrders.length > 0 ? 'pending' : 'preview')}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-black transition-colors cursor-pointer self-start sm:self-auto"
                 >
                   <FileSpreadsheet size={14} />
-                  <span>Descarcă Fișierul CSV (.csv)</span>
+                  <span>{pendingOrders.length > 0 ? 'Descarcă Fișierul CSV (.csv)' : 'Descarcă CSV Previzualizare'}</span>
                 </button>
               </div>
 
@@ -766,7 +868,9 @@ export function FulfillmentModal({
                         Subiect: <strong className="text-slate-900">{computeSubject(previewOrders, settings.auto_dispatch_enabled ? 'scheduled_8am' : 'manual')}</strong>
                       </div>
                       <div className="text-slate-500 text-[11px] flex items-center gap-1.5 pt-0.5">
-                        <span className="text-emerald-700 font-bold">📎 Fișier atașat:</span>
+                        <span className="text-emerald-700 font-bold inline-flex items-center gap-1">
+                          <FileSpreadsheet size={12} /> Fișier atașat:
+                        </span>
                         <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700 font-semibold">
                           comenzi_trenzone_{new Date().toISOString().split('T')[0]}.csv
                         </span>
@@ -802,11 +906,11 @@ export function FulfillmentModal({
                         </div>
                       </div>
 
-                      {/* 📋 PICKING LIST IN PREVIEW */}
+                      {/* PICKING LIST IN PREVIEW */}
                       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                         <div className="bg-slate-100 p-2.5 px-3 flex items-center justify-between text-xs font-black text-slate-800">
                           <span className="flex items-center gap-1.5 uppercase text-[11px] tracking-wider">
-                            <span>📋</span> Sumar Cules Articole (Picking List)
+                            <Layers size={13} className="text-slate-600" /> Sumar Cules Articole (Picking List)
                           </span>
                           <span className="text-[11px] text-slate-500">
                             Total: {previewOrders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)} buc.
@@ -1051,11 +1155,21 @@ export function FulfillmentModal({
                           className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
-                              <CheckCircle2 size={18} />
+                            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                              log.status === 'failed'
+                                ? 'bg-red-50 text-red-600 border-red-200'
+                                : log.error_message
+                                  ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                            }`}>
+                              {log.status === 'failed' || log.error_message ? (
+                                <AlertCircle size={18} />
+                              ) : (
+                                <CheckCircle2 size={18} />
+                              )}
                             </div>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <strong className="text-xs sm:text-sm font-black text-slate-900 truncate">
                                   {dateFormatted}
                                 </strong>
@@ -1066,6 +1180,11 @@ export function FulfillmentModal({
                                 }`}>
                                   {log.trigger === 'scheduled_8am' ? 'Cron 08:00' : 'Manual'}
                                 </span>
+                                {log.status === 'failed' && (
+                                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200">
+                                    Eșuat
+                                  </span>
+                                )}
                               </div>
                               <div className="text-[11px] text-slate-500 truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
                                 <span>Trimis la: <strong className="text-slate-700">{log.recipient_email}</strong></span>
@@ -1080,6 +1199,11 @@ export function FulfillmentModal({
                               {log.subject && (
                                 <div className="text-[10px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded mt-1 truncate max-w-xl">
                                   Subiect: {log.subject}
+                                </div>
+                              )}
+                              {log.error_message && (
+                                <div className="text-[10px] font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-1 rounded mt-1 max-w-xl">
+                                  {log.error_message}
                                 </div>
                               )}
                             </div>
@@ -1169,7 +1293,7 @@ export function FulfillmentModal({
 
         </div>
 
-        {/* 🌟 MODAL FOOTER */}
+        {/* MODAL FOOTER */}
         <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
           <div className="text-xs text-slate-500 font-medium hidden sm:block">
             {settings.manual_shipping_enabled ? (

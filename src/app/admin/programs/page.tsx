@@ -19,7 +19,6 @@ import {
   ChevronUp,
   User,
   Phone,
-  Sparkles,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -230,7 +229,7 @@ export default function AdminProgramsPage() {
               disabled={bulkSending}
               className="flex items-center gap-2 bg-[#e32f8c] hover:bg-[#c81e78] text-black px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-sm transition-all disabled:opacity-50"
             >
-              {bulkSending ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {bulkSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               <span>Trimite PDF tuturor celor gata ({stats.readyToSend})</span>
             </button>
           )}

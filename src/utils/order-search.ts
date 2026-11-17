@@ -104,6 +104,17 @@ export function classifyOrderIsActivePreorder(o: any, trackingMap?: Record<strin
     return false;
   }
 
+  // If admin explicitly released this preorder to processing/fulfillment, it is no longer held in active Precomenzi
+  const st = String(o.status || '').toLowerCase().trim();
+  const isExplicitlyReleased = Boolean(
+    o.carrierMetadata?.preorder_released === true ||
+      o.carrier_metadata?.preorder_released === true ||
+      o.preorderReleased === true
+  );
+  if (st !== 'preorder' && isExplicitlyReleased) {
+    return false;
+  }
+
   // Prefer immutable snapshot stored at order creation time
   const recordedSnapshot =
     typeof o.isPreorderSnapshot === 'boolean'

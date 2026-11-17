@@ -25,11 +25,11 @@ import toast from 'react-hot-toast';
 import {
   getAdminProgramOrdersAction,
   sendManualProgramEmailAction,
-  uploadProgramPdfAction,
   removeProgramPdfSlotAction,
   type AdminProgramOrderRow,
   type AdminProgramPdfSlot,
 } from '@/app/actions/programs';
+import { uploadAdminProgramPdf } from '@/lib/admin-pdf-upload';
 import type { StoredProgramFiles, ProgramFileSlot } from '@/lib/program-pdf-generator';
 
 type FilterTab = 'all' | 'needs_attention' | 'ready_to_send' | 'delivered';
@@ -174,10 +174,7 @@ export default function AdminProgramsPage() {
     if (!file) return;
     setUploadingSlot(slot);
     try {
-      const fd = new FormData();
-      fd.append('slot', slot);
-      fd.append('file', file);
-      const res = await uploadProgramPdfAction(fd);
+      const res = await uploadAdminProgramPdf(slot, file);
       if (res.success) {
         toast.success(`PDF încărcat pentru ${slot}!`);
         await loadData();

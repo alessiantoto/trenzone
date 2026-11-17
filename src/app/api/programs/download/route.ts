@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isAdminAuthorized } from '@/app/actions/admin-auth';
 import {
   getProgramPdfBuffer,
+  getStoredProgramFileUrl,
   verifyProgramDownloadToken,
   type SingleProgramKey,
 } from '@/lib/program-pdf-generator';
@@ -54,6 +55,19 @@ export async function GET(req: Request) {
       );
     }
 
+    // Redirect large CDN/Storage PDFs (> 3.8 MB) directly so buyers bypass Vercel's 4.5 MB function response limit
+    const storedEntry = await getStoredProgramFileUrl(programKey, lang);
+    if (storedEntry) {
+      const headRes = await fetch(storedEntry.url, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+      const sizeBytes = Number(headRes?.headers.get('content-length') || 0);
+      if (sizeBytes > 3.8 * 1024 * 1024) {
+        const targetUrl = storedEntry.url.includes('.supabase.co/storage/')
+          ? `${storedEntry.url}${storedEntry.url.includes('?') ? '&' : '?'}download=${encodeURIComponent(storedEntry.filename)}`
+          : storedEntry.url;
+        return NextResponse.redirect(targetUrl, 307);
+      }
+    }
+
     const result = await getProgramPdfBuffer(programKey, lang);
     if (!result) {
       const html = `<!doctype html>
@@ -74,6 +88,13 @@ export async function GET(req: Request) {
     }
 
     const { buffer, filename } = result;
+
+    if (buffer.byteLength > 3.8 * 1024 * 1024 && storedEntry) {
+      const targetUrl = storedEntry.url.includes('.supabase.co/storage/')
+        ? `${storedEntry.url}${storedEntry.url.includes('?') ? '&' : '?'}download=${encodeURIComponent(filename)}`
+        : storedEntry.url;
+      return NextResponse.redirect(targetUrl, 307);
+    }
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

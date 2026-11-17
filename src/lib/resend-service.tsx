@@ -1042,10 +1042,14 @@ export async function sendProgramDeliveryEmail(
           lang: prog.lang,
           downloadUrl,
         });
-        attachments.push({
-          filename: pdfResult.filename,
-          content: pdfResult.buffer,
-        });
+        const maxAttachmentBytes = 16 * 1024 * 1024;
+        const currentTotalBytes = attachments.reduce((sum, a) => sum + a.content.byteLength, 0);
+        if (currentTotalBytes + pdfResult.buffer.byteLength <= maxAttachmentBytes) {
+          attachments.push({
+            filename: pdfResult.filename,
+            content: pdfResult.buffer,
+          });
+        }
         deliveredSlots.push(slot);
       } else {
         pendingList.push({

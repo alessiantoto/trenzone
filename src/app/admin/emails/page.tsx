@@ -5,7 +5,8 @@ import { Mail, Save, RefreshCw, Eye, Code, Languages, ChevronDown, Paperclip, Ch
 import { LanguageFlagSvg } from '@/components/programs/LanguageFlagSvg';
 import { motion, AnimatePresence } from 'framer-motion';
 import { updateEmailTemplate, EmailTemplate as DBEmailTemplate } from '@/app/actions/email-templates';
-import { getProgramFilesAction, uploadProgramPdfAction, type AdminProgramPdfSlot } from '@/app/actions/programs';
+import { getProgramFilesAction, type AdminProgramPdfSlot } from '@/app/actions/programs';
+import { uploadAdminProgramPdf } from '@/lib/admin-pdf-upload';
 import type { ProgramFileSlot, StoredProgramFiles } from '@/lib/program-pdf-generator';
 import { updateSiteSetting } from '@/app/actions/settings';
 import toast from 'react-hot-toast';
@@ -107,10 +108,7 @@ export default function AdminEmailsPage() {
     if (!file) return;
     setUploadingSlot(slot);
     try {
-      const fd = new FormData();
-      fd.append('slot', slot);
-      fd.append('file', file);
-      const res = await uploadProgramPdfAction(fd);
+      const res = await uploadAdminProgramPdf(slot, file);
       const uploadedUrl = res.url;
       if (res.success && uploadedUrl) {
         setProgramFiles((prev) => ({ ...prev, [slot]: uploadedUrl }));

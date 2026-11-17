@@ -87,6 +87,47 @@ export async function getProgramFilesAction(): Promise<{
   return { success: true, files, slots };
 }
 
+export async function createProgramPdfSignedUploadAction(slot: ProgramFileSlot): Promise<{
+  success: boolean;
+  path?: string;
+  token?: string;
+  publicUrl?: string;
+  error?: string;
+}> {
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) {
+    return { success: false, error: 'Neautorizat.' };
+  }
+
+  const cleanSlot = String(slot || '').trim().toLowerCase() as ProgramFileSlot;
+  if (!VALID_SLOT_REGEX.test(cleanSlot)) {
+    return { success: false, error: 'Slot invalid pentru programul digital.' };
+  }
+
+  const fileName = `programs/${cleanSlot}-${Date.now()}.pdf`;
+  const { data, error } = await supabaseAdmin.storage
+    .from('products')
+    .createSignedUploadUrl(fileName, { upsert: true });
+
+  if (error || !data?.path || !data?.token) {
+    return {
+      success: false,
+      error: error?.message || 'Nu s-a putut genera link-ul de încărcare PDF.',
+    };
+  }
+
+  const { data: publicUrlData } = supabaseAdmin.storage
+    .from('products')
+    .getPublicUrl(fileName);
+
+  return {
+    success: true,
+    path: data.path,
+    token: data.token,
+    publicUrl: publicUrlData.publicUrl,
+  };
+}
+
 export async function uploadProgramPdfAction(formData: FormData): Promise<{
   success: boolean;
   slot?: ProgramFileSlot;
@@ -109,6 +150,9 @@ export async function uploadProgramPdfAction(formData: FormData): Promise<{
     if (!saved) {
       return { success: false, error: 'Nu s-a putut salva link-ul PDF în store_settings.' };
     }
+    revalidatePath('/admin/emails');
+    revalidatePath('/admin/products');
+    revalidatePath('/admin/programs');
     return { success: true, slot, url: customUrl };
   }
 

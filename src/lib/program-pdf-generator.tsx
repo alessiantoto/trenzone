@@ -130,6 +130,23 @@ export function getProgramAttachmentFilename(
   return `Vlad-Tren-${safeSlugTitle || 'Program'}-${langUpper}.pdf`;
 }
 
+export async function getStoredProgramFileUrl(
+  programKey: SingleProgramKey,
+  lang: DigitalProgramLanguage
+): Promise<{ url: string; filename: string } | null> {
+  const safeLang: DigitalProgramLanguage = lang === 'en' ? 'en' : 'ro';
+  const slot: ProgramFileSlot = `${programKey}-${safeLang}`;
+  const stored = await getStoredProgramFiles();
+  const customUrl = stored[slot];
+  if (customUrl && typeof customUrl === 'string' && customUrl.startsWith('http')) {
+    return {
+      url: customUrl,
+      filename: getProgramAttachmentFilename(programKey, safeLang),
+    };
+  }
+  return null;
+}
+
 /**
  * Loads the exact PDF uploaded by the Admin (from store_settings URL or public/programs/{slot}.pdf).
  * Returns null if no PDF file has been uploaded yet for that slot.

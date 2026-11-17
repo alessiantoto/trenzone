@@ -19,7 +19,8 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { uploadProductImage } from "@/app/actions/admin-products";
-import { getProgramFilesAction, uploadProgramPdfAction } from "@/app/actions/programs";
+import { getProgramFilesAction } from "@/app/actions/programs";
+import { uploadAdminProgramPdf } from "@/lib/admin-pdf-upload";
 import { LanguageFlagSvg } from "@/components/programs/LanguageFlagSvg";
 import { isDigitalProgramId, PROGRAM_SLUGS, PROGRAM_UUIDS, sanitizeProgramSlug } from "@/lib/programs";
 import {
@@ -150,10 +151,7 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
   const handlePdfUpload = async (slot: string, file: File) => {
     setUploadingPdfSlot(slot);
     try {
-      const fd = new FormData();
-      fd.append("slot", slot);
-      fd.append("file", file);
-      const res = await uploadProgramPdfAction(fd);
+      const res = await uploadAdminProgramPdf(slot, file);
       if (res.success && res.url) {
         setProgramFiles((prev) => ({ ...prev, [slot]: res.url! }));
         toast.success(`PDF-ul (${slot.toUpperCase()}) a fost atașat cu succes!`);

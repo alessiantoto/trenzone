@@ -29,7 +29,7 @@ export function StepIndicator({
   ];
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-4 md:py-8">
+    <div className="w-full max-w-2xl mx-auto px-4 py-4 md:py-8 text-zinc-900">
       <div className="flex items-center justify-between relative">
         {/* Progress Line */}
         <div className="absolute top-[22px] left-[15%] right-[15%] h-[2px] bg-zinc-200 -z-0">
@@ -62,10 +62,10 @@ export function StepIndicator({
                 initial={false}
                 animate={{
                   backgroundColor: isCompleted || isActive ? "#e32f8c" : "#ffffff",
-                  borderColor: isCompleted || isActive ? "#e32f8c" : "#e4e4e7",
-                  color: isCompleted || isActive ? "#000000" : "#a1a1aa",
+                  borderColor: isCompleted || isActive ? "#e32f8c" : "#d4d4d8",
+                  color: isCompleted || isActive ? "#ffffff" : "#71717a",
                   scale: isClickable ? 1 : 0.95,
-                  opacity: isClickable ? 1 : 0.5,
+                  opacity: isClickable ? 1 : 0.65,
                 }}
                 whileHover={isClickable ? { scale: 1.1 } : {}}
                 whileTap={isClickable ? { scale: 0.9 } : {}}
@@ -78,7 +78,7 @@ export function StepIndicator({
                   <Icon className="w-6 h-6" />
                 )}
               </motion.button>
-              <span className={`text-[11px] font-black uppercase tracking-widest transition-colors ${isActive || isCompleted ? "text-black" : "text-zinc-400"}`}>
+              <span className={`text-[11px] font-black uppercase tracking-widest transition-colors ${isActive || isCompleted ? "text-zinc-950" : "text-zinc-500"}`}>
                 {step.name}
               </span>
             </div>

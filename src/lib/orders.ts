@@ -58,7 +58,7 @@ export interface OrderData {
 /**
  * Saves the order to the Supabase 'orders' table.
  */
-async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise<{ isDuplicateRace: boolean }> {
+async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise<{ isDuplicateRace: boolean; emailSentAt: string | null }> {
   console.log(`💾 [ORDER DB] Saving Order #${order.id} to Supabase...`);
   
   try {
@@ -66,7 +66,7 @@ async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise
     const paymentId = order.paymentIntentId || order.id;
     const { data: existingOrder } = await supabaseAdmin
       .from('orders')
-      .select('id, receipt_url, carrier_metadata, tracking_number')
+      .select('id, status, receipt_url, carrier_metadata, tracking_number, email_sent_at')
       .eq('payment_intent_id', paymentId)
       .order('created_at', { ascending: true })
       .limit(1)
@@ -112,6 +112,11 @@ async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise
       ...(order.stripeChargeId ? { stripe_charge_id: order.stripeChargeId } : {}),
     };
 
+    const preservedStatus =
+      existingOrder?.status && existingOrder.status !== 'failed' && existingOrder.status !== 'pending'
+        ? existingOrder.status
+        : (order.status || 'processing');
+
     const payload = {
       payment_intent_id: paymentId,
       subtotal: order.subtotal,
@@ -120,7 +125,7 @@ async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise
       shipping_amount: order.shipping,
       coupon_id: resolvedCouponId,
       currency: order.currency.toUpperCase(),
-      status: order.status || 'processing',
+      status: preservedStatus,
       payment_method: order.paymentMethod,
       shipping_type: order.shippingType,
       carrier_id: order.carrierId,
@@ -134,7 +139,7 @@ async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise
       addr_line2: order.customer.addr_line2 || null,
       addr_city: order.customer.addr_city,
       addr_county: order.customer.addr_county || null,
-      addr_zip: order.customer.addr_zip,
+      addr_zip: order.customer.addr_zip ?? '',
       addr_country: order.customer.addr_country,
       items: order.items,
       tracking_number: trackingNumber || existingOrder?.tracking_number || null,
@@ -148,6 +153,7 @@ async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise
 
     let saveError;
     let isNewInsert = false;
+    let resolvedEmailSentAt: string | null = existingOrder?.email_sent_at || null;
     if (existingOrder?.id) {
       console.log(`📝 [ORDER DB] Updating existing order: ${paymentId}`);
       const { error } = await supabaseAdmin
@@ -171,23 +177,29 @@ async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise
         isNewInsert = false;
         const { data: raceRow } = await supabaseAdmin
           .from('orders')
-          .select('id, receipt_url, carrier_metadata, tracking_number')
+          .select('id, status, receipt_url, carrier_metadata, tracking_number, email_sent_at')
           .eq('payment_intent_id', paymentId)
           .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle();
 
         if (raceRow?.id) {
+          resolvedEmailSentAt = raceRow.email_sent_at || resolvedEmailSentAt;
           const existingRaceMeta = (raceRow.carrier_metadata || {}) as Record<string, any>;
           const raceMeta = {
             ...existingRaceMeta,
             ...mergedCarrierMetadata,
             order_number: existingRaceMeta.order_number || mergedCarrierMetadata.order_number,
           };
+          const raceStatus =
+            raceRow.status && raceRow.status !== 'failed' && raceRow.status !== 'pending'
+              ? raceRow.status
+              : payload.status;
           const { error: fallbackErr } = await supabaseAdmin
             .from('orders')
             .update({
               ...payload,
+              status: raceStatus,
               receipt_url: raceRow.receipt_url || payload.receipt_url,
               tracking_number: raceRow.tracking_number || payload.tracking_number,
               carrier_metadata: raceMeta,
@@ -213,24 +225,34 @@ async function saveOrderToDb(order: OrderData, trackingNumber?: string): Promise
        const { error: rpcError } = await supabaseAdmin.rpc('increment_coupon_usage', { coupon_id: resolvedCouponId });
        
        if (rpcError) {
-         console.warn('⚠️ [ORDER DB] RPC increment failed, using fallback:', rpcError.message);
-         const { data: c } = await supabaseAdmin
-           .from('coupons')
-           .select('used_count')
-           .eq('id', resolvedCouponId)
-           .limit(1)
-           .maybeSingle();
-         if (c) {
-           await supabaseAdmin
+         console.warn('⚠️ [ORDER DB] RPC increment failed, using CAS fallback:', rpcError.message);
+         for (let attempt = 0; attempt < 3; attempt++) {
+           const { data: c } = await supabaseAdmin
              .from('coupons')
-             .update({ used_count: (c.used_count || 0) + 1 })
+             .select('used_count')
+             .eq('id', resolvedCouponId)
+             .limit(1)
+             .maybeSingle();
+           if (!c) break;
+
+           const currentUsed = typeof c.used_count === 'number' ? c.used_count : 0;
+           let updateQuery = supabaseAdmin
+             .from('coupons')
+             .update({ used_count: currentUsed + 1 })
              .eq('id', resolvedCouponId);
+           updateQuery =
+             c.used_count === null || c.used_count === undefined
+               ? updateQuery.is('used_count', null)
+               : updateQuery.eq('used_count', c.used_count);
+
+           const { data: updatedCoupon } = await updateQuery.select('id').maybeSingle();
+           if (updatedCoupon?.id) break;
          }
        }
     }
     
     console.log('✅ [ORDER DB] Order successfully saved in Supabase.');
-    return { isDuplicateRace };
+    return { isDuplicateRace, emailSentAt: resolvedEmailSentAt };
   } catch (err) {
     console.error('❌ [ORDER DB] Failed to persist order:', err instanceof Error ? err.message : err);
     // We log but don't strictly halt the process if DB fails after payment, 
@@ -367,7 +389,7 @@ export async function processOrder(
 
     orderData.items = orderData.items.map((item: any) => {
       const match = item.id?.match(BUNDLE_REGEX);
-      const isBundle = !!match || String(item.name || '').toLowerCase().includes('pachet') || String(item.name || '').toLowerCase().includes('bundle');
+      const isBundle = !!match || !!item.bundleId || String(item.name || '').toLowerCase().includes('pachet') || String(item.name || '').toLowerCase().includes('bundle');
       const realId = match ? match[1] : item.id;
       const p = physicalData?.find(d => d.id === realId);
       
@@ -405,8 +427,13 @@ export async function processOrder(
             ? (variantObj.name[loc] || variantObj.name.ro || variantObj.name.en || Object.values(variantObj.name)[0])
             : variantObj.name;
           
-          // Check variants from DB
-          const variantsData = typeof p.variants === 'string' ? JSON.parse(p.variants) : p.variants;
+          // Check variants from DB safely
+          let variantsData: any = null;
+          if (typeof p.variants === 'string') {
+            try { variantsData = JSON.parse(p.variants); } catch { variantsData = null; }
+          } else {
+            variantsData = p.variants;
+          }
           if (variantsData?.options) {
             const opt = variantsData.options.find((o: any) => {
               const oRo = typeof o.name === 'object' ? o.name.ro : o.name;
@@ -431,13 +458,17 @@ export async function processOrder(
       }
 
       let finalNameStr = String(displayName);
+      let resolvedVariantStr: string | null = null;
       if (variantObj?.name) {
           const loc = orderData.locale || 'ro';
           const vName = typeof variantObj.name === 'object'
             ? (variantObj.name[loc] || variantObj.name.ro || variantObj.name.en || Object.values(variantObj.name)[0])
             : variantObj.name;
-          if (vName && !finalNameStr.includes(vName)) {
-             finalNameStr = `${finalNameStr} (${vName})`;
+          if (vName) {
+            resolvedVariantStr = String(vName);
+            if (!finalNameStr.includes(resolvedVariantStr)) {
+              finalNameStr = `${finalNameStr} (${resolvedVariantStr})`;
+            }
           }
       }
 
@@ -456,6 +487,7 @@ export async function processOrder(
         price: finalPrice, 
         image: finalImage, 
         slug: item.slug || p?.slug || '',
+        variant: resolvedVariantStr || item.variant || null,
         is_digital: Boolean(item.is_digital || p?.specs_summary?.is_digital || isDigitalProgramItem(p || item)),
         specs_summary: p?.specs_summary || item.specs_summary,
         selectedVariant: variantObj ? {
@@ -548,7 +580,10 @@ export async function processOrder(
     const paymentIdKey = orderData.paymentIntentId || orderData.id;
 
     // 2. [PRIORITY 1] ALWAYS save the order in DB FIRST — never lose a paid order
-    let dbSaveResult: { isDuplicateRace: boolean } = { isDuplicateRace: false };
+    let dbSaveResult: { isDuplicateRace: boolean; emailSentAt: string | null } = {
+      isDuplicateRace: false,
+      emailSentAt: null,
+    };
     try {
       console.log('💾 [PHASE 1] Initial DB Save (Safety First)...');
       dbSaveResult = await saveOrderToDb(
@@ -631,7 +666,15 @@ export async function processOrder(
         customer: {
           ...orderData.customer,
           name: `${orderData.customer.firstName} ${orderData.customer.lastName}`.trim(),
-          address: `${orderData.customer.addr_line1}, ${orderData.customer.addr_city}, ${orderData.customer.addr_zip}, ${orderData.customer.addr_country}`
+          address: [
+            orderData.customer.addr_line1,
+            orderData.customer.addr_city,
+            orderData.customer.addr_zip,
+            orderData.customer.addr_country,
+          ]
+            .map((v) => String(v || '').trim())
+            .filter(Boolean)
+            .join(', ')
         }
       };
       pdfBuffer = await generateInvoicePdf(legacyOrderData);
@@ -724,21 +767,35 @@ export async function processOrder(
     }
 
     if (orderData.customer.email && !orderData.customer.email.includes('lipsa-email@')) {
-      try {
-        console.log('📧 [PHASE 4] Sending confirmation email...');
-        await sendOrderConfirmationEmail(orderData.customer.email, {
-          ...orderData,
-          customer: {
-            ...orderData.customer,
-            name: `${orderData.customer.firstName} ${orderData.customer.lastName}`.trim()
-          },
-          trackingNumber: barcode || undefined
-        }, pdfBuffer);
-        console.log('✅ [PHASE 4] SUCCESS: Email sent.');
-      } catch (emailErr: any) {
-        const msg = formatErrorMessage(emailErr);
-        console.error('⚠️ [PHASE 4] Email confirmation failed (NON-FATAL — keeping active order status):', msg);
-        commErrors.push(`Email: ${msg}`);
+      if (dbSaveResult.emailSentAt) {
+        console.log(`⏭️ [PHASE 4] Confirmation email already sent at ${dbSaveResult.emailSentAt}. Skipping duplicate send.`);
+      } else {
+        try {
+          console.log('📧 [PHASE 4] Sending confirmation email...');
+          await sendOrderConfirmationEmail(orderData.customer.email, {
+            ...orderData,
+            customer: {
+              ...orderData.customer,
+              name: `${orderData.customer.firstName} ${orderData.customer.lastName}`.trim()
+            },
+            trackingNumber: barcode || undefined
+          }, pdfBuffer);
+          console.log('✅ [PHASE 4] SUCCESS: Email sent.');
+          try {
+            const sentAtIso = new Date().toISOString();
+            await supabaseAdmin
+              .from('orders')
+              .update({ email_sent_at: sentAtIso, updated_at: sentAtIso })
+              .eq('payment_intent_id', paymentIdKey)
+              .is('email_sent_at', null);
+          } catch (stampErr) {
+            console.warn('⚠️ [PHASE 4] Could not persist email_sent_at timestamp:', stampErr);
+          }
+        } catch (emailErr: any) {
+          const msg = formatErrorMessage(emailErr);
+          console.error('⚠️ [PHASE 4] Email confirmation failed (NON-FATAL — keeping active order status):', msg);
+          commErrors.push(`Email: ${msg}`);
+        }
       }
 
       // 4.1 [DIGITAL PROGRAMS INSTANT DELIVERY] If order contains Food Plan / Bench Program, send dedicated PDF email

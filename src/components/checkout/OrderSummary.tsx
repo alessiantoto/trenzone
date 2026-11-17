@@ -125,33 +125,34 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
   }, []);
 
   return (
-    <div className="bg-white border border-zinc-100 rounded-[2.5rem] overflow-hidden shadow-sm transition-all duration-500">
+    <div className="bg-white text-zinc-900 border border-zinc-200/80 rounded-[2.5rem] overflow-hidden shadow-sm transition-all duration-500">
       {/* Mobile Toggle & Header */}
       <button
         type="button"
         onClick={() => isMobile && setIsExpanded(!isExpanded)}
-        className={`w-full px-5 py-4 md:px-8 md:py-6 flex items-center justify-between transition-all ${isMobile ? 'hover:bg-zinc-50/50 active:scale-[0.99] cursor-pointer' : 'cursor-default'}`}
+        className={`w-full px-5 py-4 md:px-8 md:py-6 flex items-center justify-between text-zinc-900 transition-all ${isMobile ? 'hover:bg-zinc-50/50 active:scale-[0.99] cursor-pointer' : 'cursor-default'}`}
       >
         <div className="flex items-center gap-3">
           <div className="relative">
-            <ShoppingBag className="w-5 h-5 text-black" />
-            <span className="absolute -top-2 -right-2 w-4 h-4 bg-[#e32f8c] text-black text-[8px] font-black rounded-full flex items-center justify-center">
+            <ShoppingBag className="w-5 h-5 text-zinc-950" />
+            <span className="absolute -top-2 -right-2 w-4 h-4 bg-[#e32f8c] text-white text-[8px] font-black rounded-full flex items-center justify-center">
               {totalQuantityBadge}
             </span>
           </div>
-          <span className="text-sm font-black uppercase tracking-tight text-black flex items-center gap-2">
+          <span className="text-sm font-black uppercase tracking-tight text-zinc-950 flex items-center gap-2">
             {t('order_summary')}
             {isMobile && (
               <motion.div
                 animate={{ rotate: isExpanded ? 180 : 0 }}
                 transition={{ duration: 0.3 }}
+                className="text-zinc-700"
               >
                 <ChevronDown className="w-4 h-4" />
               </motion.div>
             )}
           </span>
         </div>
-        <span className="text-xl font-black text-black">
+        <span className="text-xl font-black text-zinc-950">
           {formatPrice(finalDisplayTotal, displayCurrency)}
         </span>
       </button>
@@ -258,13 +259,13 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
 
                 {/* 3. Coupon Discount */}
                 {couponDiscount > 0 && (
-                  <div className="flex justify-between items-center text-sm bg-green-50/50 p-2 rounded-xl border border-green-100">
-                    <span className="font-bold uppercase tracking-widest text-[10px] text-green-600 flex items-center gap-1.5">
-                      <Ticket className="w-3 h-3" />
+                  <div className="flex justify-between items-center text-sm bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80">
+                    <span className="font-bold uppercase tracking-widest text-[10px] text-emerald-800 flex items-center gap-1.5">
+                      <Ticket className="w-3.5 h-3.5 shrink-0" />
                       {appliedCoupon?.code}
                       {appliedCoupon?.type === 'percentage' ? ` (-${appliedCoupon.value}%)` : ''}
                     </span>
-                    <span className="font-black text-[#00e676] drop-shadow-[0_0_8px_rgba(0,230,118,0.4)]">-{formatPrice(couponDiscount, displayCurrency)}</span>
+                    <span className="font-black text-emerald-700">-{formatPrice(couponDiscount, displayCurrency)}</span>
                   </div>
                 )}
 
@@ -276,14 +277,14 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                   ) : (isFreeShipping || shippingCost === 0) ? (
                     <div className="flex flex-col items-end">
                       {isFreeShipping && !digitalOnly && rawShippingCost > 0 && (
-                        <span className="text-[10px] text-zinc-400 line-through">
+                        <span className="text-[10px] text-zinc-500 line-through">
                           {formatPrice(rawShippingCost, displayCurrency)}
                         </span>
                       )}
-                      <span className="font-semibold text-green-600">{t('free')}</span>
+                      <span className="font-semibold text-emerald-700">{t('free')}</span>
                     </div>
                   ) : (
-                    <span className="font-semibold text-black">{formatPrice(shippingCost, displayCurrency)}</span>
+                    <span className="font-semibold text-zinc-950">{formatPrice(shippingCost, displayCurrency)}</span>
                   )}
                 </div>
 
@@ -291,7 +292,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 {!digitalOnly && priorityProcessing && (
                   <div className="flex justify-between text-sm">
                     <span className="text-zinc-600">{locale === 'en' ? 'Priority Processing' : 'Procesare Prioritară'}</span>
-                    <span className="font-semibold text-black">+{formatPrice(priorityCost, displayCurrency)}</span>
+                    <span className="font-semibold text-zinc-950">+{formatPrice(priorityCost, displayCurrency)}</span>
                   </div>
                 )}
 
@@ -299,28 +300,37 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 {!digitalOnly && giftPackaging && (
                   <div className="flex justify-between text-sm">
                     <span className="text-zinc-600">{locale === 'en' ? 'Gift Packaging' : 'Împachetare Cadou'}</span>
-                    <span className="font-semibold text-black">+{formatPrice(giftCost, displayCurrency)}</span>
+                    <span className="font-semibold text-zinc-950">+{formatPrice(giftCost, displayCurrency)}</span>
                   </div>
                 )}
 
                 {/* 7. Card Discount — același stil ca și cuponul, fără fundal negru */}
                 {cardDiscount > 0 && (
-                  <div className="flex justify-between items-center text-sm bg-green-50/50 p-2 rounded-xl border border-green-100">
-                    <span className="font-bold uppercase tracking-widest text-[10px] text-green-600 flex items-center gap-1.5">
+                  <div className="flex justify-between items-center text-sm bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80">
+                    <span className="font-bold uppercase tracking-widest text-[10px] text-emerald-800 flex items-center gap-1.5">
                       <CreditCard className="w-3.5 h-3.5 shrink-0" />
                       <span>{locale === 'en' ? 'Card Discount' : 'Reducere Card'}</span>
                     </span>
-                    <span className="font-black text-[#00e676] drop-shadow-[0_0_8px_rgba(0,230,118,0.4)]">-{formatPrice(cardDiscount, displayCurrency)}</span>
+                    <span className="font-black text-emerald-700">-{formatPrice(cardDiscount, displayCurrency)}</span>
                   </div>
                 )}
 
                 {/* 8. Total */}
-                <div className="pt-6 mt-4 border-t border-zinc-100 flex justify-between items-center">
-                  <span className="text-base font-semibold text-black">Total</span>
+                <div className="pt-6 mt-4 border-t border-zinc-200/70 flex justify-between items-center">
+                  <span className="text-base font-semibold text-zinc-950">Total</span>
                   <div className="text-right flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-black leading-none">{formatPrice(finalDisplayTotal, displayCurrency)}</span>
+                    <span className="text-2xl font-bold text-zinc-950 leading-none">{formatPrice(finalDisplayTotal, displayCurrency)}</span>
                   </div>
                 </div>
+
+                {/* RON Notice when browsing in foreign currency & COD selected */}
+                {paymentMethod === 'cod' && currency !== 'RON' && (
+                  <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-900 leading-relaxed">
+                    {locale === 'ro'
+                      ? 'Plata ramburs la livrare se efectuează exclusiv în RON.'
+                      : 'Cash on delivery orders in Romania are billed strictly in RON.'}
+                  </div>
+                )}
 
                 {/* Non-EU Customs & Import Tax Disclosure */}
                 {!digitalOnly && !isEuCustomsCountry(shippingParams?.country || storedCountry) && (
@@ -332,13 +342,13 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 )}
 
                 {/* Secure Payment — Stripe */}
-                <div className="pt-6 flex flex-col items-center gap-2">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-zinc-300">
+                <div className="pt-6 flex flex-col items-center gap-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">
                     {locale === 'ro' ? 'Plată securizată prin Stripe' : 'Secured payment by Stripe'}
                   </span>
-                  <div className="flex items-center gap-1 opacity-30">
-                    <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-                    <span className="text-[9px] text-zinc-400 font-bold">SSL / TLS Encrypted</span>
+                  <div className="flex items-center gap-1.5 text-zinc-400">
+                    <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
+                    <span className="text-[9px] text-zinc-500 font-bold">SSL / TLS Encrypted</span>
                   </div>
                 </div>
               </div>

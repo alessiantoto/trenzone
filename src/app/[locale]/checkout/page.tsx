@@ -27,33 +27,66 @@ const appearance = {
   variables: { 
     colorPrimary: '#e32f8c',
     colorBackground: '#ffffff',
-    colorText: '#000000',
+    colorText: '#111827',
+    colorTextSecondary: '#6b7280',
     colorDanger: '#ef4444',
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: 'Inter, system-ui, sans-serif',
     spacingUnit: '4px',
-    borderRadius: '16px',
-    fontSizeBase: '16px',
+    borderRadius: '14px',
+    fontSizeBase: '15px',
+    fontWeightMedium: '600',
+    fontWeightBold: '700',
   },
   rules: {
     '.Input': {
       backgroundColor: '#f8fafc',
-      border: '1px solid #f1f5f9',
+      border: '1px solid #e2e8f0',
       boxShadow: 'none',
+      color: '#111827',
       transition: 'all 0.2s ease',
     },
     '.Input:focus': {
       backgroundColor: '#ffffff',
       border: '1px solid #e32f8c',
-      boxShadow: '0 0 0 4px rgba(227, 47, 140, 0.1)',
+      boxShadow: '0 0 0 3px rgba(227, 47, 140, 0.12)',
+    },
+    '.Tab': {
+      border: '1px solid #e2e8f0',
+      borderRadius: '14px',
+      backgroundColor: '#ffffff',
+      color: '#111827',
+    },
+    '.Tab--selected': {
+      border: '2px solid #e32f8c',
+      backgroundColor: '#ffffff',
+      color: '#111827',
+    },
+    '.AccordionItem': {
+      border: '1px solid #e2e8f0',
+      padding: '16px 18px',
+      marginBottom: '10px',
+      borderRadius: '18px',
+      backgroundColor: '#ffffff',
+      color: '#111827',
+      transition: 'all 0.2s ease',
+    },
+    '.AccordionItem--selected': {
+      border: '2px solid #e32f8c',
+      boxShadow: '0 8px 20px rgba(227, 47, 140, 0.10)',
+      backgroundColor: '#ffffff',
+      color: '#111827',
+    },
+    '.AccordionItem:hover': {
+      borderColor: '#e32f8c',
     },
     '.Label': {
-      fontSize: '10px',
-      fontWeight: '900',
+      fontSize: '11px',
+      fontWeight: '700',
       textTransform: 'uppercase',
-      letterSpacing: '0.1em',
-      color: '#a1a1aa',
-      marginBottom: '8px',
-      marginLeft: '4px',
+      letterSpacing: '0.08em',
+      color: '#4b5563',
+      marginBottom: '6px',
+      marginLeft: '2px',
     }
   }
 };
@@ -184,52 +217,9 @@ export default function CheckoutPage() {
 
   const options: any = useMemo(() => {
     const baseOptions = {
-      appearance: {
-        ...appearance,
-        variables: {
-          ...appearance.variables,
-          spacingUnit: '5px',
-          fontWeightMedium: '700',
-          fontWeightBold: '900',
-        },
-        rules: {
-          ...appearance.rules,
-          '.AccordionItem': {
-            border: '2px solid #f1f5f9',
-            padding: '24px 20px',
-            marginBottom: '12px',
-            borderRadius: '24px',
-            transition: 'all 0.2s ease',
-          },
-          '.AccordionItem--selected': {
-            border: '2px solid #e32f8c',
-            boxShadow: '0 8px 16px rgba(227, 47, 140, 0.12)',
-            backgroundColor: '#ffffff',
-          },
-          '.AccordionItem:hover': {
-            borderColor: '#e32f8c',
-          },
-          '.Label': {
-             fontSize: '12px',
-             fontWeight: '900',
-             textTransform: 'uppercase',
-             letterSpacing: '0.1em',
-             color: '#000000',
-          }
-        }
-      },
+      appearance,
       locale: locale as any,
-      business: { name: 'TrenZone' },
     };
-
-    const paymentLayout = {
-      type: 'accordion' as const,
-      defaultCollapsed: false,
-      radios: true,
-      spacedAccent: true,
-    };
-
-    const paymentMethodOrder = ['apple_pay', 'google_pay', 'blik', 'card', 'revolut_pay', 'bancontact', 'ideal'];
 
     // total from getTotals(currency) is already in the selected currency
     const localizedTotal = total;
@@ -238,8 +228,6 @@ export default function CheckoutPage() {
       return {
         ...baseOptions,
         clientSecret,
-        layout: paymentLayout,
-        paymentMethodOrder,
       };
     }
 
@@ -251,8 +239,6 @@ export default function CheckoutPage() {
       mode: 'payment' as const,
       amount: Math.max(1, Math.round(localizedTotal * multiplier)),
       currency: currency.toLowerCase(),
-      layout: paymentLayout,
-      paymentMethodOrder,
     };
   }, [clientSecret, total, currency, locale]);
 
@@ -266,8 +252,8 @@ export default function CheckoutPage() {
         >
           <ShoppingBag className="w-10 h-10" />
         </motion.div>
-        <h2 className="text-3xl font-black uppercase tracking-tighter text-black mb-3 italic">{t('empty_cart')}</h2>
-        <p className="text-zinc-400 font-black uppercase tracking-widest text-[10px] mb-10 max-w-xs leading-loose">
+        <h2 className="text-3xl font-black uppercase tracking-tighter text-zinc-950 mb-3 italic">{t('empty_cart')}</h2>
+        <p className="text-zinc-500 font-black uppercase tracking-widest text-[10px] mb-10 max-w-xs leading-loose">
           {t('empty_cart_desc')}
         </p>
         <Link href="/shop" className="group flex items-center gap-4 bg-black text-white px-12 py-6 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-[#e32f8c] hover:text-black transition-all shadow-xl shadow-black/10">
@@ -282,16 +268,16 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-[#fafafc] text-zinc-900 [color-scheme:light] pt-8 md:pt-24 pb-12" style={{ '--primary': '#e32f8c' } as React.CSSProperties}>
       <div className="container mx-auto px-4 md:px-6">
         <header className="mb-6 md:mb-12 max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
-           <Link href="/" className="inline-flex items-center gap-3 text-zinc-400 hover:text-black transition-colors group">
-              <div className="w-8 h-8 rounded-xl bg-white border border-zinc-100 flex items-center justify-center group-hover:border-[#e32f8c] transition-colors">
+           <Link href="/" className="inline-flex items-center gap-3 text-zinc-600 hover:text-zinc-950 transition-colors group">
+              <div className="w-8 h-8 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-700 group-hover:border-[#e32f8c] group-hover:text-zinc-950 transition-colors">
                 <ArrowLeft className="w-4 h-4" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest leading-none">{t('back_to_site')}</span>
            </Link>
-           <h1 className="text-3xl md:text-6xl font-black uppercase tracking-tighter text-black leading-none italic">
+           <h1 className="text-3xl md:text-6xl font-black uppercase tracking-tighter text-zinc-950 leading-none italic">
              {t('title').split(' ')[0]} <span className="text-[#e32f8c] italic">{t('title').split(' ').slice(1).join(' ')}</span>
            </h1>
-           <div className="hidden lg:flex items-center gap-4 text-zinc-400">
+           <div className="hidden lg:flex items-center gap-4 text-zinc-500">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-[#e32f8c]" />
                 <span className="text-[8px] font-black uppercase tracking-[0.2em]">{t('secure_badge')}</span>

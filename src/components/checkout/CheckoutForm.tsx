@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCartStore, isPreorder } from "@/store/useCartStore";
-import { ChevronRight, Truck, MapPin, ShieldCheck, Check, Loader2, Lock } from "lucide-react";
+import { ChevronRight, Truck, MapPin, ShieldCheck, Check, Loader2, Lock, Plus } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter, Link } from "@/i18n/routing";
 import { getShippingServices, getLocalizedServiceName, getShippingCost, isServiceAvailable, ParcelMetrics, COUNTRY_SERVICES, ALLOWED_SHIPPING_COUNTRIES, EXPRESS_ALLOWED_COUNTRIES, toStripeIsoCountryCode, isEuCustomsCountry } from "@/lib/shipping-config";
@@ -265,8 +265,8 @@ const StripePaymentSection = ({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-zinc-100 p-6 rounded-3xl border border-zinc-100 font-bold min-h-[220px] flex flex-col justify-center relative overflow-hidden">
+    <div className="space-y-6 text-zinc-900">
+      <div className="bg-zinc-50 p-4 sm:p-6 rounded-3xl border border-zinc-200/80 text-zinc-900 font-bold min-h-[220px] flex flex-col justify-center relative overflow-hidden">
         {(isUpdatingPaymentInfo || !stripe || !elements) && (
           <div className="absolute inset-0 bg-zinc-100/95 backdrop-blur-[2px] z-10 flex flex-col justify-center gap-3 p-6" aria-label={t('loading_payment_methods')}>
             <div className="grid grid-cols-2 gap-2.5">
@@ -310,7 +310,18 @@ const StripePaymentSection = ({
             />
           </div>
         )}
-        <PaymentElement onReady={() => setMessage(null)} />
+        <PaymentElement
+          onReady={() => setMessage(null)}
+          options={{
+            layout: {
+              type: 'accordion',
+              defaultCollapsed: false,
+              radios: true,
+              spacedAccordionItems: true,
+            },
+            paymentMethodOrder: ['card', 'apple_pay', 'google_pay', 'revolut_pay', 'link', 'klarna', 'bancontact', 'ideal'],
+          }}
+        />
       </div>
       
       {message && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-bold border border-red-100">{message}</div>}
@@ -411,7 +422,14 @@ const StripePaymentSection = ({
       </AnimatePresence>
 
       <div className="flex gap-4 pt-2">
-        <Button type="button" variant="outline" onClick={handleBack} disabled={loading} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer">{t('back')}</Button>
+        <button
+          type="button"
+          onClick={handleBack}
+          disabled={loading}
+          className="flex-1 h-14 rounded-2xl bg-white text-zinc-900 border-2 border-zinc-200 hover:bg-zinc-100 hover:border-zinc-300 hover:text-black font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none inline-flex items-center justify-center"
+        >
+          {t('back')}
+        </button>
         <Button 
           onClick={handleStripeSubmit} 
           disabled={loading || isUpdatingPaymentInfo || !stripe || !elements} 
@@ -535,7 +553,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, error, label }: C
           <motion.div
             animate={{ rotate: isOpen ? 180 : 0 }}
             transition={{ duration: 0.2 }}
-            className="opacity-40"
+            className="text-zinc-500"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
           </motion.div>
@@ -1698,9 +1716,22 @@ export default function CheckoutForm({
     }
 
     if (currentStep === 2) {
-      if (shippingType === 'pudo' && !selectedBranches[selectedServiceId]) {
+      const effectiveShippingType: 'hd' | 'pudo' = !lockersAllowed ? 'hd' : shippingType;
+      const validServices = getShippingServices(country, effectiveShippingType, { lockersEnabled: lockersAllowed });
+      const effectiveCarrierId = validServices.some(s => s.id === selectedServiceId)
+        ? selectedServiceId
+        : (validServices[0]?.id || (country === 'RO' ? '7' : ''));
+
+      if (effectiveShippingType === 'pudo' && !selectedBranches[effectiveCarrierId]) {
         setMessage(t('choose_pickup'));
         return;
+      }
+
+      if (effectiveShippingType !== shippingType) {
+        setShippingType(effectiveShippingType);
+      }
+      if (effectiveCarrierId && effectiveCarrierId !== selectedServiceId) {
+        setSelectedServiceId(effectiveCarrierId);
       }
 
       // ⚡ INSTANT TRANSITION
@@ -1721,10 +1752,10 @@ export default function CheckoutForm({
               body: JSON.stringify({
                 paymentIntentId,
                 clientSecret,
-                shipping_type: shippingType,
-                carrier_id: selectedServiceId,
-                branch_id: selectedBranches[selectedServiceId]?.id || "",
-                branch_name: selectedBranches[selectedServiceId]?.name || "",
+                shipping_type: effectiveShippingType,
+                carrier_id: effectiveCarrierId,
+                branch_id: effectiveShippingType === 'pudo' ? (selectedBranches[effectiveCarrierId]?.id || "") : "",
+                branch_name: effectiveShippingType === 'pudo' ? (selectedBranches[effectiveCarrierId]?.name || "") : "",
                 payment_method: "online",
                 firstName, lastName, email,
                 phone: formatPhoneWithPrefix(phone, phoneCountry),
@@ -1767,6 +1798,11 @@ export default function CheckoutForm({
 
     if (submittingCodRef.current) return;
 
+    if (!agreedToTerms) {
+      triggerTermsError();
+      return;
+    }
+
     if (hasDigitalItems) {
       setMessage(locale === 'ro'
         ? 'Comenzile care includ programe digitale se achită exclusiv online cu cardul.'
@@ -1782,12 +1818,42 @@ export default function CheckoutForm({
       return;
     }
 
-    if (shippingType === 'pudo' && !selectedBranches[selectedServiceId]?.id) {
+    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    const isFirstNameValid = firstName.trim().length >= 2;
+    const isLastNameValid = lastName.trim().length >= 2;
+    const isAddressValid = line1.trim().length >= 3;
+    const isCityValid = city.trim().length >= 2;
+    const isPhoneValid = phone.trim().replace(/\D/g, '').length >= 8;
+    const isStateValid = !!state && state.trim().length > 0;
+    if (!isEmailValid || !isFirstNameValid || !isLastNameValid || !isAddressValid || !isCityValid || !isPhoneValid || !isStateValid) {
+      setErrors({
+        email: !isEmailValid,
+        firstName: !isFirstNameValid,
+        lastName: !isLastNameValid,
+        name: !isFirstNameValid || !isLastNameValid,
+        address: !isAddressValid,
+        city: !isCityValid,
+        phone: !isPhoneValid,
+        state: !isStateValid,
+      });
+      setMessage(t('validation_error'));
+      setCurrentStep(1);
+      return;
+    }
+
+    const effectiveShippingType: 'hd' | 'pudo' = !lockersAllowed ? 'hd' : shippingType;
+    const validCodServices = getShippingServices(country, effectiveShippingType, { lockersEnabled: lockersAllowed });
+    const effectiveCarrierId = validCodServices.some(s => s.id === selectedServiceId)
+      ? selectedServiceId
+      : (validCodServices[0]?.id || '7');
+
+    if (effectiveShippingType === 'pudo' && !selectedBranches[effectiveCarrierId]?.id) {
       setMessage(t('choose_pickup'));
       setCurrentStep(2);
       return;
     }
 
+    setMessage(null);
     submittingCodRef.current = true;
     setLoading(true);
 
@@ -1802,10 +1868,10 @@ export default function CheckoutForm({
           email, firstName, lastName,
           phone: formatPhoneWithPrefix(phone, phoneCountry),
           line1, line2, city, state, postal_code: postalCode, country,
-          shipping_type: shippingType,
-          carrier_id: selectedServiceId,
-          branch_id: selectedBranches[selectedServiceId]?.id || "",
-          branch_name: selectedBranches[selectedServiceId]?.name || "",
+          shipping_type: effectiveShippingType,
+          carrier_id: effectiveCarrierId,
+          branch_id: effectiveShippingType === 'pudo' ? (selectedBranches[effectiveCarrierId]?.id || "") : "",
+          branch_name: effectiveShippingType === 'pudo' ? (selectedBranches[effectiveCarrierId]?.name || "") : "",
           items: items.map(i => {
             const isDigital = isDigitalProgramItem(i);
             const isBundle = !isDigital && (String(i.id).includes('-bundle-') || (i.name && String(i.name).toLowerCase().includes('pachet')));
@@ -1849,7 +1915,7 @@ export default function CheckoutForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full" noValidate>
+    <form onSubmit={handleSubmit} className="w-full text-zinc-900" noValidate>
       <style dangerouslySetInnerHTML={{ __html: pacStyles }} />
 
       {isMixedCart && (
@@ -2180,14 +2246,14 @@ export default function CheckoutForm({
 
                 if (hdServices.length === 0 && pudoServices.length === 0) {
                   return (
-                    <div className="p-8 bg-zinc-100 border border-dashed border-zinc-200 rounded-[2rem] text-center">
-                      <Truck className="w-10 h-10 text-zinc-300 mx-auto mb-4" />
+                    <div className="p-8 bg-zinc-100 border border-dashed border-zinc-200 rounded-[2rem] text-center text-zinc-900">
+                      <Truck className="w-10 h-10 text-zinc-400 mx-auto mb-4" />
                       <p className="text-xs font-bold text-zinc-800 uppercase leading-relaxed mb-4">
                         {t('shipping_special_case')}
                       </p>
                       <a
                         href="mailto:trenzone483@gmail.com"
-                        className="inline-block px-6 py-3 bg-white border border-zinc-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all"
+                        className="inline-block px-6 py-3 bg-white text-zinc-900 border border-zinc-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all"
                       >
                         {t('contact_us_cta', { defaultValue: 'Contactează-ne' })}
                       </a>
@@ -2201,16 +2267,16 @@ export default function CheckoutForm({
                       <div
                         key={service.id}
                         onClick={() => { setShippingType('hd'); setSelectedServiceId(service.id); }}
-                        className={`p-6 rounded-3xl border-2 transition-all cursor-pointer ${shippingType === 'hd' && selectedServiceId === service.id ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-white'}`}
+                        className={`p-6 rounded-3xl border-2 transition-all cursor-pointer text-zinc-900 ${shippingType === 'hd' && selectedServiceId === service.id ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-200/80 bg-white hover:border-zinc-300'}`}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-4">
-                            <Truck className={`w-6 h-6 ${shippingType === 'hd' && selectedServiceId === service.id ? 'text-[#e32f8c]' : 'text-zinc-400'}`} />
-                            <p className="text-sm font-black uppercase">{getLocalizedServiceName(service, locale, t)}</p>
+                            <Truck className={`w-6 h-6 shrink-0 ${shippingType === 'hd' && selectedServiceId === service.id ? 'text-[#e32f8c]' : 'text-zinc-500'}`} />
+                            <p className="text-sm font-black uppercase text-zinc-900">{getLocalizedServiceName(service, locale, t)}</p>
                           </div>
-                          <span className="font-black text-sm">
+                          <span className="font-black text-sm text-zinc-900 shrink-0">
                             {isFreeShipping || getShippingCost(country, 'hd', totalWeight, step2Currency, service.id) === 0
-                              ? <span className="text-green-600">{t('free')}</span>
+                              ? <span className="text-emerald-700">{t('free')}</span>
                               : formatPrice(getShippingCost(country, 'hd', totalWeight, step2Currency, service.id), step2Currency)}
                           </span>
                         </div>
@@ -2229,13 +2295,13 @@ export default function CheckoutForm({
                             openPacketaWidget(service.id); 
                           }
                         }}
-                        className={`p-6 rounded-3xl border-2 transition-all cursor-pointer ${shippingType === 'pudo' && selectedServiceId === service.id ? (service.provider === 'sameday' ? 'border-red-600 bg-red-50' : 'border-[#e32f8c] bg-[#e32f8c]/5') : 'border-zinc-100 bg-white'}`}
+                        className={`p-6 rounded-3xl border-2 transition-all cursor-pointer text-zinc-900 ${shippingType === 'pudo' && selectedServiceId === service.id ? (service.provider === 'sameday' ? 'border-red-600 bg-red-50' : 'border-[#e32f8c] bg-[#e32f8c]/5') : 'border-zinc-200/80 bg-white hover:border-zinc-300'}`}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-4">
-                            <MapPin className={`w-6 h-6 ${shippingType === 'pudo' && selectedServiceId === service.id ? (service.provider === 'sameday' ? 'text-red-600' : 'text-[#e32f8c]') : 'text-zinc-400'}`} />
+                            <MapPin className={`w-6 h-6 shrink-0 ${shippingType === 'pudo' && selectedServiceId === service.id ? (service.provider === 'sameday' ? 'text-red-600' : 'text-[#e32f8c]') : 'text-zinc-500'}`} />
                             <div className="flex-1">
-                              <p className="text-sm font-black uppercase text-black">{getLocalizedServiceName(service, locale, t)}</p>
+                              <p className="text-sm font-black uppercase text-zinc-900">{getLocalizedServiceName(service, locale, t)}</p>
                               
                               {shippingType === 'pudo' && selectedServiceId === service.id && service.provider === 'sameday' ? (
                                 <div className="mt-2">
@@ -2261,13 +2327,13 @@ export default function CheckoutForm({
                                   )}
                                 </div>
                               ) : (
-                                <p className="text-[9px] font-bold text-zinc-400 uppercase mt-0.5">{selectedBranches[service.id]?.name || t('choose_pickup')}</p>
+                                <p className="text-[9px] font-bold text-zinc-500 uppercase mt-0.5">{selectedBranches[service.id]?.name || t('choose_pickup')}</p>
                               )}
                             </div>
                           </div>
-                          <span className="font-black text-sm">
+                          <span className="font-black text-sm text-zinc-900 shrink-0">
                             {isFreeShipping || getShippingCost(country, 'pudo', totalWeight, step2Currency, service.id) === 0
-                              ? <span className="text-green-600">{t('free')}</span>
+                              ? <span className="text-emerald-700">{t('free')}</span>
                               : formatPrice(getShippingCost(country, 'pudo', totalWeight, step2Currency, service.id), step2Currency)}
                           </span>
                         </div>
@@ -2281,7 +2347,13 @@ export default function CheckoutForm({
             {message && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-bold border border-red-100 mb-4">{message}</div>}
 
             <div className="flex gap-4">
-              <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer">{t('back')}</Button>
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex-1 h-14 rounded-2xl bg-white text-zinc-900 border-2 border-zinc-200 hover:bg-zinc-100 hover:border-zinc-300 hover:text-black font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer inline-flex items-center justify-center"
+              >
+                {t('back')}
+              </button>
               <Button type="submit" disabled={!selectedServiceId} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-50 cursor-pointer">{locale === 'en' ? 'Next Step' : 'Următorul Pas'}</Button>
             </div>
           </motion.div>
@@ -2301,23 +2373,23 @@ export default function CheckoutForm({
               <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-[#e32f8c] italic">{t('step_label', { current: 3, total: 4 })}</span>
             </div>
 
-            <div className="space-y-4">
-              <label className={`flex flex-col gap-2 p-6 rounded-3xl border-2 transition-all cursor-pointer ${priorityProcessing ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-white hover:border-zinc-200'}`}>
+            <div className="space-y-4 text-zinc-900">
+              <label className={`flex flex-col gap-2 p-6 rounded-3xl border-2 transition-all cursor-pointer text-zinc-900 ${priorityProcessing ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-200/80 bg-white hover:border-zinc-300'}`}>
                 <div className="flex items-start gap-4">
                   <div className="relative flex items-center h-6 mt-1">
                     <input type="checkbox" checked={priorityProcessing} onChange={(e) => setPriorityProcessing(e.target.checked)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
                     <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${priorityProcessing ? 'bg-[#e32f8c] border-[#e32f8c]' : 'border-zinc-300 bg-white'}`}>
-                      {priorityProcessing && <Check className="w-4 h-4 text-black stroke-[3]" />}
+                      {priorityProcessing && <Check className="w-4 h-4 text-white stroke-[3]" />}
                     </div>
                   </div>
                   <div>
-                    <span className="text-sm font-black uppercase tracking-widest text-black">
+                    <span className="text-sm font-black uppercase tracking-widest text-zinc-900">
                       {locale === 'ro' ? 'Procesare Prioritară' : 'Priority Processing'}{' '}
                       <span className="text-[#e32f8c] text-xs font-black ml-1">
                         (+{formatPrice(getProductPrice(6.90, paymentMethod === 'cod' ? 'RON' : currency), paymentMethod === 'cod' ? 'RON' : currency)})
                       </span>
                     </span>
-                    <p className="text-xs text-zinc-500 font-medium mt-1">
+                    <p className="text-xs text-zinc-600 font-medium mt-1">
                       {locale === 'ro'
                         ? 'Comanda ta ajunge prima la ambalare și va fi predată curierului în cel mai scurt timp posibil.'
                         : 'Your order gets packed first and handed to the courier as fast as possible.'}
@@ -2326,7 +2398,7 @@ export default function CheckoutForm({
                 </div>
               </label>
 
-              <label className={`flex flex-col gap-2 p-6 rounded-3xl border-2 transition-all cursor-pointer ${giftPackaging ? 'border-[#ff007a] bg-[#ff007a]/5' : 'border-zinc-100 bg-white hover:border-zinc-200'}`}>
+              <label className={`flex flex-col gap-2 p-6 rounded-3xl border-2 transition-all cursor-pointer text-zinc-900 ${giftPackaging ? 'border-[#ff007a] bg-[#ff007a]/5' : 'border-zinc-200/80 bg-white hover:border-zinc-300'}`}>
                 <div className="flex items-start gap-4">
                   <div className="relative flex items-center h-6 mt-1">
                     <input type="checkbox" checked={giftPackaging} onChange={(e) => setGiftPackaging(e.target.checked)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
@@ -2335,13 +2407,13 @@ export default function CheckoutForm({
                     </div>
                   </div>
                   <div className="w-full">
-                    <span className="text-sm font-black uppercase tracking-widest text-black">
+                    <span className="text-sm font-black uppercase tracking-widest text-zinc-900">
                       {locale === 'ro' ? 'Împachetare Cadou' : 'Gift Packaging'}{' '}
                       <span className="text-[#ff007a] text-xs font-black ml-1">
                         (+{formatPrice(getProductPrice(14.90, paymentMethod === 'cod' ? 'RON' : currency), paymentMethod === 'cod' ? 'RON' : currency)})
                       </span>
                     </span>
-                    <p className="text-xs text-zinc-500 font-medium mt-1">
+                    <p className="text-xs text-zinc-600 font-medium mt-1">
                       {locale === 'ro'
                         ? 'Produsele vor fi ambalate festiv, perfecte pentru a fi oferite cadou.'
                         : 'Products will be festively wrapped, perfect for gifting.'}
@@ -2429,61 +2501,73 @@ export default function CheckoutForm({
                 };
 
                 return (
-                  <div className="p-5 sm:p-6 rounded-3xl border-2 border-zinc-100 bg-white transition-all">
-                    <div className="flex items-center justify-between gap-3 mb-3.5">
-                      <div>
-                        <span className="text-sm font-black uppercase tracking-widest text-black block">
+                  <div className="p-5 sm:p-6 rounded-3xl border-2 border-zinc-200/80 bg-white text-zinc-900 transition-all">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                      <div className="min-w-0">
+                        <span className="text-sm font-black uppercase tracking-widest text-zinc-900 block">
                           {locale === 'ro' ? 'Programe Digitale' : 'Digital Programs'}
                         </span>
-                        <p className="text-xs text-zinc-500 font-medium mt-0.5">
+                        <p className="text-xs text-zinc-600 font-medium mt-0.5">
                           {locale === 'ro'
                             ? 'Livrare instantă pe email · Reducere automată la pachetul de 3 (-27%)'
                             : 'Instant email delivery · Automatic 3-book bundle discount (-27%)'}
                         </p>
                       </div>
 
-                      {/* Clean Separate SVG Flag Options */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setStep3ProgLang("en")}
-                          title="English"
-                          className={cn(
-                            "px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center cursor-pointer",
-                            step3ProgLang === "en"
-                              ? "bg-white border-[#e32f8c] ring-1 ring-[#e32f8c]/50 shadow-2xs scale-105"
-                              : "bg-zinc-50 border-zinc-200 opacity-60 hover:opacity-100 hover:border-zinc-300"
-                          )}
+                      {/* Segmented PDF Language Pill Switcher */}
+                      <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-600 whitespace-nowrap">
+                          {locale === 'ro' ? 'Limbă PDF:' : 'PDF Language:'}
+                        </span>
+                        <div
+                          role="group"
+                          aria-label={locale === 'ro' ? 'Limbă PDF' : 'PDF Language'}
+                          className="inline-flex items-center p-1 rounded-xl bg-zinc-100 border border-zinc-200"
                         >
-                          <LanguageFlagSvg isEnglish={true} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setStep3ProgLang("ro")}
-                          title="Română"
-                          className={cn(
-                            "px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center cursor-pointer",
-                            step3ProgLang === "ro"
-                              ? "bg-white border-[#e32f8c] ring-1 ring-[#e32f8c]/50 shadow-2xs scale-105"
-                              : "bg-zinc-50 border-zinc-200 opacity-60 hover:opacity-100 hover:border-zinc-300"
-                          )}
-                        >
-                          <LanguageFlagSvg isEnglish={false} />
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setStep3ProgLang("en")}
+                            aria-pressed={step3ProgLang === "en"}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer whitespace-nowrap",
+                              step3ProgLang === "en"
+                                ? "bg-white text-zinc-950 font-bold border border-[#e32f8c]/60 shadow-xs"
+                                : "bg-transparent text-zinc-600 font-semibold border border-transparent hover:text-zinc-900"
+                            )}
+                          >
+                            <LanguageFlagSvg isEnglish={true} />
+                            <span>English</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStep3ProgLang("ro")}
+                            aria-pressed={step3ProgLang === "ro"}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer whitespace-nowrap",
+                              step3ProgLang === "ro"
+                                ? "bg-white text-zinc-950 font-bold border border-[#e32f8c]/60 shadow-xs"
+                                : "bg-transparent text-zinc-600 font-semibold border border-transparent hover:text-zinc-900"
+                            )}
+                          >
+                            <LanguageFlagSvg isEnglish={false} />
+                            <span>Română</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
-                        { prog: foodProg, inCart: foodItemInCart, label: "Food Plan" },
-                        { prog: trainingProg, inCart: trainingItemInCart, label: "Training Program" },
-                        { prog: benchProg, inCart: benchItemInCart, label: "Bench Program" },
+                        { prog: foodProg, inCart: foodItemInCart, label: "Food Plan", badge: null },
+                        { prog: trainingProg, inCart: trainingItemInCart, label: "Training Program", badge: null },
+                        { prog: benchProg, inCart: benchItemInCart, label: "Bench Program", badge: null },
                         {
                           prog: bundleProg,
                           inCart: bundleItemInCart,
-                          label: locale === "ro" ? "Pachet Toate 3 (-27%)" : "All 3 Bundle (-27%)",
+                          label: locale === "ro" ? "Pachet Toate 3" : "All 3 Bundle",
+                          badge: "-27%",
                         },
-                      ].map(({ prog, inCart, label }) => {
+                      ].map(({ prog, inCart, label, badge }) => {
                         const isAdded = Boolean(inCart);
                         const priceVal = getProductPrice(prog.price, dispCur);
                         return (
@@ -2491,14 +2575,15 @@ export default function CheckoutForm({
                             key={prog.id}
                             type="button"
                             onClick={() => toggleProg(prog, inCart)}
+                            aria-pressed={isAdded}
                             className={cn(
-                              "flex items-center gap-3 p-2.5 rounded-2xl border-2 text-left transition-all cursor-pointer",
+                              "group flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition-all cursor-pointer active:scale-[0.99]",
                               isAdded
-                                ? "border-[#e32f8c] bg-[#e32f8c]/5"
-                                : "border-zinc-100 bg-zinc-50/60 hover:border-zinc-200 hover:bg-zinc-50"
+                                ? "border-[#e32f8c] bg-[#e32f8c]/5 text-zinc-900 shadow-xs"
+                                : "border-zinc-200/80 bg-zinc-50/70 text-zinc-900 hover:border-zinc-300 hover:bg-white"
                             )}
                           >
-                            <div className="relative w-11 h-14 rounded-lg overflow-hidden bg-zinc-950 shrink-0 border border-black/10">
+                            <div className="relative w-12 h-16 rounded-xl overflow-hidden bg-zinc-950 shrink-0 border border-zinc-200">
                               <Image
                                 src={prog.image}
                                 alt={label}
@@ -2508,28 +2593,40 @@ export default function CheckoutForm({
                               />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="text-xs font-black uppercase tracking-tight text-black truncate">
-                                {label}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-black uppercase tracking-tight text-zinc-900 leading-snug">
+                                  {label}
+                                </span>
+                                {badge && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-[#e32f8c]/15 text-[#b81d6d] text-[9px] font-black uppercase tracking-wider shrink-0">
+                                    {badge}
+                                  </span>
+                                )}
                               </div>
-                              <div className="text-xs font-extrabold text-zinc-700 mt-0.5">
+                              <div className="text-sm font-black text-zinc-900 mt-1">
                                 +{formatPrice(priceVal, dispCur)}
                               </div>
-                              <div
-                                className={cn(
-                                  "mt-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider",
-                                  isAdded ? "text-[#e32f8c]" : "text-zinc-500"
-                                )}
-                              >
-                                {isAdded ? (
-                                  <>
-                                    <Check className="w-3 h-3 stroke-[3]" />
-                                    <span>{locale === "ro" ? "Adăugat" : "Added"}</span>
-                                  </>
-                                ) : (
-                                  <span>{locale === "ro" ? "Adaugă" : "Add"}</span>
-                                )}
-                              </div>
                             </div>
+                            <span
+                              className={cn(
+                                "shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-colors",
+                                isAdded
+                                  ? "bg-[#e32f8c] text-white shadow-xs"
+                                  : "bg-white text-zinc-800 border border-zinc-200 group-hover:border-[#e32f8c] group-hover:text-[#e32f8c]"
+                              )}
+                            >
+                              {isAdded ? (
+                                <>
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                  <span>{locale === "ro" ? "Inclus" : "Included"}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-3 h-3 stroke-[2.5]" />
+                                  <span>{locale === "ro" ? "Selectează" : "Select"}</span>
+                                </>
+                              )}
+                            </span>
                           </button>
                         );
                       })}
@@ -2540,10 +2637,20 @@ export default function CheckoutForm({
             </div>
 
             <div className="flex gap-4 pt-4">
-              <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer">{t('back')}</Button>
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex-1 h-14 rounded-2xl bg-white text-zinc-900 border-2 border-zinc-200 hover:bg-zinc-100 hover:border-zinc-300 hover:text-black font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer inline-flex items-center justify-center"
+              >
+                {t('back')}
+              </button>
               <Button type="button" onClick={() => {
-                // Ensure online payment method is selected (or COD if Stripe disabled in RO) before Step 4
-                setPaymentMethod(country === 'RO' && isStripeDisabled ? 'cod' : 'online');
+                const nextMethod = (country === 'RO' && isStripeDisabled)
+                  ? 'cod'
+                  : (country === 'RO' && !hasPreorderItems && !hasDigitalItems && paymentMethod === 'cod')
+                    ? 'cod'
+                    : 'online';
+                setPaymentMethod(nextMethod);
                 setCurrentStep(4);
               }} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98] cursor-pointer">{t('continue_to_payment')}</Button>
             </div>
@@ -2566,23 +2673,24 @@ export default function CheckoutForm({
 
             {/* Payment Method Selector */}
             {country === 'RO' && !isStripeDisabled && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 items-start text-zinc-900">
                 <button
                   type="button"
                   onClick={async () => {
+                    setMessage(null);
                     setPaymentMethod('online');
                     // Sync Stripe so Apple Pay / Google Pay shows correct total with -5 lei card discount
                     await syncStripePaymentMethod('online');
                   }}
-                  className={`relative overflow-hidden flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 transition-all active:scale-[0.98] cursor-pointer h-full ${paymentMethod === 'online' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'}`}
+                  className={`relative overflow-hidden flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 text-zinc-900 transition-all active:scale-[0.98] cursor-pointer h-full ${paymentMethod === 'online' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-200/80 bg-zinc-50 hover:bg-zinc-100 hover:border-zinc-300'}`}
                 >
                   <div className="absolute top-0 right-0 bg-[#ff007a] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-2xl shadow-sm">
                     -{formatPrice(getProductPrice(5, currency), currency)} {locale === 'ro' ? 'REDUCERE' : 'DISCOUNT'}
                   </div>
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mt-2 ${paymentMethod === 'online' ? 'bg-[#e32f8c] text-white' : 'bg-white text-zinc-400'}`}>
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mt-2 ${paymentMethod === 'online' ? 'bg-[#e32f8c] text-white' : 'bg-white text-zinc-600 border border-zinc-200'}`}>
                     <ShieldCheck className="w-5 h-5" />
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">{t('card_payment')}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-900">{t('card_payment')}</span>
                 </button>
                 <div className="flex flex-col gap-1.5 h-full">
                   <button
@@ -2590,17 +2698,18 @@ export default function CheckoutForm({
                     disabled={hasPreorderItems || hasDigitalItems}
                     onClick={async () => {
                       if (hasPreorderItems || hasDigitalItems) return;
+                      setMessage(null);
                       setPaymentMethod('cod');
                     }}
-                    className={`flex-1 w-full flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'cod' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'} ${(hasPreorderItems || hasDigitalItems) ? 'opacity-50 cursor-not-allowed' : 'active:scale-[0.98] cursor-pointer'}`}
+                    className={`flex-1 w-full flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 text-zinc-900 transition-all ${paymentMethod === 'cod' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-200/80 bg-zinc-50 hover:bg-zinc-100 hover:border-zinc-300'} ${(hasPreorderItems || hasDigitalItems) ? 'opacity-50 cursor-not-allowed' : 'active:scale-[0.98] cursor-pointer'}`}
                   >
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${paymentMethod === 'cod' ? 'bg-[#e32f8c] text-white' : 'bg-white text-zinc-400'}`}>
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${paymentMethod === 'cod' ? 'bg-[#e32f8c] text-white' : 'bg-white text-zinc-600 border border-zinc-200'}`}>
                       <Truck className="w-5 h-5" />
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">{t('cod_payment')}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-900">{t('cod_payment')}</span>
                   </button>
                   {(hasPreorderItems || hasDigitalItems) && (
-                    <span className="text-[9px] font-bold text-red-500 text-center px-1 leading-tight">
+                    <span className="text-[9px] font-bold text-red-600 text-center px-1 leading-tight">
                       {hasDigitalItems
                         ? (locale === 'ro' ? '*Programele digitale se achită online' : '*Online payment required for digital programs')
                         : (locale === 'ro' ? '*Indisponibil pentru precomandă' : '*Unavailable for preorder')}
@@ -2639,10 +2748,17 @@ export default function CheckoutForm({
                 stripeSyncTrigger={stripeSyncTrigger}
               />
             ) : (
-              <div className="space-y-6">
-                <div className="bg-zinc-100 p-8 rounded-3xl border border-dashed border-zinc-200 text-center mb-6">
-                  <Truck className="w-8 h-8 text-zinc-300 mx-auto mb-4" />
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase">{t('cod_notice')}</p>
+              <div className="space-y-6 text-zinc-900">
+                <div className="bg-zinc-50 p-6 sm:p-8 rounded-3xl border border-dashed border-zinc-300 text-center mb-6">
+                  <Truck className="w-8 h-8 text-zinc-500 mx-auto mb-3" />
+                  <p className="text-xs font-bold text-zinc-800 uppercase tracking-wide">{t('cod_notice')}</p>
+                  {currency !== 'RON' && (
+                    <p className="mt-3 text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2 leading-relaxed">
+                      {locale === 'ro'
+                        ? 'Notă monedă: Plata ramburs la curier în România se încasează exclusiv în RON. Sumarul comenzii a fost actualizat în RON.'
+                        : 'Currency notice: Cash on delivery in Romania is collected strictly in RON. Your order summary has been updated to RON.'}
+                    </p>
+                  )}
                 </div>
 
                 <div id="terms-checkbox-container-cod" className="space-y-3 mb-6 scroll-mt-24">
@@ -2729,7 +2845,14 @@ export default function CheckoutForm({
               </AnimatePresence>
               
               <div className="flex gap-4">
-                <Button type="button" variant="outline" onClick={handleBack} disabled={loading} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer">{t('back')}</Button>
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  disabled={loading}
+                  className="flex-1 h-14 rounded-2xl bg-white text-zinc-900 border-2 border-zinc-200 hover:bg-zinc-100 hover:border-zinc-300 hover:text-black font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none inline-flex items-center justify-center"
+                >
+                  {t('back')}
+                </button>
                 <Button 
                   type="submit" 
                   onClick={(e) => {

@@ -3,11 +3,44 @@
 import { useTranslations, useLocale } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { motion } from "framer-motion";
-import { CheckCircle2, ShoppingBag, ArrowRight, Home, AlertCircle, BookOpen, Download, Loader2 } from "lucide-react";
+import { CheckCircle2, ShoppingBag, ArrowRight, Home, AlertCircle, BookOpen, Download, Loader2, Truck, Banknote, CreditCard } from "lucide-react";
 import { useEffect, useState, Suspense } from "react";
 import { useCartStore } from "@/store/useCartStore";
 import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { useSearchParams } from "next/navigation";
+import { getProductPrice } from "@/utils/pricing";
+
+interface CheckoutOrderDetails {
+  orderNumber: string;
+  paymentIntentId?: string | null;
+  status: string;
+  paymentMethod: string;
+  currency: string;
+  subtotal: number;
+  discount: number;
+  cardDiscount?: number;
+  shipping: number;
+  total: number;
+  priorityProcessing?: boolean;
+  giftPackaging?: boolean;
+  shippingType: "hd" | "pudo";
+  branchName?: string | null;
+  items: Array<{
+    id: string;
+    name: string;
+    variant?: string | null;
+    quantity: number;
+    price: number;
+    image?: string;
+  }>;
+  customer?: {
+    firstName?: string;
+    emailMasked?: string | null;
+    city?: string;
+    county?: string;
+    country?: string;
+  };
+}
 
 function OrderSuccessContent() {
   const t = useTranslations("Checkout");
@@ -18,16 +51,21 @@ function OrderSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'processing' | 'success' | 'error'>('loading');
+  const [errorReason, setErrorReason] = useState<'payment_failed' | 'not_found'>('payment_failed');
   const [isCheckingAgain, setIsCheckingAgain] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string>('');
+  const [isCodOrder, setIsCodOrder] = useState(false);
+  const [orderDetails, setOrderDetails] = useState<CheckoutOrderDetails | null>(null);
   const [digitalDownloads, setDigitalDownloads] = useState<
     Array<{ programKey: string; lang: string; title: string; downloadUrl: string }>
   >([]);
 
   useEffect(() => {
+    let cancelled = false;
     const isExpressCheckout = searchParams.get('express') === '1';
 
     const finishSuccess = (resolvedId?: string) => {
+      if (cancelled) return;
       if (resolvedId) setPaymentIntentId(resolvedId);
       setStatus('success');
       if (!isExpressCheckout) {
@@ -36,13 +74,65 @@ function OrderSuccessContent() {
       }
     };
 
+    const fetchOrderDetails = async (id: string): Promise<{ status: number; data: CheckoutOrderDetails | null }> => {
+      try {
+        const res = await fetch(
+          `/api/checkout/details?order_id=${encodeURIComponent(id)}&locale=${encodeURIComponent(locale)}`,
+          { cache: 'no-store' }
+        );
+        if (!res.ok) {
+          return { status: res.status, data: null };
+        }
+        const data = (await res.json()) as CheckoutOrderDetails;
+        return { status: res.status, data };
+      } catch {
+        return { status: 0, data: null };
+      }
+    };
+
     // --- COD (Cash on Delivery) Payment Handler ---
     const type = searchParams.get('type');
-    const orderId = searchParams.get('order_id');
-    
-    if (type === 'cod' && orderId) {
-      finishSuccess(orderId);
-      return;
+    const orderId = (searchParams.get('order_id') || '').trim();
+
+    if (type === 'cod') {
+      if (!orderId) {
+        router.replace('/checkout');
+        return;
+      }
+
+      setIsCodOrder(true);
+      setPaymentIntentId(orderId);
+
+      const loadCodOrder = async () => {
+        let lookup = await fetchOrderDetails(orderId);
+        if (lookup.status === 404) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          if (cancelled) return;
+          lookup = await fetchOrderDetails(orderId);
+        }
+
+        if (cancelled) return;
+
+        if (lookup.data) {
+          setOrderDetails(lookup.data);
+          finishSuccess(lookup.data.orderNumber || orderId);
+          return;
+        }
+
+        if (lookup.status === 404 || lookup.status === 400) {
+          setErrorReason('not_found');
+          setStatus('error');
+          return;
+        }
+
+        // Transient server/network error after redirect from /api/checkout/cod: still show COD confirmation
+        finishSuccess(orderId);
+      };
+
+      loadCodOrder();
+      return () => {
+        cancelled = true;
+      };
     }
     // -----------------------------------------------
 
@@ -73,7 +163,7 @@ function OrderSuccessContent() {
         let consecutiveFailures = 0;
         const maxConsecutiveFailures = 4;
 
-        while (attempts < maxAttempts) {
+        while (attempts < maxAttempts && !cancelled) {
           try {
             const res = await fetch('/api/checkout/verify', {
               method: 'POST',
@@ -92,7 +182,12 @@ function OrderSuccessContent() {
                 if (Array.isArray(data.paymentIntent?.digitalDownloads)) {
                   setDigitalDownloads(data.paymentIntent.digitalDownloads);
                 }
-                finishSuccess(data.paymentIntent?.orderId || data.paymentIntent?.id || effectivePiId);
+                const resolvedOrderId = data.paymentIntent?.orderId || data.paymentIntent?.id || effectivePiId;
+                const detailsLookup = await fetchOrderDetails(resolvedOrderId);
+                if (!cancelled && detailsLookup.data) {
+                  setOrderDetails(detailsLookup.data);
+                }
+                finishSuccess(resolvedOrderId);
                 return;
               }
 
@@ -103,8 +198,10 @@ function OrderSuccessContent() {
                   await new Promise((resolve) => setTimeout(resolve, 2000));
                   continue;
                 }
-                setPaymentIntentId(effectivePiId);
-                setStatus('processing');
+                if (!cancelled) {
+                  setPaymentIntentId(effectivePiId);
+                  setStatus('processing');
+                }
                 return;
               }
 
@@ -112,18 +209,27 @@ function OrderSuccessContent() {
               consecutiveFailures++;
               if (piStatus === 'requires_payment_method' || piStatus === 'canceled') {
                 if (consecutiveFailures >= 2) {
-                  setStatus('error');
+                  if (!cancelled) {
+                    setErrorReason('payment_failed');
+                    setStatus('error');
+                  }
                   return;
                 }
               } else if (consecutiveFailures >= maxConsecutiveFailures) {
-                setStatus('error');
+                if (!cancelled) {
+                  setErrorReason('payment_failed');
+                  setStatus('error');
+                }
                 return;
               }
             } else {
               // HTTP error (e.g. 500 during temporary DB sync retry) — do not mark failed immediately
               consecutiveFailures++;
               if (consecutiveFailures >= maxConsecutiveFailures) {
-                setStatus('error');
+                if (!cancelled) {
+                  setErrorReason('payment_failed');
+                  setStatus('error');
+                }
                 return;
               }
             }
@@ -138,15 +244,27 @@ function OrderSuccessContent() {
         }
 
         // Timed out without any confirmed status — do NOT clear cart or show false success
-        setStatus('error');
+        if (!cancelled) {
+          setErrorReason('payment_failed');
+          setStatus('error');
+        }
       } catch (err) {
         console.error('Payment verification error:', err);
-        setStatus('error');
+        if (!cancelled) {
+          setErrorReason('payment_failed');
+          setStatus('error');
+        }
       }
     };
 
     verifyPayment();
-  }, [searchParams, clearCart, resetOrderAddons, router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, clearCart, resetOrderAddons, router, locale]);
+
+  const isCodEffective = isCodOrder || orderDetails?.paymentMethod === 'cod';
+  const orderCurrency = orderDetails?.currency || 'RON';
 
   return (
     <div className="min-h-screen bg-[#fafafc] flex items-center justify-center p-6">
@@ -205,7 +323,11 @@ function OrderSuccessContent() {
               transition={{ delay: 0.4 }}
               className="text-zinc-500 font-bold text-sm md:text-base leading-relaxed mb-2"
             >
-              {t('success_message')}
+              {isCodEffective
+                ? (isEn
+                    ? 'Your Cash on Delivery order has been confirmed! You will pay upon delivery of your parcel. A confirmation email has been sent.'
+                    : 'Comanda ta cu plată ramburs a fost înregistrată! Vei achita suma la livrarea coletului. Confirmarea a fost trimisă pe email.')
+                : t('success_message')}
             </motion.p>
 
             {paymentIntentId && (
@@ -217,6 +339,110 @@ function OrderSuccessContent() {
               >
                 ID: {paymentIntentId}
               </motion.p>
+            )}
+
+            {orderDetails && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.52 }}
+                className="mb-8 p-5 rounded-3xl bg-zinc-50 border border-zinc-200/80 text-left space-y-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-zinc-200/70">
+                  <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-800">
+                    {isCodEffective ? (
+                      <Banknote className="w-4 h-4 text-primary shrink-0" />
+                    ) : (
+                      <CreditCard className="w-4 h-4 text-primary shrink-0" />
+                    )}
+                    <span>
+                      {isCodEffective
+                        ? (isEn ? 'Cash on Delivery (COD)' : 'Plată Ramburs la Livrare')
+                        : (isEn ? 'Paid Online by Card' : 'Plătit Online cu Cardul')}
+                    </span>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-zinc-500">
+                    <Truck className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {orderDetails.shippingType === 'pudo'
+                        ? (orderDetails.branchName || 'Easybox / Locker')
+                        : (isEn ? 'Home Delivery' : 'Livrare la domiciliu')}
+                      {orderDetails.customer?.city ? ` · ${orderDetails.customer.city}` : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {orderDetails.items.length > 0 && (
+                  <div className="space-y-2">
+                    {orderDetails.items.map((item, idx) => {
+                      const showVariant =
+                        item.variant &&
+                        !item.name.toLowerCase().includes(item.variant.toLowerCase());
+                      return (
+                        <div key={`${item.id}-${idx}`} className="flex items-start justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <span className="font-bold text-zinc-900">
+                              {item.name}
+                              {showVariant ? ` (${item.variant})` : ''}
+                            </span>
+                            <span className="text-zinc-500 font-semibold ml-1.5">×{item.quantity}</span>
+                          </div>
+                          <span className="font-mono font-bold text-zinc-800 shrink-0">
+                            {(item.price * item.quantity).toFixed(2)} {orderCurrency}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-zinc-200/70 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-zinc-500 font-semibold">
+                    <span>{t('subtotal')}</span>
+                    <span className="font-mono">{orderDetails.subtotal.toFixed(2)} {orderCurrency}</span>
+                  </div>
+                  <div className="flex justify-between text-zinc-500 font-semibold">
+                    <span>{isEn ? 'Shipping' : 'Transport'}</span>
+                    <span className="font-mono">
+                      {orderDetails.shipping > 0
+                        ? `${orderDetails.shipping.toFixed(2)} ${orderCurrency}`
+                        : (isEn ? 'Free' : 'Gratuit')}
+                    </span>
+                  </div>
+                  {orderDetails.discount > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>{isEn ? 'Discount' : 'Reducere'}</span>
+                      <span className="font-mono">-{orderDetails.discount.toFixed(2)} {orderCurrency}</span>
+                    </div>
+                  )}
+                  {(orderDetails.cardDiscount ?? 0) > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>{isEn ? 'Card Discount' : 'Reducere Card'}</span>
+                      <span className="font-mono">-{(orderDetails.cardDiscount || 0).toFixed(2)} {orderCurrency}</span>
+                    </div>
+                  )}
+                  {orderDetails.priorityProcessing && (
+                    <div className="flex justify-between text-zinc-500 font-semibold">
+                      <span>{isEn ? 'Priority Processing' : 'Procesare Prioritară'}</span>
+                      <span className="font-mono">+{getProductPrice(6.90, orderCurrency).toFixed(2)} {orderCurrency}</span>
+                    </div>
+                  )}
+                  {orderDetails.giftPackaging && (
+                    <div className="flex justify-between text-zinc-500 font-semibold">
+                      <span>{isEn ? 'Gift Packaging' : 'Ambalaj Cadou'}</span>
+                      <span className="font-mono">+{getProductPrice(14.90, orderCurrency).toFixed(2)} {orderCurrency}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-2 border-t border-zinc-200 text-sm font-black text-black">
+                    <span>
+                      {isCodEffective
+                        ? (isEn ? 'Total Due on Delivery' : 'Total de plată ramburs')
+                        : t('total')}
+                    </span>
+                    <span className="font-mono">{orderDetails.total.toFixed(2)} {orderCurrency}</span>
+                  </div>
+                </div>
+              </motion.div>
             )}
 
             {digitalDownloads.length > 0 && (
@@ -364,7 +590,9 @@ function OrderSuccessContent() {
               transition={{ delay: 0.3 }}
               className="text-3xl md:text-4xl font-black uppercase tracking-tighter text-black mb-6"
             >
-              {isEn ? 'Payment Unconfirmed' : 'Plată Neconfirmată'}
+              {errorReason === 'not_found'
+                ? (isEn ? 'Order Not Found' : 'Comanda nu a fost găsită')
+                : (isEn ? 'Payment Unconfirmed' : 'Plată Neconfirmată')}
             </motion.h1>
 
             <motion.p
@@ -373,9 +601,13 @@ function OrderSuccessContent() {
               transition={{ delay: 0.4 }}
               className="text-zinc-500 font-bold text-sm md:text-base leading-relaxed mb-8"
             >
-              {isEn
-                ? 'Payment was not completed. If you closed the payment dialog, no order was created.'
-                : 'Plata nu a fost completată. Dacă ai închis dialogul de plată, nicio comandă nu a fost creată.'}
+              {errorReason === 'not_found'
+                ? (isEn
+                    ? 'We could not find an order matching this reference. Please verify the link or return to checkout.'
+                    : 'Nu am găsit nicio comandă cu acest identificator. Te rugăm să verifici linkul sau să revii la checkout.')
+                : (isEn
+                    ? 'Payment was not completed. If you closed the payment dialog, no order was created.'
+                    : 'Plata nu a fost completată. Dacă ai închis dialogul de plată, nicio comandă nu a fost creată.')}
             </motion.p>
 
             <motion.div
@@ -388,11 +620,13 @@ function OrderSuccessContent() {
                 href="/checkout" 
                 className="flex items-center justify-center gap-3 bg-primary text-black px-8 py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary/80 transition-all"
               >
-                {t('retry_payment')}
+                {errorReason === 'not_found'
+                  ? (isEn ? 'Return to Checkout' : 'Înapoi la Checkout')
+                  : t('retry_payment')}
               </Link>
 
               <Link 
-                href="/shop" 
+                href="/" 
                 className="flex items-center justify-center gap-3 bg-zinc-50 text-zinc-400 px-8 py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-zinc-100 hover:text-black transition-all"
               >
                 <Home className="w-4 h-4" />

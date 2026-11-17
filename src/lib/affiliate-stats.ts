@@ -1,4 +1,30 @@
+import { isDigitalOnlyCart } from './programs';
+
 export type AffiliateNonCountableReason = 'cancelled' | 'returned' | 'refunded' | 'failed';
+export type AffiliateOrderPayoutStatus = 'eligible' | 'pending_pickup' | 'voided';
+
+export const AFFILIATE_PAYOUT_ELIGIBLE_STATUSES = new Set([
+  'delivered',
+  'livrat',
+  'livrata',
+  'completed',
+  'ridicat',
+  'ridicata',
+]);
+
+export interface AffiliateOrderPayoutOptions {
+  isDigitalOnly?: boolean;
+  programDeliveryStatus?: string | null;
+}
+
+export interface AffiliateOrderPayoutClassification {
+  payoutStatus: AffiliateOrderPayoutStatus;
+  isPayoutEligible: boolean;
+  isPendingPickup: boolean;
+  isVoided: boolean;
+  labelRo: string;
+  labelEn: string;
+}
 
 export interface AffiliatePayoutRecord {
   id: string;
@@ -18,7 +44,13 @@ export interface AffiliateOrderMetrics {
   subtotal: number;
   shippingAmount: number;
   commissionAmount: number;
+  eligibleCommissionAmount: number;
+  pendingPickupCommissionAmount: number;
   isCountable: boolean;
+  payoutStatus: AffiliateOrderPayoutStatus;
+  isPayoutEligible: boolean;
+  payoutStatusLabelRo: string;
+  payoutStatusLabelEn: string;
   nonCountableReason: AffiliateNonCountableReason | null;
   nonCountableLabel: string;
 }
@@ -26,12 +58,16 @@ export interface AffiliateOrderMetrics {
 export interface AffiliateFinancialSummary {
   totalSales: number;
   totalNetSales: number;
+  eligibleCommissions: number;
+  pendingPickupCommissions: number;
   totalCommissions: number;
   paidPayout: number;
   pendingPayout: number;
   overpaidAmount: number;
   payoutProgressPercent: number;
   validOrdersCount: number;
+  deliveredOrdersCount: number;
+  inTransitOrdersCount: number;
   cancelledOrdersCount: number;
   aov: number;
   payouts: AffiliatePayoutRecord[];
@@ -112,7 +148,7 @@ export function classifyOrderNonCountable(status?: string | null): {
   label: string;
 } {
   const normalized = String(status || '').toLowerCase().trim();
-  if (['cancelled', 'anulat', 'anulata'].includes(normalized)) {
+  if (['cancelled', 'canceled', 'anulat', 'anulata'].includes(normalized)) {
     return { isCountable: false, reason: 'cancelled', label: 'Anulată' };
   }
   if (['returned', 'returnat', 'returnata', 'refused', 'neridicat'].includes(normalized)) {
@@ -127,6 +163,61 @@ export function classifyOrderNonCountable(status?: string | null): {
   return { isCountable: true, reason: null, label: '' };
 }
 
+/**
+ * Classifies whether an order's affiliate commission is payable ("De încasat")
+ * based on strict parcel pickup/delivery confirmation.
+ */
+export function classifyAffiliateOrderPayoutStatus(
+  status?: string | null,
+  options?: AffiliateOrderPayoutOptions
+): AffiliateOrderPayoutClassification {
+  const nonCountable = classifyOrderNonCountable(status);
+  if (!nonCountable.isCountable) {
+    const labelEn =
+      nonCountable.reason === 'cancelled'
+        ? 'Cancelled'
+        : nonCountable.reason === 'returned'
+          ? 'Returned / Unclaimed'
+          : nonCountable.reason === 'refunded'
+            ? 'Refunded'
+            : 'Failed';
+    return {
+      payoutStatus: 'voided',
+      isPayoutEligible: false,
+      isPendingPickup: false,
+      isVoided: true,
+      labelRo: nonCountable.label || 'Anulată / Returnată',
+      labelEn,
+    };
+  }
+
+  const normalized = String(status || '').toLowerCase().trim();
+  const isDeliveredParcel = AFFILIATE_PAYOUT_ELIGIBLE_STATUSES.has(normalized);
+  const isDigitalDelivered =
+    Boolean(options?.isDigitalOnly) &&
+    String(options?.programDeliveryStatus || '').toLowerCase().trim() === 'delivered';
+
+  if (isDeliveredParcel || isDigitalDelivered) {
+    return {
+      payoutStatus: 'eligible',
+      isPayoutEligible: true,
+      isPendingPickup: false,
+      isVoided: false,
+      labelRo: isDeliveredParcel ? 'Colet ridicat · Eligibil' : 'Livrat digital · Eligibil',
+      labelEn: isDeliveredParcel ? 'Picked up · Eligible' : 'Delivered digitally · Eligible',
+    };
+  }
+
+  return {
+    payoutStatus: 'pending_pickup',
+    isPayoutEligible: false,
+    isPendingPickup: true,
+    isVoided: false,
+    labelRo: 'În livrare · Așteaptă ridicarea',
+    labelEn: 'In transit · Awaiting pickup',
+  };
+}
+
 export function computeAffiliateOrderMetrics(
   order: {
     total_amount?: unknown;
@@ -135,6 +226,8 @@ export function computeAffiliateOrderMetrics(
     subtotal?: unknown;
     currency?: string | null;
     status?: string | null;
+    items?: unknown;
+    carrier_metadata?: any;
   },
   commissionPercent: number,
   toRon: (amount: number, currency: string) => number
@@ -154,10 +247,24 @@ export function computeAffiliateOrderMetrics(
   const subtotal = roundCurrency(toRon(rawNetSubtotal, originalCurrency));
   const shippingAmount = roundCurrency(toRon(rawShipping, originalCurrency));
 
+  const rawItems = Array.isArray(order.items) ? order.items : [];
+  const isDigitalOnly =
+    rawItems.length > 0
+      ? isDigitalOnlyCart(rawItems)
+      : order.carrier_metadata?.is_digital_only === true;
+  const programDeliveryStatus = order.carrier_metadata?.program_delivery?.status || null;
+
   const statusCheck = classifyOrderNonCountable(order.status);
+  const payoutCheck = classifyAffiliateOrderPayoutStatus(order.status, {
+    isDigitalOnly,
+    programDeliveryStatus,
+  });
+
   const commissionAmount = statusCheck.isCountable
     ? roundCurrency(subtotal * (commissionPercent / 100))
     : 0;
+  const eligibleCommissionAmount = payoutCheck.isPayoutEligible ? commissionAmount : 0;
+  const pendingPickupCommissionAmount = payoutCheck.isPendingPickup ? commissionAmount : 0;
 
   return {
     originalCurrency,
@@ -168,7 +275,13 @@ export function computeAffiliateOrderMetrics(
     subtotal,
     shippingAmount,
     commissionAmount,
+    eligibleCommissionAmount,
+    pendingPickupCommissionAmount,
     isCountable: statusCheck.isCountable,
+    payoutStatus: payoutCheck.payoutStatus,
+    isPayoutEligible: payoutCheck.isPayoutEligible,
+    payoutStatusLabelRo: payoutCheck.labelRo,
+    payoutStatusLabelEn: payoutCheck.labelEn,
     nonCountableReason: statusCheck.reason,
     nonCountableLabel: statusCheck.label,
   };
@@ -275,6 +388,10 @@ export function computeAffiliateFinancialSummary(
     subtotal: number;
     commissionAmount: number;
     isCountable: boolean;
+    isPayoutEligible?: boolean;
+    eligibleCommissionAmount?: number;
+    pendingPickupCommissionAmount?: number;
+    status?: string | null;
   }>,
   commissionPercent: number,
   paymentDetails: any,
@@ -283,8 +400,11 @@ export function computeAffiliateFinancialSummary(
 ): AffiliateFinancialSummary {
   let calculatedSales = 0;
   let calculatedNetSales = 0;
-  let calculatedCommissions = 0;
+  let calculatedEligibleCommissions = 0;
+  let calculatedPendingPickupCommissions = 0;
   let validOrdersCount = 0;
+  let deliveredOrdersCount = 0;
+  let inTransitOrdersCount = 0;
   let cancelledOrdersCount = 0;
 
   for (const o of orders) {
@@ -292,7 +412,25 @@ export function computeAffiliateFinancialSummary(
       validOrdersCount += 1;
       calculatedSales += Number(o.totalAmount) || 0;
       calculatedNetSales += Number(o.subtotal) || 0;
-      calculatedCommissions += Number(o.commissionAmount) || 0;
+      const orderComm = Number(o.commissionAmount) || 0;
+      const eligible =
+        typeof o.isPayoutEligible === 'boolean'
+          ? o.isPayoutEligible
+          : classifyAffiliateOrderPayoutStatus(o.status).isPayoutEligible;
+
+      if (eligible) {
+        deliveredOrdersCount += 1;
+        calculatedEligibleCommissions +=
+          typeof o.eligibleCommissionAmount === 'number'
+            ? o.eligibleCommissionAmount
+            : orderComm;
+      } else {
+        inTransitOrdersCount += 1;
+        calculatedPendingPickupCommissions +=
+          typeof o.pendingPickupCommissionAmount === 'number'
+            ? o.pendingPickupCommissionAmount
+            : orderComm;
+      }
     } else {
       cancelledOrdersCount += 1;
     }
@@ -305,18 +443,25 @@ export function computeAffiliateFinancialSummary(
   const totalNetSales = hasOrderRecords
     ? roundCurrency(calculatedNetSales)
     : roundCurrency(fallbackLegacySales);
-  const totalCommissions = hasOrderRecords
-    ? roundCurrency(calculatedCommissions)
+
+  const eligibleCommissions = hasOrderRecords
+    ? roundCurrency(calculatedEligibleCommissions)
     : roundCurrency(totalSales * (commissionPercent / 100));
+  const pendingPickupCommissions = hasOrderRecords
+    ? roundCurrency(calculatedPendingPickupCommissions)
+    : 0;
+  const totalCommissions = roundCurrency(eligibleCommissions + pendingPickupCommissions);
 
   const effectiveOrdersCount = hasOrderRecords ? validOrdersCount : Number(fallbackUsageCount) || 0;
+  const effectiveDeliveredCount = hasOrderRecords ? deliveredOrdersCount : effectiveOrdersCount;
   const { payouts, paidAmount, lastPayoutAt } = normalizeAffiliatePayouts(paymentDetails);
 
-  const pendingPayout = Math.max(0, roundCurrency(totalCommissions - paidAmount));
-  const overpaidAmount = Math.max(0, roundCurrency(paidAmount - totalCommissions));
+  // Strictly only commissions from picked-up/delivered orders are payable ("De încasat")
+  const pendingPayout = Math.max(0, roundCurrency(eligibleCommissions - paidAmount));
+  const overpaidAmount = Math.max(0, roundCurrency(paidAmount - eligibleCommissions));
   const payoutProgressPercent =
-    totalCommissions > 0
-      ? Math.min(100, Math.round((paidAmount / totalCommissions) * 100))
+    eligibleCommissions > 0
+      ? Math.min(100, Math.round((paidAmount / eligibleCommissions) * 100))
       : paidAmount > 0
         ? 100
         : 0;
@@ -325,12 +470,16 @@ export function computeAffiliateFinancialSummary(
   return {
     totalSales,
     totalNetSales,
+    eligibleCommissions,
+    pendingPickupCommissions,
     totalCommissions,
     paidPayout: paidAmount,
     pendingPayout,
     overpaidAmount,
     payoutProgressPercent,
     validOrdersCount: effectiveOrdersCount,
+    deliveredOrdersCount: effectiveDeliveredCount,
+    inTransitOrdersCount,
     cancelledOrdersCount,
     aov,
     payouts,

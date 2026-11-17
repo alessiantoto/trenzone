@@ -1,9 +1,11 @@
 'use server';
 
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isAdminAuthorized } from './admin-auth';
 import { sendReviewEmail } from '@/lib/resend-service';
 import { getCanonicalOrderNumber } from '@/utils/admin-helpers';
+import { recordDeletedStripePaymentIntentIds } from '@/lib/stripe-order-sync';
 
 function sanitizeOrderIdFilter(rawId: string): string {
   return String(rawId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -72,20 +74,65 @@ export async function deleteOrderAction(orderId: string) {
     const safeOrderId = sanitizeOrderIdFilter(orderId);
     if (!safeOrderId) throw new Error("ID comandă invalid.");
 
-    let query = supabaseAdmin.from('orders').delete();
+    let fetchQuery = supabaseAdmin
+      .from('orders')
+      .select('id, payment_intent_id, carrier_metadata');
     if (isUuid) {
-      query = query.eq('id', orderId);
+      fetchQuery = fetchQuery.eq('id', orderId);
     } else {
-      query = query.or(`payment_intent_id.eq.${safeOrderId},receipt_url.ilike.%${safeOrderId}%`);
+      fetchQuery = fetchQuery.or(`payment_intent_id.eq.${safeOrderId},receipt_url.ilike.%${safeOrderId}%`);
     }
-    const { error } = await query;
+
+    const { data: matchedOrders, error: fetchErr } = await fetchQuery;
+    if (fetchErr) {
+      console.error("Error inspecting order before delete:", fetchErr);
+      throw new Error("Eroare la verificarea comenzii înainte de ștergere.");
+    }
+
+    const rows = Array.isArray(matchedOrders) ? matchedOrders : [];
+    const stripePiIds = rows
+      .map((row: any) => String(row?.payment_intent_id || '').trim())
+      .filter((pi: string) => pi.startsWith('pi_'));
+
+    const dispatchedRow = rows.find((row: any) => Boolean(row?.carrier_metadata?.fulfillment_dispatched_at));
+    const wasDispatchedToFulfillment = Boolean(dispatchedRow);
+    const dispatchedAt = dispatchedRow?.carrier_metadata?.fulfillment_dispatched_at || null;
+
+    // Persist Stripe PaymentIntent tombstones BEFORE deleting so cron reconciliation never recreates this order
+    if (stripePiIds.length > 0) {
+      await recordDeletedStripePaymentIntentIds(stripePiIds);
+    }
+
+    let deleteQuery = supabaseAdmin.from('orders').delete();
+    if (rows.length > 0) {
+      deleteQuery = deleteQuery.in('id', rows.map((r: any) => r.id));
+    } else if (isUuid) {
+      deleteQuery = deleteQuery.eq('id', orderId);
+    } else {
+      deleteQuery = deleteQuery.or(`payment_intent_id.eq.${safeOrderId},receipt_url.ilike.%${safeOrderId}%`);
+    }
+    const { error } = await deleteQuery;
 
     if (error) {
       console.error("Error deleting order:", error);
       throw new Error("Eroare la ștergerea comenzii.");
     }
 
-    return { success: true };
+    try {
+      revalidateTag('orders', 'max');
+      revalidateTag('global_settings', 'max');
+      revalidatePath('/admin/orders');
+      revalidatePath('/admin/fulfillment');
+      revalidatePath('/admin/preorders');
+      revalidatePath('/admin');
+    } catch (_) {}
+
+    return {
+      success: true,
+      wasDispatchedToFulfillment,
+      dispatchedAt,
+      deletedStripePiCount: stripePiIds.length,
+    };
   } catch (error: any) {
     console.error("deleteOrderAction failed:", error);
     return { success: false, error: error.message };
@@ -143,6 +190,12 @@ export async function updateOrderShippingAction(
       throw new Error(error.message || "Eroare la actualizarea comenzii.");
     }
 
+    try {
+      revalidateTag('orders', 'max');
+      revalidatePath('/admin/orders');
+      revalidatePath('/admin/fulfillment');
+    } catch (_) {}
+
     return { success: true };
   } catch (error: any) {
     console.error("updateOrderShippingAction failed:", error);
@@ -180,6 +233,13 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
       console.error("Error updating order status:", error);
       throw new Error(error.message || "Eroare la actualizarea statusului comenzii.");
     }
+
+    try {
+      revalidateTag('orders', 'max');
+      revalidatePath('/admin/orders');
+      revalidatePath('/admin/fulfillment');
+      revalidatePath('/admin/preorders');
+    } catch (_) {}
 
     return { success: true };
   } catch (error: any) {

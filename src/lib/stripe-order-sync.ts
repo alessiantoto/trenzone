@@ -41,6 +41,89 @@ export function getCurrencyMultiplier(currency?: string | null): 1 | 100 {
 
 const MAX_STRIPE_METADATA_VALUE_LEN = 500;
 const STANDARD_ITEM_CHUNK_KEYS = ['order_items', 'order_items_2', 'order_items_3', 'order_items_4'] as const;
+export const DELETED_STRIPE_PIS_KEY = 'deleted_stripe_pis';
+const MAX_DELETED_STRIPE_PIS = 500;
+
+/**
+ * Reads the tombstone list of Stripe PaymentIntent IDs whose orders were manually
+ * deleted by an admin so reconciliation never resurrects them.
+ */
+export async function getDeletedStripePaymentIntentIds(): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('store_settings')
+      .select('value')
+      .eq('key', DELETED_STRIPE_PIS_KEY)
+      .maybeSingle();
+
+    if (error || !data || !Array.isArray(data.value)) {
+      return new Set<string>();
+    }
+
+    return new Set(
+      data.value
+        .map((id: any) => String(id || '').trim())
+        .filter((id: string) => id.startsWith('pi_'))
+    );
+  } catch (err) {
+    console.warn('[STRIPE SYNC] Could not read deleted_stripe_pis tombstone list:', err);
+    return new Set<string>();
+  }
+}
+
+/**
+ * Persists deleted Stripe PaymentIntent IDs into `store_settings.deleted_stripe_pis`,
+ * deduplicated and capped to the latest 500 entries.
+ */
+export async function recordDeletedStripePaymentIntentIds(piIds: string[]): Promise<void> {
+  const validNewIds = Array.from(
+    new Set(
+      (piIds || [])
+        .map((id) => String(id || '').trim())
+        .filter((id) => id.startsWith('pi_'))
+    )
+  );
+
+  if (validNewIds.length === 0) return;
+
+  try {
+    const { data } = await supabaseAdmin
+      .from('store_settings')
+      .select('value')
+      .eq('key', DELETED_STRIPE_PIS_KEY)
+      .maybeSingle();
+
+    const existingList = Array.isArray(data?.value)
+      ? data.value
+          .map((id: any) => String(id || '').trim())
+          .filter((id: string) => id.startsWith('pi_'))
+      : [];
+
+    const existingSet = new Set(existingList);
+    const merged = [...existingList];
+    for (const id of validNewIds) {
+      if (!existingSet.has(id)) {
+        merged.push(id);
+        existingSet.add(id);
+      }
+    }
+
+    const capped = merged.slice(-MAX_DELETED_STRIPE_PIS);
+
+    const { error } = await supabaseAdmin
+      .from('store_settings')
+      .upsert({
+        key: DELETED_STRIPE_PIS_KEY,
+        value: capped,
+      });
+
+    if (error) {
+      console.error('[STRIPE SYNC] Failed updating deleted_stripe_pis tombstone list:', error.message);
+    }
+  } catch (err: any) {
+    console.error('[STRIPE SYNC] Exception recording deleted_stripe_pis:', err?.message || err);
+  }
+}
 
 export function getStripeClient(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY || 'sk_test_dummy_key';
@@ -884,6 +967,17 @@ export async function ensureStripeOrderInDb(
       throw new Error(`DB idempotency lookup failed for ${pi.id}: ${lookupErr.message}`);
     }
 
+    if (!existingOrder) {
+      const deletedStripePis = await getDeletedStripePaymentIntentIds();
+      if (deletedStripePis.has(pi.id)) {
+        return {
+          outcome: 'already_exists',
+          orderId: pi.id,
+          paymentIntentId: pi.id,
+        };
+      }
+    }
+
     const charge = await resolveExpandedCharge(pi, getStripeClient());
     const receiptNum = charge?.receipt_number ? String(charge.receipt_number).trim() : null;
     const chargeId = charge?.id ? String(charge.id).trim() : null;
@@ -988,11 +1082,13 @@ export interface ReconcileStripeResult {
   recovered: number;
   backfilled: number;
   alreadySynced: number;
+  skippedDeleted: number;
   errors: Array<{ paymentIntentId: string; error: string }>;
 }
 
 /**
  * Reconciles recent succeeded Stripe PaymentIntents (older than 45 seconds) against Supabase `orders`:
+ * - Skips any PaymentIntent tombstoned in `store_settings.deleted_stripe_pis`
  * - Imports any missing succeeded payments automatically
  * - Recovers `failed` placeholders
  * - Backfills `stripe_receipt_number` and `stripe_charge_id` on existing orders
@@ -1007,6 +1103,7 @@ export async function reconcileRecentStripeOrders(options?: {
     recovered: 0,
     backfilled: 0,
     alreadySynced: 0,
+    skippedDeleted: 0,
     errors: [],
   };
 
@@ -1047,6 +1144,8 @@ export async function reconcileRecentStripeOrders(options?: {
     return result;
   }
 
+  const deletedStripePis = await getDeletedStripePaymentIntentIds();
+
   const piIds = succeededIntents.map((pi) => pi.id);
   const { data: dbOrders, error: dbErr } = await supabaseAdmin
     .from('orders')
@@ -1066,6 +1165,11 @@ export async function reconcileRecentStripeOrders(options?: {
 
   for (const pi of succeededIntents) {
     try {
+      if (deletedStripePis.has(pi.id)) {
+        result.skippedDeleted++;
+        continue;
+      }
+
       const existing = dbByPi.get(pi.id);
       const charge = typeof pi.latest_charge === 'object' ? (pi.latest_charge as Stripe.Charge) : null;
       const hasMissingReceipt = Boolean(

@@ -1,43 +1,45 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Mail, 
-  Send, 
-  Check, 
-  Loader2, 
-  Clock, 
-  FileText, 
-  Truck, 
-  CheckCircle2, 
-  AlertCircle, 
-  History, 
-  ChevronDown, 
-  ChevronUp, 
-  Eye, 
-  Calendar, 
-  Layers, 
-  ShoppingBag,
+import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import {
+  X,
+  Mail,
+  Send,
+  Check,
+  Loader2,
+  Clock,
+  FileText,
+  Truck,
+  History,
+  Eye,
+  Calendar,
+  Layers,
   ExternalLink,
   ShieldCheck,
-  RefreshCw,
   Package,
   Download,
   FileSpreadsheet
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { 
-  getFulfillmentSettings, 
-  updateFulfillmentSettings, 
-  getFulfillmentHistory, 
+import {
+  getFulfillmentSettings,
+  updateFulfillmentSettings,
+  getFulfillmentHistory,
   dispatchOrdersToFulfillment,
   getFulfillmentQueueOverview,
   generateFulfillmentCsv,
   type FulfillmentQueueOverview
 } from '@/app/actions/admin-fulfillment';
-import { FulfillmentSettings, FulfillmentDispatchLog, FulfillmentOrderSummary } from '@/types/fulfillment';
+import {
+  FulfillmentSettings,
+  FulfillmentDispatchLog,
+  FulfillmentOrderSummary,
+  formatRomaniaDateTime,
+  getFulfillmentScheduleInfo
+} from '@/types/fulfillment';
+import { FulfillmentReportView } from '@/components/admin/FulfillmentReportView';
 
 interface FulfillmentModalProps {
   isOpen: boolean;
@@ -79,7 +81,7 @@ export function FulfillmentModal({
   // History state
   const [history, setHistory] = useState<FulfillmentDispatchLog[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [now, setNow] = useState<Date>(() => new Date());
 
   // Queue & preview state
   const [queueOverview, setQueueOverview] = useState<FulfillmentQueueOverview>({
@@ -131,8 +133,21 @@ export function FulfillmentModal({
   useEffect(() => {
     if (isOpen) {
       loadData();
+      setNow(new Date());
+      const timer = setInterval(() => setNow(new Date()), 30_000);
+      return () => clearInterval(timer);
     }
   }, [isOpen]);
+
+  const scheduleInfo = useMemo(
+    () =>
+      getFulfillmentScheduleInfo({
+        now,
+        lastDispatchedAt: settings.last_dispatched_at,
+        autoDispatchEnabled: settings.auto_dispatch_enabled,
+      }),
+    [now, settings.last_dispatched_at, settings.auto_dispatch_enabled]
+  );
 
   // Load tab-specific data
   useEffect(() => {
@@ -195,7 +210,7 @@ export function FulfillmentModal({
     }
   };
 
-  // Toggle 08:00 AM auto-dispatch
+  // Toggle auto-dispatch
   const handleToggleAutoDispatch = async () => {
     const nextVal = !settings.auto_dispatch_enabled;
     const updated = { ...settings, auto_dispatch_enabled: nextVal };
@@ -204,7 +219,11 @@ export function FulfillmentModal({
 
     try {
       await updateFulfillmentSettings({ auto_dispatch_enabled: nextVal });
-      toast.success(nextVal ? 'Trimiterea automată la ora 08:00 AM a fost activată!' : 'Trimiterea automată a fost dezactivată.');
+      toast.success(
+        nextVal
+          ? `Trimiterea automată la ora ${scheduleInfo.todayTimeRo} (ora României) a fost activată!`
+          : 'Trimiterea automată a fost dezactivată.'
+      );
     } catch (err: any) {
       setSettings(settings);
       toast.error('Eroare la salvare: ' + err.message);
@@ -308,14 +327,14 @@ export function FulfillmentModal({
     const year = dateObj.getFullYear();
     const dateStr = `${day}.${month}.${year}`;
 
-    const triggerLabel = trigger === 'scheduled_8am' ? '08:00 AM' : 'Manual';
+    const triggerLabel = trigger === 'scheduled_8am' ? `${scheduleInfo.todayTimeRo} RO` : 'Manual';
     let countryPart = '';
     if (roCount > 0 && intCount > 0) {
-      countryPart = ` • 🇷🇴 ${roCount} RO · 🇪🇺 ${intCount} INT`;
+      countryPart = ` • ${roCount} RO · ${intCount} INT`;
     } else if (intCount > 0) {
-      countryPart = ` • 🇪🇺 ${intCount} Internațional`;
+      countryPart = ` • ${intCount} Internațional`;
     } else if (roCount > 0) {
-      countryPart = ` • 🇷🇴 România`;
+      countryPart = ` • România`;
     }
 
     const orderWord = count === 1 ? 'comandă' : 'comenzi';
@@ -391,6 +410,16 @@ export function FulfillmentModal({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/admin/fulfillment"
+              onClick={onClose}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all shadow-2xs"
+              title="Deschide pagina dedicată Raport Zilnic Fulfillment"
+            >
+              <ExternalLink size={13} className="text-[#008ba3]" />
+              <span>Raport Zilnic</span>
+            </Link>
+
             <button
               onClick={() => handleDownloadCsv('pending')}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs"
@@ -445,7 +474,7 @@ export function FulfillmentModal({
             }`}
           >
             <History size={15} className={activeTab === 'history' ? 'text-[#e32f8c]' : ''} />
-            <span>Istoric Trimise</span>
+            <span>Raport Zilnic & Istoric</span>
             {history.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded-full font-bold">
                 {history.length}
@@ -476,11 +505,46 @@ export function FulfillmentModal({
                   <div className="text-lg font-black text-indigo-700 mt-0.5">{queueOverview.excludedAlreadyDispatched}</div>
                 </div>
                 <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Excluse (PDF/Anul./AWB)</div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Excluse (Anul./AWB)</div>
                   <div className="text-lg font-black text-slate-600 mt-0.5">
-                    {queueOverview.excludedDigital + queueOverview.excludedUnpaidOrInvalid}
+                    {queueOverview.excludedUnpaidOrInvalid}
                   </div>
                 </div>
+              </div>
+
+              {/* Exact Romania Time Auto-Dispatch Status Card */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                    scheduleInfo.autoDispatchEnabled
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-slate-100 text-slate-500 border-slate-200'
+                  }`}>
+                    <Clock size={16} />
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-black text-slate-900">
+                        Program automat: ora {scheduleInfo.todayTimeRo} (ora României)
+                      </span>
+                      <span className="text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.2 rounded">
+                        06:00 UTC · {scheduleInfo.timezoneOffsetLabel}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      Următorul dispatch: <strong className="text-slate-900">{scheduleInfo.nextDayLabelRo}, {scheduleInfo.nextTimeRo}</strong> ({scheduleInfo.countdownLabel}) · {scheduleInfo.todayBatchStatusLabel}
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border self-start sm:self-center shrink-0 ${
+                  scheduleInfo.todayBatchRan
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : scheduleInfo.autoDispatchEnabled
+                      ? 'bg-sky-50 text-sky-800 border-sky-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}>
+                  {scheduleInfo.todayBatchRan ? 'Lot trimis azi' : scheduleInfo.autoDispatchEnabled ? 'Programat' : 'Oprit'}
+                </span>
               </div>
 
               {/* Explicit Preorder Hold Notice */}
@@ -636,15 +700,17 @@ export function FulfillmentModal({
                   </button>
                 </div>
 
-                {/* 08:00 AM Dispatch Toggle */}
+                {/* Auto-Dispatch Toggle */}
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-1.5">
                       <Clock size={14} className="text-slate-500" />
-                      <span className="text-xs font-black text-slate-800">Trimitere Automată Zilnică (Ora 08:00 AM)</span>
+                      <span className="text-xs font-black text-slate-800">
+                        Trimitere Automată Zilnică (Ora {scheduleInfo.todayTimeRo} România)
+                      </span>
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      În fiecare dimineață la 08:00 (Europe/Bucharest), comenzile noi sunt transmise automat cu fișier CSV atașat.
+                      În fiecare dimineață la 06:00 UTC ({scheduleInfo.todayTimeRo} în {scheduleInfo.timezoneOffsetLabel}, Europe/Bucharest), comenzile fizice noi sunt transmise automat cu fișier CSV atașat.
                     </p>
                   </div>
 
@@ -690,10 +756,10 @@ export function FulfillmentModal({
                     <Package size={11} className="text-slate-500" /> Nr. Comenzi & Bucăți
                   </span>
                   <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-700">
-                    <span>🇷🇴/🇪🇺</span> Împărțire Țară (Sameday vs Packeta)
+                    <span>RO/INT</span> Împărțire Țară (Sameday vs Packeta)
                   </span>
                   <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-700">
-                    <Clock size={11} className="text-slate-500" /> Marcaj Orar (08:00 AM / Manual)
+                    <Clock size={11} className="text-slate-500" /> Marcaj Orar ({scheduleInfo.todayTimeRo} RO / Manual)
                   </span>
                   <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-700">
                     <FileSpreadsheet size={11} className="text-slate-500" /> Fișier CSV Atașat
@@ -733,7 +799,7 @@ export function FulfillmentModal({
 
                   {settings.last_dispatched_at && (
                     <span className="text-[11px] text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-                      Ultima trimitere: <strong>{new Date(settings.last_dispatched_at).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</strong>
+                      Ultima trimitere (RO): <strong>{formatRomaniaDateTime(settings.last_dispatched_at)}</strong>
                     </span>
                   )}
                 </div>
@@ -851,7 +917,9 @@ export function FulfillmentModal({
                     <div className="bg-slate-50 p-4 border-b border-slate-200 text-xs space-y-1.5">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-slate-900">De la: TrenZone Fulfillment &lt;contact@trenzone.fit&gt;</span>
-                        <span className="text-[11px] text-slate-400">Astăzi, 08:00 AM</span>
+                        <span className="text-[11px] text-slate-400">
+                          {scheduleInfo.nextDayLabelRo}, {scheduleInfo.nextTimeRo} (RO)
+                        </span>
                       </div>
                       <div className="text-slate-600">
                         Către (Depozit): <strong className="text-slate-900">{settings.email || 'depozit@fulfillment.ro'}</strong>
@@ -946,14 +1014,15 @@ export function FulfillmentModal({
                         </div>
                       </div>
 
-                      {/* 🌍 ORDERS SPLIT BY COUNTRY */}
+                      {/* ORDERS SPLIT BY COUNTRY */}
                       <div className="space-y-4">
                         {/* Romania Group */}
                         {roOrders.length > 0 && (
                           <div className="space-y-2.5">
                             <div className="flex items-center justify-between bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-black text-slate-800">
                               <span className="flex items-center gap-1.5">
-                                <span>🇷🇴</span> România (Comenzi Naționale - Sameday)
+                                <span className="px-1.5 py-0.2 rounded bg-slate-900 text-white text-[10px]">RO</span>
+                                <span>România (Comenzi Naționale - Sameday)</span>
                               </span>
                               <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-slate-200">
                                 {roOrders.length} comenzi
@@ -1025,7 +1094,8 @@ export function FulfillmentModal({
                           <div className="space-y-2.5">
                             <div className="flex items-center justify-between bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-black text-slate-800">
                               <span className="flex items-center gap-1.5">
-                                <span>🇪🇺</span> Comenzi Internaționale (Packeta / Cross-Border)
+                                <span className="px-1.5 py-0.2 rounded bg-indigo-700 text-white text-[10px]">INT</span>
+                                <span>Comenzi Internaționale (Packeta / Cross-Border)</span>
                               </span>
                               <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-slate-200">
                                 {intlOrders.length} comenzi
@@ -1098,196 +1168,36 @@ export function FulfillmentModal({
             </div>
           )}
 
-          {/* ═════════════════════════════════════════════════════════ */}
-          {/* TAB 3: ISTORIC TRIMISE (EMAIL LOGS)                       */}
-          {/* ═════════════════════════════════════════════════════════ */}
+          {/* TAB 3: RAPORT ZILNIC & ISTORIC TRIMISE */}
           {activeTab === 'history' && (
             <div className="space-y-3 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
-                  Istoric Expedieri Către Centrul de Fulfillment
+                  Raport Zilnic & Istoric Expedieri Fulfillment
                 </h3>
-                <button
-                  onClick={() => {
-                    setLoadingHistory(true);
-                    getFulfillmentHistory().then(setHistory).finally(() => setLoadingHistory(false));
-                  }}
-                  className="text-xs font-bold text-[#008ba3] hover:underline flex items-center gap-1 cursor-pointer"
+                <Link
+                  href="/admin/fulfillment"
+                  onClick={onClose}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#008ba3] hover:underline self-start sm:self-auto"
                 >
-                  <RefreshCw size={12} className={loadingHistory ? 'animate-spin' : ''} />
-                  <span>Reîmprospătează</span>
-                </button>
+                  <ExternalLink size={12} />
+                  <span>Deschide Raportul în Pagină Dedicată</span>
+                </Link>
               </div>
 
-              {loadingHistory ? (
-                <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
-                  <Loader2 size={24} className="animate-spin text-[#e32f8c] mx-auto mb-2" />
-                  <p className="text-xs text-slate-500">Se încarcă istoricul expedierilor...</p>
-                </div>
-              ) : history.length === 0 ? (
-                <div className="p-10 text-center bg-white rounded-2xl border border-slate-200 space-y-2">
-                  <History size={32} className="text-slate-300 mx-auto" />
-                  <h4 className="text-sm font-bold text-slate-700">Nicio expediere înregistrată încă</h4>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    Emailurile transmise zilnic la ora 08:00 AM sau manual prin butonul „Trimite Acum” vor fi arhivate aici cu toate comenzile și fișierele incluse.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {history.map((log) => {
-                    const isExpanded = expandedLogId === log.id;
-                    const dateFormatted = new Date(log.sent_at).toLocaleString('ro-RO', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    });
-
-                    return (
-                      <div
-                        key={log.id}
-                        className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden transition-all"
-                      >
-                        {/* Header bar */}
-                        <div
-                          onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
-                          className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
-                              log.status === 'failed'
-                                ? 'bg-red-50 text-red-600 border-red-200'
-                                : log.error_message
-                                  ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                  : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                            }`}>
-                              {log.status === 'failed' || log.error_message ? (
-                                <AlertCircle size={18} />
-                              ) : (
-                                <CheckCircle2 size={18} />
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <strong className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                                  {dateFormatted}
-                                </strong>
-                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                  log.trigger === 'scheduled_8am'
-                                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                    : 'bg-purple-50 text-purple-700 border border-purple-200'
-                                }`}>
-                                  {log.trigger === 'scheduled_8am' ? 'Cron 08:00' : 'Manual'}
-                                </span>
-                                {log.status === 'failed' && (
-                                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200">
-                                    Eșuat
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[11px] text-slate-500 truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                <span>Trimis la: <strong className="text-slate-700">{log.recipient_email}</strong></span>
-                                {log.secondary_email && (
-                                  <span className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded font-semibold text-[10px]">
-                                    CC: {log.secondary_email}
-                                  </span>
-                                )}
-                                <span>•</span>
-                                <span className="text-slate-800 font-bold">{log.order_count} {log.order_count === 1 ? 'comandă' : 'comenzi'}</span>
-                              </div>
-                              {log.subject && (
-                                <div className="text-[10px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded mt-1 truncate max-w-xl">
-                                  Subiect: {log.subject}
-                                </div>
-                              )}
-                              {log.error_message && (
-                                <div className="text-[10px] font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-1 rounded mt-1 max-w-xl">
-                                  {log.error_message}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-xs font-bold text-slate-500 hidden sm:inline">
-                              {isExpanded ? 'Ascunde detalii' : 'Vezi comenzi'}
-                            </span>
-                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                          </div>
-                        </div>
-
-                        {/* Expanded details */}
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className="border-t border-slate-100 bg-slate-50/60 p-4 space-y-3"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                                  Comenzi Incluse În Acest Email ({log.orders?.length || 0}):
-                                </span>
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    const csv = await generateFulfillmentCsv(log.orders || []);
-                                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `comenzi_${log.id}.csv`;
-                                    a.click();
-                                  }}
-                                  className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
-                                >
-                                  <Download size={12} />
-                                  <span>Descarcă CSV Expediere</span>
-                                </button>
-                              </div>
-
-                              <div className="space-y-2">
-                                {(log.orders || []).map((o, oIdx) => (
-                                  <div
-                                    key={o.id || oIdx}
-                                    className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs text-xs space-y-2"
-                                  >
-                                    <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                                        <span className="font-black text-slate-900">{o.id}</span>
-                                        <span className="text-slate-400">•</span>
-                                        <span className="font-bold text-slate-700 truncate max-w-[160px] sm:max-w-none">{o.customer}</span>
-                                        <span className="text-slate-400">•</span>
-                                        <span className="text-slate-500">{o.city} ({o.country || 'RO'})</span>
-                                      </div>
-                                      <span className="font-black text-slate-900 shrink-0">{o.total}</span>
-                                    </div>
-
-                                    {/* Items summary */}
-                                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-100">
-                                      {o.items.map((item, iIdx) => (
-                                        <span
-                                          key={iIdx}
-                                          className="text-[11px] bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md font-medium text-slate-700"
-                                        >
-                                          <strong>{item.quantity}x</strong> {item.name} {item.variant ? `(${item.variant})` : ''}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <FulfillmentReportView
+                logs={history}
+                loading={loadingHistory}
+                settings={settings}
+                pendingCount={pendingOrders.length}
+                onRefresh={() => {
+                  setLoadingHistory(true);
+                  return getFulfillmentHistory()
+                    .then(setHistory)
+                    .finally(() => setLoadingHistory(false));
+                }}
+                compact
+              />
             </div>
           )}
 

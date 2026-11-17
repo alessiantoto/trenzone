@@ -2,7 +2,7 @@
 
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, ChevronRight, Send, ArrowUpRight, Plus, X, Info, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 import { submitAffiliateApplication } from "@/app/actions/affiliate";
@@ -46,23 +46,32 @@ export default function AffiliatePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submittingRef.current || status === "sending") return;
-    if (!lastName.trim() || !firstName.trim() || !email.trim() || !socials[0].trim()) return;
-    
+    const validSocials = socials.map((s) => s.trim()).filter((s) => s.length > 0);
+    if (!lastName.trim() || !firstName.trim() || !email.trim() || validSocials.length === 0) {
+      setErrorMessage(
+        isRo
+          ? "Te rugăm să completezi toate câmpurile obligatorii (Nume, Prenume, Email și cel puțin un link social)."
+          : "Please fill in all required fields (First Name, Last Name, Email, and at least one social link)."
+      );
+      setStatus("error");
+      return;
+    }
+
     submittingRef.current = true;
     setStatus("sending");
     setErrorMessage("");
     try {
       const res = await submitAffiliateApplication({
-        name: `${firstName} ${lastName}`,
-        email,
-        socials: socials.filter(s => s.trim().length > 0),
-        preferredCode: preferredCode,
+        name: `${firstName.trim()} ${lastName.trim()}`,
+        email: email.trim(),
+        socials: validSocials,
+        preferredCode: preferredCode.trim(),
         message,
         preferredLocale,
         honeypot,
         formLoadedAt: loadedAt
       });
-      
+
       if (res.success) {
         setStatus("success");
         setLastName("");
@@ -75,9 +84,10 @@ export default function AffiliatePage() {
         setErrorMessage(res.error || (isRo ? "A apărut o eroare. Încearcă din nou." : "An error occurred. Please try again."));
         setStatus("error");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Affiliate submission error:", err);
-      setErrorMessage(err.message || (isRo ? "A apărut o eroare. Încearcă din nou." : "An error occurred. Please try again."));
+      const messageText = err instanceof Error ? err.message : "";
+      setErrorMessage(messageText || (isRo ? "A apărut o eroare. Încearcă din nou." : "An error occurred. Please try again."));
       setStatus("error");
     } finally {
       submittingRef.current = false;
@@ -86,15 +96,23 @@ export default function AffiliatePage() {
 
   return (
     <div className="bg-white text-zinc-900 min-h-screen overflow-x-hidden font-sans relative selection:bg-[#e32f8c] selection:text-white">
-      {/* Subtle Blue Gradients */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] pointer-events-none -z-10" style={{ background: 'radial-gradient(circle, rgba(227, 47, 140,0.15) 0%, rgba(227, 47, 140,0) 70%)' }} />
-      <div className="absolute bottom-40 left-0 w-[400px] h-[400px] pointer-events-none -z-10" style={{ background: 'radial-gradient(circle, rgba(227, 47, 140,0.08) 0%, rgba(227, 47, 140,0) 70%)' }} />
+      {/* Subtle Ambient Gradients */}
+      <div
+        className="absolute top-0 right-0 w-[340px] sm:w-[500px] h-[340px] sm:h-[500px] pointer-events-none z-0"
+        style={{ background: 'radial-gradient(circle, rgba(227, 47, 140,0.12) 0%, rgba(227, 47, 140,0) 70%)' }}
+        aria-hidden="true"
+      />
+      <div
+        className="absolute bottom-40 left-0 w-[280px] sm:w-[400px] h-[280px] sm:h-[400px] pointer-events-none z-0"
+        style={{ background: 'radial-gradient(circle, rgba(227, 47, 140,0.07) 0%, rgba(227, 47, 140,0) 70%)' }}
+        aria-hidden="true"
+      />
 
-      {/* ═══ Breadcrumb & Header ═══ */}
-      <section className="container mx-auto px-4 md:px-6 pt-8 md:pt-12 pb-12 relative z-10">
-        <nav className="flex items-center gap-2 text-xs md:text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4">
-          <Link href="/" className="hover:text-black transition-colors">{tShop('breadcrumb_home')}</Link>
-          <ChevronRight className="w-3.5 h-3.5" />
+      {/* Breadcrumb & Header */}
+      <section className="container mx-auto px-4 md:px-6 pt-5 sm:pt-8 md:pt-12 pb-7 sm:pb-10 md:pb-12 relative z-10">
+        <nav className="flex flex-wrap items-center gap-2 text-xs md:text-sm font-bold uppercase tracking-widest text-zinc-400 mb-3 sm:mb-4">
+          <Link href="/" className="hover:text-black transition-colors py-1">{tShop('breadcrumb_home')}</Link>
+          <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           <span className="text-[#e32f8c]">{t('hero_tagline')}</span>
         </nav>
         
@@ -104,69 +122,79 @@ export default function AffiliatePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <h1 className="text-2xl md:text-6xl font-heading font-black uppercase tracking-tighter text-black leading-tight mb-4">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-black uppercase tracking-tighter text-black leading-[1.05] mb-3 sm:mb-4">
               {t('hero_title')}
             </h1>
-            <p className="text-zinc-500 text-base md:text-xl font-medium max-w-2xl leading-relaxed mb-6">
+            <p className="text-zinc-600 text-base md:text-xl font-medium max-w-2xl leading-relaxed mb-5 sm:mb-6">
               {t('hero_desc')}
             </p>
-            <div className="inline-flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs sm:text-sm">
-              <span className="font-semibold text-zinc-600">
+            <div className="flex flex-col sm:inline-flex sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 sm:px-4 sm:py-2 rounded-2xl bg-zinc-50 border border-zinc-200 w-full sm:w-auto">
+              <span className="text-xs sm:text-sm font-semibold text-zinc-600 text-center sm:text-left">
                 {isRo ? 'Ești deja partener aprobat?' : 'Already an approved partner?'}
               </span>
               <Link
                 href="/affiliate/login"
-                className="inline-flex items-center gap-1.5 font-black uppercase tracking-wider text-xs text-[#e32f8c] hover:text-black transition-colors"
+                className="min-h-11 inline-flex items-center justify-center sm:justify-start gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-zinc-200 hover:border-[#e32f8c]/60 font-black uppercase tracking-wider text-xs text-[#e32f8c] hover:text-black transition-all shadow-2xs"
               >
                 <span>{isRo ? 'Autentifică-te în Dashboard' : 'Sign in to Dashboard'}</span>
-                <ArrowUpRight className="w-4 h-4" />
+                <ArrowUpRight className="w-4 h-4 shrink-0" aria-hidden="true" />
               </Link>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* ═══ Main Content Grid ═══ */}
-      <div className="container mx-auto px-4 mb-16 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 max-w-7xl mx-auto items-start">
+      {/* Main Content Grid */}
+      <div className="container mx-auto px-4 md:px-6 mb-14 sm:mb-16 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 max-w-7xl mx-auto items-start">
           
-          {/* ═══ Calculator Section ═══ */}
+          {/* Calculator Section */}
           <EarningsCalculator />
 
-          {/* ═══ Form Section ═══ */}
+          {/* Form Section */}
           <section className="relative w-full order-1 lg:order-1">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="relative bg-white border border-zinc-200 rounded-[32px] p-6 md:p-12 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+          className="relative bg-white border border-zinc-200 rounded-2xl sm:rounded-[32px] p-5 sm:p-8 md:p-10 lg:p-12 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
         >
           <div className="relative z-10">
-            <h2 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter mb-8 text-black">{t('form_title')}</h2>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black italic uppercase tracking-tighter mb-6 sm:mb-8 text-black">{t('form_title')}</h2>
             
             <AnimatePresence mode="wait">
               {status === 'success' ? (
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="py-12 text-center"
+                  className="py-8 sm:py-12 text-center"
                 >
-                  <div className="bg-[#e32f8c]/10 border border-[#e32f8c]/20 rounded-2xl p-4 flex items-start gap-3 mb-8">
-                    <Info className="w-5 h-5 text-[#e32f8c] shrink-0 mt-0.5" />
-                    <p className="text-sm font-medium text-slate-700">
+                  <div className="bg-[#e32f8c]/10 border border-[#e32f8c]/20 rounded-2xl p-4 flex items-start gap-3 mb-8 text-left">
+                    <Info className="w-5 h-5 text-[#e32f8c] shrink-0 mt-0.5" aria-hidden="true" />
+                    <p className="text-sm font-medium text-slate-700 leading-relaxed">
                       {t('form_success_banner')}
                     </p>
                   </div>
-                  <div className="w-24 h-24 bg-[#e32f8c]/10 border border-[#e32f8c]/30 rounded-full flex items-center justify-center mx-auto mb-8">
-                    <CheckCircle2 className="w-12 h-12 text-[#e32f8c]" />
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-[#e32f8c]/10 border border-[#e32f8c]/30 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8">
+                    <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12 text-[#e32f8c]" aria-hidden="true" />
                   </div>
-                  <p className="text-2xl font-black uppercase tracking-tight mb-2 text-black">{t('form_success')}</p>
-                  <button 
-                    onClick={() => setStatus('idle')}
-                    className="text-zinc-500 text-xs font-black uppercase tracking-widest hover:text-[#e32f8c] transition-colors mt-6 cursor-pointer"
-                  >
-                    {t('form_submit_another')}
-                  </button>
+                  <p className="text-xl sm:text-2xl font-black uppercase tracking-tight mb-2 text-black">{t('form_success')}</p>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
+                    <Link
+                      href="/affiliate/login"
+                      className="min-h-11 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 text-white text-xs font-black uppercase tracking-wider hover:bg-[#e32f8c] transition-colors"
+                    >
+                      <span>{isRo ? 'Portal Parteneri' : 'Partner Login'}</span>
+                      <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
+                    </Link>
+                    <button 
+                      type="button"
+                      onClick={() => setStatus('idle')}
+                      className="min-h-11 px-4 py-2.5 text-zinc-600 text-xs font-black uppercase tracking-widest hover:text-[#e32f8c] transition-colors cursor-pointer"
+                    >
+                      {t('form_submit_another')}
+                    </button>
+                  </div>
                 </motion.div>
               ) : (
                 <motion.form 
@@ -174,7 +202,7 @@ export default function AffiliatePage() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onSubmit={handleSubmit}
-                  className="space-y-6"
+                  className="space-y-5 sm:space-y-6"
                 >
                   {/* Anti-Bot Honeypot (Invisible to real humans) */}
                   <div className="sr-only" style={{ display: 'none', position: 'absolute', left: '-9999px', opacity: 0, height: 0, width: 0, pointerEvents: 'none' }} aria-hidden="true">
@@ -190,49 +218,68 @@ export default function AffiliatePage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_last_name')}</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <label htmlFor="aff-last-name" className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_last_name')}</label>
                       <input 
+                        id="aff-last-name"
+                        name="lastName"
                         required
+                        autoComplete="family-name"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         placeholder={t('form_last_name_placeholder')}
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-[#e32f8c] transition-all font-medium placeholder:text-zinc-500 text-black" 
+                        className="w-full h-12 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 sm:px-5 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/20 transition-all font-medium placeholder:text-zinc-500 text-black" 
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_first_name')}</label>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <label htmlFor="aff-first-name" className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_first_name')}</label>
                       <input 
+                        id="aff-first-name"
+                        name="firstName"
                         required
+                        autoComplete="given-name"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         placeholder={t('form_first_name_placeholder')}
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-[#e32f8c] transition-all font-medium placeholder:text-zinc-500 text-black" 
+                        className="w-full h-12 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 sm:px-5 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/20 transition-all font-medium placeholder:text-zinc-500 text-black" 
                       />
                     </div>
                   </div>
                   
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_email')}</label>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <label htmlFor="aff-email" className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_email')}</label>
                     <input 
+                      id="aff-email"
+                      name="email"
                       required
                       type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={t('form_email_placeholder')}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-[#e32f8c] transition-all font-medium placeholder:text-zinc-500 text-black" 
+                      className="w-full h-12 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 sm:px-5 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/20 transition-all font-medium placeholder:text-zinc-500 text-black" 
                     />
                   </div>
                   
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_social')}</label>
-                    <div className="space-y-3">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <label htmlFor="aff-social-0" className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_social')}</label>
+                    <div className="space-y-2.5 sm:space-y-3">
                       {socials.map((social, index) => (
                         <div key={index} className="relative flex items-center gap-2">
-                          <div className="relative flex-1">
+                          <div className="relative flex-1 min-w-0">
                             <input 
+                              id={`aff-social-${index}`}
                               required={index === 0}
+                              type="text"
+                              inputMode="url"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
                               value={social}
                               onChange={(e) => {
                                 const newSocials = [...socials];
@@ -240,17 +287,18 @@ export default function AffiliatePage() {
                                 setSocials(newSocials);
                               }}
                               placeholder={t('form_social_placeholder')}
-                              className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-[#e32f8c] transition-all font-medium placeholder:text-zinc-500 text-black pr-12"
+                              className="w-full h-12 bg-zinc-50 border border-zinc-200 rounded-2xl pl-4 sm:pl-5 pr-11 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/20 transition-all font-medium placeholder:text-zinc-500 text-black"
                             />
-                            <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none">
-                               <ArrowUpRight className="w-4 h-4 text-zinc-400" />
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                               <ArrowUpRight className="w-4 h-4 text-zinc-400" aria-hidden="true" />
                             </div>
                           </div>
                           {socials.length > 1 && (
                             <button
                               type="button"
+                              aria-label={isRo ? 'Elimină linkul' : 'Remove link'}
                               onClick={() => setSocials(socials.filter((_, i) => i !== index))}
-                              className="w-12 h-12 shrink-0 flex items-center justify-center rounded-2xl bg-zinc-50 border border-zinc-200 text-zinc-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all cursor-pointer"
+                              className="w-12 h-12 shrink-0 flex items-center justify-center rounded-2xl bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all cursor-pointer"
                             >
                               <X className="w-5 h-5" />
                             </button>
@@ -261,21 +309,21 @@ export default function AffiliatePage() {
                         <button
                           type="button"
                           onClick={() => setSocials([...socials, ''])}
-                          className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-[#e32f8c] transition-colors ml-1 mt-2 cursor-pointer"
+                          className="inline-flex items-center gap-2 min-h-11 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-600 hover:text-[#e32f8c] hover:bg-[#e32f8c]/5 transition-colors cursor-pointer"
                         >
-                          <Plus className="w-3 h-3" /> {t('form_add_social')}
+                          <Plus className="w-3.5 h-3.5" aria-hidden="true" /> {t('form_add_social')}
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Limba Preferata / Preferred Language */}
-                  <div className="space-y-2">
+                  {/* Preferred Language */}
+                  <div className="space-y-1.5 sm:space-y-2">
                     <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">
                       {t('form_preferred_language')}
                     </label>
 
-                    <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label={t('form_preferred_language')}>
+                    <div className="grid grid-cols-2 gap-2.5 sm:gap-3" role="radiogroup" aria-label={t('form_preferred_language')}>
                       {([
                         { code: 'ro' as const, label: t('form_lang_ro'), isEnglish: false },
                         { code: 'en' as const, label: t('form_lang_en'), isEnglish: true },
@@ -294,7 +342,7 @@ export default function AffiliatePage() {
                                 setPreferredLocale(opt.code);
                               }
                             }}
-                            className={`relative flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 cursor-pointer transition-all duration-200 select-none group active:scale-[0.99] ${
+                            className={`relative flex items-center gap-2.5 sm:gap-3 min-h-12 px-3 sm:px-4 py-3 rounded-2xl border-2 cursor-pointer transition-all duration-200 select-none group active:scale-[0.99] ${
                               selected
                                 ? 'border-[#e32f8c] bg-[#e32f8c]/5 shadow-[0_0_20px_rgba(227,47,140,0.12)]'
                                 : 'border-zinc-200 bg-zinc-50/70 hover:border-zinc-300 hover:bg-zinc-50'
@@ -324,8 +372,8 @@ export default function AffiliatePage() {
                               />
                             </div>
 
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <LanguageFlagSvg isEnglish={opt.isEnglish} className="w-6 h-4" />
+                            <div className="flex items-center gap-2 min-w-0">
+                              <LanguageFlagSvg isEnglish={opt.isEnglish} className="w-6 h-4 shrink-0" />
                               <span
                                 className={`text-sm tracking-tight leading-none transition-colors truncate ${
                                   selected ? 'font-black text-black' : 'font-bold text-zinc-700 group-hover:text-black'
@@ -340,49 +388,57 @@ export default function AffiliatePage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_preferred_code')}</label>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <label htmlFor="aff-preferred-code" className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_preferred_code')}</label>
                     <input 
+                      id="aff-preferred-code"
+                      name="preferredCode"
                       type="text"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
                       value={preferredCode}
                       onChange={(e) => setPreferredCode(e.target.value.toUpperCase())}
                       placeholder={t('form_preferred_code_placeholder')}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-[#e32f8c] transition-all font-medium placeholder:text-zinc-500 text-black uppercase" 
+                      className="w-full h-12 bg-zinc-50 border border-zinc-200 rounded-2xl px-4 sm:px-5 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/20 transition-all font-medium placeholder:text-zinc-500 text-black uppercase" 
                     />
-                    <p className="text-[10px] text-zinc-500 font-medium ml-1">{t('form_preferred_code_desc')}</p>
+                    <p className="text-[11px] text-zinc-500 font-medium ml-1">{t('form_preferred_code_desc')}</p>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_audience')}</label>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <label htmlFor="aff-message" className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">{t('form_audience')}</label>
                     <textarea 
+                      id="aff-message"
+                      name="message"
                       rows={4}
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder={t('form_message')}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-[#e32f8c] transition-all font-medium placeholder:text-zinc-500 text-black resize-none" 
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 sm:px-5 py-3.5 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/20 transition-all font-medium placeholder:text-zinc-500 text-black resize-none" 
                     />
                   </div>
 
                   <button 
                     type="submit"
                     disabled={status === 'sending'}
-                    className="w-full bg-[#e32f8c] hover:bg-[#c41a72] text-black py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(227, 47, 140,0.3)] mt-6 cursor-pointer"
+                    className="w-full min-h-13 bg-[#e32f8c] hover:bg-[#c41a72] text-white py-4 sm:py-5 rounded-2xl font-black uppercase tracking-[0.18em] text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 shadow-[0_0_20px_rgba(227,47,140,0.3)] mt-6 cursor-pointer"
                   >
                     {status === 'sending' ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
                         <span>{t('form_button_sending')}</span>
                       </>
                     ) : (
                       <>
-                        {t('form_button')} <Send className="w-4 h-4" />
+                        <span>{t('form_button')}</span>
+                        <Send className="w-4 h-4" aria-hidden="true" />
                       </>
                     )}
                   </button>
 
                   {status === 'error' && (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-center gap-2 text-red-600 text-xs font-bold mt-4 shadow-2xs">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-red-700 text-xs sm:text-sm font-bold mt-4 shadow-2xs leading-relaxed">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
                       <span>{errorMessage || t('form_error_generic')}</span>
                     </div>
                   )}
@@ -398,41 +454,52 @@ export default function AffiliatePage() {
   );
 }
 
+interface CalculatorProduct {
+  id?: string;
+  slug?: string;
+  is_active?: boolean;
+  is_digital?: boolean;
+  isDigital?: boolean;
+  price_numeric?: number | string | null;
+  price?: number | Record<string, number>;
+}
+
+const emptySubscribe = () => () => {};
+
 function EarningsCalculator() {
   const locale = useLocale();
   const isRo = locale === "ro";
   const uiLocale: 'ro' | 'en' = isRo ? 'ro' : 'en';
 
   const { currency: storeCurrency, exchangeRates, fetchExchangeRates } = useRegionStore();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [averageOrderValueRon, setAverageOrderValueRon] = useState<number>(420);
 
   useEffect(() => {
-    setMounted(true);
     fetchExchangeRates();
 
     let cancelled = false;
     fetch('/api/products')
       .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
+      .then((json: { products?: CalculatorProduct[] } | null) => {
         if (cancelled || !json?.products?.length) return;
-        const activeProducts = json.products.filter((p: any) => p.is_active !== false);
+        const activeProducts = json.products.filter((p) => p.is_active !== false);
         const physicalPrices = activeProducts
-          .filter((p: any) => !isDigitalProgramItem(p))
-          .map((p: any) => Number(p.price_numeric) || getProductPrice(p.price, 'RON'))
-          .filter((n: number) => n > 0);
+          .filter((p) => !isDigitalProgramItem(p))
+          .map((p) => Number(p.price_numeric) || getProductPrice(p.price, 'RON'))
+          .filter((n) => n > 0);
         const digitalPrices = activeProducts
-          .filter((p: any) => isDigitalProgramItem(p))
-          .map((p: any) => Number(p.price_numeric) || getProductPrice(p.price, 'RON'))
-          .filter((n: number) => n > 0);
+          .filter((p) => isDigitalProgramItem(p))
+          .map((p) => Number(p.price_numeric) || getProductPrice(p.price, 'RON'))
+          .filter((n) => n > 0);
 
         const avgPhys =
           physicalPrices.length > 0
-            ? physicalPrices.reduce((a: number, b: number) => a + b, 0) / physicalPrices.length
+            ? physicalPrices.reduce((a, b) => a + b, 0) / physicalPrices.length
             : 430;
         const avgDig =
           digitalPrices.length > 0
-            ? digitalPrices.reduce((a: number, b: number) => a + b, 0) / digitalPrices.length
+            ? digitalPrices.reduce((a, b) => a + b, 0) / digitalPrices.length
             : 147;
 
         // Weighted AOV reflecting ~80% physical gear (with occasional 2-item/combo uplift) & ~20% digital programs
@@ -551,7 +618,7 @@ function EarningsCalculator() {
                     key={t.rate}
                     type="button"
                     onClick={() => setCommissionRate(t.rate)}
-                    className={`py-2.5 px-2 rounded-xl border text-center transition-all duration-200 cursor-pointer active:scale-[0.98] ${
+                    className={`min-h-14 py-3 px-2 rounded-xl border text-center transition-all duration-200 cursor-pointer active:scale-[0.98] ${
                       isSelected 
                         ? "bg-[#e32f8c]/20 border-[#e32f8c] shadow-[0_0_15px_rgba(227,47,140,0.3)]" 
                         : "bg-zinc-900/80 border-white/5 hover:border-white/15"
@@ -573,11 +640,11 @@ function EarningsCalculator() {
 
           {/* Sales Volume Control */}
           <div className="mb-5 p-3.5 sm:p-5 rounded-2xl bg-zinc-900/60 border border-white/5">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
                 {isRo ? "Comenzi Generate Lunar" : "Estimated Monthly Orders"}
               </label>
-              <div className="flex items-baseline gap-1">
+              <div className="flex items-baseline gap-1 shrink-0">
                 <span className="text-2xl font-black text-white">{salesPerMonth}</span>
                 <span className="text-xs text-zinc-500 font-bold">{isRo ? "colete" : "orders"}</span>
               </div>
@@ -585,7 +652,7 @@ function EarningsCalculator() {
 
             {/* Audience Context Tag */}
             <div className="text-[11px] text-[#e32f8c] font-medium mb-3">
-              • {audienceLabel}
+              {audienceLabel}
             </div>
 
             {/* Preset Volume Quick Buttons */}
@@ -595,7 +662,7 @@ function EarningsCalculator() {
                   key={qty}
                   type="button"
                   onClick={() => setSalesPerMonth(qty)}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-[0.98] ${
+                  className={`min-h-11 py-2.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-[0.98] ${
                     salesPerMonth === qty
                       ? "bg-white text-black shadow-sm"
                       : "bg-white/5 hover:bg-white/10 text-zinc-400"
@@ -607,7 +674,7 @@ function EarningsCalculator() {
             </div>
 
             {/* Slider */}
-            <div className="relative flex items-center w-full h-5">
+            <div className="relative flex items-center w-full h-10">
               <div className="absolute left-0 right-0 h-2 rounded-full bg-zinc-800 overflow-hidden pointer-events-none">
                 <div 
                   className="absolute top-0 left-0 h-full bg-[#e32f8c]"
@@ -619,14 +686,15 @@ function EarningsCalculator() {
                 min="5" 
                 max="150" 
                 step="5"
+                aria-label={isRo ? "Comenzi generate lunar" : "Estimated monthly orders"}
                 value={salesPerMonth} 
-                onChange={(e) => setSalesPerMonth(parseInt(e.target.value))}
+                onChange={(e) => setSalesPerMonth(parseInt(e.target.value, 10))}
                 className="w-full h-full appearance-none cursor-pointer outline-none bg-transparent relative z-10 
-                           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#e32f8c] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(227,47,140,0.5)] 
-                           [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#e32f8c] [&::-moz-range-thumb]:rounded-full"
+                           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-7 [&::-webkit-slider-thumb]:h-7 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#e32f8c] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(227,47,140,0.5)] 
+                           [&::-moz-range-thumb]:w-7 [&::-moz-range-thumb]:h-7 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#e32f8c] [&::-moz-range-thumb]:rounded-full"
               />
             </div>
-            <div className="flex justify-between mt-2 text-[9px] font-bold text-zinc-600">
+            <div className="flex justify-between mt-1 text-[10px] font-bold text-zinc-500">
               <span>{isRo ? '5 comenzi' : '5 orders'}</span>
               <span>75</span>
               <span>{isRo ? '150+ comenzi' : '150+ orders'}</span>
@@ -639,7 +707,7 @@ function EarningsCalculator() {
               {isRo ? "Câștig Lunar Estimat" : "Estimated Monthly Payout"}
             </span>
             <div className="flex items-baseline justify-center gap-2 mb-2.5">
-              <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
+              <span className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight">
                 {formatMoneyInCurrency(estimatedEarnings, displayCurrency, uiLocale, 0)}
               </span>
             </div>

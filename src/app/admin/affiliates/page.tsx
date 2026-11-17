@@ -48,7 +48,12 @@ import {
   recordAffiliatePayoutAction,
   deleteAffiliatePayoutAction
 } from '@/app/actions/admin-affiliates';
-import { formatRon, formatOriginalAmount, classifyOrderNonCountable } from '@/lib/affiliate-stats';
+import {
+  formatRon,
+  formatOriginalAmount,
+  classifyOrderNonCountable,
+  classifyAffiliateOrderPayoutStatus,
+} from '@/lib/affiliate-stats';
 import toast from 'react-hot-toast';
 
 import Link from 'next/link';
@@ -243,12 +248,74 @@ function AffiliatePortalView({
       </div>
 
       {/* 6 FINANCIAL KPI CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+        {/* De incasat (Colet ridicat) */}
+        <div className={`p-3.5 rounded-2xl border shadow-2xs ${
+          (affiliate.pendingPayoutRaw || 0) > 0
+            ? 'bg-emerald-50/70 border-emerald-200'
+            : 'bg-slate-50/70 border-slate-200'
+        }`}>
+          <div className={`flex items-center justify-between mb-1 ${
+            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-emerald-800' : 'text-slate-400'
+          }`}>
+            <span className="text-[10px] font-black uppercase tracking-wider">De Încasat (Colet ridicat)</span>
+            <DollarSign size={14} className={(affiliate.pendingPayoutRaw || 0) > 0 ? 'text-emerald-600 shrink-0' : 'text-slate-400 shrink-0'} />
+          </div>
+          <p className={`text-base sm:text-lg font-black ${
+            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-emerald-900' : 'text-slate-700'
+          }`}>
+            {affiliate.pendingPayout}
+          </p>
+          <p className={`text-[10px] font-bold mt-0.5 ${
+            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-emerald-700' : 'text-slate-500'
+          }`}>
+            {(affiliate.pendingPayoutRaw || 0) > 0
+              ? `Eligibil IBAN (din ${affiliate.eligibleCommissions || affiliate.totalCommissions})`
+              : (affiliate.eligibleCommissionsRaw || 0) > 0
+                ? 'Achitat integral'
+                : 'Niciun colet ridicat neachitat'}
+          </p>
+        </div>
+
+        {/* In asteptare (In livrare / Neridicat inca) */}
+        <div className={`p-3.5 rounded-2xl border shadow-2xs ${
+          (affiliate.pendingPickupCommissionsRaw || 0) > 0
+            ? 'bg-amber-50/70 border-amber-200/90'
+            : 'bg-white border-slate-200'
+        }`}>
+          <div className={`flex items-center justify-between mb-1 ${
+            (affiliate.pendingPickupCommissionsRaw || 0) > 0 ? 'text-amber-700' : 'text-slate-400'
+          }`}>
+            <span className="text-[10px] font-black uppercase tracking-wider">În Așteptare (În livrare)</span>
+            <Clock size={14} className={(affiliate.pendingPickupCommissionsRaw || 0) > 0 ? 'text-amber-600 shrink-0' : 'text-slate-400 shrink-0'} />
+          </div>
+          <p className={`text-base sm:text-lg font-black ${
+            (affiliate.pendingPickupCommissionsRaw || 0) > 0 ? 'text-amber-900' : 'text-slate-700'
+          }`}>
+            {affiliate.pendingPickupCommissions || formatRon(0)}
+          </p>
+          <p className="text-[10px] font-bold text-slate-500 mt-0.5 leading-snug">
+            Se mută automat în De încasat după ce clientul ridică coletul
+          </p>
+        </div>
+
+        {/* Incasat pana acum */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-400 mb-1">
+            <span className="text-[10px] font-black uppercase tracking-wider">Încasat Până Acum</span>
+            <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+          </div>
+          <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.paidPayout}</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+            {affiliate.payoutProgressPercent ?? 0}% din eligibil achitat
+          </p>
+        </div>
+
         {/* Total Sales */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
             <span className="text-[10px] font-black uppercase tracking-wider">Vânzări Totale</span>
-            <TrendingUp size={14} className="text-[#e32f8c]" />
+            <TrendingUp size={14} className="text-[#e32f8c] shrink-0" />
           </div>
           <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.totalSales}</p>
           <p className="text-[10px] font-bold text-slate-400 mt-0.5">
@@ -256,68 +323,16 @@ function AffiliatePortalView({
           </p>
         </div>
 
-        {/* Total Commissions */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[10px] font-black uppercase tracking-wider">Comisioane</span>
-            <DollarSign size={14} className="text-emerald-600" />
-          </div>
-          <p className="text-base sm:text-lg font-black text-emerald-600">{affiliate.totalCommissions}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">Ratǎ {affiliate.commission} din net</p>
-        </div>
-
-        {/* Pending Payout */}
-        <div className={`p-3.5 rounded-2xl border shadow-2xs ${
-          (affiliate.pendingPayoutRaw || 0) > 0
-            ? 'bg-amber-50/70 border-amber-200/90'
-            : 'bg-slate-50/70 border-slate-200'
-        }`}>
-          <div className={`flex items-center justify-between mb-1 ${
-            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-amber-700' : 'text-slate-400'
-          }`}>
-            <span className="text-[10px] font-black uppercase tracking-wider">De Plată</span>
-            <Clock size={14} className={(affiliate.pendingPayoutRaw || 0) > 0 ? 'text-amber-600' : 'text-slate-400'} />
-          </div>
-          <p className={`text-base sm:text-lg font-black ${
-            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-amber-900' : 'text-slate-700'
-          }`}>
-            {affiliate.pendingPayout}
-          </p>
-          <p className={`text-[10px] font-bold mt-0.5 ${
-            (affiliate.pendingPayoutRaw || 0) > 0 ? 'text-amber-700' : 'text-emerald-600'
-          }`}>
-            {(affiliate.pendingPayoutRaw || 0) > 0
-              ? 'Neachitat către IBAN'
-              : (affiliate.totalCommissionsRaw || 0) > 0
-                ? 'Achitat integral'
-                : 'Sold 0'}
-          </p>
-        </div>
-
-        {/* Paid Payout */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[10px] font-black uppercase tracking-wider">Plătit Deja</span>
-            <CheckCircle2 size={14} className="text-emerald-500" />
-          </div>
-          <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.paidPayout}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-            {affiliate.payoutProgressPercent ?? 0}% achitat
-            {(affiliate.overpaidAmountRaw || 0) > 0 ? ` (+${formatRon(affiliate.overpaidAmountRaw)} avans)` : ''}
-          </p>
-        </div>
-
         {/* Total Usages / Orders */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
             <span className="text-[10px] font-black uppercase tracking-wider">Comenzi Valide</span>
-            <ShoppingBag size={14} className="text-blue-500" />
+            <ShoppingBag size={14} className="text-blue-500 shrink-0" />
           </div>
           <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.usages}</p>
           <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-            {(affiliate.cancelledOrdersCount || 0) > 0
-              ? `${affiliate.cancelledOrdersCount} anulate / excluse`
-              : 'Utilizări cod active'}
+            {affiliate.deliveredOrdersCount ?? 0} ridicate • {affiliate.inTransitOrdersCount ?? 0} în livrare
+            {(affiliate.cancelledOrdersCount || 0) > 0 ? ` • ${affiliate.cancelledOrdersCount} excluse` : ''}
           </p>
         </div>
 
@@ -325,7 +340,7 @@ function AffiliatePortalView({
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
             <span className="text-[10px] font-black uppercase tracking-wider">Coș Mediu</span>
-            <Award size={14} className="text-purple-500" />
+            <Award size={14} className="text-purple-500 shrink-0" />
           </div>
           <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.aov}</p>
           <p className="text-[10px] font-bold text-slate-400 mt-0.5">AOV pe comandă validă</p>
@@ -370,14 +385,14 @@ function AffiliatePortalView({
         </div>
 
         {/* Commission Settlement Progress Bar */}
-        {((affiliate.totalCommissionsRaw || 0) > 0 || (affiliate.paidPayoutRaw || 0) > 0) && (
+        {((affiliate.eligibleCommissionsRaw || 0) > 0 || (affiliate.paidPayoutRaw || 0) > 0) && (
           <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1.5">
             <div className="flex items-center justify-between text-[11px] font-bold">
               <span className="text-slate-600">
-                Progres decontare comisioane ({affiliate.payoutProgressPercent ?? 0}%)
+                Progres decontare comisioane eligibile ({affiliate.payoutProgressPercent ?? 0}%)
               </span>
               <span className="text-slate-800 font-black">
-                {affiliate.paidPayout} / {affiliate.totalCommissions}
+                {affiliate.paidPayout} / {affiliate.eligibleCommissions || affiliate.totalCommissions}
               </span>
             </div>
             <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -386,6 +401,15 @@ function AffiliatePortalView({
                 style={{ width: `${Math.min(100, affiliate.payoutProgressPercent ?? 0)}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {(affiliate.pendingPickupCommissionsRaw || 0) > 0 && (
+          <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-xl text-xs text-amber-900 font-medium">
+            <strong className="font-black">În așteptare ({affiliate.pendingPickupCommissions}):</strong> comisioanele din{' '}
+            {affiliate.inTransitOrdersCount || 0}{' '}
+            {(affiliate.inTransitOrdersCount || 0) === 1 ? 'comandă în livrare' : 'comenzi în livrare'} se mută automat în{' '}
+            <strong className="font-black">De încasat</strong> după ce clientul ridică coletul.
           </div>
         )}
 
@@ -575,8 +599,17 @@ function AffiliatePortalView({
           <div className="space-y-3">
             {filteredOrders.map((order: any, oIdx: number) => {
               const statusCheck = classifyOrderNonCountable(order.status);
-              const isNonCountable = !statusCheck.isCountable || order.isCountable === false;
-              const nonCountableLabel = order.nonCountableLabel || statusCheck.label || 'Exclusă';
+              const payoutCheck = classifyAffiliateOrderPayoutStatus(order.status);
+              const payoutStatus = order.payoutStatus || payoutCheck.payoutStatus;
+              const isEligible = payoutStatus === 'eligible';
+              const isPendingPickup = payoutStatus === 'pending_pickup';
+              const isNonCountable = !statusCheck.isCountable || order.isCountable === false || payoutStatus === 'voided';
+              const nonCountableLabel = order.nonCountableLabel || statusCheck.label || 'Anulată / Returnată';
+              const badgeLabel = isEligible
+                ? (order.payoutStatusLabel || payoutCheck.labelRo)
+                : isPendingPickup
+                  ? (order.payoutStatusLabel || payoutCheck.labelRo)
+                  : nonCountableLabel;
               const hasForeignCurrency =
                 order.originalCurrency &&
                 order.originalCurrency !== 'RON' &&
@@ -597,18 +630,14 @@ function AffiliatePortalView({
                       {order.formattedDate || new Date(order.createdAt).toLocaleDateString('ro-RO')}
                     </span>
                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                      order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                      order.status === 'shipped' ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                      isEligible ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      isPendingPickup ? 'bg-amber-50 text-amber-800 border-amber-200' :
                       statusCheck.reason === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
                       statusCheck.reason === 'returned' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                       statusCheck.reason === 'refunded' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                      statusCheck.reason === 'failed' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                      'bg-blue-50 text-blue-700 border-blue-200'
+                      'bg-rose-50 text-rose-700 border-rose-200'
                     }`}>
-                      {order.status === 'delivered' ? 'Livrat' : 
-                       order.status === 'shipped' ? 'Expediat' : 
-                       isNonCountable ? nonCountableLabel :
-                       'În procesare'}
+                      {badgeLabel}
                     </span>
                   </div>
 
@@ -633,12 +662,26 @@ function AffiliatePortalView({
                       <span className="text-[10px] text-slate-400 uppercase font-bold block">Comision Afiliat</span>
                       {isNonCountable || order.commissionAmount === 0 ? (
                         <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200/60 inline-block">
-                          0.00 RON ({nonCountableLabel})
+                          0,00 RON ({nonCountableLabel})
                         </span>
+                      ) : isEligible ? (
+                        <>
+                          <span className="text-xs font-black text-emerald-700 block">
+                            +{formatRon(order.commissionAmount)}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-600 block">
+                            Eligibil de încasat
+                          </span>
+                        </>
                       ) : (
-                        <span className="text-xs font-black text-emerald-700">
-                          +{formatRon(order.commissionAmount)}
-                        </span>
+                        <>
+                          <span className="text-xs font-black text-amber-700 block">
+                            +{formatRon(order.commissionAmount)}
+                          </span>
+                          <span className="text-[10px] font-bold text-amber-600 block">
+                            În așteptare (neridicat)
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -803,10 +846,14 @@ export default function AffiliatesPage() {
   const [stats, setStats] = useState({
     totalSales: 0,
     totalNetSales: 0,
+    totalEligibleCommissions: 0,
+    totalPendingPickup: 0,
     totalCommissions: 0,
     totalPaid: 0,
     totalPending: 0,
     totalOrders: 0,
+    totalDeliveredOrders: 0,
+    totalInTransitOrders: 0,
     activeCount: 0,
     pendingCount: 0,
   });
@@ -897,9 +944,18 @@ export default function AffiliatesPage() {
 
   const handleConfirmPayout = async () => {
     if (!payoutAffiliate || isRecordingPayout) return;
+    const eligiblePending = Number(payoutAffiliate.pendingPayoutRaw) || 0;
+    if (eligiblePending <= 0) {
+      toast.error('Nu există sold eligibil („De încasat”). Comisioanele devin eligibile doar după ridicarea coletului.');
+      return;
+    }
     const amount = Number(payoutAmount);
     if (!amount || isNaN(amount) || amount <= 0) {
       toast.error('Te rugăm să introduci o sumă validă.');
+      return;
+    }
+    if (amount > eligiblePending + 0.01) {
+      toast.error(`Suma depășește soldul eligibil („De încasat”) de ${payoutAffiliate.pendingPayout}.`);
       return;
     }
 
@@ -1183,6 +1239,61 @@ export default function AffiliatesPage() {
       ) : (
       <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+        <div className={`border rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0 ${
+          (stats.totalPending || 0) > 0
+            ? 'bg-emerald-50/70 border-emerald-200'
+            : 'bg-white border-slate-200'
+        }`}>
+          <div className="flex items-center justify-between gap-1">
+            <h3 className={`text-[10px] sm:text-xs font-black uppercase tracking-wider truncate ${
+              (stats.totalPending || 0) > 0 ? 'text-emerald-800' : 'text-slate-500'
+            }`}>De Încasat (Colet ridicat)</h3>
+            <DollarSign size={15} className={`${(stats.totalPending || 0) > 0 ? 'text-emerald-600' : 'text-slate-400'} shrink-0`} />
+          </div>
+          <p className={`text-lg sm:text-2xl font-black mt-2 truncate ${
+            (stats.totalPending || 0) > 0 ? 'text-emerald-900' : 'text-slate-900'
+          }`}>{formatRon(stats.totalPending || 0)}</p>
+          <p className={`text-[11px] sm:text-xs font-bold mt-1 truncate ${
+            (stats.totalPending || 0) > 0 ? 'text-emerald-700' : 'text-slate-500'
+          }`}>
+            {(stats.totalPending || 0) > 0
+              ? `Eligibil IBAN • ${stats.totalDeliveredOrders || 0} ridicate`
+              : `Eligibil total: ${formatRon(stats.totalEligibleCommissions || 0)}`}
+          </p>
+        </div>
+
+        <div className={`border rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0 ${
+          (stats.totalPendingPickup || 0) > 0
+            ? 'bg-amber-50/70 border-amber-200'
+            : 'bg-white border-slate-200'
+        }`}>
+          <div className="flex items-center justify-between gap-1">
+            <h3 className={`text-[10px] sm:text-xs font-black uppercase tracking-wider truncate ${
+              (stats.totalPendingPickup || 0) > 0 ? 'text-amber-800' : 'text-slate-500'
+            }`}>În Așteptare (În livrare)</h3>
+            <Clock size={15} className={`${(stats.totalPendingPickup || 0) > 0 ? 'text-amber-600' : 'text-slate-400'} shrink-0`} />
+          </div>
+          <p className={`text-lg sm:text-2xl font-black mt-2 truncate ${
+            (stats.totalPendingPickup || 0) > 0 ? 'text-amber-900' : 'text-slate-900'
+          }`}>{formatRon(stats.totalPendingPickup || 0)}</p>
+          <p className="text-[11px] sm:text-xs font-bold text-amber-700/90 mt-1 truncate">
+            {stats.totalInTransitOrders || 0} în livrare • se mută la ridicare
+          </p>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-500 truncate">Încasat Până Acum</h3>
+            <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+          </div>
+          <p className="text-lg sm:text-2xl font-black mt-2 text-slate-900 truncate">{formatRon(stats.totalPaid || 0)}</p>
+          <p className="text-[11px] sm:text-xs font-bold text-slate-500 mt-1 truncate">
+            {(stats.totalEligibleCommissions || 0) > 0
+              ? `${Math.min(100, Math.round(((stats.totalPaid || 0) / stats.totalEligibleCommissions) * 100))}% din eligibil achitat`
+              : 'Transferuri înregistrate'}
+          </p>
+        </div>
+
         <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
           <div className="flex items-center justify-between gap-1">
             <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-500 truncate">Vânzări Afiliați</h3>
@@ -1190,55 +1301,8 @@ export default function AffiliatesPage() {
           </div>
           <p className="text-lg sm:text-2xl font-black mt-2 text-slate-900 truncate">{formatRon(stats.totalSales)}</p>
           <p className="text-[11px] sm:text-xs font-bold text-slate-400 mt-1 truncate">
-            {stats.totalOrders || 0} comenzi • net {formatRon(stats.totalNetSales || 0)}
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
-          <div className="flex items-center justify-between gap-1">
-            <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-500 truncate">Comisioane</h3>
-            <UserCheck size={15} className="text-[#008ba3] shrink-0" />
-          </div>
-          <p className="text-lg sm:text-2xl font-black mt-2 text-slate-900 truncate">{formatRon(stats.totalCommissions)}</p>
-          <p className="text-[11px] sm:text-xs font-bold text-slate-400 mt-1 truncate">
-            {stats.activeCount} activi
-            {(stats.pendingCount || 0) > 0 && (
-              <span className="ml-1.5 text-amber-600">• {stats.pendingCount} în așteptare</span>
-            )}
-          </p>
-        </div>
-
-        <div className={`border rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0 ${
-          (stats.totalPending || 0) > 0
-            ? 'bg-amber-50/70 border-amber-200'
-            : 'bg-white border-slate-200'
-        }`}>
-          <div className="flex items-center justify-between gap-1">
-            <h3 className={`text-[10px] sm:text-xs font-black uppercase tracking-wider truncate ${
-              (stats.totalPending || 0) > 0 ? 'text-amber-800' : 'text-slate-500'
-            }`}>De Plată Acum</h3>
-            <Clock size={15} className={`${(stats.totalPending || 0) > 0 ? 'text-amber-600' : 'text-slate-400'} shrink-0`} />
-          </div>
-          <p className={`text-lg sm:text-2xl font-black mt-2 truncate ${
-            (stats.totalPending || 0) > 0 ? 'text-amber-900' : 'text-slate-900'
-          }`}>{formatRon(stats.totalPending || 0)}</p>
-          <p className={`text-[11px] sm:text-xs font-bold mt-1 truncate ${
-            (stats.totalPending || 0) > 0 ? 'text-amber-700' : 'text-emerald-600'
-          }`}>
-            {(stats.totalPending || 0) > 0 ? 'Rest neachitat' : 'Achitat integral'}
-          </p>
-        </div>
-
-        <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
-          <div className="flex items-center justify-between gap-1">
-            <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-800 truncate">Plătit Deja</h3>
-            <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-          </div>
-          <p className="text-lg sm:text-2xl font-black mt-2 text-emerald-900 truncate">{formatRon(stats.totalPaid || 0)}</p>
-          <p className="text-[11px] sm:text-xs font-bold text-emerald-700 mt-1 truncate">
-            {stats.totalCommissions > 0
-              ? `${Math.min(100, Math.round(((stats.totalPaid || 0) / stats.totalCommissions) * 100))}% decontat din total`
-              : 'Transferuri înregistrate'}
+            {stats.totalOrders || 0} comenzi • {stats.activeCount} activi
+            {(stats.pendingCount || 0) > 0 ? ` • ${stats.pendingCount} noi` : ''}
           </p>
         </div>
       </div>
@@ -1350,18 +1414,22 @@ export default function AffiliatesPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Comision Generat</span>
-                    <span className="font-black text-emerald-700">{affiliate.totalCommissions}</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block">De Încasat</span>
+                    <span className={`font-black ${(affiliate.pendingPayoutRaw || 0) > 0 ? 'text-emerald-700' : 'text-slate-600'}`}>
+                      {affiliate.pendingPayout}
+                    </span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block">În Așteptare</span>
+                    <span className="font-bold text-amber-700">
+                      {affiliate.pendingPickupCommissions || formatRon(0)}
+                    </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Sold Plăți</span>
-                    {(affiliate.pendingPayoutRaw || 0) > 0 ? (
-                      <span className="font-black text-amber-700">De plată: {affiliate.pendingPayout}</span>
-                    ) : (
-                      <span className="font-bold text-slate-600">Plătit: {affiliate.paidPayout}</span>
-                    )}
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block">Încasat</span>
+                    <span className="font-bold text-slate-700">{affiliate.paidPayout}</span>
                   </div>
                 </div>
                 
@@ -1382,8 +1450,8 @@ export default function AffiliatesPage() {
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Afiliat</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cod & Rată</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vânzări Aplicate</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Comision Generat</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Plătit / De Plată</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Eligibil / În Așteptare</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">De Încasat / Încasat</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right">Statistici</th>
               </tr>
@@ -1423,32 +1491,36 @@ export default function AffiliatesPage() {
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-slate-900">{affiliate.totalSales}</span>
                         <span className="text-xs text-slate-500">
-                          {affiliate.usages} comenzi valide
+                          {affiliate.deliveredOrdersCount ?? 0} ridicate • {affiliate.inTransitOrdersCount ?? 0} în livrare
                           {(affiliate.cancelledOrdersCount || 0) > 0 ? ` • ${affiliate.cancelledOrdersCount} excluse` : ''}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="text-sm font-black text-emerald-700">{affiliate.totalCommissions}</span>
-                        <span className="text-[11px] text-slate-400">din net {affiliate.totalNetSales || affiliate.totalSales}</span>
+                        <span className="text-sm font-black text-emerald-700">
+                          {affiliate.eligibleCommissions || affiliate.totalCommissions}
+                        </span>
+                        <span className="text-[11px] font-bold text-amber-700">
+                          În așteptare: {affiliate.pendingPickupCommissions || formatRon(0)}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-0.5">
                         {(affiliate.pendingPayoutRaw || 0) > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs font-black w-fit">
-                            De plată: {affiliate.pendingPayout}
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black w-fit">
+                            De încasat: {affiliate.pendingPayout}
                           </span>
-                        ) : (affiliate.totalCommissionsRaw || 0) > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold w-fit">
+                        ) : (affiliate.eligibleCommissionsRaw || 0) > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold w-fit">
                             Achitat integral
                           </span>
                         ) : (
                           <span className="text-xs font-medium text-slate-400">0,00 RON</span>
                         )}
                         <span className="text-[11px] text-slate-500 font-medium">
-                          Plătit deja: {affiliate.paidPayout}
+                          Încasat până acum: {affiliate.paidPayout}
                         </span>
                       </div>
                     </td>
@@ -1888,18 +1960,23 @@ export default function AffiliatesPage() {
             <div className="p-4 sm:p-5 md:p-6 space-y-4 overflow-y-auto flex-1">
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5">
                 <p><span className="font-bold text-slate-500">Cont IBAN:</span> <span className="font-mono font-bold text-slate-900 break-all">{payoutAffiliate.paymentDetails?.iban || 'Necompletat'}</span></p>
-                <p><span className="font-bold text-slate-500">Balanță de plată actuală:</span> <span className="font-black text-amber-800">{payoutAffiliate.pendingPayout}</span></p>
-                <p><span className="font-bold text-slate-500">Plătit anterior:</span> <span className="font-bold text-emerald-700">{payoutAffiliate.paidPayout}</span></p>
+                <p><span className="font-bold text-slate-500">De încasat (Colet ridicat):</span> <span className="font-black text-emerald-800">{payoutAffiliate.pendingPayout}</span></p>
+                <p><span className="font-bold text-slate-500">În așteptare (În livrare / Neridicat încă):</span> <span className="font-bold text-amber-700">{payoutAffiliate.pendingPickupCommissions || formatRon(0)}</span></p>
+                <p><span className="font-bold text-slate-500">Încasat până acum:</span> <span className="font-bold text-slate-800">{payoutAffiliate.paidPayout}</span></p>
               </div>
 
-              {(payoutAffiliate.pendingPayoutRaw || 0) > 0 && (
+              {(payoutAffiliate.pendingPayoutRaw || 0) <= 0 ? (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-900 leading-relaxed">
+                  Nu există sold eligibil „De încasat” în acest moment. Comisioanele aflate în livrare se mută automat în <span className="font-black">De încasat</span> după ce clientul ridică coletul.
+                </div>
+              ) : (
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setPayoutAmount(Number(payoutAffiliate.pendingPayoutRaw).toFixed(2))}
                     className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition-colors cursor-pointer"
                   >
-                    Achită tot soldul ({payoutAffiliate.pendingPayout})
+                    Achită tot soldul eligibil ({payoutAffiliate.pendingPayout})
                   </button>
                   <button
                     type="button"
@@ -1917,15 +1994,17 @@ export default function AffiliatesPage() {
                   type="number" 
                   step="0.01"
                   min="0.01"
+                  max={(payoutAffiliate.pendingPayoutRaw || 0) > 0 ? Number(payoutAffiliate.pendingPayoutRaw).toFixed(2) : undefined}
+                  disabled={(payoutAffiliate.pendingPayoutRaw || 0) <= 0}
                   required 
                   value={payoutAmount}
                   onChange={(e) => setPayoutAmount(e.target.value)}
                   placeholder="ex: 150.00"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-black text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-base sm:text-sm font-black text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm disabled:bg-slate-100 disabled:text-slate-400" 
                 />
-                {Number(payoutAmount) > (payoutAffiliate.pendingPayoutRaw || 0) + 0.01 && (
-                  <p className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                    Atenție: Suma introdusă depășește soldul curent datorat ({payoutAffiliate.pendingPayout}). Diferența va fi înregistrată ca avans.
+                {(payoutAffiliate.pendingPayoutRaw || 0) > 0 && Number(payoutAmount) > (payoutAffiliate.pendingPayoutRaw || 0) + 0.01 && (
+                  <p className="text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+                    Suma introdusă depășește soldul eligibil („De încasat”) de {payoutAffiliate.pendingPayout}. Pot fi decontate doar comenzi cu coletul ridicat.
                   </p>
                 )}
               </div>
@@ -1935,10 +2014,11 @@ export default function AffiliatesPage() {
                 <input 
                   type="text" 
                   maxLength={200}
+                  disabled={(payoutAffiliate.pendingPayoutRaw || 0) <= 0}
                   value={payoutNote}
                   onChange={(e) => setPayoutNote(e.target.value)}
                   placeholder="ex: OP Banca Transilvania • Decont Decembrie"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm" 
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm disabled:bg-slate-100" 
                 />
               </div>
             </div>
@@ -1955,7 +2035,12 @@ export default function AffiliatesPage() {
               <button 
                 type="button" 
                 onClick={handleConfirmPayout}
-                disabled={isRecordingPayout}
+                disabled={
+                  isRecordingPayout ||
+                  (payoutAffiliate.pendingPayoutRaw || 0) <= 0 ||
+                  Number(payoutAmount) <= 0 ||
+                  Number(payoutAmount) > (payoutAffiliate.pendingPayoutRaw || 0) + 0.01
+                }
                 className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto cursor-pointer"
               >
                 {isRecordingPayout ? (

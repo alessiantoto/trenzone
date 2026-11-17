@@ -7,7 +7,8 @@ import {
   FulfillmentSettings,
   FulfillmentDispatchLog,
   FulfillmentOrderSummary,
-  FulfillmentItemSummary
+  FulfillmentItemSummary,
+  FulfillmentOrderSnapshot
 } from '@/types/fulfillment';
 import { sendFulfillmentDispatchEmail, buildFulfillmentDispatchSubject } from '@/lib/resend-service';
 import { getSingleFlavorImage } from '@/lib/product-images';
@@ -170,6 +171,7 @@ export async function updateFulfillmentSettings(partial: Partial<FulfillmentSett
   try {
     revalidateTag('global_settings', 'max');
     revalidatePath('/admin/orders');
+    revalidatePath('/admin/fulfillment');
     revalidatePath('/admin/settings');
     revalidatePath('/admin/shipping');
   } catch (_) {}
@@ -177,17 +179,82 @@ export async function updateFulfillmentSettings(partial: Partial<FulfillmentSett
   return { success: true, settings: updated };
 }
 
-/**
- * Get dispatch logs history
- */
-export async function getFulfillmentHistory(): Promise<FulfillmentDispatchLog[]> {
-  const isAuthorized = await isAdminAuthorized();
-  if (!isAuthorized) return [];
-
-  return readFulfillmentHistoryInternal();
+function parseOrderItemsArray(rawItemsInput: any): any[] {
+  if (Array.isArray(rawItemsInput)) return rawItemsInput;
+  if (typeof rawItemsInput === 'string' && rawItemsInput.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(rawItemsInput);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
-async function readFulfillmentHistoryInternal(): Promise<FulfillmentDispatchLog[]> {
+function toOrderSnapshot(o: FulfillmentOrderSummary): FulfillmentOrderSnapshot {
+  return {
+    id: o.supabaseId || o.id,
+    orderNumber: o.id,
+    customerName: o.customer,
+    city: o.city,
+    country: o.country || 'RO',
+    shippingType: o.shippingType || 'hd',
+    paymentMethod: o.paymentMethod || 'stripe',
+    totalAmount: Number(o.totalAmount || 0),
+    currency: o.currency || 'RON',
+    items: (o.items || []).map((item) => ({
+      name: item.name,
+      variant: item.variant,
+      quantity: Number(item.quantity) || 1,
+      sku: item.sku,
+    })),
+  };
+}
+
+function snapshotToOrderSummary(s: FulfillmentOrderSnapshot, fallbackDate?: string): FulfillmentOrderSummary {
+  const currency = String(s.currency || 'RON').trim().toUpperCase();
+  const totalAmount = Number(s.totalAmount || 0);
+  return {
+    id: s.orderNumber || s.id,
+    supabaseId: s.id,
+    date: fallbackDate || 'N/A',
+    customer: s.customerName || 'Client',
+    customerEmail: 'N/A',
+    customerPhone: 'N/A',
+    address: 'N/A',
+    city: s.city || 'N/A',
+    zip: '',
+    country: s.country || 'RO',
+    total: `${totalAmount.toFixed(2)} ${currency}`,
+    totalAmount,
+    currency,
+    paymentMethod: s.paymentMethod || 'stripe',
+    shippingType: s.shippingType || 'hd',
+    items: (s.items || []).map((it) => ({
+      name: it.name,
+      variant: it.variant,
+      quantity: Number(it.quantity) || 1,
+      sku: it.sku,
+    })),
+  };
+}
+
+function isOrderSummaryDigitalOnly(o: FulfillmentOrderSummary): boolean {
+  const items = Array.isArray(o?.items) ? o.items : [];
+  if (items.length === 0) return true;
+  return items.every((item) => isDigitalProgramItem(item));
+}
+
+function filterSummaryPhysicalItems(o: FulfillmentOrderSummary): FulfillmentOrderSummary {
+  const physical = (o.items || []).filter((item) => !isDigitalProgramItem(item));
+  return { ...o, items: physical };
+}
+
+/**
+ * Get raw dispatch logs from store_settings without enrichment (used for appending).
+ */
+async function readRawFulfillmentHistory(): Promise<FulfillmentDispatchLog[]> {
   try {
     const { data, error } = await supabaseAdmin
       .from('store_settings')
@@ -200,7 +267,286 @@ async function readFulfillmentHistoryInternal(): Promise<FulfillmentDispatchLog[
     }
 
     return (data.value as FulfillmentDispatchLog[]).sort((a, b) =>
-      new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+      new Date(b.sentAt || b.sent_at || 0).getTime() - new Date(a.sentAt || a.sent_at || 0).getTime()
+    );
+  } catch (err) {
+    console.error('Error fetching raw fulfillment history:', err);
+    return [];
+  }
+}
+
+/**
+ * Get dispatch logs history, normalized and enriched/backfilled from `orders` when older logs lack `ordersSnapshot`.
+ */
+export async function getFulfillmentHistory(): Promise<FulfillmentDispatchLog[]> {
+  const isAuthorized = await isAdminAuthorized();
+  if (!isAuthorized) return [];
+
+  return readFulfillmentHistoryInternal();
+}
+
+async function readFulfillmentHistoryInternal(): Promise<FulfillmentDispatchLog[]> {
+  try {
+    const [primaryRes, legacyRes, emailLogsRes] = await Promise.all([
+      supabaseAdmin.from('store_settings').select('value').eq('key', 'fulfillment_history').maybeSingle(),
+      supabaseAdmin.from('store_settings').select('value').eq('key', 'fulfillment_dispatch_logs').maybeSingle(),
+      supabaseAdmin
+        .from('email_logs')
+        .select('id, created_at, recipient, subject, status, error_message, metadata')
+        .eq('type', 'fulfillment-dispatch')
+        .order('created_at', { ascending: false })
+        .limit(100),
+    ]);
+
+    const rawEntries: any[] = [];
+    if (Array.isArray(primaryRes.data?.value)) {
+      rawEntries.push(...primaryRes.data.value);
+    }
+    if (Array.isArray(legacyRes.data?.value)) {
+      const seenBatchIds = new Set(rawEntries.map((e) => e?.id).filter(Boolean));
+      for (const leg of legacyRes.data.value) {
+        if (leg && !seenBatchIds.has(leg.id)) {
+          rawEntries.push(leg);
+        }
+      }
+    }
+
+    // Merge any fulfillment-dispatch entries from email_logs that aren't already in store_settings
+    if (Array.isArray(emailLogsRes.data)) {
+      for (const em of emailLogsRes.data) {
+        const emTime = new Date(em.created_at).getTime();
+        const alreadyPresent = rawEntries.some((entry) => {
+          const entryTime = new Date(entry?.sentAt || entry?.sent_at || 0).getTime();
+          if (Math.abs(entryTime - emTime) <= 120_000) return true;
+          if (entry?.subject && em.subject && entry.subject === em.subject && Math.abs(entryTime - emTime) <= 3_600_000) {
+            return true;
+          }
+          return false;
+        });
+        if (!alreadyPresent) {
+          const metaOrderIds = Array.isArray(em.metadata?.order_ids) ? em.metadata.order_ids : [];
+          const recipientRaw = String(em.recipient || '');
+          const ccMatch = recipientRaw.match(/\(CC:\s*([^)]+)\)/i);
+          const cleanPrimary = recipientRaw.replace(/\s*\(CC:[^)]+\)/i, '').trim();
+          const secondaryFromMeta = em.metadata?.secondary_email || (ccMatch ? ccMatch[1].trim() : undefined);
+          rawEntries.push({
+            id: `email_${em.id}`,
+            sentAt: em.created_at,
+            sent_at: em.created_at,
+            recipient: cleanPrimary,
+            recipient_email: cleanPrimary,
+            secondaryRecipient: secondaryFromMeta || undefined,
+            secondary_email: secondaryFromMeta || undefined,
+            subject: em.subject || undefined,
+            trigger: String(em.subject || '').includes('[08:00') || String(em.subject || '').includes('[09:00')
+              ? 'scheduled_8am'
+              : 'manual',
+            status: em.status === 'failed' ? 'failed' : 'sent',
+            orderCount: Number(em.metadata?.order_count || metaOrderIds.length || 0),
+            order_count: Number(em.metadata?.order_count || metaOrderIds.length || 0),
+            orderIds: metaOrderIds,
+            orderNumbers: metaOrderIds.filter((id: any) => typeof id === 'string' && !/^[0-9a-f-]{36}$/i.test(id)),
+            error_message: em.error_message || undefined,
+          });
+        }
+      }
+    }
+
+    // Collect references for logs that lack ordersSnapshot so we can backfill in a single query
+    const logsNeedingBackfill: any[] = [];
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const candidateUuids = new Set<string>();
+    const candidateBatchIds = new Set<string>();
+    const candidateOrderNumbers = new Set<string>();
+
+    for (const raw of rawEntries) {
+      if (!raw) continue;
+      const hasSnapshots = Array.isArray(raw.ordersSnapshot) && raw.ordersSnapshot.length > 0;
+      const hasLegacyOrders = Array.isArray(raw.orders) && raw.orders.length > 0;
+      if (!hasSnapshots && !hasLegacyOrders) {
+        logsNeedingBackfill.push(raw);
+        if (raw.id && !String(raw.id).startsWith('email_')) {
+          candidateBatchIds.add(String(raw.id));
+        }
+        const refs = [
+          ...(Array.isArray(raw.orderIds) ? raw.orderIds : []),
+          ...(Array.isArray(raw.order_ids) ? raw.order_ids : []),
+          ...(Array.isArray(raw.orderNumbers) ? raw.orderNumbers : []),
+        ];
+        for (const ref of refs) {
+          const s = String(ref || '').trim();
+          if (!s) continue;
+          if (uuidRegex.test(s)) candidateUuids.add(s);
+          else candidateOrderNumbers.add(s);
+        }
+      }
+    }
+
+    const orderByUuid = new Map<string, any>();
+    const orderByCanonical = new Map<string, any>();
+    const ordersByBatchId = new Map<string, any[]>();
+
+    if (logsNeedingBackfill.length > 0) {
+      // Query candidate orders safely (recent 500 or matching UUIDs) to enrich historical logs
+      const fetchedRows: any[] = [];
+      if (candidateUuids.size > 0) {
+        const { data: byIdRows } = await supabaseAdmin
+          .from('orders')
+          .select('*')
+          .in('id', Array.from(candidateUuids));
+        if (Array.isArray(byIdRows)) fetchedRows.push(...byIdRows);
+      }
+
+      if (candidateBatchIds.size > 0 || candidateOrderNumbers.size > 0) {
+        const { data: recentRows } = await supabaseAdmin
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(500);
+        if (Array.isArray(recentRows)) fetchedRows.push(...recentRows);
+      }
+
+      for (const row of fetchedRows) {
+        if (!row?.id || orderByUuid.has(row.id)) continue;
+        // Never enrich digital-only orders into fulfillment reports
+        if (classifyOrderForFulfillment(row).isDigitalOnly) continue;
+
+        orderByUuid.set(row.id, row);
+        const canonical = getCanonicalOrderNumber(row);
+        if (canonical) orderByCanonical.set(canonical, row);
+
+        const batchKey =
+          row?.carrier_metadata?.fulfillment_dispatch_id ||
+          row?.carrier_metadata?.fulfillment_batch_id;
+        if (batchKey) {
+          const list = ordersByBatchId.get(String(batchKey)) || [];
+          list.push(row);
+          ordersByBatchId.set(String(batchKey), list);
+        }
+      }
+    }
+
+    const normalized: FulfillmentDispatchLog[] = rawEntries
+      .filter(Boolean)
+      .map((raw) => {
+        const sentAt = String(raw.sentAt || raw.sent_at || raw.created_at || new Date().toISOString());
+        const recipient = String(raw.recipient || raw.recipient_email || '');
+        const secondaryRecipient = raw.secondaryRecipient || raw.secondary_email || undefined;
+        const trigger: 'manual' | 'scheduled_8am' = raw.trigger === 'scheduled_8am' ? 'scheduled_8am' : 'manual';
+        const status: 'sent' | 'partial' | 'failed' =
+          raw.status === 'failed' ? 'failed' : raw.status === 'partial' ? 'partial' : 'sent';
+
+        let orders: FulfillmentOrderSummary[] = Array.isArray(raw.orders)
+          ? (raw.orders as FulfillmentOrderSummary[])
+              .filter((o) => !isOrderSummaryDigitalOnly(o))
+              .map(filterSummaryPhysicalItems)
+          : [];
+
+        let ordersSnapshot: FulfillmentOrderSnapshot[] = Array.isArray(raw.ordersSnapshot)
+          ? (raw.ordersSnapshot as FulfillmentOrderSnapshot[]).filter((s) =>
+              (s.items || []).some((it) => !isDigitalProgramItem(it))
+            ).map((s) => ({
+              ...s,
+              items: (s.items || []).filter((it) => !isDigitalProgramItem(it)),
+            }))
+          : [];
+
+        if (ordersSnapshot.length === 0 && orders.length > 0) {
+          ordersSnapshot = orders.map(toOrderSnapshot);
+        }
+
+        if (ordersSnapshot.length === 0) {
+          const matchedRawRows: any[] = [];
+          const seenMatchedIds = new Set<string>();
+
+          const refs = [
+            ...(Array.isArray(raw.orderIds) ? raw.orderIds : []),
+            ...(Array.isArray(raw.order_ids) ? raw.order_ids : []),
+            ...(Array.isArray(raw.orderNumbers) ? raw.orderNumbers : []),
+          ];
+
+          for (const ref of refs) {
+            const s = String(ref || '').trim();
+            if (!s) continue;
+            const found = orderByUuid.get(s) || orderByCanonical.get(s);
+            if (found && !seenMatchedIds.has(found.id)) {
+              seenMatchedIds.add(found.id);
+              matchedRawRows.push(found);
+            }
+          }
+
+          if (matchedRawRows.length === 0 && raw.id && ordersByBatchId.has(String(raw.id))) {
+            for (const found of ordersByBatchId.get(String(raw.id)) || []) {
+              if (!seenMatchedIds.has(found.id)) {
+                seenMatchedIds.add(found.id);
+                matchedRawRows.push(found);
+              }
+            }
+          }
+
+          if (matchedRawRows.length > 0) {
+            orders = matchedRawRows.map(formatOrderForFulfillment);
+            ordersSnapshot = orders.map(toOrderSnapshot);
+          }
+        }
+
+        if (orders.length === 0 && ordersSnapshot.length > 0) {
+          const fallbackDate = new Date(sentAt).toLocaleString('ro-RO', {
+            timeZone: 'Europe/Bucharest',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          orders = ordersSnapshot.map((s) => snapshotToOrderSummary(s, fallbackDate));
+        }
+
+        const totalItemsCount =
+          typeof raw.totalItemsCount === 'number' && ordersSnapshot.length === 0
+            ? raw.totalItemsCount
+            : ordersSnapshot.reduce(
+                (sum, o) => sum + (o.items || []).reduce((s, it) => s + (Number(it.quantity) || 1), 0),
+                0
+              );
+
+        const orderNumbers: string[] =
+          ordersSnapshot.length > 0
+            ? ordersSnapshot.map((o) => o.orderNumber).filter(Boolean)
+            : Array.isArray(raw.orderNumbers)
+              ? raw.orderNumbers
+              : [];
+
+        const orderCount =
+          ordersSnapshot.length > 0
+            ? ordersSnapshot.length
+            : Number(raw.orderCount ?? raw.order_count ?? 0);
+
+        return {
+          id: String(raw.id || `hist_${sentAt}`),
+          sentAt,
+          sent_at: sentAt,
+          recipient,
+          recipient_email: recipient,
+          secondaryRecipient,
+          secondary_email: secondaryRecipient,
+          subject: raw.subject,
+          trigger,
+          status,
+          orderCount,
+          order_count: orderCount,
+          totalItemsCount,
+          excludedPreorders: Number(raw.excludedPreorders ?? 0),
+          orderNumbers,
+          orderIds: Array.isArray(raw.orderIds) ? raw.orderIds : undefined,
+          ordersSnapshot,
+          orders,
+          error_message: raw.error_message,
+        };
+      });
+
+    return normalized.sort(
+      (a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
     );
   } catch (err) {
     console.error('Error fetching fulfillment history:', err);
@@ -218,12 +564,11 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
   const totalAmount = Number(order.total_amount || 0);
   const formattedTotal = `${totalAmount.toFixed(2)} ${rawCurrency}`;
 
-  const rawItems = Array.isArray(order.items) ? order.items : [];
-  // For orders containing both physical items and digital PDFs, exclude digital items from warehouse picking
+  const rawItems = parseOrderItemsArray(order.items);
+  // For orders containing both physical items and digital PDFs, strictly strip digital items from warehouse picking
   const physicalItems = rawItems.filter((item: any) => !isDigitalProgramItem(item));
-  const itemsToFormat = physicalItems.length > 0 ? physicalItems : rawItems;
 
-  const items: FulfillmentItemSummary[] = itemsToFormat.map((item: any) => {
+  const items: FulfillmentItemSummary[] = physicalItems.map((item: any) => {
     let name = 'Produs';
     if (item && typeof item.name === 'object' && item.name !== null) {
       name = item.name['ro'] || item.name['en'] || 'Produs';
@@ -345,10 +690,13 @@ interface OrderFulfillmentClassification {
 function classifyOrderForFulfillment(order: any): OrderFulfillmentClassification {
   const status = String(order?.status || '').trim().toLowerCase();
   const paymentMethod = String(order?.payment_method || '').trim().toLowerCase();
+  const carrierId = String(order?.carrier_id || '').trim().toLowerCase();
+  const shippingType = String(order?.shipping_type || '').trim().toLowerCase();
   const meta = (order?.carrier_metadata && typeof order.carrier_metadata === 'object')
     ? order.carrier_metadata
     : {};
-  const rawItems = Array.isArray(order?.items) ? order.items : [];
+  const rawItems = parseOrderItemsArray(order?.items);
+  const physicalItems = rawItems.filter((item: any) => !isDigitalProgramItem(item));
 
   const alreadyDispatched = Boolean(meta.fulfillment_dispatched_at);
   const hasAwb = Boolean(order?.tracking_number && String(order.tracking_number).trim());
@@ -366,7 +714,10 @@ function classifyOrderForFulfillment(order: any): OrderFulfillmentClassification
 
   const isDigitalOnly =
     Boolean(meta.is_digital_only === true) ||
+    carrierId === 'digital' ||
+    shippingType === 'digital' ||
     rawItems.length === 0 ||
+    physicalItems.length === 0 ||
     isDigitalOnlyCart(rawItems);
 
   const hasPreorderItems =
@@ -473,13 +824,13 @@ async function evaluateFulfillmentOrders(options?: {
     const cls = classifyOrderForFulfillment(order);
 
     // Hard safety gates (never bypassed even with explicit orderIds)
-    if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.hasAwb) {
-      excludedUnpaidOrInvalid++;
+    if (cls.isDigitalOnly) {
+      excludedDigital++;
       continue;
     }
 
-    if (cls.isDigitalOnly) {
-      excludedDigital++;
+    if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.hasAwb) {
+      excludedUnpaidOrInvalid++;
       continue;
     }
 
@@ -547,7 +898,7 @@ export async function getFulfillmentPendingCount(): Promise<{
   try {
     const { data } = await supabaseAdmin
       .from('orders')
-      .select('id, status, payment_method, tracking_number, carrier_metadata, items');
+      .select('id, status, payment_method, tracking_number, carrier_id, shipping_type, carrier_metadata, items');
 
     if (!data) return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0 };
 
@@ -557,11 +908,14 @@ export async function getFulfillmentPendingCount(): Promise<{
 
     for (const o of data) {
       const cls = classifyOrderForFulfillment(o);
+      if (cls.isDigitalOnly) {
+        continue;
+      }
       if (cls.alreadyDispatched) {
         dispatchedCount++;
         continue;
       }
-      if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.hasAwb || cls.isDigitalOnly) {
+      if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.hasAwb) {
         continue;
       }
       if (cls.isUnreleasedPreorder) {
@@ -873,7 +1227,7 @@ export async function releasePreorderForFulfillmentAction(orderIds: string[]) {
   try {
     const { data: rows, error } = await supabaseAdmin
       .from('orders')
-      .select('id, status, payment_method, tracking_number, carrier_metadata, items, payment_intent_id, receipt_url')
+      .select('id, status, payment_method, tracking_number, carrier_id, shipping_type, carrier_metadata, items, payment_intent_id, receipt_url')
       .in('id', uuids);
 
     if (error || !rows || rows.length === 0) {
@@ -885,7 +1239,7 @@ export async function releasePreorderForFulfillmentAction(orderIds: string[]) {
 
     for (const row of rows) {
       const cls = classifyOrderForFulfillment(row);
-      if (cls.isNonFulfillableStatus || cls.isUnpaidCard) continue;
+      if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.isDigitalOnly) continue;
 
       const currentMeta = (row.carrier_metadata && typeof row.carrier_metadata === 'object')
         ? row.carrier_metadata
@@ -1016,8 +1370,8 @@ async function releaseDistributedDispatchLock(lockToken: string): Promise<void> 
 
 async function appendFulfillmentHistoryLog(logEntry: FulfillmentDispatchLog): Promise<void> {
   try {
-    const history = await readFulfillmentHistoryInternal();
-    const updatedHistory = [logEntry, ...history].slice(0, 50);
+    const history = await readRawFulfillmentHistory();
+    const updatedHistory = [logEntry, ...history].slice(0, 120);
     await supabaseAdmin
       .from('store_settings')
       .upsert({
@@ -1197,17 +1551,30 @@ export async function dispatchOrdersToFulfillment(options?: {
         subject
       });
 
+      const ordersSnapshot = orders.map(toOrderSnapshot);
+      const orderNumbers = orders.map((o) => o.id);
+      const orderIds = evaluated.readyRawOrders.map((r) => r.id);
+
       if (!emailRes.success) {
         await appendFulfillmentHistoryLog({
           id: batchId,
+          sentAt,
           sent_at: sentAt,
+          recipient: settings.email.trim(),
           recipient_email: settings.email.trim(),
+          secondaryRecipient: settings.secondary_email?.trim() || undefined,
           secondary_email: settings.secondary_email?.trim() || undefined,
           subject,
           trigger,
-          order_count: orders.length,
-          orders,
           status: 'failed',
+          orderCount: orders.length,
+          order_count: orders.length,
+          totalItemsCount: totalItems,
+          excludedPreorders: evaluated.excludedPreorders,
+          orderNumbers,
+          orderIds,
+          ordersSnapshot,
+          orders,
           error_message: emailRes.error || 'Trimiterea emailului a eșuat.',
         });
 
@@ -1305,16 +1672,27 @@ export async function dispatchOrdersToFulfillment(options?: {
         });
       }
 
+      const batchStatus: 'sent' | 'partial' = failedDbUpdates.length > 0 ? 'partial' : 'sent';
+
       await appendFulfillmentHistoryLog({
         id: batchId,
+        sentAt,
         sent_at: sentAt,
+        recipient: settings.email.trim(),
         recipient_email: settings.email.trim(),
+        secondaryRecipient: settings.secondary_email?.trim() || undefined,
         secondary_email: settings.secondary_email?.trim() || undefined,
         subject,
         trigger,
+        status: batchStatus,
+        orderCount: orders.length,
         order_count: orders.length,
+        totalItemsCount: totalItems,
+        excludedPreorders: evaluated.excludedPreorders,
+        orderNumbers,
+        orderIds,
+        ordersSnapshot,
         orders,
-        status: 'sent',
         error_message: reconciliationWarning,
       });
 
@@ -1333,7 +1711,9 @@ export async function dispatchOrdersToFulfillment(options?: {
       }
 
       try {
+        revalidateTag('global_settings', 'max');
         revalidatePath('/admin/orders');
+        revalidatePath('/admin/fulfillment');
         revalidatePath('/admin/settings');
       } catch (_) {}
 

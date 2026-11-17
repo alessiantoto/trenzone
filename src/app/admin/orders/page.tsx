@@ -43,6 +43,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { deleteOrderAction, updateOrderShippingAction, updateOrderStatusAction } from '@/app/actions/orders';
 import { generateManualAwbAction, deleteAwbAction, syncAllTrackingAction } from '@/app/actions/awb';
@@ -50,6 +51,7 @@ import { emitOblioInvoiceAction } from '@/app/actions/invoices';
 import { syncRecentStripeOrdersAction } from '@/app/actions/admin-orders';
 import { releasePreorderForFulfillmentAction } from '@/app/actions/admin-fulfillment';
 import { isDigitalOnlyCart } from '@/lib/programs';
+import { formatRomaniaDateTime, getFulfillmentScheduleInfo } from '@/types/fulfillment';
 import {
   classifyOrderHistoricalOrActivePreorder,
   classifyOrderIsActivePreorder,
@@ -58,6 +60,15 @@ import {
 } from '@/utils/order-search';
 import { convertToRon, FALLBACK_RATES } from '@/utils/pricing';
 import { FulfillmentModal } from './FulfillmentModal';
+
+function isOrderDigitalOnly(o: any): boolean {
+  if (!o) return false;
+  if (String(o.carrierId || o.carrier_id || '').trim().toLowerCase() === 'digital') return true;
+  if (String(o.shippingType || o.shipping_type || '').trim().toLowerCase() === 'digital') return true;
+  if (Boolean(o.carrierMetadata?.is_digital_only || o.carrier_metadata?.is_digital_only)) return true;
+  const items = Array.isArray(o.items) ? o.items : [];
+  return items.length > 0 && isDigitalOnlyCart(items);
+}
 
 // Modern Custom Checkbox Component
 function ModernCheckbox({ 
@@ -410,6 +421,22 @@ function OrdersPageContent() {
   const [showFulfillmentModal, setShowFulfillmentModal] = useState(false);
   const [manualShippingEnabled, setManualShippingEnabled] = useState(false);
   const [fulfillmentSettings, setFulfillmentSettings] = useState<any>(null);
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const fulfillmentScheduleInfo = useMemo(
+    () =>
+      getFulfillmentScheduleInfo({
+        now,
+        lastDispatchedAt: fulfillmentSettings?.last_dispatched_at || null,
+        autoDispatchEnabled: fulfillmentSettings?.auto_dispatch_enabled ?? true,
+      }),
+    [now, fulfillmentSettings?.last_dispatched_at, fulfillmentSettings?.auto_dispatch_enabled]
+  );
 
   useEffect(() => {
     if (searchParams.get('fulfillment') === 'open') {
@@ -561,14 +588,24 @@ function OrdersPageContent() {
     }
   };
 
-  const confirmDeleteOrder = (orderId: string, displayId?: string) => {
+  const confirmDeleteOrder = (
+    orderId: string,
+    displayId?: string,
+    fulfillmentDispatchedAt?: string | null,
+    fulfillmentDispatchedTo?: string | null
+  ) => {
+    const label = displayId || orderId;
+    const message = fulfillmentDispatchedAt
+      ? `ATENȚIE: Emailul de fulfillment pentru comanda ${label} A FOST DEJA TRIMIS la data de ${formatRomaniaDateTime(fulfillmentDispatchedAt)} (ora României)${fulfillmentDispatchedTo ? ` către ${fulfillmentDispatchedTo}` : ''}.\n\nȘtergerea din baza de date NU anulează emailul deja expediat către depozit — va trebui să anunți depozitul manual dacă coletul nu trebuie trimis.\n\nEști sigur că vrei să ștergi definitiv comanda?`
+      : `Comanda ${label} nu a fost încă transmisă către Centrul de Fulfillment.\n\nȘtergerea o va elimina definitiv din baza de date și din coada de expediere (nu va fi trimisă la fulfillment și nu va fi reimportată automat de reconcilierea Stripe).`;
+
     setPopup({
       isOpen: true,
       type: 'confirm',
       variant: 'danger',
       title: `Ștergere Definitivă ${displayId || ''}`.trim() || 'Ștergere Definitivă Comandă',
-      message: `Ești sigur că vrei să ștergi definitiv comanda ${displayId || orderId} din baza de date?\n\nAceastă acțiune este ireversibilă și va șterge toate datele asociate comenzii.`,
-      confirmText: 'Da, șterge definitiv',
+      message,
+      confirmText: fulfillmentDispatchedAt ? 'Am înțeles, șterge definitiv' : 'Da, șterge definitiv',
       cancelText: 'Renunță',
       onConfirm: () => executeDeleteOrder(orderId)
     });
@@ -581,7 +618,13 @@ function OrdersPageContent() {
     try {
       const res = await deleteOrderAction(orderId);
       if (res.success) {
-        toast.success('Comanda a fost ștearsă.');
+        setOrders(prev => prev.filter(o => o.id !== orderId && o.supabaseId !== orderId));
+        setSelectedOrders(prev => prev.filter(id => id !== orderId));
+        toast.success(
+          res.wasDispatchedToFulfillment
+            ? 'Comanda a fost ștearsă. Reține că emailul de fulfillment fusese deja trimis anterior.'
+            : 'Comanda a fost ștearsă definitiv și exclusă de la fulfillment.'
+        );
         fetchOrders();
       } else {
         toast.error(`Eroare: ${res.error}`);
@@ -1123,7 +1166,7 @@ function OrdersPageContent() {
       } else if (statusFilter === 'all') {
         matchesStatus = !isActivePreorderBucket;
       } else if (statusFilter === 'pending_awb') {
-        matchesStatus = !o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled' && !isActivePreorderBucket;
+        matchesStatus = !o.trackingNumber && !isOrderDigitalOnly(o) && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled' && o.status !== 'failed' && !isActivePreorderBucket;
       } else if (statusFilter === 'generated_awb') {
         matchesStatus = !!o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled' && !isActivePreorderBucket;
       } else if (statusFilter === 'printed') {
@@ -1139,9 +1182,9 @@ function OrdersPageContent() {
       } else if (statusFilter === 'preorder') {
         matchesStatus = classifyOrderHistoricalOrActivePreorder(o);
       } else if (statusFilter === 'fulfillment_sent') {
-        matchesStatus = Boolean(o.fulfillmentDispatchedAt) && !isActivePreorderBucket;
+        matchesStatus = Boolean(o.fulfillmentDispatchedAt) && !isOrderDigitalOnly(o) && !isActivePreorderBucket;
       } else if (statusFilter === 'fulfillment_pending') {
-        const isDigitalOnly = Boolean(o.carrierMetadata?.is_digital_only) || (Array.isArray(o.items) && o.items.length > 0 && isDigitalOnlyCart(o.items));
+        const isDigitalOnly = isOrderDigitalOnly(o);
         matchesStatus = !o.fulfillmentDispatchedAt && !o.trackingNumber && !isDigitalOnly && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'failed' && o.status !== 'delivered' && o.status !== 'shipped' && !isActivePreorderBucket;
       }
 
@@ -1158,7 +1201,7 @@ function OrdersPageContent() {
   const counts = useMemo(() => {
     const isActivePre = (o: any) => isOrderHeldAsActivePreorder(o);
     const total = orders.filter(o => !isActivePre(o)).length;
-    const pendingAwb = orders.filter(o => !isActivePre(o) && !o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled').length;
+    const pendingAwb = orders.filter(o => !isActivePre(o) && !isOrderDigitalOnly(o) && !o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled' && o.status !== 'failed').length;
     const generatedAwb = orders.filter(o => !isActivePre(o) && !!o.trackingNumber && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'cancelled').length;
     const printed = orders.filter(o => !isActivePre(o) && isOrderPrinted(o, trackingStatus)).length;
     const notPrinted = orders.filter(o => !isActivePre(o) && isOrderNotPrinted(o, trackingStatus)).length;
@@ -1167,9 +1210,9 @@ function OrdersPageContent() {
     const cancelled = orders.filter(o => !isActivePre(o) && o.status === 'cancelled').length;
     const preorder = orders.filter(o => classifyOrderHistoricalOrActivePreorder(o)).length;
     const activePreorder = orders.filter(o => isActivePre(o)).length;
-    const fulfillmentSent = orders.filter(o => !isActivePre(o) && Boolean(o.fulfillmentDispatchedAt)).length;
+    const fulfillmentSent = orders.filter(o => !isActivePre(o) && !isOrderDigitalOnly(o) && Boolean(o.fulfillmentDispatchedAt)).length;
     const fulfillmentPending = orders.filter(o => {
-      const isDigitalOnly = Boolean(o.carrierMetadata?.is_digital_only) || (Array.isArray(o.items) && o.items.length > 0 && isDigitalOnlyCart(o.items));
+      const isDigitalOnly = isOrderDigitalOnly(o);
       return !isActivePre(o) && !o.fulfillmentDispatchedAt && !o.trackingNumber && !isDigitalOnly && o.status !== 'cancelled' && o.status !== 'returned' && o.status !== 'refunded' && o.status !== 'failed' && o.status !== 'delivered' && o.status !== 'shipped';
     }).length;
     return { total, pendingAwb, generatedAwb, printed, notPrinted, delivered, returned, cancelled, preorder, activePreorder, fulfillmentSent, fulfillmentPending };
@@ -1284,6 +1327,16 @@ function OrdersPageContent() {
             )}
           </button>
 
+          <Link
+            href="/admin/fulfillment"
+            className="min-h-[40px] px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98]"
+            title="Deschide Raportul Zilnic Fulfillment"
+          >
+            <FileText size={14} className="text-[#008ba3]" />
+            <span className="hidden sm:inline">Raport Fulfillment</span>
+            <span className="sm:hidden">Raport Zilnic</span>
+          </Link>
+
           <button
             onClick={toggleExpandAll}
             className="col-span-2 sm:col-span-1 min-h-[40px] px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98] cursor-pointer"
@@ -1350,32 +1403,76 @@ function OrdersPageContent() {
         </div>
       </div>
 
-      {/* 📦 Expediere Manuală Active Banner */}
-      {manualShippingEnabled && (
-        <div className="bg-amber-50 border border-amber-200/90 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
-              <Truck size={18} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase text-amber-900 tracking-wider">Mod Expediere Manuală Activ</span>
-                <span className="text-[10px] font-bold bg-amber-200/80 text-amber-950 px-2 py-0.5 rounded-full">Centru Fulfillment</span>
-              </div>
-              <p className="text-xs text-amber-800/90 mt-0.5">
-                AWB-urile sunt gestionate de centrul de fulfillment. Butoanele de generare și resetare AWB din TrenZone sunt blocate conform setărilor.
-              </p>
-            </div>
+      {/* Fulfillment Schedule & Manual Shipping Status Bar (Exact Europe/Bucharest time) */}
+      <div className={`rounded-2xl p-3.5 sm:p-4 border shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
+        manualShippingEnabled
+          ? 'bg-amber-50 border-amber-200/90'
+          : 'bg-white border-slate-200/90'
+      }`}>
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+            manualShippingEnabled
+              ? 'bg-amber-100 text-amber-800'
+              : fulfillmentScheduleInfo.autoDispatchEnabled
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-slate-100 text-slate-500'
+          }`}>
+            <Truck size={18} />
           </div>
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`text-xs font-black uppercase tracking-wider ${
+                manualShippingEnabled ? 'text-amber-900' : 'text-slate-900'
+              }`}>
+                {manualShippingEnabled ? 'Mod Expediere Manuală Activ' : 'Program Fulfillment Automat'}
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                Ora {fulfillmentScheduleInfo.todayTimeRo} (ora României · {fulfillmentScheduleInfo.timezoneOffsetLabel})
+              </span>
+              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                fulfillmentScheduleInfo.todayBatchRan
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : fulfillmentScheduleInfo.autoDispatchEnabled
+                    ? 'bg-sky-50 text-sky-800 border-sky-200'
+                    : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}>
+                {fulfillmentScheduleInfo.todayBatchRan
+                  ? 'Lot trimis azi'
+                  : fulfillmentScheduleInfo.autoDispatchEnabled
+                    ? `Urmează ${fulfillmentScheduleInfo.nextDayLabelRo} ${fulfillmentScheduleInfo.nextTimeRo} (${fulfillmentScheduleInfo.countdownLabel})`
+                    : 'Auto-dispatch oprit'}
+              </span>
+            </div>
+            <p className={`text-xs leading-relaxed ${
+              manualShippingEnabled ? 'text-amber-900/90' : 'text-slate-600'
+            }`}>
+              {manualShippingEnabled
+                ? `AWB-urile sunt gestionate de centrul de fulfillment. ${fulfillmentScheduleInfo.todayBatchStatusLabel}.`
+                : `${fulfillmentScheduleInfo.todayBatchStatusLabel}. Următorul lot automat: ${fulfillmentScheduleInfo.nextDayLabelRo}, ${fulfillmentScheduleInfo.nextTimeRo} (Europe/Bucharest).`}
+            </p>
+          </div>
+        </div>
 
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Link
+            href="/admin/fulfillment"
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-2xs inline-flex items-center gap-1.5"
+          >
+            <FileText size={13} className="text-[#008ba3]" />
+            <span>Raport Zilnic</span>
+          </Link>
           <button
             onClick={() => setShowFulfillmentModal(true)}
-            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer shadow-xs self-start sm:self-auto"
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
+              manualShippingEnabled
+                ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                : 'bg-slate-900 hover:bg-slate-800 text-white'
+            }`}
           >
             Deschide Fulfillment
           </button>
         </div>
-      )}
+      </div>
 
       {/* BANNERE PREVENTIVE COMENZI ÎN PRECOMENZI / DE GENERAT */}
       {counts.activePreorder > 0 && statusFilter !== 'preorder' && !searchQuery.trim() && (
@@ -1798,7 +1895,7 @@ function OrdersPageContent() {
             const isCancelled = order.status === 'cancelled';
             const isCod = order.paymentMethod === 'cod';
             const isHeldPreorder = isOrderHeldAsActivePreorder(order);
-            const isDigitalOnly = Boolean(order.carrierMetadata?.is_digital_only) || (Array.isArray(order.items) && order.items.length > 0 && isDigitalOnlyCart(order.items));
+            const isDigitalOnly = isOrderDigitalOnly(order);
             const isOrderActionBusy = Boolean(actionOrderIds[order.id] || (order.supabaseId && actionOrderIds[order.supabaseId]));
             const isEmittingOrderOblio = Boolean(emittingOblioOrders[order.id] || (order.supabaseId && emittingOblioOrders[order.supabaseId]));
             const isFetchingOrderTracking = Boolean(fetchingTracking[order.id] || (order.supabaseId && fetchingTracking[order.supabaseId]));
@@ -1879,11 +1976,19 @@ function OrdersPageContent() {
                         </span>
                       )}
 
-                      {/* TRIMIS LA FULFILLMENT / PRECOMANDĂ REȚINUTĂ BADGE */}
-                      {order.fulfillmentDispatchedAt ? (
+                      {/* TRIMIS LA FULFILLMENT / PRECOMANDĂ REȚINUTĂ / DIGITAL PDF BADGE */}
+                      {isDigitalOnly ? (
+                        <span
+                          className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-50 text-sky-800 border border-sky-200 shadow-2xs shrink-0"
+                          title="Comandă digitală (PDF) — livrare automată prin email, fără expediere fizică"
+                        >
+                          <FileText size={11} className="text-sky-600 shrink-0" />
+                          <span>DIGITAL PDF</span>
+                        </span>
+                      ) : order.fulfillmentDispatchedAt ? (
                         <span 
                           className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-300 shadow-2xs shrink-0" 
-                          title={`Transmis către centrul de fulfillment la data de: ${new Date(order.fulfillmentDispatchedAt).toLocaleString('ro-RO')}${order.fulfillmentDispatchedTo ? ` către ${order.fulfillmentDispatchedTo}` : ''}`}
+                          title={`Transmis către centrul de fulfillment la data de: ${formatRomaniaDateTime(order.fulfillmentDispatchedAt)} (ora României)${order.fulfillmentDispatchedTo ? ` către ${order.fulfillmentDispatchedTo}` : ''}`}
                         >
                           <Truck size={11} className="text-indigo-600 shrink-0" />
                           <span>TRIMIS FULFILLMENT</span>
@@ -1896,7 +2001,7 @@ function OrdersPageContent() {
                           <Clock size={11} className="text-violet-600 shrink-0" />
                           <span>REȚINUT (PRECOMANDĂ)</span>
                         </span>
-                      ) : manualShippingEnabled && !isCancelled && !isReturned && !isDelivered && !isDigitalOnly && !order.trackingNumber && order.status !== 'failed' && (
+                      ) : manualShippingEnabled && !isCancelled && !isReturned && !isDelivered && !order.trackingNumber && order.status !== 'failed' && (
                         <span 
                           className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs shrink-0" 
                           title="Comandă nouă în așteptare de expediere către centrul de fulfillment"
@@ -2186,7 +2291,14 @@ function OrdersPageContent() {
 
                       {/* Delete button */}
                       <button
-                        onClick={() => confirmDeleteOrder(order.supabaseId || order.id, order.id)}
+                        onClick={() =>
+                          confirmDeleteOrder(
+                            order.supabaseId || order.id,
+                            order.id,
+                            order.fulfillmentDispatchedAt,
+                            order.fulfillmentDispatchedTo
+                          )
+                        }
                         disabled={isOrderActionBusy}
                         className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-[0.98] shrink-0 cursor-pointer disabled:opacity-50"
                         title="Șterge Comanda Definitiv"
@@ -2299,6 +2411,24 @@ function OrdersPageContent() {
                           </button>
                         </div>
                       </div>
+                    ) : isDigitalOnly ? (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-sky-500" />
+                          <div>
+                            <p className="text-[11px] font-black leading-tight text-sky-950 flex items-center gap-1.5">
+                              <FileText size={13} className="text-sky-600" />
+                              <span>Produs Digital (PDF) — Livrare prin Email</span>
+                            </p>
+                            <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                              Comandă exclusiv digitală — nu intră în coada de fulfillment fizic și nu necesită AWB.
+                            </p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-800 text-[10px] font-black uppercase self-start sm:self-auto shrink-0">
+                          Livrare Digitală
+                        </span>
+                      </div>
                     ) : (
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2.5">
@@ -2324,9 +2454,11 @@ function OrdersPageContent() {
                             </p>
                             <p className="text-[10px] text-slate-500 font-medium mt-0.5">
                               {order.fulfillmentDispatchedAt
-                                ? `Expediat pe email către depozit la: ${new Date(order.fulfillmentDispatchedAt).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                                ? `Expediat pe email către depozit la: ${formatRomaniaDateTime(order.fulfillmentDispatchedAt)} (ora României)`
                                 : manualShippingEnabled
-                                  ? 'Comanda nouă va fi expediată automat mâine la ora 08:00 AM sau prin butonul Trimite Acum'
+                                  ? (fulfillmentScheduleInfo.autoDispatchEnabled
+                                      ? `Va fi expediată automat ${fulfillmentScheduleInfo.nextDayLabelRo.toLowerCase()} la ora ${fulfillmentScheduleInfo.nextTimeRo} (ora României, ${fulfillmentScheduleInfo.countdownLabel}) sau prin Trimite Acum`
+                                      : 'Trimiterea automată este oprită — folosește Centrul de Fulfillment pentru expediere manuală')
                                   : 'Comanda necesită expediere'
                               }
                             </p>

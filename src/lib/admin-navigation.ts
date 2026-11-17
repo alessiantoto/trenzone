@@ -43,6 +43,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { name: 'Dashboard', path: '/admin', iconKey: 'dashboard' },
       { name: 'Comenzi', path: '/admin/orders', iconKey: 'orders' },
+      { name: 'Raport Fulfillment', path: '/admin/fulfillment', iconKey: 'shipping' },
       { name: 'Precomenzi', path: '/admin/preorders', iconKey: 'preorders' },
       { name: 'Web Analytics', path: '/admin/analytics', iconKey: 'analytics' },
     ],

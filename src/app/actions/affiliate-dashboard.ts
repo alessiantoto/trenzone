@@ -9,6 +9,7 @@ import {
   computeAffiliateFinancialSummary,
   convertAffiliateItemPriceToRon,
   type AffiliateNonCountableReason,
+  type AffiliateOrderPayoutStatus,
   type AffiliatePayoutRecord,
 } from '@/lib/affiliate-stats';
 
@@ -32,9 +33,15 @@ export interface AffiliateOrderHistory {
   subtotal: number;
   shippingAmount: number;
   commissionAmount: number;
+  eligibleCommissionAmount: number;
+  pendingPickupCommissionAmount: number;
   customerName?: string;
   customerCity?: string;
   isCountable: boolean;
+  payoutStatus: AffiliateOrderPayoutStatus;
+  isPayoutEligible: boolean;
+  payoutStatusLabelRo: string;
+  payoutStatusLabelEn: string;
   nonCountableReason?: AffiliateNonCountableReason | null;
   nonCountableLabel?: string;
   items: AffiliateOrderItem[];
@@ -47,12 +54,16 @@ export interface AffiliateDashboardResponse {
   commissionPercent: number;
   totalSales: number;
   totalNetSales: number;
+  eligibleCommissions: number;
+  pendingPickupCommissions: number;
   totalCommissions: number;
   pendingPayout: number;
   paidPayout: number;
   overpaidAmount: number;
   payoutProgressPercent: number;
   usagesCount: number;
+  deliveredOrdersCount: number;
+  inTransitOrdersCount: number;
   cancelledOrdersCount: number;
   joinedAt: string;
   lastPayoutAt: string | null;
@@ -128,7 +139,7 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
   if (orFilters.length > 0) {
     const { data: ordersData, error: ordersError } = await supabaseAdmin
       .from('orders')
-      .select('id, payment_intent_id, receipt_url, coupon_id, total_amount, subtotal, discount_total, shipping_amount, currency, status, items, created_at, customer_firstname, customer_lastname, addr_city')
+      .select('id, payment_intent_id, receipt_url, coupon_id, total_amount, subtotal, discount_total, shipping_amount, currency, status, items, carrier_metadata, created_at, customer_firstname, customer_lastname, addr_city')
       .or(orFilters.join(','))
       .order('created_at', { ascending: false });
 
@@ -193,6 +204,10 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
       createdAt: o.created_at || new Date().toISOString(),
       status: o.status || 'processing',
       isCountable: metrics.isCountable,
+      payoutStatus: metrics.payoutStatus,
+      isPayoutEligible: metrics.isPayoutEligible,
+      payoutStatusLabelRo: metrics.payoutStatusLabelRo,
+      payoutStatusLabelEn: metrics.payoutStatusLabelEn,
       nonCountableReason: metrics.nonCountableReason,
       nonCountableLabel: metrics.nonCountableLabel,
       // Converted amounts are always expressed in RON
@@ -203,11 +218,13 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
       subtotal: metrics.subtotal,
       shippingAmount: metrics.shippingAmount,
       commissionAmount: metrics.commissionAmount,
+      eligibleCommissionAmount: metrics.eligibleCommissionAmount,
+      pendingPickupCommissionAmount: metrics.pendingPickupCommissionAmount,
       items
     };
   });
 
-  // Accurate totals: ground truth from valid non-cancelled orders
+  // Accurate totals: ground truth from valid orders (payout eligibility strictly requires parcel pickup)
   const paymentDetails = affiliate.payment_details || {};
   const summary = computeAffiliateFinancialSummary(
     mappedOrders,
@@ -226,12 +243,16 @@ export async function getAffiliateDashboardData(): Promise<{ success: boolean; d
       commissionPercent,
       totalSales: summary.totalSales,
       totalNetSales: summary.totalNetSales,
+      eligibleCommissions: summary.eligibleCommissions,
+      pendingPickupCommissions: summary.pendingPickupCommissions,
       totalCommissions: summary.totalCommissions,
       pendingPayout: summary.pendingPayout,
       paidPayout: summary.paidPayout,
       overpaidAmount: summary.overpaidAmount,
       payoutProgressPercent: summary.payoutProgressPercent,
       usagesCount: summary.validOrdersCount,
+      deliveredOrdersCount: summary.deliveredOrdersCount,
+      inTransitOrdersCount: summary.inTransitOrdersCount,
       cancelledOrdersCount: summary.cancelledOrdersCount,
       joinedAt: affiliate.activated_at || affiliate.requested_at || new Date().toISOString(),
       lastPayoutAt: summary.lastPayoutAt,

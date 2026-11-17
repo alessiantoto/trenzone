@@ -37,10 +37,14 @@ export async function getAdminAffiliates() {
       stats: {
         totalSales: 0,
         totalNetSales: 0,
+        totalEligibleCommissions: 0,
+        totalPendingPickup: 0,
         totalCommissions: 0,
         totalPaid: 0,
         totalPending: 0,
         totalOrders: 0,
+        totalDeliveredOrders: 0,
+        totalInTransitOrders: 0,
         activeCount: 0,
         pendingCount: 0,
       },
@@ -144,6 +148,9 @@ export async function getAdminAffiliates() {
         status: o.status || 'processing',
         paymentMethod: o.payment_method || null,
         isCountable: metrics.isCountable,
+        payoutStatus: metrics.payoutStatus,
+        isPayoutEligible: metrics.isPayoutEligible,
+        payoutStatusLabel: metrics.payoutStatusLabelRo,
         nonCountableReason: metrics.nonCountableReason,
         nonCountableLabel: metrics.nonCountableLabel,
         // Converted amounts are always expressed in RON
@@ -154,6 +161,8 @@ export async function getAdminAffiliates() {
         subtotal: metrics.subtotal,
         shippingAmount: metrics.shippingAmount,
         commissionAmount: metrics.commissionAmount,
+        eligibleCommissionAmount: metrics.eligibleCommissionAmount,
+        pendingPickupCommissionAmount: metrics.pendingPickupCommissionAmount,
         items
       };
     });
@@ -182,6 +191,10 @@ export async function getAdminAffiliates() {
       totalSalesRaw: summary.totalSales,
       totalNetSales: formatRon(summary.totalNetSales),
       totalNetSalesRaw: summary.totalNetSales,
+      eligibleCommissions: formatRon(summary.eligibleCommissions),
+      eligibleCommissionsRaw: summary.eligibleCommissions,
+      pendingPickupCommissions: formatRon(summary.pendingPickupCommissions),
+      pendingPickupCommissionsRaw: summary.pendingPickupCommissions,
       totalCommissions: formatRon(summary.totalCommissions),
       totalCommissionsRaw: summary.totalCommissions,
       pendingPayout: formatRon(summary.pendingPayout),
@@ -193,6 +206,8 @@ export async function getAdminAffiliates() {
       aov: formatRon(summary.aov),
       aovRaw: summary.aov,
       usages: summary.validOrdersCount,
+      deliveredOrdersCount: summary.deliveredOrdersCount,
+      inTransitOrdersCount: summary.inTransitOrdersCount,
       cancelledOrdersCount: summary.cancelledOrdersCount,
       totalOrdersMatched: mappedOrders.length,
       lastPayoutAt: summary.lastPayoutAt,
@@ -217,24 +232,84 @@ export async function getAdminAffiliates() {
   const pendingCount = mappedAffiliates.filter(a => a.status === 'pending').length;
   const totalSales = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.totalSalesRaw || 0), 0));
   const totalNetSales = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.totalNetSalesRaw || 0), 0));
+  const totalEligibleCommissions = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.eligibleCommissionsRaw || 0), 0));
+  const totalPendingPickup = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.pendingPickupCommissionsRaw || 0), 0));
   const totalCommissions = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.totalCommissionsRaw || 0), 0));
   const totalPaid = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.paidPayoutRaw || 0), 0));
   const totalPending = roundCurrency(mappedAffiliates.reduce((sum, a) => sum + (a.pendingPayoutRaw || 0), 0));
   const totalOrders = mappedAffiliates.reduce((sum, a) => sum + (a.usages || 0), 0);
+  const totalDeliveredOrders = mappedAffiliates.reduce((sum, a) => sum + (a.deliveredOrdersCount || 0), 0);
+  const totalInTransitOrders = mappedAffiliates.reduce((sum, a) => sum + (a.inTransitOrdersCount || 0), 0);
 
   return {
     affiliates: mappedAffiliates,
     stats: {
       totalSales,
       totalNetSales,
+      totalEligibleCommissions,
+      totalPendingPickup,
       totalCommissions,
       totalPaid,
       totalPending,
       totalOrders,
+      totalDeliveredOrders,
+      totalInTransitOrders,
       activeCount,
       pendingCount,
     }
   };
+}
+
+async function computeSingleAffiliateFinancialSummary(affiliate: {
+  code?: string | null;
+  commission_percent?: unknown;
+  payment_details?: any;
+  total_earnings_ron?: unknown;
+  usage_count?: unknown;
+}) {
+  const commissionPercent = Number(affiliate.commission_percent) || 10;
+  const cleanCode = String(affiliate.code || '').trim().replace(/[^A-Za-z0-9_-]/g, '');
+  let matchingOrders: any[] = [];
+
+  if (cleanCode) {
+    const escapedCode = escapeLike(cleanCode);
+    const { data: coupons } = await supabaseAdmin
+      .from('coupons')
+      .select('id')
+      .ilike('code', escapedCode);
+
+    const couponIds = (coupons || [])
+      .map((c) => c.id)
+      .filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+    const orFilters: string[] = [];
+    if (couponIds.length > 0) {
+      orFilters.push(`coupon_id.in.(${couponIds.join(',')})`);
+    }
+    orFilters.push(`carrier_metadata->>coupon_code.ilike.${escapedCode}`);
+    orFilters.push(`carrier_metadata->>coupon.ilike.${escapedCode}`);
+
+    const { data: ordersData } = await supabaseAdmin
+      .from('orders')
+      .select('total_amount, subtotal, discount_total, shipping_amount, currency, status, items, carrier_metadata')
+      .or(orFilters.join(','));
+
+    if (ordersData) {
+      matchingOrders = ordersData;
+    }
+  }
+
+  const liveRates = await getServerExchangeRates();
+  const toRon = (amount: number, currency: string) => convertToRon(amount, currency, liveRates);
+  const metricsList = matchingOrders.map((o) => computeAffiliateOrderMetrics(o, commissionPercent, toRon));
+
+  return computeAffiliateFinancialSummary(
+    metricsList,
+    commissionPercent,
+    affiliate.payment_details || {},
+    Number(affiliate.total_earnings_ron) || 0,
+    Number(affiliate.usage_count) || 0
+  );
 }
 
 export async function recordAffiliatePayoutAction(affiliateId: string, amount: number, note?: string) {
@@ -248,12 +323,28 @@ export async function recordAffiliatePayoutAction(affiliateId: string, amount: n
 
   const { data: aff, error: fetchErr } = await supabaseAdmin
     .from('affiliates')
-    .select('payment_details, name')
+    .select('payment_details, name, code, commission_percent, total_earnings_ron, usage_count')
     .eq('id', affiliateId)
     .single();
 
   if (fetchErr || !aff) return { success: false, error: 'Afiliat negăsit.' };
 
+  const liveSummary = await computeSingleAffiliateFinancialSummary(aff);
+  if (liveSummary.pendingPayout <= 0) {
+    return {
+      success: false,
+      error: 'Nu există sold eligibil „De încasat”. Comisioanele devin eligibile de plată doar după ridicarea coletului.',
+    };
+  }
+
+  if (roundedAmount > liveSummary.pendingPayout + 0.01) {
+    return {
+      success: false,
+      error: `Suma depășește soldul eligibil („De încasat”) de ${formatRon(liveSummary.pendingPayout)} din coletele ridicate.`,
+    };
+  }
+
+  const finalPayoutAmount = Math.min(roundedAmount, liveSummary.pendingPayout);
   const currentDetails = aff.payment_details || {};
   const { payouts: existingPayouts, paidAmount: currentPaid } = normalizeAffiliatePayouts(currentDetails);
 
@@ -263,7 +354,7 @@ export async function recordAffiliatePayoutAction(affiliateId: string, amount: n
 
   const newEntry = {
     id: payoutId,
-    amount: roundedAmount,
+    amount: finalPayoutAmount,
     paidAt: now,
     ...(cleanNote ? { note: cleanNote } : {}),
     ...(currentDetails.iban ? { ibanSnapshot: String(currentDetails.iban) } : {}),
@@ -272,7 +363,7 @@ export async function recordAffiliatePayoutAction(affiliateId: string, amount: n
   // Persist sanitized list (preserving any migrated legacy payout record)
   const sanitizedExisting = existingPayouts.map(({ isLegacy: _legacy, ...rest }) => rest);
   const updatedPayouts = [newEntry, ...sanitizedExisting];
-  const newPaid = roundCurrency(currentPaid + roundedAmount);
+  const newPaid = roundCurrency(currentPaid + finalPayoutAmount);
 
   const { error: updateErr } = await supabaseAdmin
     .from('affiliates')

@@ -36,6 +36,7 @@ import {
 } from '@/app/actions/affiliate-dashboard';
 import {
   classifyOrderNonCountable,
+  classifyAffiliateOrderPayoutStatus,
   formatMoneyInCurrency,
   formatOriginalAmount,
   normalizeDisplayCurrency,
@@ -224,11 +225,29 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
       return classifyOrderNonCountable(o.status).isCountable;
     };
 
+    const isOrderEligible = (o: AffiliateOrderHistory) => {
+      if (typeof o.isPayoutEligible === 'boolean') return o.isPayoutEligible;
+      return classifyAffiliateOrderPayoutStatus(o.status).isPayoutEligible;
+    };
+
     const countableOrders = filteredOrders.filter(isOrderCountable);
+    const eligibleOrders = countableOrders.filter(isOrderEligible);
+    const inTransitOrders = countableOrders.filter(o => !isOrderEligible(o));
+
     const totalSales = countableOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
     const totalNetSales = countableOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0);
     const totalCommissions = countableOrders.reduce((sum, o) => sum + (o.commissionAmount || 0), 0);
+    const eligibleCommissions = eligibleOrders.reduce(
+      (sum, o) => sum + (typeof o.eligibleCommissionAmount === 'number' ? o.eligibleCommissionAmount : (o.commissionAmount || 0)),
+      0
+    );
+    const pendingPickupCommissions = inTransitOrders.reduce(
+      (sum, o) => sum + (typeof o.pendingPickupCommissionAmount === 'number' ? o.pendingPickupCommissionAmount : (o.commissionAmount || 0)),
+      0
+    );
     const usagesCount = countableOrders.length;
+    const deliveredCount = eligibleOrders.length;
+    const inTransitCount = inTransitOrders.length;
     const cancelledCount = filteredOrders.length - usagesCount;
     const aov = usagesCount > 0 ? totalSales / usagesCount : 0;
 
@@ -236,7 +255,11 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
       totalSales: roundCurrency(totalSales),
       totalNetSales: roundCurrency(totalNetSales),
       totalCommissions: roundCurrency(totalCommissions),
+      eligibleCommissions: roundCurrency(eligibleCommissions),
+      pendingPickupCommissions: roundCurrency(pendingPickupCommissions),
       usagesCount,
+      deliveredCount,
+      inTransitCount,
       cancelledCount,
       aov: roundCurrency(aov),
     };
@@ -456,144 +479,158 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
         {/* PRIMARY FINANCIAL OVERVIEW: 4 KEY KPI CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           
-          {/* CARD 1: DE INCASAT IN TOTAL */}
+          {/* CARD 1: DE INCASAT (COLET RIDICAT) */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="relative rounded-3xl p-6 border border-[#e32f8c]/40 bg-gradient-to-br from-[#e32f8c]/10 via-white to-white shadow-sm overflow-hidden"
+            className="relative rounded-3xl p-6 border border-[#e32f8c]/40 bg-gradient-to-br from-[#e32f8c]/10 via-white to-white shadow-sm overflow-hidden flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-black uppercase tracking-widest text-[#008ba3]">
-                {isRo ? 'De Încasat Acum' : 'Pending Payout'}
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-[#e32f8c]/15 flex items-center justify-center text-[#008ba3]">
-                <Clock size={16} />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                {formatMoney(data.pendingPayout)}
-              </span>
-            </div>
-            {displayCurrency !== 'RON' && data.pendingPayout > 0 && (
-              <p className="text-[10px] font-bold text-slate-400 mt-1">
-                ≈ {formatMoneyInCurrency(data.pendingPayout, 'RON', uiLocale, 2)} {isRo ? 'bază contabilă' : 'base settlement'}
-              </p>
-            )}
-            {(data.totalCommissions > 0 || data.paidPayout > 0) && (
-              <div className="mt-3">
-                <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#008ba3] to-emerald-500 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, data.payoutProgressPercent ?? 0)}%` }}
-                  />
+            <div>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <span className="text-[11px] font-black uppercase tracking-widest text-[#008ba3]">
+                  {isRo ? 'De Încasat (Colet ridicat)' : 'Ready to Cash Out (Picked up)'}
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-[#e32f8c]/15 flex items-center justify-center text-[#008ba3] shrink-0">
+                  <CheckCircle2 size={16} />
                 </div>
               </div>
-            )}
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
+                  {formatMoney(data.pendingPayout)}
+                </span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-500 mt-1">
+                {isRo ? 'Eligibil din colete ridicate: ' : 'Eligible from picked-up parcels: '}
+                {formatMoney(data.eligibleCommissions)}
+              </p>
+              {displayCurrency !== 'RON' && data.pendingPayout > 0 && (
+                <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                  ≈ {formatMoneyInCurrency(data.pendingPayout, 'RON', uiLocale, 2)} {isRo ? 'bază contabilă' : 'base settlement'}
+                </p>
+              )}
+              {(data.eligibleCommissions > 0 || data.paidPayout > 0) && (
+                <div className="mt-3">
+                  <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#008ba3] to-emerald-500 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(100, data.payoutProgressPercent ?? 0)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-500">{isRo ? 'Încasat deja:' : 'Already paid:'}</span>
+              <span className="text-slate-500">{isRo ? 'Rată comision:' : 'Commission rate:'}</span>
               <span className="font-bold text-emerald-700">
-                {formatMoney(data.paidPayout)}
+                {data.commissionPercent}% {isRo ? 'din net' : 'of net'}
               </span>
             </div>
           </motion.div>
 
-          {/* CARD 2: TOTAL VANZARI GENERATE */}
+          {/* CARD 2: IN ASTEPTARE (IN LIVRARE / NERIDICAT INCA) */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="rounded-3xl p-6 border border-slate-200/90 bg-white/95 backdrop-blur-sm shadow-sm"
+            className="rounded-3xl p-6 border border-amber-200/90 bg-gradient-to-br from-amber-50/70 via-white to-white shadow-sm flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                {isRo ? 'Vânzări Generate' : 'Sales Volume'}
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <TrendingUp size={16} />
+            <div>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <span className="text-[11px] font-black uppercase tracking-widest text-amber-800">
+                  {isRo ? 'În Așteptare (În livrare)' : 'Pending (In transit)'}
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Clock size={16} />
+                </div>
               </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-black tracking-tight text-amber-950">
+                  {formatMoney(period === 'all' ? data.pendingPickupCommissions : activeStats.pendingPickupCommissions)}
+                </span>
+              </div>
+              <p className="text-[11px] font-semibold text-amber-900/80 mt-1.5 leading-snug">
+                {isRo
+                  ? 'Neridicat încă. Se mută automat în De încasat după ce clientul ridică coletul.'
+                  : 'Awaiting pickup. Automatically moves to Ready to Cash Out once the parcel is picked up.'}
+              </p>
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                {formatMoney(period === 'all' ? data.totalSales : activeStats.totalSales)}
-              </span>
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 mt-1">
-              {isRo ? 'Bază netă (fără transp.): ' : 'Commissionable net: '}
-              {formatMoney(period === 'all' ? (data.totalNetSales ?? data.totalSales) : activeStats.totalNetSales)}
-            </p>
-            <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-500">{isRo ? 'Comision total generat:' : 'Total commission:'}</span>
-              <span className="font-bold text-emerald-600">
-                {formatMoney(period === 'all' ? data.totalCommissions : activeStats.totalCommissions)}
+            <div className="mt-3 pt-2.5 border-t border-amber-100 flex items-center justify-between text-[11px]">
+              <span className="text-amber-800/80">{isRo ? 'Comenzi în livrare:' : 'Orders in transit:'}</span>
+              <span className="font-bold text-amber-900">
+                {period === 'all' ? data.inTransitOrdersCount : activeStats.inTransitCount}{' '}
+                {isRo ? 'comenzi' : 'orders'}
               </span>
             </div>
           </motion.div>
 
-          {/* CARD 3: COMENZI SI UTILIZARI */}
+          {/* CARD 3: INCASAT PANA ACUM */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="rounded-3xl p-6 border border-slate-200/90 bg-white/95 backdrop-blur-sm shadow-sm"
+            className="rounded-3xl p-6 border border-emerald-200/90 bg-white/95 backdrop-blur-sm shadow-sm flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                {isRo ? 'Comenzi Valide' : 'Valid Orders'}
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                <ShoppingBag size={16} />
+            <div>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <span className="text-[11px] font-black uppercase tracking-widest text-emerald-700">
+                  {isRo ? 'Încasat Până Acum' : 'Paid So Far'}
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <Award size={16} />
+                </div>
               </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                {period === 'all' ? data.usagesCount : activeStats.usagesCount}
-              </span>
-              <span className="text-xs font-bold text-slate-500">{isRo ? 'comenzi' : 'orders'}</span>
-            </div>
-            {(period === 'all' ? (data.cancelledOrdersCount ?? 0) : activeStats.cancelledCount) > 0 && (
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
+                  {formatMoney(data.paidPayout)}
+                </span>
+              </div>
               <p className="text-[10px] font-bold text-slate-400 mt-1">
-                {period === 'all' ? data.cancelledOrdersCount : activeStats.cancelledCount}{' '}
-                {isRo ? 'anulate / excluse din calcul' : 'cancelled / excluded'}
+                {data.payoutProgressPercent ?? 0}% {isRo ? 'din comisionul eligibil achitat' : 'of eligible commission paid'}
               </p>
-            )}
-            <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-500">{isRo ? 'Valoare medie coș:' : 'Average order:'}</span>
-              <span className="font-bold text-slate-700">
-                {formatMoney(activeStats.aov)}
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">{isRo ? 'Status cont:' : 'Payout status:'}</span>
+              <span className="font-bold text-emerald-600 flex items-center gap-1.5 text-[11px]">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {isRo ? 'Comision Activ' : 'Active'}
               </span>
             </div>
           </motion.div>
 
-          {/* CARD 4: COMISIONUL TAU (%) */}
+          {/* CARD 4: VANZARI & COMENZI */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="rounded-3xl p-6 border border-slate-200/90 bg-white/95 backdrop-blur-sm shadow-sm"
+            className="rounded-3xl p-6 border border-slate-200/90 bg-white/95 backdrop-blur-sm shadow-sm flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                {isRo ? 'Rată Comision' : 'Commission Rate'}
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-                <Award size={16} />
+            <div>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                  {isRo ? 'Vânzări & Comenzi' : 'Sales & Orders'}
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <TrendingUp size={16} />
+                </div>
               </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+                  {formatMoney(period === 'all' ? data.totalSales : activeStats.totalSales)}
+                </span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-500 mt-1">
+                {period === 'all' ? data.usagesCount : activeStats.usagesCount} {isRo ? 'comenzi valide' : 'valid orders'} •{' '}
+                {period === 'all' ? data.deliveredOrdersCount : activeStats.deliveredCount} {isRo ? 'ridicate' : 'picked up'}
+                {(period === 'all' ? (data.cancelledOrdersCount ?? 0) : activeStats.cancelledCount) > 0 && (
+                  <> • {period === 'all' ? data.cancelledOrdersCount : activeStats.cancelledCount} {isRo ? 'anulate' : 'voided'}</>
+                )}
+              </p>
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                {data.commissionPercent}%
-              </span>
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 mt-1">
-              {isRo ? 'Calculat din subtotalul net (fără transport)' : 'Calculated on net order subtotal'}
-            </p>
-            <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-500">{isRo ? 'Status comision:' : 'Commission status:'}</span>
-              <span className="font-bold text-emerald-600 flex items-center gap-1.5 text-[11px]">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                {isRo ? 'Comision Activ' : 'Active'}
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">{isRo ? 'Valoare medie coș:' : 'Average order:'}</span>
+              <span className="font-bold text-slate-700">
+                {formatMoney(activeStats.aov)}
               </span>
             </div>
           </motion.div>
@@ -871,20 +908,36 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                   minute: '2-digit'
                 });
                 const statusCheck = classifyOrderNonCountable(order.status);
+                const payoutCheck = classifyAffiliateOrderPayoutStatus(order.status);
+                const payoutStatus = order.payoutStatus || payoutCheck.payoutStatus;
+                const isEligible = payoutStatus === 'eligible';
+                const isPendingPickup = payoutStatus === 'pending_pickup';
                 const isCancelled = statusCheck.reason === 'cancelled';
                 const isReturned = statusCheck.reason === 'returned';
                 const isRefunded = statusCheck.reason === 'refunded';
                 const isFailed = statusCheck.reason === 'failed';
-                const isNonCountable = !statusCheck.isCountable || order.isCountable === false;
-                const statusBadgeLabel = isCancelled
-                  ? (isRo ? 'Anulată' : 'Cancelled')
-                  : isReturned
-                    ? (isRo ? 'Returnată / Neridicată' : 'Returned')
-                    : isRefunded
-                      ? (isRo ? 'Rambursată' : 'Refunded')
-                      : isFailed
-                        ? (isRo ? 'Eșuată' : 'Failed')
-                        : order.nonCountableLabel || (isRo ? 'Fără comision' : 'No commission');
+                const isNonCountable = !statusCheck.isCountable || order.isCountable === false || payoutStatus === 'voided';
+                const voidBadgeLabel = isCancelled || isReturned
+                  ? (isRo ? 'Anulată / Returnată' : 'Cancelled / Returned')
+                  : isRefunded
+                    ? (isRo ? 'Rambursată' : 'Refunded')
+                    : isFailed
+                      ? (isRo ? 'Eșuată' : 'Failed')
+                      : order.nonCountableLabel || (isRo ? 'Anulată / Returnată' : 'Cancelled / Returned');
+                const statusBadgeLabel = isEligible
+                  ? (isRo ? (order.payoutStatusLabelRo || payoutCheck.labelRo) : (order.payoutStatusLabelEn || payoutCheck.labelEn))
+                  : isPendingPickup
+                    ? (isRo ? (order.payoutStatusLabelRo || payoutCheck.labelRo) : (order.payoutStatusLabelEn || payoutCheck.labelEn))
+                    : voidBadgeLabel;
+                const statusBadgeClass = isEligible
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : isPendingPickup
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                    : isReturned
+                      ? 'bg-orange-50 text-orange-700 border-orange-200'
+                      : isRefunded
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-red-50 text-red-700 border-red-200';
                 const hasForeignCurrency =
                   order.originalCurrency &&
                   order.originalCurrency !== displayCurrency &&
@@ -919,27 +972,9 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                             <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                               #{order.orderNumber}
                             </span>
-                            {isCancelled ? (
-                              <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                                {statusBadgeLabel}
-                              </span>
-                            ) : isReturned ? (
-                              <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                                {statusBadgeLabel}
-                              </span>
-                            ) : isRefunded ? (
-                              <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                                {statusBadgeLabel}
-                              </span>
-                            ) : isFailed || isNonCountable ? (
-                              <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                {statusBadgeLabel}
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                {order.status === 'delivered' ? (isRo ? 'Livrată' : 'Delivered') : (isRo ? 'Confirmată' : 'Confirmed')}
-                              </span>
-                            )}
+                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${statusBadgeClass}`}>
+                              {statusBadgeLabel}
+                            </span>
                             {order.customerName && (
                               <span className="text-[10px] font-bold text-slate-700 bg-blue-50 text-blue-700 border border-blue-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
                                 <Users size={11} className="text-blue-500" />
@@ -1020,13 +1055,22 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                               {statusBadgeLabel}
                             </span>
                           </>
-                        ) : (
+                        ) : isEligible ? (
                           <>
                             <p className="text-sm font-black text-emerald-600">
                               +{formatMoney(order.commissionAmount)}
                             </p>
                             <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                              {data.commissionPercent}% {isRo ? 'comision' : 'earned'}
+                              {isRo ? 'Eligibil de încasat' : 'Ready to cash out'}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm font-black text-amber-700">
+                              +{formatMoney(order.commissionAmount)}
+                            </p>
+                            <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                              {isRo ? 'În așteptare (neridicat)' : 'Pending pickup'}
                             </span>
                           </>
                         )}
@@ -1050,27 +1094,9 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                             <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                               #{order.orderNumber}
                             </span>
-                            {isCancelled ? (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                                {statusBadgeLabel}
-                              </span>
-                            ) : isReturned ? (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                                {statusBadgeLabel}
-                              </span>
-                            ) : isRefunded ? (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                                {statusBadgeLabel}
-                              </span>
-                            ) : isFailed || isNonCountable ? (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                {statusBadgeLabel}
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                {order.status === 'delivered' ? (isRo ? 'Livrată' : 'Delivered') : (isRo ? 'Confirmată' : 'Confirmed')}
-                              </span>
-                            )}
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusBadgeClass}`}>
+                              {statusBadgeLabel}
+                            </span>
                             {order.customerName && (
                               <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
                                 <Users size={11} className="text-blue-500" />
@@ -1096,8 +1122,13 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                             </>
                           ) : (
                             <>
-                              <p className="text-xs font-black text-emerald-600">
+                              <p className={`text-xs font-black ${isEligible ? 'text-emerald-600' : 'text-amber-700'}`}>
                                 +{formatMoney(order.commissionAmount)}
+                              </p>
+                              <p className="text-[9px] font-bold mt-0.5 text-slate-500">
+                                {isEligible
+                                  ? (isRo ? 'Eligibil de încasat' : 'Eligible')
+                                  : (isRo ? 'În așteptare' : 'Awaiting pickup')}
                               </p>
                               <p className="text-[10px] font-bold text-slate-400 mt-0.5">
                                 {isRo ? 'coș: ' : 'order: '}{formatMoney(order.totalAmount)}

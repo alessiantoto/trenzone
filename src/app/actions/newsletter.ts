@@ -60,20 +60,21 @@ export async function subscribeToNewsletter(
       await supabaseAdmin
         .from('unsubscribed_emails')
         .delete()
-        .eq('email', email.toLowerCase().trim());
+        .eq('email', cleanEmail);
     }
 
-    // 2. Trigger Welcome Email via Resend
+    // 2. Trigger Welcome Email via Resend (sends active 5% coupon e.g. TREN5)
     console.log("📧 [NEWSLETTER ACTION] Triggering welcome email...");
+    let emailSent = false;
     try {
-      await sendWelcomeEmail(email, displayName, locale);
+      await sendWelcomeEmail(cleanEmail, displayName, locale);
+      emailSent = true;
       console.log("✅ [NEWSLETTER ACTION] Welcome email sent successfully.");
     } catch (emailErr: any) {
       console.error("⚠️ [NEWSLETTER ACTION] Email failed but user saved:", emailErr);
-      // We don't fail the whole action if email fails after saving to DB
     }
-    
-    return { success: true };
+
+    return { success: true, emailSent };
   } catch (error: any) {
     console.error("❌ [NEWSLETTER ACTION] Failed:", error.message || error);
     return { success: false, error: error.message || "Something went wrong. Please try again." };

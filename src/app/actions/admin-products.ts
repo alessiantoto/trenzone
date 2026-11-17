@@ -6,7 +6,16 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { Product } from '@/lib/api';
 import { isAdminAuthorized } from './admin-auth';
 import { uploadToR2, deleteFromR2, getR2PublicBaseUrl } from '@/lib/r2';
-import { DIGITAL_PROGRAM_PRODUCTS, isDigitalProgramId } from '@/lib/programs';
+import { DIGITAL_PROGRAM_PRODUCTS, PROGRAM_UUIDS, isDigitalProgramId } from '@/lib/programs';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LEGACY_TRAINING_UUID = '7a1n0004-4444-4444-8444-000000000004';
+
+/** Maps the legacy non-hex Training Program ID to its valid RFC 4122 UUID. */
+function normalizeProductUuid(id?: string | null): string {
+  const trimmed = String(id || '').trim();
+  return trimmed.toLowerCase() === LEGACY_TRAINING_UUID ? PROGRAM_UUIDS.TRAINING_PROGRAM : trimmed;
+}
 
 export async function getAdminProductBySlug(slugOrId: string): Promise<any | null> {
   const isAuthorized = await isAdminAuthorized();
@@ -14,11 +23,12 @@ export async function getAdminProductBySlug(slugOrId: string): Promise<any | nul
 
   if (!slugOrId) return null;
   const decoded = decodeURIComponent(slugOrId);
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded);
+  const normalized = normalizeProductUuid(decoded);
+  const isUUID = UUID_REGEX.test(normalized);
 
   let query = supabaseAdmin.from('products').select('*');
   if (isUUID) {
-    query = query.or(`slug.eq.${decoded},id.eq.${decoded}`);
+    query = query.or(`slug.eq.${normalized},id.eq.${normalized}`);
   } else {
     query = query.eq('slug', decoded);
   }
@@ -139,16 +149,32 @@ export async function updateProductAdmin(product: Partial<Product> & { id: strin
     updateData.specs_summary = baseSpecs;
   }
 
-  // Check for deleted images to prevent ghost files
-  const { data: oldProduct } = await supabaseAdmin
-    .from('products')
-    .select('id, images')
-    .eq('id', product.id)
-    .maybeSingle();
+  const rawId = String(product.id || '').trim();
+  const normalizedId = normalizeProductUuid(rawId);
 
   const fallbackDigital = DIGITAL_PROGRAM_PRODUCTS.find(
-    (p) => p.id === product.id || p.slug === product.slug
+    (p) => p.id === normalizedId || p.id === rawId || (product.slug && p.slug === product.slug)
   );
+  const lookupSlug = product.slug || fallbackDigital?.slug;
+
+  // Check for deleted images to prevent ghost files (match by valid UUID first, then slug fallback)
+  let oldProduct: { id: string; images: string[] | null } | null = null;
+  if (UUID_REGEX.test(normalizedId)) {
+    const res = await supabaseAdmin
+      .from('products')
+      .select('id, images')
+      .eq('id', normalizedId)
+      .maybeSingle();
+    oldProduct = res.data;
+  }
+  if (!oldProduct && lookupSlug) {
+    const res = await supabaseAdmin
+      .from('products')
+      .select('id, images')
+      .eq('slug', lookupSlug)
+      .maybeSingle();
+    oldProduct = res.data;
+  }
 
   let data: any = null;
   let error: any = null;
@@ -157,14 +183,19 @@ export async function updateProductAdmin(product: Partial<Product> & { id: strin
     const res = await supabaseAdmin
       .from('products')
       .update(updateData)
-      .eq('id', product.id)
+      .eq('id', oldProduct.id)
       .select()
       .single();
     data = res.data;
     error = res.error;
   } else {
+    const resolvedId = UUID_REGEX.test(normalizedId)
+      ? normalizedId
+      : fallbackDigital?.id && UUID_REGEX.test(fallbackDigital.id)
+      ? fallbackDigital.id
+      : crypto.randomUUID();
     const insertPayload: any = {
-      id: product.id,
+      id: resolvedId,
       slug: updateData.slug || fallbackDigital?.slug || product.slug,
       name: updateData.name || fallbackDigital?.name || { ro: 'Produs', en: 'Product' },
       description: updateData.description || fallbackDigital?.description || { ro: '', en: '' },
@@ -307,11 +338,13 @@ export async function deleteProductAdmin(id: string, imageUrls?: string[]) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
+  const normalizedId = normalizeProductUuid(id);
+
   // 1. Delete the product from the database
   const { error: dbError } = await supabaseAdmin
     .from('products')
     .delete()
-    .eq('id', id);
+    .eq('id', normalizedId);
 
   if (dbError) {
     console.error('Error deleting product:', dbError);
@@ -335,10 +368,12 @@ export async function toggleProductStatus(id: string, isActive: boolean) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
+  const normalizedId = normalizeProductUuid(id);
+
   const { data: existing } = await supabaseAdmin
     .from('products')
     .select('id')
-    .eq('id', id)
+    .eq('id', normalizedId)
     .maybeSingle();
 
   let error: any = null;
@@ -346,10 +381,10 @@ export async function toggleProductStatus(id: string, isActive: boolean) {
     const res = await supabaseAdmin
       .from('products')
       .update({ is_active: isActive })
-      .eq('id', id);
+      .eq('id', normalizedId);
     error = res.error;
   } else {
-    const fallbackDigital = DIGITAL_PROGRAM_PRODUCTS.find((p) => p.id === id);
+    const fallbackDigital = DIGITAL_PROGRAM_PRODUCTS.find((p) => p.id === normalizedId);
     if (fallbackDigital) {
       const res = await supabaseAdmin.from('products').upsert(
         {

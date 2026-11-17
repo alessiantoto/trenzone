@@ -7,7 +7,7 @@ export type DigitalProgramLanguage = ProgramLanguage;
 export const PROGRAM_UUIDS = {
   FOOD_PLAN: 'f00d0001-1111-4111-8111-000000000001',
   BENCH_PROGRAM: 'be0c0002-2222-4222-8222-000000000002',
-  TRAINING_PROGRAM: '7a1n0004-4444-4444-8444-000000000004',
+  TRAINING_PROGRAM: '7a1a0004-4444-4444-8444-000000000004',
   COMPLETE_BUNDLE: 'b00d0003-3333-4333-8333-000000000003',
   BUNDLE: 'b00d0003-3333-4333-8333-000000000003',
 } as const;
@@ -56,6 +56,7 @@ export function isDigitalProgramId(idOrSlug?: string | null): boolean {
     clean.includes('pachet-programe') ||
     clean.startsWith('f00d0001-') ||
     clean.startsWith('be0c0002-') ||
+    clean.startsWith('7a1a0004-') ||
     clean.startsWith('7a1n0004-') ||
     clean.startsWith('b00d0003-')
   );
@@ -195,6 +196,7 @@ export function resolveOrderedPrograms(
       keysToAdd = ['food-plan'];
     } else if (
       idAndName.includes(PROGRAM_UUIDS.TRAINING_PROGRAM) ||
+      idAndName.includes('7a1n0004-4444-4444-8444-000000000004') ||
       idAndName.includes(PROGRAM_SLUGS.TRAINING_PROGRAM) ||
       idAndName.includes('training-program') ||
       idAndName.includes('training program')

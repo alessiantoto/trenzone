@@ -113,15 +113,19 @@ export async function updateOrderShippingAction(
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
     const updatePayload: Record<string, any> = {};
 
-    if (data.customerFirstName !== undefined) updatePayload.customer_firstname = data.customerFirstName.trim();
-    if (data.customerLastName !== undefined) updatePayload.customer_lastname = data.customerLastName.trim();
-    if (data.customerPhone !== undefined) updatePayload.customer_phone = data.customerPhone.trim();
-    if (data.customerEmail !== undefined) updatePayload.customer_email = data.customerEmail.trim();
-    if (data.addrLine1 !== undefined) updatePayload.addr_line1 = data.addrLine1.trim();
-    if (data.addrLine2 !== undefined) updatePayload.addr_line2 = data.addrLine2.trim();
-    if (data.addrCity !== undefined) updatePayload.addr_city = data.addrCity.trim();
-    if (data.addrZip !== undefined) updatePayload.addr_zip = data.addrZip.trim();
+    if (data.customerFirstName !== undefined) updatePayload.customer_firstname = String(data.customerFirstName).trim().slice(0, 100);
+    if (data.customerLastName !== undefined) updatePayload.customer_lastname = String(data.customerLastName).trim().slice(0, 100);
+    if (data.customerPhone !== undefined) updatePayload.customer_phone = String(data.customerPhone).trim().slice(0, 30);
+    if (data.customerEmail !== undefined) updatePayload.customer_email = String(data.customerEmail).trim().toLowerCase().slice(0, 150);
+    if (data.addrLine1 !== undefined) updatePayload.addr_line1 = String(data.addrLine1).trim().slice(0, 200);
+    if (data.addrLine2 !== undefined) updatePayload.addr_line2 = String(data.addrLine2).trim().slice(0, 200);
+    if (data.addrCity !== undefined) updatePayload.addr_city = String(data.addrCity).trim().slice(0, 100);
+    if (data.addrZip !== undefined) updatePayload.addr_zip = String(data.addrZip).trim().slice(0, 20);
     // Țara comenzii este fixă (nu se poate modifica pentru a nu invalida tarifele și rutele de transport)
+
+    if (Object.keys(updatePayload).length === 0) {
+      throw new Error("Niciun câmp de actualizat.");
+    }
 
     const safeOrderId = sanitizeOrderIdFilter(orderId);
     if (!safeOrderId) throw new Error("ID comandă invalid.");
@@ -151,9 +155,14 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
   if (!isAuthorized) return { success: false, error: 'Neautorizat' };
 
   try {
+    const cleanStatus = String(status || '').trim().toLowerCase();
+    if (!/^[a-z0-9_-]{2,40}$/.test(cleanStatus)) {
+      throw new Error("Status comandă invalid.");
+    }
+
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
     let query = supabaseAdmin.from('orders').update({ 
-      status, 
+      status: cleanStatus, 
       updated_at: new Date().toISOString() 
     });
 

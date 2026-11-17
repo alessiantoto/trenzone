@@ -134,12 +134,12 @@ export default function EmailHistoryPage() {
         </div>
         <button
           type="button"
-          onClick={fetchLogs}
+          onClick={() => { if (!loading) fetchLogs(); }}
           disabled={loading}
-          className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+          className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
         >
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          <span>Reîmprospătează</span>
+          <span>{loading ? 'Se actualizează...' : 'Reîmprospătează'}</span>
         </button>
       </div>
 
@@ -192,10 +192,19 @@ export default function EmailHistoryPage() {
         {/* MOBILE CARDS VIEW */}
         <div className="md:hidden divide-y divide-slate-100">
           {loading ? (
-            <div className="p-8 text-center text-slate-400 text-sm">
-              <Clock className="w-6 h-6 animate-spin mx-auto mb-2" />
-              Se încarcă istoricul...
-            </div>
+            [...Array(5)].map((_, idx) => (
+              <div key={idx} className="p-4 space-y-2.5 animate-pulse">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h-5 w-20 bg-slate-200 rounded-md" />
+                  <div className="h-6 w-16 bg-slate-200 rounded-lg" />
+                </div>
+                <div className="h-4 bg-slate-200 rounded-lg w-4/5" />
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <div className="h-3.5 bg-slate-100 rounded w-40" />
+                  <div className="h-3.5 bg-slate-100 rounded w-24" />
+                </div>
+              </div>
+            ))
           ) : filteredLogs.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-sm font-medium">
               Nu am găsit niciun email în istoric.
@@ -253,12 +262,15 @@ export default function EmailHistoryPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400">
-                    <Clock className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    Se încarcă istoricul...
-                  </td>
-                </tr>
+                [...Array(5)].map((_, idx) => (
+                  <tr key={idx} className="border-b border-slate-50 last:border-0 animate-pulse">
+                    <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-100 rounded-lg" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-44 bg-slate-200 rounded-lg" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-56 bg-slate-200 rounded-lg" /></td>
+                    <td className="px-6 py-4"><div className="h-5 w-20 bg-slate-100 rounded-md" /></td>
+                    <td className="px-6 py-4 text-right"><div className="h-6 w-16 bg-slate-200 rounded-lg ml-auto" /></td>
+                  </tr>
+                ))
               ) : filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-slate-500 font-medium">Nu am găsit niciun email în istoric.</td>

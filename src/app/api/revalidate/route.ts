@@ -1,13 +1,24 @@
+import crypto from 'crypto';
 import { revalidateTag, revalidatePath } from 'next/cache';
 import { isAdminAuthorized } from '@/app/actions/admin-auth';
 
 export const dynamic = 'force-dynamic';
 
+function isValidBearerSecret(authHeader: string | null, secret: string | undefined): boolean {
+  if (!secret || !authHeader) return false;
+  const expected = `Bearer ${secret}`;
+  const a = Buffer.from(authHeader, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 export async function GET(request: Request) {
   const isAuthorized = await isAdminAuthorized();
-  const secret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get('authorization');
-  const isSecretMatch = Boolean(secret && authHeader === `Bearer ${secret}`);
+  const isSecretMatch = isValidBearerSecret(
+    request.headers.get('authorization'),
+    process.env.CRON_SECRET
+  );
 
   if (!isAuthorized && !isSecretMatch) {
     return new Response('Unauthorized', { status: 401 });
@@ -24,8 +35,8 @@ export async function GET(request: Request) {
   revalidatePath('/api/reviews');
   revalidatePath('/api/sameday/lockers');
   revalidatePath('/sitemap.xml');
-  return new Response('All caches cleared successfully', { 
+  return new Response('All caches cleared successfully', {
     status: 200,
-    headers: { 'Cache-Control': 'no-store, max-age=0' }
+    headers: { 'Cache-Control': 'no-store, max-age=0' },
   });
 }

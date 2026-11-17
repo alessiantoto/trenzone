@@ -716,18 +716,18 @@ function AffiliatePortalView({
                 type="button"
                 onClick={() => onOpenApprove(affiliate)}
                 disabled={processingId === affiliate.id}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-black rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <CheckCircle2 size={14} />
-                <span>Aprobă Afiliat & Activează Cod</span>
+                <span>{processingId === affiliate.id ? 'Se procesează...' : 'Aprobă Afiliat & Activează Cod'}</span>
               </button>
               <button
                 type="button"
                 onClick={() => onReject(affiliate.id)}
                 disabled={processingId === affiliate.id}
-                className="px-4 py-2 bg-white hover:bg-red-50 text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 bg-white hover:bg-red-50 active:scale-[0.98] text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
               >
-                Respinge
+                {processingId === affiliate.id ? 'Se respinge...' : 'Respinge'}
               </button>
             </>
           ) : (
@@ -736,7 +736,7 @@ function AffiliatePortalView({
                 type="button"
                 onClick={() => onOpenEdit(affiliate)}
                 disabled={processingId === affiliate.id}
-                className="px-4 py-2 bg-[#e32f8c] hover:bg-[#00bad9] text-slate-950 text-xs font-black rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 bg-[#e32f8c] hover:bg-[#00bad9] active:scale-[0.98] text-slate-950 text-xs font-black rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Pencil size={13} />
                 <span>Editează Cod & Comision</span>
@@ -747,18 +747,18 @@ function AffiliatePortalView({
                   type="button"
                   onClick={() => onSuspend(affiliate.id)}
                   disabled={processingId === affiliate.id}
-                  className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                  className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 active:scale-[0.98] text-amber-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
                 >
-                  Dezactivează Cod
+                  {processingId === affiliate.id ? 'Se dezactivează...' : 'Dezactivează Cod'}
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => onActivate(affiliate.id)}
                   disabled={processingId === affiliate.id}
-                  className="px-3.5 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                  className="px-3.5 py-2 bg-emerald-100 hover:bg-emerald-200 active:scale-[0.98] text-emerald-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
                 >
-                  Reactivează Cod
+                  {processingId === affiliate.id ? 'Se reactivează...' : 'Reactivează Cod'}
                 </button>
               )}
             </>
@@ -896,7 +896,7 @@ export default function AffiliatesPage() {
   };
 
   const handleConfirmPayout = async () => {
-    if (!payoutAffiliate) return;
+    if (!payoutAffiliate || isRecordingPayout) return;
     const amount = Number(payoutAmount);
     if (!amount || isNaN(amount) || amount <= 0) {
       toast.error('Te rugăm să introduci o sumă validă.');
@@ -977,7 +977,7 @@ export default function AffiliatesPage() {
   };
 
   const handleConfirmEdit = async () => {
-    if (!editingData) return;
+    if (!editingData || processingId) return;
     if (!editingData.code) {
       toast.error('Te rugăm să introduci un cod de reducere.');
       return;
@@ -1001,7 +1001,7 @@ export default function AffiliatesPage() {
   };
 
   const handleConfirmApprove = async () => {
-    if (!approvingData) return;
+    if (!approvingData || processingId) return;
     if (!approvingData.code) {
       toast.error('Te rugăm să introduci sau să selectezi un cod de reducere.');
       return;
@@ -1025,6 +1025,7 @@ export default function AffiliatesPage() {
 
   const handleCreateAffiliate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreating) return;
     if (!newAffiliate.name || !newAffiliate.email || !newAffiliate.code) {
       toast.error('Numele, email-ul și codul de reducere sunt obligatorii.');
       return;
@@ -1048,6 +1049,7 @@ export default function AffiliatesPage() {
 
 
   const handleReject = async (id: string) => {
+    if (processingId) return;
     setProcessingId(id);
     const res = await rejectAffiliate(id);
     if (res.success) {
@@ -1060,6 +1062,7 @@ export default function AffiliatesPage() {
   };
 
   const handleSuspend = async (id: string) => {
+    if (processingId) return;
     setProcessingId(id);
     const res = await suspendAffiliate(id);
     if (res.success) {
@@ -1072,6 +1075,7 @@ export default function AffiliatesPage() {
   };
 
   const handleActivate = async (id: string) => {
+    if (processingId) return;
     setProcessingId(id);
     const res = await activateAffiliate(id);
     if (res.success) {
@@ -1084,6 +1088,7 @@ export default function AffiliatesPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (processingId) return;
     setProcessingId(id);
     const res = await deleteAffiliate(id);
     if (res.success) {
@@ -1125,13 +1130,58 @@ export default function AffiliatesPage() {
         </div>
         <button 
           id="btn-add-affiliate"
+          type="button"
           onClick={() => setIsAddModalOpen(true)} 
-          className="h-10 px-4 bg-[#e32f8c] text-black rounded-lg text-[13px] font-bold hover:bg-[#c41a72] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
+          className="h-10 px-4 bg-[#e32f8c] text-black rounded-lg text-[13px] font-bold hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
         >
           <Plus size={16} /> Adaugă Afiliat
         </button>
       </div>
 
+      {loading ? (
+        <div className="space-y-8 animate-pulse">
+          {/* 4 KPI Card Skeletons */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+            {[...Array(4)].map((_, idx) => (
+              <div key={idx} className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h-3 w-24 bg-slate-200 rounded" />
+                  <div className="w-4 h-4 rounded bg-slate-200" />
+                </div>
+                <div className="h-7 w-28 bg-slate-200 rounded-lg" />
+                <div className="h-3 w-36 bg-slate-100 rounded" />
+              </div>
+            ))}
+          </div>
+
+          {/* Search & Table Skeleton */}
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              <div className="h-10 w-full md:max-w-md bg-slate-100 rounded-xl" />
+              <div className="h-9 w-full md:w-28 bg-slate-100 rounded-xl" />
+            </div>
+            <div className="divide-y divide-slate-100">
+              {[...Array(5)].map((_, idx) => (
+                <div key={idx} className="p-4 sm:px-6 sm:py-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-slate-200 shrink-0" />
+                    <div className="space-y-1.5 flex-1 max-w-xs">
+                      <div className="h-4 w-32 bg-slate-200 rounded" />
+                      <div className="h-3 w-44 bg-slate-100 rounded" />
+                    </div>
+                  </div>
+                  <div className="hidden md:block h-6 w-20 bg-slate-100 rounded" />
+                  <div className="hidden md:block h-4 w-24 bg-slate-100 rounded" />
+                  <div className="hidden md:block h-4 w-24 bg-slate-200 rounded" />
+                  <div className="hidden md:block h-6 w-16 bg-slate-100 rounded-full" />
+                  <div className="h-8 w-28 bg-slate-200 rounded-xl shrink-0" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
           <div className="flex items-center justify-between gap-1">
@@ -1455,6 +1505,8 @@ export default function AffiliatesPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* AFFILIATE PORTAL MODAL */}
       {selectedPortalAffiliate && (
@@ -1633,7 +1685,7 @@ export default function AffiliatesPage() {
                 <button 
                   type="submit" 
                   disabled={isCreating}
-                  className="w-full h-12 bg-[#e32f8c] text-black rounded-xl font-bold hover:bg-[#c41a72] transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                  className="w-full h-12 bg-[#e32f8c] text-black rounded-xl font-bold hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
                 >
                   {isCreating ? (
                     <><Loader2 size={18} className="animate-spin" /> Se salvează...</>
@@ -1713,7 +1765,7 @@ export default function AffiliatesPage() {
                 type="button" 
                 onClick={handleConfirmApprove}
                 disabled={!!processingId}
-                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto"
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto cursor-pointer"
               >
                 {processingId ? (
                   <><Loader2 size={16} className="animate-spin" /> Se aprobă...</>
@@ -1793,7 +1845,7 @@ export default function AffiliatesPage() {
                 type="button" 
                 onClick={handleConfirmEdit}
                 disabled={!!processingId}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto cursor-pointer"
               >
                 {processingId ? (
                   <><Loader2 size={16} className="animate-spin" /> Se salvează...</>
@@ -1904,7 +1956,7 @@ export default function AffiliatesPage() {
                 type="button" 
                 onClick={handleConfirmPayout}
                 disabled={isRecordingPayout}
-                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto"
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 w-full sm:w-auto cursor-pointer"
               >
                 {isRecordingPayout ? (
                   <><Loader2 size={16} className="animate-spin" /> Se înregistrează...</>

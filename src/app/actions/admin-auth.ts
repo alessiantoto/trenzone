@@ -3,6 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from "@/lib/ratelimit";
 
 const AUTHORIZED_FALLBACK_EMAILS = [
   'vladislavmaliuc11@gmail.com',
@@ -60,8 +62,26 @@ export async function isAdminAuthorized(): Promise<boolean> {
  * Server action to verify admin authorization for a given email
  */
 export async function verifyAdminEmail(email: string): Promise<boolean> {
-  const cleanEmail = email.toLowerCase().trim();
-  
+  if (!email || typeof email !== 'string') return false;
+
+  let ip = 'unknown';
+  try {
+    const headersList = await headers();
+    ip = getClientIpFromHeaders(headersList);
+  } catch {
+    // Fallback if headers unavailable
+  }
+
+  const { allowed } = await checkRateLimit(rateLimiters.affiliateLogin, `admin-email:${ip}`, 'affiliateLogin');
+  if (!allowed) {
+    return false;
+  }
+
+  const cleanEmail = email.toLowerCase().trim().slice(0, 150);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return false;
+  }
+
   if (AUTHORIZED_FALLBACK_EMAILS.includes(cleanEmail)) {
     return true;
   }

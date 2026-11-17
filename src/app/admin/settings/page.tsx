@@ -386,14 +386,15 @@ function ModernMaintenanceDatePicker({
             <button
               type="button"
               onClick={async () => {
+                if (saving) return;
                 await onSave();
                 setIsOpen(false);
               }}
               disabled={saving}
-              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-colors cursor-pointer shadow-sm flex items-center gap-1.5"
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check size={14} className="text-[#e32f8c]" />}
-              <span>Salvează Data</span>
+              <span>{saving ? 'Se salvează...' : 'Salvează Data'}</span>
             </button>
           </div>
         </div>
@@ -403,9 +404,9 @@ function ModernMaintenanceDatePicker({
       {!isOpen && (
         <button
           type="button"
-          onClick={() => onSave()}
+          onClick={() => { if (!saving) onSave(); }}
           disabled={saving}
-          className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+          className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all disabled:opacity-50 cursor-pointer shadow-sm"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check size={14} className="text-[#e32f8c]" />}
           <span>{saving ? 'Se salvează data...' : 'Salvează Data Mentenanței'}</span>
@@ -478,6 +479,7 @@ export default function AdminSettingsPage() {
   }, []);
 
   const executeToggle = async (newValue: boolean) => {
+    if (saving) return;
     setSaving(true);
     try {
       await toggleMaintenanceMode(newValue);
@@ -496,6 +498,7 @@ export default function AdminSettingsPage() {
   };
 
   const handleToggle = async () => {
+    if (saving || loading) return;
     const newValue = !isMaintenance;
     if (newValue) {
       setShowMaintenanceModal(true);
@@ -505,7 +508,7 @@ export default function AdminSettingsPage() {
   };
 
   const handleSavePassword = async () => {
-    if (!password) return;
+    if (!password || pwdSaving) return;
     setPwdSaving(true);
     try {
       await setMaintenancePassword(password);
@@ -520,6 +523,7 @@ export default function AdminSettingsPage() {
   };
 
   const handleSaveEndDate = async (overrideDate?: string) => {
+    if (endDateSaving) return;
     setEndDateSaving(true);
     try {
       const dateToSave = overrideDate !== undefined ? overrideDate : endDate;
@@ -534,7 +538,7 @@ export default function AdminSettingsPage() {
   };
 
   const handleAddAdmin = async () => {
-    if (!newAdminEmail) return;
+    if (!newAdminEmail || adminSaving) return;
     setAdminSaving(true);
     try {
       const newUser = await addAdminUser(newAdminEmail, newAdminName || 'Admin');
@@ -551,6 +555,7 @@ export default function AdminSettingsPage() {
   };
 
   const handleRemoveAdmin = async (id: string, email: string) => {
+    if (deletingId) return;
     setDeletingId(id);
     try {
       await removeAdminUser(id);
@@ -565,6 +570,7 @@ export default function AdminSettingsPage() {
   };
 
   const handleSaveRates = async () => {
+    if (ratesSaving) return;
     setRatesSaving(true);
     try {
       // Validate all rates are positive numbers
@@ -654,7 +660,7 @@ export default function AdminSettingsPage() {
           <div className="flex items-center gap-2 text-xs sm:text-sm font-bold pt-4 mt-4 border-t border-slate-100 flex-wrap">
             <span className="text-slate-500">Status Site:</span> 
             {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+              <div className="h-5 w-36 bg-slate-200 rounded-full animate-pulse" />
             ) : isMaintenance ? (
               <span className="text-red-600 bg-red-50 border border-red-200/80 px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider">
                 ACTIV (Blocat)
@@ -724,9 +730,10 @@ export default function AdminSettingsPage() {
                 className="flex-1 h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-base sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] focus:ring-1 focus:ring-[#e32f8c]/20"
               />
               <button
+                type="button"
                 onClick={handleSavePassword}
                 disabled={pwdSaving || !password}
-                className="h-11 bg-[#e32f8c] text-black px-5 rounded-xl font-black text-sm hover:bg-[#c41a72] active:scale-95 transition-all disabled:opacity-50 disabled:hover:bg-[#e32f8c] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-[#e32f8c]/20 shrink-0"
+                className="h-11 bg-[#e32f8c] text-black px-5 rounded-xl font-black text-sm hover:bg-[#c41a72] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:bg-[#e32f8c] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-[#e32f8c]/20 shrink-0"
               >
                 {pwdSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock size={15} />}
                 <span>{pwdSaving ? 'Se setează...' : 'Setează'}</span>
@@ -767,12 +774,13 @@ export default function AdminSettingsPage() {
                   className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-base sm:text-sm font-medium focus:outline-none focus:border-[#e32f8c]"
                 />
                 <button
+                  type="button"
                   onClick={handleAddAdmin}
                   disabled={adminSaving || !newAdminEmail}
-                  className="h-11 bg-slate-900 text-white px-5 rounded-xl font-black text-sm hover:bg-slate-800 active:scale-98 transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                  className="h-11 bg-slate-900 text-white px-5 rounded-xl font-black text-sm hover:bg-slate-800 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                 >
                   {adminSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus size={16} />} 
-                  <span>Adaugă Administrator</span>
+                  <span>{adminSaving ? 'Se adaugă...' : 'Adaugă Administrator'}</span>
                 </button>
               </div>
             </div>
@@ -781,7 +789,18 @@ export default function AdminSettingsPage() {
               <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-3">Administratori Curenți</h3>
               
               {loading ? (
-                <div className="flex justify-center p-6"><Loader2 className="w-6 h-6 animate-spin text-[#e32f8c]" /></div>
+                <div className="space-y-2.5 animate-pulse">
+                  {[...Array(3)].map((_, idx) => (
+                    <div key={idx} className="bg-white border border-slate-200/80 p-3.5 sm:p-4 rounded-xl flex items-center justify-between gap-3">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="h-4 w-48 bg-slate-200 rounded" />
+                        <div className="h-3 w-28 bg-slate-100 rounded" />
+                        <div className="h-4 w-16 bg-slate-100 rounded-full" />
+                      </div>
+                      <div className="w-9 h-9 bg-slate-100 rounded-lg shrink-0" />
+                    </div>
+                  ))}
+                </div>
               ) : adminUsers.length === 0 ? (
                 <div className="text-center p-6 text-xs sm:text-sm font-bold text-slate-400">Niciun administrator configurat.</div>
               ) : (
@@ -839,7 +858,16 @@ export default function AdminSettingsPage() {
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
-            {Object.entries(rates).map(([currency, value]) => (
+            {loading ? (
+              [...Array(5)].map((_, idx) => (
+                <div key={idx} className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-slate-100 space-y-2 animate-pulse">
+                  <div className="h-3 w-16 bg-slate-200 rounded" />
+                  <div className="h-11 bg-white border border-slate-200 rounded-xl" />
+                  <div className="h-2.5 w-24 bg-slate-200/70 rounded" />
+                </div>
+              ))
+            ) : (
+            Object.entries(rates).map(([currency, value]) => (
               <div key={currency} className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-slate-100">
                 <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
                   {(() => {
@@ -883,17 +911,19 @@ export default function AdminSettingsPage() {
                   })()}
                 </p>
               </div>
-            ))}
+            ))
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3 border-t border-slate-100">
             <button
+              type="button"
               onClick={handleSaveRates}
-              disabled={ratesSaving}
-              className="w-full sm:w-auto min-h-[44px] bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-6 py-3 rounded-xl font-black text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              disabled={ratesSaving || loading}
+              className="w-full sm:w-auto min-h-[44px] bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white px-6 py-3 rounded-xl font-black text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
               {ratesSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw size={16} />}
-              <span>Salvează Cursurile</span>
+              <span>{ratesSaving ? 'Se salvează...' : 'Salvează Cursurile'}</span>
             </button>
             <p className="text-[11px] text-slate-400 leading-relaxed">
               Modificările intră în vigoare imediat pentru toți utilizatorii noi.
@@ -963,10 +993,10 @@ export default function AdminSettingsPage() {
                 type="button"
                 onClick={() => executeToggle(true)}
                 disabled={saving}
-                className="w-full sm:flex-1 min-h-[44px] py-3 px-4 rounded-xl bg-red-600 text-white text-xs sm:text-sm font-black hover:bg-red-700 active:scale-98 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-sm"
+                className="w-full sm:flex-1 min-h-[44px] py-3 px-4 rounded-xl bg-red-600 text-white text-xs sm:text-sm font-black hover:bg-red-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <AlertTriangle size={16} />}
-                Activează Acum
+                <span>{saving ? 'Se activează...' : 'Activează Acum'}</span>
               </button>
             </div>
           </div>

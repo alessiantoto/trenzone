@@ -103,7 +103,7 @@ export function MaintenanceView({
 
   const handleBypass = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password) return;
+    if (bypassing || !password) return;
     setBypassing(true);
     setBypassError('');
     try {
@@ -122,6 +122,7 @@ export function MaintenanceView({
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingEmail) return;
     const trimmed = email.trim();
     if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       setEmailError(isRo ? 'Te rugăm să introduci o adresă de email validă.' : 'Please enter a valid email address.');
@@ -329,7 +330,10 @@ export function MaintenanceView({
                 className="h-12 px-6 bg-[#e32f8c] hover:bg-[#ff3b9e] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_24px_rgba(227,47,140,0.38)] hover:shadow-[0_0_32px_rgba(227,47,140,0.6)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] shrink-0"
               >
                 {submittingEmail ? (
-                  <Loader2 size={16} className="animate-spin" />
+                  <>
+                    <Loader2 size={16} className="animate-spin shrink-0" />
+                    <span>{isRo ? 'Se trimite...' : 'Sending...'}</span>
+                  </>
                 ) : (
                   <>
                     <span>{isRo ? 'Anunță-mă' : 'Notify Me'}</span>
@@ -419,10 +423,13 @@ export function MaintenanceView({
               <button
                 type="submit"
                 disabled={bypassing || !password}
-                className="w-full h-12 bg-white hover:bg-zinc-100 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all disabled:opacity-50 flex justify-center items-center cursor-pointer shadow-lg active:scale-95"
+                className="w-full h-12 bg-white hover:bg-zinc-100 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 cursor-pointer shadow-lg active:scale-[0.98]"
               >
                 {bypassing ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-black" />
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-black shrink-0" />
+                    <span>{isRo ? 'Se verifică...' : 'Verifying...'}</span>
+                  </>
                 ) : (
                   <span>{isRo ? 'Deblochează Accesul' : 'Unlock Store'}</span>
                 )}

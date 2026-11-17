@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, Copy, ArrowRight, Mail } from "lucide-react";
+import { X, Check, Copy, ArrowRight, Mail, Loader2 } from "lucide-react";
 import { useLocale } from "next-intl";
 import { usePathname } from "next/navigation";
 import { validateCoupon } from "@/app/actions/coupons";
@@ -32,6 +32,7 @@ export function ScratchPromoPopup() {
   const [isScratched, setIsScratched] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isApplied, setIsApplied] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
 
   // Fallback newsletter mode state (configurable from Admin)
   const [email, setEmail] = useState("");
@@ -449,6 +450,8 @@ export function ScratchPromoPopup() {
   const activeCode = prize?.code || config?.couponCode || DEFAULT_PROMO_SETTINGS.couponId;
 
   const handleApplyCode = async (targetCode: string, closeAfter: boolean = false) => {
+    if (isApplying) return false;
+    setIsApplying(true);
     const { setCoupon } = useCartStore.getState();
     try {
       const res = await validateCoupon(targetCode, 999999, "RON", locale);
@@ -473,6 +476,8 @@ export function ScratchPromoPopup() {
       toast.error(res.message || (isRo ? "Codul promoțional nu este activ." : "Promo code is unavailable."));
     } catch {
       toast.error(isRo ? "Eroare la aplicarea codului." : "Failed to apply promo code.");
+    } finally {
+      setIsApplying(false);
     }
     return false;
   };
@@ -488,7 +493,7 @@ export function ScratchPromoPopup() {
 
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (isSubmitting || !email.trim()) return;
     setIsSubmitting(true);
     try {
       await subscribeToNewsletter(undefined, email.trim(), isRo ? "ro" : "en", "promo_popup");
@@ -597,7 +602,7 @@ export function ScratchPromoPopup() {
                             <button
                               type="button"
                               onClick={handleCopy}
-                              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors shrink-0 cursor-pointer"
+                              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all active:scale-[0.98] shrink-0 cursor-pointer"
                               aria-label={isRo ? "Copiază codul" : "Copy code"}
                             >
                               {isCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
@@ -607,26 +612,29 @@ export function ScratchPromoPopup() {
                           <div className="mt-2.5 flex items-center justify-center">
                             <button
                               type="button"
+                              disabled={isApplying}
                               onClick={() => handleApplyCode(prize.code, true)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-[#e32f8c] hover:bg-[#f03f99] px-4 py-1.5 text-[11px] font-black uppercase tracking-wider text-white shadow-md transition-colors active:scale-95 cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-[#e32f8c] hover:bg-[#f03f99] px-4 py-1.5 text-[11px] font-black uppercase tracking-wider text-white shadow-md transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
                             >
-                              <Check className="h-3.5 w-3.5" />
-                              <span>{isApplied ? (isRo ? "Aplicat!" : "Applied!") : isRo ? "Aplică în Coș" : "Apply Now"}</span>
+                              {isApplying ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                                  <span>{isRo ? "Se aplică..." : "Applying..."}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="h-3.5 w-3.5 shrink-0" />
+                                  <span>{isApplied ? (isRo ? "Aplicat!" : "Applied!") : isRo ? "Aplică în Coș" : "Apply Now"}</span>
+                                </>
+                              )}
                             </button>
                           </div>
                         </>
                       ) : (
-                        <div className="flex flex-col items-center gap-1.5 text-zinc-400">
-                          <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#e32f8c] border-t-transparent" />
-                          <span className="text-[11px] font-bold uppercase tracking-wider">
-                            {isGeneratingPrize
-                              ? isRo
-                                ? "Se generează codul..."
-                                : "Generating code..."
-                              : isRo
-                                ? "Răzuiește pentru 3%–7%"
-                                : "Scratch to win 3%–7%"}
-                          </span>
+                        <div className="flex flex-col items-center justify-center gap-2.5 w-full">
+                          <div className="h-3 w-24 rounded bg-[#e32f8c]/25 animate-pulse" />
+                          <div className="h-8 w-40 rounded-lg bg-white/10 animate-pulse" />
+                          <div className="h-7 w-28 rounded-lg bg-[#e32f8c]/25 animate-pulse" />
                         </div>
                       )}
                     </div>
@@ -694,10 +702,13 @@ export function ScratchPromoPopup() {
                   {!isScratched ? (
                     <button
                       type="button"
+                      disabled={isGeneratingPrize}
                       onClick={handleInstantReveal}
-                      className="mt-3 text-[11px] font-semibold text-zinc-400 hover:text-white transition-colors"
+                      className="mt-3 text-[11px] font-semibold text-zinc-400 hover:text-white transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
                     >
-                      {copy.skipLink || (isRo ? "Dezvăluie instant" : "Reveal instantly")} →
+                      {isGeneratingPrize
+                        ? (isRo ? "Se dezvăluie..." : "Revealing...")
+                        : `${copy.skipLink || (isRo ? "Dezvăluie instant" : "Reveal instantly")} →`}
                     </button>
                   ) : (
                     <p className="mt-2.5 text-[11px] text-zinc-400">
@@ -715,6 +726,7 @@ export function ScratchPromoPopup() {
                     <input
                       type="email"
                       required
+                      disabled={isSubmitting}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={isRo ? "Introdu emailul tău..." : "Enter your email..."}
@@ -723,11 +735,20 @@ export function ScratchPromoPopup() {
                   </div>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#e32f8c] text-xs font-black uppercase tracking-[0.14em] text-white shadow-lg"
+                    disabled={isSubmitting || !email.trim()}
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#e32f8c] hover:bg-[#ff3b9e] text-xs font-black uppercase tracking-[0.14em] text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    <span>{copy.button}</span>
-                    <ArrowRight className="h-4 w-4" />
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                        <span>{isRo ? "Se deblochează..." : "Unlocking..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>{copy.button}</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
                   </button>
                 </form>
               ) : (

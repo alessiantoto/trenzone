@@ -308,9 +308,106 @@ export default function AdminAnalyticsPage() {
 
   if (loading && !data) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[55vh] gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-[#e32f8c]" />
-        <p className="text-xs font-bold text-slate-500">Se încarcă telemetria GA4 și statisticile marketing...</p>
+      <div className="pb-16 text-slate-900 max-w-[1400px] mx-auto space-y-5 sm:space-y-6 animate-pulse">
+        {/* Header + Range Pills Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="space-y-2 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="h-6 w-6 rounded-lg bg-slate-200" />
+              <div className="h-6 w-64 sm:w-80 rounded-lg bg-slate-200" />
+              <div className="h-5 w-24 rounded-full bg-slate-100" />
+            </div>
+            <div className="h-3.5 w-64 rounded bg-slate-100" />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-7 w-14 rounded-lg bg-slate-200/80" />
+              ))}
+            </div>
+            <div className="h-9 w-36 rounded-xl bg-slate-100" />
+            <div className="h-9 w-24 rounded-xl bg-slate-200" />
+          </div>
+        </div>
+
+        {/* Dark Hero: 4 KPI Cards + Chart Skeleton */}
+        <div className="bg-[#09090d] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/10 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/[0.08]">
+            <div className="h-9 w-56 rounded-2xl bg-white/10" />
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-24 rounded-full bg-white/[0.07]" />
+              <div className="h-6 w-28 rounded-full bg-white/[0.07]" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-2xl p-3.5 border border-white/[0.08] bg-white/[0.04] space-y-2">
+                <div className="h-3 w-20 rounded bg-white/10" />
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="h-7 w-20 rounded bg-white/15" />
+                  <div className="h-4 w-10 rounded bg-white/10" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="h-[220px] sm:h-[260px] w-full rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-end gap-2 sm:gap-3 p-4 pt-8">
+            {[42, 65, 50, 80, 68, 90, 58, 74, 85, 62, 78, 88].map((h, i) => (
+              <div key={i} style={{ height: `${h}%` }} className="flex-1 rounded-t-lg bg-white/[0.06]" />
+            ))}
+          </div>
+        </div>
+
+        {/* 5-Step Funnel Skeleton */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-1.5">
+              <div className="h-5 w-56 rounded bg-slate-200" />
+              <div className="h-3.5 w-72 rounded bg-slate-100" />
+            </div>
+            <div className="h-7 w-36 rounded-xl bg-slate-100" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-3">
+                <div className="flex items-center justify-between gap-1">
+                  <div className="h-3 w-24 rounded bg-slate-200" />
+                  <div className="h-4 w-9 rounded-full bg-slate-200" />
+                </div>
+                <div className="h-7 w-16 rounded bg-slate-200" />
+                <div className="h-1.5 w-full rounded-full bg-slate-200" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Marketing Cards Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs lg:col-span-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="h-5 w-44 rounded bg-slate-200" />
+              <div className="h-4 w-20 rounded bg-slate-100" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="h-20 rounded-xl bg-slate-50 border border-slate-100" />
+              <div className="h-20 rounded-xl bg-slate-50 border border-slate-100" />
+            </div>
+            <div className="h-16 rounded-xl bg-slate-900/90" />
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs lg:col-span-7 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="h-5 w-52 rounded bg-slate-200" />
+              <div className="h-4 w-24 rounded bg-slate-100" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-20 rounded-xl bg-slate-50 border border-slate-100" />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -363,13 +460,14 @@ export default function AdminAnalyticsPage() {
                 key={opt.key}
                 type="button"
                 onClick={() => setRange(opt.key)}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-[0.98] shrink-0 cursor-pointer inline-flex items-center gap-1.5 ${
                   range === opt.key
                     ? 'bg-slate-900 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
                 }`}
               >
-                {opt.label}
+                {loading && range === opt.key && <Loader2 size={11} className="animate-spin" />}
+                <span>{opt.label}</span>
               </button>
             ))}
           </div>
@@ -380,7 +478,7 @@ export default function AdminAnalyticsPage() {
                 key={c.code}
                 type="button"
                 onClick={() => setSelectedCurrency(c.code)}
-                className={`px-2 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                className={`px-2 py-1.5 rounded-lg text-[11px] font-black transition-all active:scale-[0.98] cursor-pointer ${
                   selectedCurrency === c.code
                     ? 'bg-[#e32f8c] text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
@@ -394,16 +492,20 @@ export default function AdminAnalyticsPage() {
           <button
             type="button"
             onClick={() => loadAnalytics(range, true)}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer disabled:opacity-60"
+            disabled={refreshing || loading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
           >
-            <RefreshCw size={13} className={refreshing ? 'animate-spin text-[#e32f8c]' : ''} />
-            <span className="hidden sm:inline">Actualizează</span>
+            {refreshing || loading ? (
+              <Loader2 size={13} className="animate-spin text-[#e32f8c]" />
+            ) : (
+              <RefreshCw size={13} />
+            )}
+            <span className="hidden sm:inline">{refreshing || loading ? 'Se actualizează...' : 'Actualizează'}</span>
           </button>
 
           <Link
             href="/admin"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all active:scale-[0.98]"
           >
             <ArrowLeft size={13} />
             <span>Dashboard</span>
@@ -540,7 +642,7 @@ export default function AdminAnalyticsPage() {
             <button
               type="button"
               onClick={() => setChartMetric('sessions')}
-              className={`text-left rounded-2xl p-3.5 border transition-all cursor-pointer ${
+              className={`text-left rounded-2xl p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
                 chartMetric === 'sessions'
                   ? 'bg-white/[0.11] border-[#e32f8c]/60'
                   : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'
@@ -556,7 +658,7 @@ export default function AdminAnalyticsPage() {
             <button
               type="button"
               onClick={() => setChartMetric('users')}
-              className={`text-left rounded-2xl p-3.5 border transition-all cursor-pointer ${
+              className={`text-left rounded-2xl p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
                 chartMetric === 'users'
                   ? 'bg-white/[0.11] border-sky-400/60'
                   : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'
@@ -572,7 +674,7 @@ export default function AdminAnalyticsPage() {
             <button
               type="button"
               onClick={() => setChartMetric('pageviews')}
-              className={`text-left rounded-2xl p-3.5 border transition-all cursor-pointer ${
+              className={`text-left rounded-2xl p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
                 chartMetric === 'pageviews'
                   ? 'bg-white/[0.11] border-emerald-400/60'
                   : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'

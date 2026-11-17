@@ -2,7 +2,7 @@
 
 import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Plus, Package, Image as ImageIcon, X, Save, Trash2, ChevronDown, Check, Search, ExternalLink, Edit, FileText } from 'lucide-react';
+import { Plus, Package, Image as ImageIcon, X, Save, Trash2, ChevronDown, Check, Search, ExternalLink, Edit, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { deleteProductServer } from '@/app/actions/products';
@@ -29,7 +29,7 @@ function VariantRow({ v, variants, setVariants, setCroppingImage, variantType }:
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+  return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const updateField = (key: string, value: any) => {
@@ -218,6 +218,7 @@ export default function ProductsPage() {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [savingMatrix, setSavingMatrix] = useState(false);
+  const [togglingProductIds, setTogglingProductIds] = useState<Record<string, boolean>>({});
 
   const teeStockProduct = useMemo(
     () =>
@@ -270,6 +271,8 @@ export default function ProductsPage() {
 
   const handleToggleStatus = async (e: React.MouseEvent, product: any) => {
     e.stopPropagation();
+    if (togglingProductIds[product.id]) return;
+    setTogglingProductIds(prev => ({ ...prev, [product.id]: true }));
     const nextActive = !product.is_active;
     // Optimistic UI update
     setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_active: nextActive, status: nextActive ? 'active' : 'draft' } : p));
@@ -284,6 +287,8 @@ export default function ProductsPage() {
     } catch (err) {
       toast.error("A apărut o eroare neașteptată.");
       fetchProducts();
+    } finally {
+      setTogglingProductIds(prev => ({ ...prev, [product.id]: false }));
     }
   };
 
@@ -392,6 +397,99 @@ export default function ProductsPage() {
     }
   };
 
+  if (loading && products.length === 0) {
+    return (
+      <div className="pb-12 text-slate-900 max-w-6xl mx-auto space-y-5 sm:space-y-6 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="h-7 w-32 rounded-lg bg-slate-200" />
+            <div className="h-4 w-72 max-w-full rounded bg-slate-200/70" />
+          </div>
+          <div className="h-11 w-full md:w-48 rounded-xl bg-slate-200" />
+        </div>
+
+        {/* Search & Filters Skeleton */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="h-11 flex-1 md:max-w-md rounded-xl bg-slate-100" />
+            <div className="grid grid-cols-3 md:flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+              <div className="h-9 w-full md:w-20 rounded-lg bg-white" />
+              <div className="h-9 w-full md:w-24 rounded-lg bg-slate-200/60" />
+              <div className="h-9 w-full md:w-24 rounded-lg bg-slate-200/60" />
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="h-3 w-28 rounded bg-slate-200" />
+            <div className="grid grid-cols-3 sm:flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+              <div className="h-9 w-full sm:w-20 rounded-lg bg-white" />
+              <div className="h-9 w-full sm:w-24 rounded-lg bg-slate-200/60" />
+              <div className="h-9 w-full sm:w-24 rounded-lg bg-slate-200/60" />
+            </div>
+          </div>
+        </div>
+
+        {/* Products Table / Cards Skeleton */}
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+          <div className="md:hidden divide-y divide-slate-100">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-xl bg-slate-100 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-44 rounded bg-slate-200" />
+                    <div className="h-3 w-28 rounded bg-slate-100" />
+                    <div className="h-3 w-20 rounded bg-slate-100" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <div className="h-8 w-24 rounded-xl bg-slate-100" />
+                  <div className="h-5 w-20 rounded bg-slate-200" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-10 flex-1 rounded-xl bg-slate-100" />
+                  <div className="h-10 w-20 rounded-xl bg-slate-100" />
+                  <div className="h-10 w-10 rounded-xl bg-slate-100" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block">
+            <div className="grid grid-cols-5 gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+              <div className="h-3 w-20 rounded bg-slate-200" />
+              <div className="h-3 w-28 rounded bg-slate-200" />
+              <div className="h-3 w-16 rounded bg-slate-200" />
+              <div className="h-3 w-12 rounded bg-slate-200" />
+              <div className="h-3 w-16 rounded bg-slate-200 ml-auto" />
+            </div>
+            <div className="divide-y divide-slate-100">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="px-6 py-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <div className="w-14 h-14 rounded-xl bg-slate-100 shrink-0" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-48 rounded bg-slate-200" />
+                      <div className="h-3 w-32 rounded bg-slate-100" />
+                    </div>
+                  </div>
+                  <div className="h-9 w-24 rounded-xl bg-slate-100 shrink-0" />
+                  <div className="h-5 w-24 rounded-lg bg-slate-100 shrink-0" />
+                  <div className="h-5 w-20 rounded bg-slate-200 shrink-0" />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="h-10 w-24 rounded-lg bg-slate-100" />
+                    <div className="h-10 w-16 rounded-lg bg-slate-100" />
+                    <div className="h-10 w-10 rounded-lg bg-slate-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-6xl mx-auto space-y-5 sm:space-y-6">
       
@@ -403,7 +501,7 @@ export default function ProductsPage() {
         </div>
         <button 
           onClick={() => setSelectedProduct({ id: 'nou', name: '', price: '0', inventory: 0, status: 'draft', image: null, variant_type: 'flavor' })}
-          className="w-full md:w-auto min-h-[44px] h-11 px-5 bg-[#e32f8c] text-black rounded-xl text-sm font-black hover:bg-[#c41a72] transition-all flex items-center justify-center gap-2 shadow-sm shrink-0"
+          className="w-full md:w-auto min-h-[44px] h-11 px-5 bg-[#e32f8c] text-black rounded-xl text-sm font-black hover:bg-[#c41a72] transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-sm shrink-0"
         >
           <Plus size={18} /> Adaugă Produs Nou
         </button>
@@ -438,7 +536,7 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => setStatusFilter('all')}
-              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center whitespace-nowrap ${
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center whitespace-nowrap ${
                 statusFilter === 'all' 
                   ? 'bg-white text-slate-900 shadow-sm' 
                   : 'text-slate-500 hover:text-slate-900'
@@ -449,7 +547,7 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => setStatusFilter('active')}
-              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 statusFilter === 'active' 
                   ? 'bg-white text-green-700 shadow-sm' 
                   : 'text-slate-500 hover:text-slate-900'
@@ -461,7 +559,7 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => setStatusFilter('draft')}
-              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 statusFilter === 'draft' 
                   ? 'bg-white text-slate-700 shadow-sm' 
                   : 'text-slate-500 hover:text-slate-900'
@@ -480,7 +578,7 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => setCategoryFilter('all')}
-              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center whitespace-nowrap ${
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center whitespace-nowrap ${
                 categoryFilter === 'all'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900'
@@ -491,7 +589,7 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => setCategoryFilter('physical')}
-              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 categoryFilter === 'physical'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900'
@@ -503,7 +601,7 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => setCategoryFilter('digital')}
-              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 categoryFilter === 'digital'
                   ? 'bg-white text-purple-700 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900'
@@ -567,13 +665,18 @@ export default function ProductsPage() {
                   <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <button
                       type="button"
+                      disabled={Boolean(togglingProductIds[product.id])}
                       onClick={(e) => handleToggleStatus(e, product)}
-                      className={`min-h-[40px] px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all inline-flex items-center gap-1.5 ${
+                      className={`min-h-[40px] px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 inline-flex items-center gap-1.5 ${
                         product.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                       title="Apasă pentru a comuta statusul"
                     >
-                      <span className={`w-2 h-2 rounded-full ${product.is_active ? 'bg-green-500' : 'bg-slate-400'}`} />
+                      {togglingProductIds[product.id] ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <span className={`w-2 h-2 rounded-full ${product.is_active ? 'bg-green-500' : 'bg-slate-400'}`} />
+                      )}
                       {product.is_active ? 'Activ' : 'Ciornă'}
                     </button>
                     {product.is_digital ? (
@@ -687,15 +790,20 @@ export default function ProductsPage() {
                     <td className="px-6 py-4">
                       <button
                         type="button"
+                        disabled={Boolean(togglingProductIds[product.id])}
                         onClick={(e) => handleToggleStatus(e, product)}
-                        className={`min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm ${
+                        className={`min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 shadow-sm ${
                           product.is_active 
                             ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200' 
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
                         }`}
                         title="Click pentru a comuta statusul (Activ / Ciornă)"
                       >
-                        <span className={`w-2 h-2 rounded-full ${product.is_active ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                        {togglingProductIds[product.id] ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <span className={`w-2 h-2 rounded-full ${product.is_active ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                        )}
                         {product.is_active ? 'Activ' : 'Ciornă'}
                       </button>
                     </td>
@@ -965,13 +1073,13 @@ export default function ProductsPage() {
               <button 
                 onClick={handleSave} 
                 disabled={isSaving}
-                className="w-full h-12 bg-[#e32f8c] text-black rounded-xl font-bold hover:bg-[#c41a72] transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                className="w-full h-12 bg-[#e32f8c] text-black rounded-xl font-bold hover:bg-[#c41a72] transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
               >
-                {isSaving ? 'Se salvează...' : <><Save size={18} /> Salvează Modificările</>}
+                {isSaving ? <><Loader2 size={18} className="animate-spin" /> Se salvează...</> : <><Save size={18} /> Salvează Modificările</>}
               </button>
               <button 
                 onClick={() => { setProductToDelete(selectedProduct); setSelectedProduct(null); }} 
-                className="w-full h-12 bg-white border border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-50 hover:border-red-300 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                className="w-full h-12 bg-white border border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-50 hover:border-red-300 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-sm"
               >
                 <Trash2 size={18} /> Șterge Produsul
               </button>
@@ -1003,9 +1111,9 @@ export default function ProductsPage() {
               <button 
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="flex-1 min-h-[44px] px-4 py-2.5 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 min-h-[44px] px-4 py-2.5 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {isDeleting ? 'Se șterge...' : 'Da, Șterge'}
+                {isDeleting ? <><Loader2 size={16} className="animate-spin" /> Se șterge...</> : 'Da, Șterge'}
               </button>
             </div>
           </div>

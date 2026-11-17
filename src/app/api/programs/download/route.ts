@@ -7,16 +7,30 @@ import {
   type SingleProgramKey,
 } from '@/lib/program-pdf-generator';
 import type { DigitalProgramLanguage } from '@/lib/programs';
+import { rateLimiters, getClientIp, checkRateLimit } from '@/lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    const ip = getClientIp(req);
+    const { allowed, retryAfter, headers: rlHeaders } = await checkRateLimit(
+      rateLimiters.programDownload,
+      ip,
+      'programDownload'
+    );
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many download requests. Please try again shortly.', retryAfter },
+        { status: 429, headers: { ...rlHeaders, 'Cache-Control': 'private, no-store, max-age=0' } }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const rawProgram = String(searchParams.get('program') || '').trim().toLowerCase();
     const rawLang = String(searchParams.get('lang') || 'ro').trim().toLowerCase();
-    const orderId = String(searchParams.get('order') || '').trim();
-    const token = String(searchParams.get('token') || '').trim();
+    const orderId = String(searchParams.get('order') || '').trim().slice(0, 128);
+    const token = String(searchParams.get('token') || '').trim().slice(0, 128);
     const isAdminPreview = searchParams.get('admin') === '1';
 
     const cleanProgram = rawProgram.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -34,7 +48,7 @@ export async function GET(req: Request) {
     if (!programKey) {
       return NextResponse.json(
         { error: 'Invalid program requested.' },
-        { status: 400 }
+        { status: 400, headers: { 'Cache-Control': 'private, no-store, max-age=0' } }
       );
     }
 
@@ -51,7 +65,7 @@ export async function GET(req: Request) {
     if (!authorized) {
       return NextResponse.json(
         { error: lang === 'en' ? 'Download link is invalid or unauthorized.' : 'Link-ul de descărcare este invalid sau neautorizat.' },
-        { status: 403 }
+        { status: 403, headers: { 'Cache-Control': 'private, no-store, max-age=0' } }
       );
     }
 
@@ -64,7 +78,9 @@ export async function GET(req: Request) {
         const targetUrl = storedEntry.url.includes('.supabase.co/storage/')
           ? `${storedEntry.url}${storedEntry.url.includes('?') ? '&' : '?'}download=${encodeURIComponent(storedEntry.filename)}`
           : storedEntry.url;
-        return NextResponse.redirect(targetUrl, 307);
+        const redirectRes = NextResponse.redirect(targetUrl, 307);
+        redirectRes.headers.set('Cache-Control', 'private, no-store, max-age=0');
+        return redirectRes;
       }
     }
 
@@ -83,25 +99,33 @@ export async function GET(req: Request) {
 </html>`;
       return new NextResponse(html, {
         status: 404,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'private, no-store, max-age=0',
+          'X-Content-Type-Options': 'nosniff',
+        },
       });
     }
 
     const { buffer, filename } = result;
+    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '-');
 
     if (buffer.byteLength > 3.8 * 1024 * 1024 && storedEntry) {
       const targetUrl = storedEntry.url.includes('.supabase.co/storage/')
-        ? `${storedEntry.url}${storedEntry.url.includes('?') ? '&' : '?'}download=${encodeURIComponent(filename)}`
+        ? `${storedEntry.url}${storedEntry.url.includes('?') ? '&' : '?'}download=${encodeURIComponent(safeFilename)}`
         : storedEntry.url;
-      return NextResponse.redirect(targetUrl, 307);
+      const redirectRes = NextResponse.redirect(targetUrl, 307);
+      redirectRes.headers.set('Cache-Control', 'private, no-store, max-age=0');
+      return redirectRes;
     }
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${safeFilename}"`,
         'Cache-Control': 'private, no-store, max-age=0',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (err: any) {
@@ -109,7 +133,7 @@ export async function GET(req: Request) {
     const reqLang = new URL(req.url).searchParams.get('lang') === 'en' ? 'en' : 'ro';
     return NextResponse.json(
       { error: reqLang === 'en' ? 'Failed to generate/download PDF.' : 'Eroare la generarea/descărcarea PDF-ului.' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'private, no-store, max-age=0' } }
     );
   }
 }

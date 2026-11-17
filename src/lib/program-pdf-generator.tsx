@@ -11,14 +11,61 @@ export type StoredProgramFiles = Record<string, string>;
 
 const STORE_SETTING_KEY = 'digital_programs_files';
 
+let ephemeralDevSecret: string | null = null;
+
 function getSigningSecret(): string {
-  return (
+  const configured =
     process.env.PROGRAM_DOWNLOAD_SECRET ||
     process.env.CSRF_SECRET ||
     process.env.ADMIN_PASSWORD_HASH ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    'trenzone-digital-program-secret-v1'
-  );
+    process.env.STRIPE_SECRET_KEY;
+
+  if (configured && configured.trim().length >= 16) {
+    return configured.trim();
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[PROGRAM PDF] Missing server signing secret environment variable.');
+  }
+
+  if (!ephemeralDevSecret) {
+    ephemeralDevSecret = crypto.randomBytes(32).toString('hex');
+  }
+  return ephemeralDevSecret;
+}
+
+function isAllowedProgramFileUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host.endsWith('.supabase.co') ||
+      host.endsWith('.r2.dev') ||
+      host.endsWith('.r2.cloudflarestorage.com') ||
+      host === 'cdn.trenzone.fit' ||
+      host === 'trenzone.fit' ||
+      host === 'www.trenzone.fit'
+    ) {
+      return true;
+    }
+    const extraBase =
+      process.env.NEXT_PUBLIC_CDN_URL ||
+      process.env.NEXT_PUBLIC_R2_URL ||
+      process.env.R2_PUBLIC_URL;
+    if (extraBase) {
+      try {
+        const extraHost = new URL(extraBase.startsWith('http') ? extraBase : `https://${extraBase}`).hostname.toLowerCase();
+        if (host === extraHost) return true;
+      } catch {
+        // ignore invalid env
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 export function createProgramDownloadToken(
@@ -41,8 +88,8 @@ export function verifyProgramDownloadToken(
   token: string
 ): boolean {
   if (!orderId || !token) return false;
-  const expected = createProgramDownloadToken(orderId, programKey, lang);
   try {
+    const expected = createProgramDownloadToken(orderId, programKey, lang);
     const a = Buffer.from(expected, 'utf8');
     const b = Buffer.from(String(token).trim(), 'utf8');
     if (a.length !== b.length) return false;
@@ -140,7 +187,7 @@ export async function getStoredProgramFileUrl(
   const slot: ProgramFileSlot = `${programKey}-${safeLang}`;
   const stored = await getStoredProgramFiles();
   const customUrl = stored[slot];
-  if (customUrl && typeof customUrl === 'string' && customUrl.startsWith('http')) {
+  if (customUrl && typeof customUrl === 'string' && isAllowedProgramFileUrl(customUrl)) {
     return {
       url: customUrl,
       filename: getProgramAttachmentFilename(programKey, safeLang),
@@ -165,7 +212,7 @@ export async function getProgramPdfBuffer(
   try {
     const stored = await getStoredProgramFiles();
     const customUrl = stored[slot];
-    if (customUrl && typeof customUrl === 'string' && customUrl.startsWith('http')) {
+    if (customUrl && typeof customUrl === 'string' && isAllowedProgramFileUrl(customUrl)) {
       const res = await fetch(customUrl, { cache: 'no-store' });
       if (res.ok) {
         const ab = await res.arrayBuffer();

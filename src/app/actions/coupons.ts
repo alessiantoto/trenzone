@@ -7,6 +7,7 @@ import { cookies, headers } from "next/headers";
 import crypto from "crypto";
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from "@/lib/ratelimit";
 import { convertToRon, getProductPrice, getServerExchangeRates } from "@/utils/pricing";
+import type { Coupon } from "@/types/coupon";
 
 export type DiscountType = 'percentage' | 'fixed_amount' | 'free_shipping';
 
@@ -66,12 +67,24 @@ export async function createCoupon(data: Omit<CouponData, 'id' | 'used_count' | 
     return { success: false, error: "Datele cuponului sunt invalide." };
   }
 
+  const cleanCode = data.code.trim().toUpperCase();
+  if (!/^[A-Z0-9_-]{2,50}$/.test(cleanCode)) {
+    return { success: false, error: "Codul cuponului poate conține doar litere, cifre, '-' sau '_' (2-50 caractere)." };
+  }
+
+  const numericValue = Number(data.value);
+  if (data.type !== 'free_shipping') {
+    if (!Number.isFinite(numericValue) || numericValue <= 0 || (data.type === 'percentage' && numericValue > 100)) {
+      return { success: false, error: "Valoarea reducerii este invalidă." };
+    }
+  }
+
   const { error } = await supabaseAdmin
     .from('coupons')
     .insert({
-      code: data.code.toUpperCase(),
+      code: cleanCode,
       type: data.type,
-      value: data.type === 'free_shipping' ? 0 : data.value,
+      value: data.type === 'free_shipping' ? 0 : numericValue,
       usage_limit: data.usage_limit || null,
       expires_at: data.expiry_date || null, // Linked to the expires_at column in schema
       min_purchase: data.min_purchase || null,
@@ -104,12 +117,24 @@ export async function updateCoupon(id: string, data: Omit<CouponData, 'id' | 'us
     return { success: false, error: "Datele cuponului sunt invalide." };
   }
 
+  const cleanCode = data.code.trim().toUpperCase();
+  if (!/^[A-Z0-9_-]{2,50}$/.test(cleanCode)) {
+    return { success: false, error: "Codul cuponului poate conține doar litere, cifre, '-' sau '_' (2-50 caractere)." };
+  }
+
+  const numericValue = Number(data.value);
+  if (data.type !== 'free_shipping') {
+    if (!Number.isFinite(numericValue) || numericValue <= 0 || (data.type === 'percentage' && numericValue > 100)) {
+      return { success: false, error: "Valoarea reducerii este invalidă." };
+    }
+  }
+
   const { error } = await supabaseAdmin
     .from('coupons')
     .update({
-      code: data.code.toUpperCase(),
+      code: cleanCode,
       type: data.type,
-      value: data.type === 'free_shipping' ? 0 : data.value,
+      value: data.type === 'free_shipping' ? 0 : numericValue,
       usage_limit: data.usage_limit || null,
       expires_at: data.expiry_date || null,
       min_purchase: data.min_purchase || null,
@@ -143,7 +168,7 @@ export async function validateCoupon(code: string, subtotal: number = 0, currenc
     try {
       const headersList = await headers();
       const ip = getClientIpFromHeaders(headersList);
-      const { allowed } = await checkRateLimit(rateLimiters.checkoutUpdate, ip, 'validate-coupon');
+      const { allowed } = await checkRateLimit(rateLimiters.validateCoupon, ip, 'validate-coupon');
       if (!allowed) {
         return { isValid: false, message: isEn ? 'Too many attempts. Please wait a moment before trying again.' : 'Prea multe încercări. Așteaptă puțin înainte de a reîncerca.' };
       }
@@ -154,7 +179,7 @@ export async function validateCoupon(code: string, subtotal: number = 0, currenc
     const cleanCode = code.trim().toUpperCase().slice(0, 50);
     const { data: coupon, error } = await supabaseAdmin
       .from('coupons')
-      .select('*')
+      .select('id, code, type, value, min_purchase, max_discount, is_stackable, is_active, usage_limit, used_count, starts_at, expires_at')
       .eq('code', cleanCode)
       .single();
 
@@ -189,7 +214,27 @@ export async function validateCoupon(code: string, subtotal: number = 0, currenc
       return { isValid: false, message: isEn ? `Minimum order value for this code is ${displayMin}.` : `Valoarea minimă a comenzii pentru acest cod este de ${displayMin}.` };
     }
 
-    return { isValid: true, coupon };
+    const sanitizedCoupon: Coupon = {
+      id: coupon.id,
+      code: coupon.code,
+      description: null,
+      type: coupon.type,
+      value: coupon.value,
+      min_purchase: coupon.min_purchase,
+      max_discount: coupon.max_discount,
+      starts_at: null,
+      expires_at: coupon.expires_at ?? null,
+      usage_limit: null,
+      used_count: 0,
+      is_active: true,
+      is_stackable: Boolean(coupon.is_stackable),
+      created_at: '',
+    };
+
+    return {
+      isValid: true,
+      coupon: sanitizedCoupon,
+    };
   } catch (error) {
     console.error("❌ Error validating coupon:", error);
     return { isValid: false, message: isEn ? 'Error validating the code.' : 'Eroare la validarea codului.' };
@@ -267,7 +312,7 @@ export async function generateScratchCoupon() {
     try {
       const headersList = await headers();
       const ip = getClientIpFromHeaders(headersList);
-      const { allowed } = await checkRateLimit(rateLimiters.affiliateLogin, ip, 'scratch-coupon');
+      const { allowed } = await checkRateLimit(rateLimiters.promoScratch, ip, 'scratch-coupon');
       if (!allowed) {
         return { success: false, error: 'Ai generat deja un cupon. Te rugăm să aștepți.' };
       }

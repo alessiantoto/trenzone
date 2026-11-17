@@ -8,9 +8,40 @@ import crypto from 'crypto';
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/ratelimit';
 import { normalizeDropDateToUtcIso, parseUniversalDropEndDateMs } from '@/lib/maintenance-time';
 
+let ephemeralMaintenanceSecret: string | null = null;
+
+function getMaintenanceSigningSecret(): string {
+  const configured =
+    process.env.PROGRAM_DOWNLOAD_SECRET ||
+    process.env.CSRF_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.STRIPE_SECRET_KEY;
+
+  if (configured && configured.trim().length >= 16) {
+    return configured.trim();
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[MAINTENANCE] Missing server signing secret environment variable.');
+  }
+
+  if (!ephemeralMaintenanceSecret) {
+    ephemeralMaintenanceSecret = crypto.randomBytes(32).toString('hex');
+  }
+  return ephemeralMaintenanceSecret;
+}
+
 function computeMaintenanceBypassToken(): string {
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || 'trenzone-maintenance-secret';
-  return crypto.createHmac('sha256', secret).update('maintenance_bypass_v1').digest('hex');
+  return crypto
+    .createHmac('sha256', getMaintenanceSigningSecret())
+    .update('maintenance_bypass_v1')
+    .digest('hex');
+}
+
+function timingSafeStringMatch(a: string, b: string): boolean {
+  const digestA = crypto.createHash('sha256').update(a).digest();
+  const digestB = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(digestA, digestB);
 }
 
 export async function hasValidMaintenanceBypass(): Promise<boolean> {
@@ -151,6 +182,10 @@ export async function setMaintenancePassword(password: string) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
+  if (typeof password !== 'string' || password.trim().length < 4 || password.length > 200) {
+    throw new Error('Parola trebuie să aibă între 4 și 200 de caractere.');
+  }
+
   const { error } = await supabaseAdmin
     .from('global_settings')
     .upsert({ id: 1, maintenance_password: password });
@@ -165,15 +200,21 @@ export async function setMaintenancePassword(password: string) {
 }
 
 export async function verifyMaintenancePassword(password: string) {
+  let ip = 'unknown';
   try {
     const headersList = await headers();
-    const ip = getClientIpFromHeaders(headersList);
-    const { allowed } = await checkRateLimit(rateLimiters.affiliateLogin, ip, 'maintenanceBypass');
-    if (!allowed) {
-      return { success: false, error: 'Prea multe încercări. Așteaptă 1 minut.' };
-    }
+    ip = getClientIpFromHeaders(headersList);
   } catch {
-    // Ignore headers error outside request context
+    // Fallback identifier if called outside standard header scope
+  }
+
+  const { allowed } = await checkRateLimit(rateLimiters.maintenanceBypass, ip, 'maintenanceBypass');
+  if (!allowed) {
+    return { success: false, error: 'Prea multe încercări. Așteaptă 1 minut.' };
+  }
+
+  if (typeof password !== 'string' || password.length === 0 || password.length > 200) {
+    return { success: false, error: 'Parolă incorectă' };
   }
 
   const { data, error } = await supabaseAdmin
@@ -184,7 +225,7 @@ export async function verifyMaintenancePassword(password: string) {
 
   if (error || !data || !data.maintenance_password) return { success: false, error: 'Parolă incorectă' };
 
-  if (data.maintenance_password === password) {
+  if (timingSafeStringMatch(String(data.maintenance_password), password)) {
     // Set a cryptographically signed httpOnly cookie to bypass maintenance
     const cookieStore = await cookies();
     cookieStore.set('maintenance_bypass', computeMaintenanceBypassToken(), {
@@ -215,9 +256,26 @@ export async function setExchangeRates(rates: Record<string, number>) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
+  if (!rates || typeof rates !== 'object' || Array.isArray(rates)) {
+    throw new Error('Format invalid pentru cursurile valutare.');
+  }
+
+  const sanitizedRates: Record<string, number> = {};
+  for (const [currency, val] of Object.entries(rates)) {
+    const cleanCurr = String(currency).trim().toUpperCase();
+    const numVal = Number(val);
+    if (/^[A-Z]{3}$/.test(cleanCurr) && Number.isFinite(numVal) && numVal > 0 && numVal < 100000) {
+      sanitizedRates[cleanCurr] = numVal;
+    }
+  }
+
+  if (Object.keys(sanitizedRates).length === 0) {
+    throw new Error('Nu există cursuri valutare valide de salvat.');
+  }
+
   const { error } = await supabaseAdmin
     .from('global_settings')
-    .upsert({ id: 1, exchange_rates: rates });
+    .upsert({ id: 1, exchange_rates: sanitizedRates });
 
   if (error) {
     console.error('Error setting exchange rates:', error);

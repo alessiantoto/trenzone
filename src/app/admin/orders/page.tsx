@@ -37,7 +37,8 @@ import {
   Pencil,
   Lock,
   Zap,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -253,6 +254,105 @@ export function getItemDisplayDetails(item: any) {
   };
 }
 
+function OrdersListSkeleton() {
+  return (
+    <div className="space-y-3.5 animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+          <div className="p-3 sm:p-4 bg-slate-50/70 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-5 h-5 rounded-md bg-slate-200 shrink-0" />
+              <div className="h-4 w-28 rounded bg-slate-200" />
+              <div className="h-3.5 w-24 rounded bg-slate-100" />
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="h-6 w-20 rounded-full bg-slate-200" />
+              <div className="h-6 w-24 rounded-full bg-slate-100" />
+              <div className="h-5 w-20 rounded bg-slate-200" />
+            </div>
+          </div>
+          <div className="p-3.5 sm:p-4 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-40 rounded bg-slate-200" />
+                <div className="h-3 w-56 rounded bg-slate-100" />
+                <div className="flex gap-1.5 pt-0.5">
+                  <div className="h-5 w-36 rounded-md bg-slate-100" />
+                  <div className="h-5 w-28 rounded-md bg-slate-100" />
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-9 w-24 rounded-xl bg-slate-100" />
+                <div className="h-9 w-24 rounded-xl bg-slate-100" />
+                <div className="h-9 w-9 rounded-xl bg-slate-100" />
+              </div>
+            </div>
+            <div className="w-full bg-slate-50/90 border border-slate-200/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-32 rounded-lg bg-white border border-slate-200" />
+                <div className="h-6 w-20 rounded-lg bg-slate-200/70" />
+              </div>
+              <div className="h-8 w-28 rounded-lg bg-slate-200" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OrdersPageSkeleton() {
+  return (
+    <div className="w-full max-w-7xl mx-auto space-y-5 pb-24 text-slate-900 overflow-x-hidden animate-pulse">
+      {/* Header Skeleton */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-32 rounded-lg bg-slate-200" />
+            <div className="h-6 w-12 rounded-full bg-slate-200/80" />
+          </div>
+          <div className="h-4 w-56 rounded bg-slate-200/70" />
+        </div>
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="h-10 w-full sm:w-28 rounded-xl bg-white border border-slate-200" />
+          <div className="h-10 w-full sm:w-32 rounded-xl bg-white border border-slate-200" />
+          <div className="h-10 w-full sm:w-36 rounded-xl bg-white border border-slate-200" />
+          <div className="h-10 w-full sm:w-32 rounded-xl bg-white border border-slate-200" />
+        </div>
+      </div>
+
+      {/* 4 KPI Strip Skeleton */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-xs space-y-2">
+            <div className="h-3 w-24 rounded bg-slate-200" />
+            <div className="h-7 w-20 rounded bg-slate-200" />
+            <div className="h-3 w-28 rounded bg-slate-100" />
+          </div>
+        ))}
+      </div>
+
+      {/* Filter Pills Skeleton */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-10 rounded-xl bg-white border border-slate-200 shadow-xs" />
+        ))}
+      </div>
+
+      {/* Search & Filter Bar Skeleton */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
+        <div className="h-10 flex-1 rounded-xl bg-slate-100" />
+        <div className="grid grid-cols-2 sm:flex gap-2">
+          <div className="h-10 w-full sm:w-44 rounded-xl bg-slate-100" />
+          <div className="h-10 w-full sm:w-24 rounded-xl bg-slate-100" />
+        </div>
+      </div>
+
+      <OrdersListSkeleton />
+    </div>
+  );
+}
+
 function OrdersPageContent() {
   const searchParams = useSearchParams();
   const initialStatus = searchParams.get('status') || 'all';
@@ -302,7 +402,9 @@ function OrdersPageContent() {
   const [generatingAwb, setGeneratingAwb] = useState(false);
   const [deletingAwb, setDeletingAwb] = useState<Record<string, boolean>>({});
   const [printingAwb, setPrintingAwb] = useState<Record<string, boolean>>({});
+  const [bulkPrinting, setBulkPrinting] = useState(false);
   const [emittingOblioOrders, setEmittingOblioOrders] = useState<Record<string, boolean>>({});
+  const [actionOrderIds, setActionOrderIds] = useState<Record<string, boolean>>({});
   
   // Fulfillment & Manual Shipping State
   const [showFulfillmentModal, setShowFulfillmentModal] = useState(false);
@@ -417,7 +519,7 @@ function OrdersPageContent() {
 
   const handleSaveShipping = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingOrder) return;
+    if (!editingOrder || savingShipping) return;
     setSavingShipping(true);
     const toastId = toast.loading('Se actualizează datele de livrare...');
     try {
@@ -473,7 +575,9 @@ function OrdersPageContent() {
   };
 
   const executeDeleteOrder = async (orderId: string) => {
+    if (actionOrderIds[orderId]) return;
     setPopup(p => ({ ...p, isOpen: false }));
+    setActionOrderIds(prev => ({ ...prev, [orderId]: true }));
     try {
       const res = await deleteOrderAction(orderId);
       if (res.success) {
@@ -484,6 +588,8 @@ function OrdersPageContent() {
       }
     } catch (err) {
       toast.error('A apărut o eroare la ștergere.');
+    } finally {
+      setActionOrderIds(prev => ({ ...prev, [orderId]: false }));
     }
   };
 
@@ -523,7 +629,9 @@ function OrdersPageContent() {
       confirmText: 'Da, eliberează pt. expediere',
       cancelText: 'Renunță',
       onConfirm: async () => {
+        if (actionOrderIds[orderId]) return;
         setPopup(p => ({ ...p, isOpen: false }));
+        setActionOrderIds(prev => ({ ...prev, [orderId]: true }));
         const toastId = toast.loading('Se eliberează precomanda pentru expediere...');
         try {
           const res = await releasePreorderForFulfillmentAction([orderId]);
@@ -535,13 +643,17 @@ function OrdersPageContent() {
           }
         } catch (err: any) {
           toast.error('Eroare la eliberarea precomenzii.', { id: toastId });
+        } finally {
+          setActionOrderIds(prev => ({ ...prev, [orderId]: false }));
         }
       }
     });
   };
 
   const executeUpdateOrderStatus = async (orderId: string, newStatus: string, successMsg: string) => {
+    if (actionOrderIds[orderId]) return;
     setPopup(p => ({ ...p, isOpen: false }));
+    setActionOrderIds(prev => ({ ...prev, [orderId]: true }));
     const toastId = toast.loading('Se actualizează statusul comenzii...');
     try {
       const res = await updateOrderStatusAction(orderId, newStatus);
@@ -558,10 +670,13 @@ function OrdersPageContent() {
       }
     } catch (err: any) {
       toast.error('A apărut o eroare la actualizarea comenzii.', { id: toastId });
+    } finally {
+      setActionOrderIds(prev => ({ ...prev, [orderId]: false }));
     }
   };
 
   const handleSyncStripe = async () => {
+    if (isSyncingStripe) return;
     setIsSyncingStripe(true);
     const toastId = toast.loading('Se sincronizează plățile recente din Stripe...');
     try {
@@ -588,6 +703,7 @@ function OrdersPageContent() {
   };
 
   const handleEmitOblioFromOrders = async (orderId: string) => {
+    if (emittingOblioOrders[orderId]) return;
     setEmittingOblioOrders(prev => ({ ...prev, [orderId]: true }));
     const toastId = toast.loading('Se emite factura în Oblio și se transmite la SPV...');
 
@@ -640,6 +756,7 @@ function OrdersPageContent() {
   };
 
   const executeGenerateAwb = async (orderIds: string[]) => {
+    if (generatingAwb) return;
     setPopup(p => ({ ...p, isOpen: false }));
     setGeneratingAwb(true);
     const toastId = toast.loading(`Se generează ${orderIds.length} AWB-uri...`);
@@ -693,6 +810,8 @@ function OrdersPageContent() {
   };
 
   const handlePrintAwbs = async (orderIds: string[]) => {
+    if (bulkPrinting || orderIds.length === 0) return;
+    setBulkPrinting(true);
     // Create the URL before doing anything async
     const url = `/api/admin/orders/bulk-awb-pdf?ids=${orderIds.map(selectedId => {
       const order = orders.find(o => o.id === selectedId || o.supabaseId === selectedId);
@@ -735,6 +854,8 @@ function OrdersPageContent() {
       }
     } catch (err) {
       console.error('Failed to mark AWBs as printed', err);
+    } finally {
+      setBulkPrinting(false);
     }
   };
 
@@ -1083,6 +1204,10 @@ function OrdersPageContent() {
     };
   }, [filteredOrders, exchangeRates]);
 
+  if (loading && orders.length === 0) {
+    return <OrdersPageSkeleton />;
+  }
+
   return (
     <div className="w-full max-w-7xl mx-auto space-y-5 pb-24 text-slate-900 animate-in fade-in duration-500 overflow-x-hidden">
       
@@ -1103,44 +1228,48 @@ function OrdersPageContent() {
           <button
             onClick={fetchOrders}
             disabled={loading}
-            className="min-h-[40px] px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="min-h-[40px] px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
             title="Reîncarcă comenzile"
           >
             <RotateCcw size={14} className={loading ? 'animate-spin text-[#e32f8c]' : ''} />
-            <span className="sm:hidden">Actualizează</span>
-            <span className="hidden sm:inline">Reîmprospătează</span>
+            <span className="sm:hidden">{loading ? 'Se încarcă...' : 'Actualizează'}</span>
+            <span className="hidden sm:inline">{loading ? 'Se actualizează...' : 'Reîmprospătează'}</span>
           </button>
 
           <button
             onClick={handleSyncAllTracking}
             disabled={isSyncingAllTracking || loading || manualShippingEnabled}
-            className={`min-h-[40px] px-3 border rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 ${
+            className={`min-h-[40px] px-3 border rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98] ${
               manualShippingEnabled
                 ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
                 : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700 cursor-pointer disabled:opacity-50'
             }`}
             title={manualShippingEnabled ? "Sincronizarea AWB este dezactivată în modul Expediere Manuală" : "Sincronizează automat statusul tuturor coletelor nelivrate din Sameday și Packeta"}
           >
-            <Truck size={14} className={isSyncingAllTracking ? 'animate-bounce text-[#e32f8c]' : 'text-slate-500'} />
-            <span className="sm:hidden">{isSyncingAllTracking ? 'Sync...' : 'Sync AWB'}</span>
+            {isSyncingAllTracking ? (
+              <Loader2 size={14} className="animate-spin text-[#e32f8c]" />
+            ) : (
+              <Truck size={14} className="text-slate-500" />
+            )}
+            <span className="sm:hidden">{isSyncingAllTracking ? 'Se sincronizează...' : 'Sync AWB'}</span>
             <span className="hidden sm:inline">{isSyncingAllTracking ? 'Se sincronizează...' : 'Sincronizează AWB'}</span>
           </button>
 
           <button
             onClick={handleSyncStripe}
             disabled={isSyncingStripe || loading}
-            className="min-h-[40px] px-3 bg-white border border-[#635BFF]/30 hover:border-[#635BFF]/60 hover:bg-[#635BFF]/5 rounded-xl text-[#635BFF] font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+            className="min-h-[40px] px-3 bg-white border border-[#635BFF]/30 hover:border-[#635BFF]/60 hover:bg-[#635BFF]/5 rounded-xl text-[#635BFF] font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
             title="Scanează ultimele plăți reușite din Stripe și importă/recuperează automat orice comandă lipsă sau chitanță (#receipt)"
           >
-            <CreditCard size={14} className={isSyncingStripe ? 'animate-pulse' : ''} />
-            <span className="sm:hidden">{isSyncingStripe ? 'Sync...' : 'Sync Stripe'}</span>
-            <span className="hidden sm:inline">{isSyncingStripe ? 'Sync Stripe...' : 'Sincronizează Stripe'}</span>
+            {isSyncingStripe ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
+            <span className="sm:hidden">{isSyncingStripe ? 'Se sincronizează...' : 'Sync Stripe'}</span>
+            <span className="hidden sm:inline">{isSyncingStripe ? 'Se sincronizează...' : 'Sincronizează Stripe'}</span>
           </button>
 
           {/* Centru Fulfillment Button */}
           <button
             onClick={() => setShowFulfillmentModal(true)}
-            className={`min-h-[40px] px-3 border rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer ${
+            className={`min-h-[40px] px-3 border rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98] cursor-pointer ${
               manualShippingEnabled
                 ? 'bg-amber-500 text-white border-amber-600 shadow-amber-200'
                 : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
@@ -1157,7 +1286,7 @@ function OrdersPageContent() {
 
           <button
             onClick={toggleExpandAll}
-            className="col-span-2 sm:col-span-1 min-h-[40px] px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="col-span-2 sm:col-span-1 min-h-[40px] px-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98] cursor-pointer"
             title={expandedOrders.size === filteredOrders.length ? "Restrânge toate" : "Extinde toate"}
           >
             {expandedOrders.size === filteredOrders.length && filteredOrders.length > 0 ? (
@@ -1291,7 +1420,7 @@ function OrdersPageContent() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full">
         <button
           onClick={() => setStatusFilter('all')}
-          className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+          className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
             statusFilter === 'all' 
               ? 'bg-slate-900 text-white shadow-sm ring-1 ring-slate-900' 
               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1307,7 +1436,7 @@ function OrdersPageContent() {
           <>
             <button
               onClick={() => setStatusFilter('fulfillment_pending')}
-              className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+              className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
                 statusFilter === 'fulfillment_pending'
                   ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-400/40' 
                   : 'bg-amber-50/80 border border-amber-200 text-amber-900 hover:bg-amber-100 shadow-xs'
@@ -1321,7 +1450,7 @@ function OrdersPageContent() {
 
             <button
               onClick={() => setStatusFilter('fulfillment_sent')}
-              className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+              className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
                 statusFilter === 'fulfillment_sent' 
                   ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-700' 
                   : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1337,7 +1466,7 @@ function OrdersPageContent() {
           <>
             <button
               onClick={() => setStatusFilter('pending_awb')}
-              className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+              className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
                 statusFilter === 'pending_awb'
                   ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-400/40' 
                   : 'bg-amber-50/80 border border-amber-200 text-amber-900 hover:bg-amber-100 shadow-xs'
@@ -1351,7 +1480,7 @@ function OrdersPageContent() {
 
             <button
               onClick={() => setStatusFilter('generated_awb')}
-              className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+              className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
                 statusFilter === 'generated_awb' 
                   ? 'bg-[#e32f8c] text-slate-950 shadow-sm ring-1 ring-[#00b0ce]' 
                   : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1365,7 +1494,7 @@ function OrdersPageContent() {
 
             <button
               onClick={() => setStatusFilter('printed')}
-              className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+              className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
                 statusFilter === 'printed' 
                   ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-700' 
                   : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1379,7 +1508,7 @@ function OrdersPageContent() {
 
             <button
               onClick={() => setStatusFilter('not_printed')}
-              className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+              className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
                 statusFilter === 'not_printed' 
                   ? 'bg-orange-500 text-white shadow-sm ring-1 ring-orange-600' 
                   : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1395,7 +1524,7 @@ function OrdersPageContent() {
 
         <button
           onClick={() => setStatusFilter('delivered')}
-          className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+          className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
             statusFilter === 'delivered' 
               ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700' 
               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1409,7 +1538,7 @@ function OrdersPageContent() {
 
         <button
           onClick={() => setStatusFilter('returned')}
-          className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+          className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
             statusFilter === 'returned' 
               ? 'bg-red-600 text-white shadow-sm ring-1 ring-red-700' 
               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1423,7 +1552,7 @@ function OrdersPageContent() {
 
         <button
           onClick={() => setStatusFilter('cancelled')}
-          className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+          className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
             statusFilter === 'cancelled' 
               ? 'bg-slate-700 text-white shadow-sm ring-1 ring-slate-800' 
               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1437,7 +1566,7 @@ function OrdersPageContent() {
 
         <button
           onClick={() => setStatusFilter('preorder')}
-          className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+          className={`px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer ${
             statusFilter === 'preorder' 
               ? 'bg-[#e32f8c] text-white shadow-sm ring-1 ring-[#e32f8c]' 
               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
@@ -1630,21 +1759,7 @@ function OrdersPageContent() {
           </div>
         )}
         {loading ? (
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm animate-pulse space-y-4">
-                <div className="flex justify-between items-center">
-                  <div className="h-5 bg-slate-100 rounded-md w-36" />
-                  <div className="h-5 bg-slate-100 rounded-md w-24" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="h-4 bg-slate-100 rounded-md w-full" />
-                  <div className="h-4 bg-slate-100 rounded-md w-full" />
-                  <div className="h-4 bg-slate-100 rounded-md w-full" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <OrdersListSkeleton />
         ) : error ? (
           <div className="bg-white rounded-2xl p-10 text-center border border-slate-200 shadow-sm space-y-3">
             <AlertCircle className="text-red-500 mx-auto" size={36} />
@@ -1684,6 +1799,11 @@ function OrdersPageContent() {
             const isCod = order.paymentMethod === 'cod';
             const isHeldPreorder = isOrderHeldAsActivePreorder(order);
             const isDigitalOnly = Boolean(order.carrierMetadata?.is_digital_only) || (Array.isArray(order.items) && order.items.length > 0 && isDigitalOnlyCart(order.items));
+            const isOrderActionBusy = Boolean(actionOrderIds[order.id] || (order.supabaseId && actionOrderIds[order.supabaseId]));
+            const isEmittingOrderOblio = Boolean(emittingOblioOrders[order.id] || (order.supabaseId && emittingOblioOrders[order.supabaseId]));
+            const isFetchingOrderTracking = Boolean(fetchingTracking[order.id] || (order.supabaseId && fetchingTracking[order.supabaseId]));
+            const isPrintingOrderAwb = Boolean(printingAwb[order.id] || (order.supabaseId && printingAwb[order.supabaseId]));
+            const isDeletingOrderAwb = Boolean(deletingAwb[order.id] || (order.supabaseId && deletingAwb[order.supabaseId]));
 
             return (
               <div 
@@ -1852,12 +1972,16 @@ function OrdersPageContent() {
                             e.stopPropagation();
                             handleEmitOblioFromOrders(order.supabaseId || order.id);
                           }}
-                          disabled={emittingOblioOrders[order.id] || (order.supabaseId && emittingOblioOrders[order.supabaseId])}
-                          className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-200 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+                          disabled={isEmittingOrderOblio}
+                          className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-200 transition-all active:scale-[0.98] shrink-0 cursor-pointer disabled:opacity-50"
                           title="Emite factura în Oblio și trimite automat la ANAF SPV"
                         >
-                          <FileText size={10} className={(emittingOblioOrders[order.id] || (order.supabaseId && emittingOblioOrders[order.supabaseId])) ? 'animate-spin text-emerald-600' : 'text-slate-400'} />
-                          <span>{(emittingOblioOrders[order.id] || (order.supabaseId && emittingOblioOrders[order.supabaseId])) ? 'Se emite...' : '+ Emite SPV'}</span>
+                          {isEmittingOrderOblio ? (
+                            <Loader2 size={10} className="animate-spin text-emerald-600" />
+                          ) : (
+                            <FileText size={10} className="text-slate-400" />
+                          )}
+                          <span>{isEmittingOrderOblio ? 'Se emite...' : '+ Emite SPV'}</span>
                         </button>
                       )}
 
@@ -2028,11 +2152,12 @@ function OrdersPageContent() {
                       {isHeldPreorder && !isCancelled && !isReturned && !order.fulfillmentDispatchedAt && (
                         <button
                           onClick={() => confirmReleasePreorder(order.supabaseId || order.id, order.id)}
-                          className="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-800 border border-violet-200 cursor-pointer"
+                          disabled={isOrderActionBusy}
+                          className="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-800 border border-violet-200 cursor-pointer disabled:opacity-50"
                           title="Marchează stocul ca sosit și mută precomanda în coada de expediere către fulfillment"
                         >
-                          <Package size={13} className="text-violet-600" />
-                          <span>Eliberează pt. Expediere</span>
+                          {isOrderActionBusy ? <Loader2 size={13} className="animate-spin text-violet-600" /> : <Package size={13} className="text-violet-600" />}
+                          <span>{isOrderActionBusy ? 'Se procesează...' : 'Eliberează pt. Expediere'}</span>
                         </button>
                       )}
 
@@ -2040,30 +2165,33 @@ function OrdersPageContent() {
                       {isCancelled ? (
                         <button
                           onClick={() => confirmReactivateOrder(order.supabaseId || order.id, order.id)}
-                          className="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0 bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer"
+                          disabled={isOrderActionBusy}
+                          className="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1 shrink-0 bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer disabled:opacity-50"
                           title="Reactivează comanda (revine la activă)"
                         >
-                          <RotateCcw size={13} />
-                          <span>Reactivează</span>
+                          {isOrderActionBusy ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                          <span>{isOrderActionBusy ? 'Se procesează...' : 'Reactivează'}</span>
                         </button>
                       ) : (
                         <button
                           onClick={() => confirmCancelOrder(order.supabaseId || order.id, order.id)}
-                          className="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-700 border border-slate-200 hover:border-red-200 cursor-pointer"
+                          disabled={isOrderActionBusy}
+                          className="h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1 shrink-0 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-700 border border-slate-200 hover:border-red-200 cursor-pointer disabled:opacity-50"
                           title="Anulează comanda"
                         >
-                          <X size={13} className="text-red-500" />
-                          <span>Anulează</span>
+                          {isOrderActionBusy ? <Loader2 size={13} className="animate-spin text-red-500" /> : <X size={13} className="text-red-500" />}
+                          <span>{isOrderActionBusy ? 'Se procesează...' : 'Anulează'}</span>
                         </button>
                       )}
 
                       {/* Delete button */}
                       <button
                         onClick={() => confirmDeleteOrder(order.supabaseId || order.id, order.id)}
-                        className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0 cursor-pointer"
+                        disabled={isOrderActionBusy}
+                        className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-[0.98] shrink-0 cursor-pointer disabled:opacity-50"
                         title="Șterge Comanda Definitiv"
                       >
-                        <Trash2 size={15} />
+                        {isOrderActionBusy ? <Loader2 size={15} className="animate-spin text-red-500" /> : <Trash2 size={15} />}
                       </button>
                     </div>
                   </div>
@@ -2134,20 +2262,20 @@ function OrdersPageContent() {
                         <div className="flex flex-wrap items-center gap-2 shrink-0 pt-1.5 sm:pt-0 border-t sm:border-0 border-slate-200/60">
                           <button 
                             onClick={() => fetchTracking(order.supabaseId || order.id)}
-                            disabled={fetchingTracking[order.id] || (order.supabaseId ? fetchingTracking[order.supabaseId] : false)}
-                            className="min-h-[38px] text-[11px] font-bold text-[#00a8c4] hover:text-[#008ba3] flex items-center gap-1.5 transition-colors cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50"
+                            disabled={isFetchingOrderTracking}
+                            className="min-h-[38px] text-[11px] font-bold text-[#00a8c4] hover:text-[#008ba3] flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 disabled:opacity-60"
                           >
-                            <RotateCcw size={11} className={(fetchingTracking[order.id] || (order.supabaseId && fetchingTracking[order.supabaseId])) ? 'animate-spin' : ''} /> 
-                            <span>{(fetchingTracking[order.id] || (order.supabaseId && fetchingTracking[order.supabaseId])) ? 'Verificare...' : 'Verifică Status'}</span>
+                            {isFetchingOrderTracking ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                            <span>{isFetchingOrderTracking ? 'Se verifică...' : 'Verifică Status'}</span>
                           </button>
 
                           <button
                             onClick={() => handlePrintAwb(order.supabaseId || order.id, order.trackingNumber)}
-                            disabled={printingAwb[order.id]}
-                            className="min-h-[38px] text-[11px] font-bold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50"
+                            disabled={isPrintingOrderAwb}
+                            className="min-h-[38px] text-[11px] font-bold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 disabled:opacity-60"
                           >
-                            <Printer size={11} />
-                            <span>Print AWB</span>
+                            {isPrintingOrderAwb ? <Loader2 size={11} className="animate-spin" /> : <Printer size={11} />}
+                            <span>{isPrintingOrderAwb ? 'Se pregătește...' : 'Print AWB'}</span>
                           </button>
 
                           <button
@@ -2158,15 +2286,16 @@ function OrdersPageContent() {
                               }
                               confirmDeleteAwb(order.supabaseId || order.id);
                             }}
-                            disabled={deletingAwb[order.id] || manualShippingEnabled}
-                            className={`min-h-[38px] text-[11px] font-bold transition-colors ml-auto sm:ml-0 px-2 py-1.5 ${
+                            disabled={isDeletingOrderAwb || manualShippingEnabled}
+                            className={`min-h-[38px] text-[11px] font-bold transition-all active:scale-[0.98] ml-auto sm:ml-0 px-2 py-1.5 inline-flex items-center gap-1 ${
                               manualShippingEnabled
                                 ? 'text-slate-300 cursor-not-allowed'
-                                : 'text-slate-400 hover:text-red-500 cursor-pointer'
+                                : 'text-slate-400 hover:text-red-500 cursor-pointer disabled:opacity-60'
                             }`}
                             title={manualShippingEnabled ? "Expedierea manuală este activă (Resetare blocată)" : "Resetează AWB-ul pentru a genera altul"}
                           >
-                            Reset
+                            {isDeletingOrderAwb && <Loader2 size={11} className="animate-spin text-red-500" />}
+                            <span>{isDeletingOrderAwb ? 'Se resetează...' : 'Reset'}</span>
                           </button>
                         </div>
                       </div>
@@ -2221,14 +2350,14 @@ function OrdersPageContent() {
                               }}
                               disabled={generatingAwb || manualShippingEnabled}
                               title={manualShippingEnabled ? "Expedierea manuală este activă — AWB-urile sunt gestionate de centrul de fulfillment" : "Generează AWB"}
-                              className={`px-3 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 shrink-0 text-xs font-black ${
+                              className={`px-3 py-1.5 rounded-xl transition-all active:scale-[0.98] shadow-xs flex items-center gap-1.5 shrink-0 text-xs font-black ${
                                 manualShippingEnabled
                                   ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed opacity-75'
-                                  : 'bg-[#e32f8c] hover:bg-[#00bad9] active:scale-95 text-slate-950 cursor-pointer disabled:opacity-50'
+                                  : 'bg-[#e32f8c] hover:bg-[#00bad9] text-slate-950 cursor-pointer disabled:opacity-50'
                               }`}
                             >
-                              <Truck size={13} />
-                              <span>{manualShippingEnabled ? 'Fulfillment Activ' : '+ Generează AWB'}</span>
+                              {generatingAwb ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
+                              <span>{manualShippingEnabled ? 'Fulfillment Activ' : generatingAwb ? 'Se generează...' : '+ Generează AWB'}</span>
                             </button>
                           )}
                         </div>
@@ -2766,9 +2895,10 @@ function OrdersPageContent() {
                   <button 
                     type="submit"
                     disabled={savingShipping}
-                    className="px-5 py-2 rounded-xl text-xs font-black bg-[#e32f8c] text-slate-950 hover:bg-[#00bad9] shadow-md shadow-[#e32f8c]/20 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="px-5 py-2 rounded-xl text-xs font-black bg-[#e32f8c] text-slate-950 hover:bg-[#00bad9] shadow-md shadow-[#e32f8c]/20 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer inline-flex items-center gap-1.5"
                   >
-                    {savingShipping ? 'Se salvează...' : 'Salvează Modificările'}
+                    {savingShipping && <Loader2 size={13} className="animate-spin" />}
+                    <span>{savingShipping ? 'Se salvează...' : 'Salvează Modificările'}</span>
                   </button>
                 </div>
               </form>
@@ -2802,11 +2932,12 @@ function OrdersPageContent() {
               {/* Bulk Print */}
               <button 
                 onClick={() => handlePrintAwbs(selectedOrders)}
-                className="h-8 sm:h-9 px-2.5 sm:px-3.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-sm shrink-0 cursor-pointer"
+                disabled={bulkPrinting}
+                className="h-8 sm:h-9 px-2.5 sm:px-3.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all active:scale-[0.98] flex items-center gap-1.5 whitespace-nowrap shadow-sm shrink-0 cursor-pointer disabled:opacity-60"
                 title="Printează AWB-urile comenzilor selectate"
               >
-                <Printer size={13} className="sm:w-3.5 sm:h-3.5" /> 
-                <span className="hidden sm:inline">Printează AWB-uri</span>
+                {bulkPrinting ? <Loader2 size={13} className="animate-spin sm:w-3.5 sm:h-3.5" /> : <Printer size={13} className="sm:w-3.5 sm:h-3.5" />}
+                <span className="hidden sm:inline">{bulkPrinting ? 'Se pregătește...' : 'Printează AWB-uri'}</span>
               </button>
 
               {/* Bulk Generate AWB */}
@@ -2820,15 +2951,15 @@ function OrdersPageContent() {
                 }}
                 disabled={generatingAwb || manualShippingEnabled}
                 title={manualShippingEnabled ? "Expedierea manuală este activă (AWB blocat)" : "Generează AWB"}
-                className={`h-8 sm:h-9 px-3 sm:px-4 text-[11px] sm:text-xs font-black rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap shadow-md shrink-0 ${
+                className={`h-8 sm:h-9 px-3 sm:px-4 text-[11px] sm:text-xs font-black rounded-xl transition-all active:scale-[0.98] flex items-center gap-1.5 whitespace-nowrap shadow-md shrink-0 ${
                   manualShippingEnabled
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
-                    : 'bg-[#e32f8c] hover:bg-[#00bad9] active:scale-95 text-slate-950 cursor-pointer shadow-[#e32f8c]/20 disabled:opacity-50'
+                    : 'bg-[#e32f8c] hover:bg-[#00bad9] text-slate-950 cursor-pointer shadow-[#e32f8c]/20 disabled:opacity-50'
                 }`}
               >
-                <Truck size={13} className="sm:w-3.5 sm:h-3.5" /> 
-                <span className="sm:hidden">{manualShippingEnabled ? 'AWB Blocat' : (generatingAwb ? '...' : `AWB (${selectedOrders.length})`)}</span>
-                <span className="hidden sm:inline">{manualShippingEnabled ? 'Fulfillment Activ (AWB Blocat)' : (generatingAwb ? 'Generare...' : `Generează AWB (${selectedOrders.length})`)}</span>
+                {generatingAwb ? <Loader2 size={13} className="animate-spin sm:w-3.5 sm:h-3.5" /> : <Truck size={13} className="sm:w-3.5 sm:h-3.5" />}
+                <span className="sm:hidden">{manualShippingEnabled ? 'AWB Blocat' : (generatingAwb ? 'Se procesează...' : `AWB (${selectedOrders.length})`)}</span>
+                <span className="hidden sm:inline">{manualShippingEnabled ? 'Fulfillment Activ (AWB Blocat)' : (generatingAwb ? 'Se generează...' : `Generează AWB (${selectedOrders.length})`)}</span>
               </button>
 
               {/* Deselect */}
@@ -2921,7 +3052,7 @@ function OrdersPageContent() {
 
 export default function OrdersPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-400">Se încarcă comenzile...</div>}>
+    <Suspense fallback={<OrdersPageSkeleton />}>
       <OrdersPageContent />
     </Suspense>
   );

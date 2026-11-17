@@ -25,14 +25,18 @@ const getCachedSiteSetting = unstable_cache(
   }
 );
 
-const PROTECTED_SETTING_KEYS = new Set([
-  'fulfillment_history',
-  'fulfillment_settings',
-  'abandoned_72h_coupon',
+// Strict allowlist of setting keys that may be read publicly without admin auth.
+// All sensitive keys (digital_programs_files, fulfillment_settings, fulfillment_history,
+// abandoned_72h_coupon, order_counter, etc.) require isAdminAuthorized().
+const PUBLIC_SETTING_KEYS = new Set([
+  'shipping_config',
+  'active_promotion',
+  'digital_programs_video_config',
 ]);
 
 export async function getSiteSetting(id: string) {
-  if (PROTECTED_SETTING_KEYS.has(id) || id.startsWith('admin_') || id.startsWith('fulfillment_')) {
+  if (!id || typeof id !== 'string') return null;
+  if (!PUBLIC_SETTING_KEYS.has(id)) {
     const isAuth = await isAdminAuthorized();
     if (!isAuth) return null;
   }
@@ -42,6 +46,9 @@ export async function getSiteSetting(id: string) {
 export async function updateSiteSetting(id: string, value: any) {
   const isAuth = await isAdminAuthorized();
   if (!isAuth) throw new Error("Unauthorized");
+  if (!id || typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(id)) {
+    throw new Error("Invalid setting key");
+  }
 
   const { data, error } = await supabaseAdmin
     .from('store_settings')
@@ -70,20 +77,35 @@ export async function uploadPromoImage(formData: FormData) {
   if (!isAuth) throw new Error("Unauthorized");
 
   const file = formData.get('file') as File;
-  if (!file) throw new Error('No file provided');
+  if (!file || file.size <= 0) throw new Error('No file provided');
+  if (file.size > 10 * 1024 * 1024) throw new Error('Fișierul depășește limita de 10MB.');
 
   const ALLOWED_IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'];
+  const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'];
   const fileExt = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!ALLOWED_IMAGE_EXTS.includes(fileExt) || file.type === 'image/svg+xml') {
-    throw new Error('Format de imagine nepermis. Folosește JPG, PNG, WebP sau AVIF.');
+  if (!ALLOWED_IMAGE_EXTS.includes(fileExt) || !ALLOWED_MIMES.includes(file.type)) {
+    throw new Error('Format de imagine nepermis. Folosește JPG, PNG, WebP, AVIF sau GIF.');
   }
+
+  const bytes = await file.arrayBuffer();
+  const byteArray = new Uint8Array(bytes);
+  const headerText = Buffer.from(byteArray.subarray(0, 256)).toString('utf8').toLowerCase();
+  if (
+    headerText.includes('<svg') ||
+    headerText.includes('<html') ||
+    headerText.includes('<script') ||
+    headerText.includes('<!doctype') ||
+    headerText.includes('<?xml')
+  ) {
+    throw new Error('Conținutul fișierului nu este o imagine raster validă.');
+  }
+
   const fileName = `promo-${Date.now()}.${fileExt}`;
   const filePath = `marketing/promotie/${fileName}`;
 
   // 1. Prefer Cloudflare R2 if configured
   const r2Base = getR2PublicBaseUrl();
   if (process.env.R2_BUCKET_NAME && r2Base) {
-    const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const r2Url = await uploadToR2(buffer, filePath, file.type || `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`);
     return { success: true, url: r2Url };
@@ -92,9 +114,10 @@ export async function uploadPromoImage(formData: FormData) {
   // 2. Fallback to Supabase Storage
   const { error } = await supabaseAdmin.storage
     .from('marketing')
-    .upload(filePath, file, {
+    .upload(filePath, Buffer.from(bytes), {
       cacheControl: '3600',
-      upsert: false
+      upsert: false,
+      contentType: file.type
     });
 
   if (error) throw new Error(error.message);

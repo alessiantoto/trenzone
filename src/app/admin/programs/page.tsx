@@ -49,6 +49,7 @@ export default function AdminProgramsPage() {
   const [sendingOrderId, setSendingOrderId] = useState<string | null>(null);
   const [bulkSending, setBulkSending] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
+  const [removingSlot, setRemovingSlot] = useState<string | null>(null);
   const [showPdfManager, setShowPdfManager] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -154,6 +155,7 @@ export default function AdminProgramsPage() {
     order: AdminProgramOrderRow,
     overrideMode: 'auto' | 'force_pending' = 'auto'
   ) => {
+    if (sendingOrderId || bulkSending) return;
     setSendingOrderId(order.supabaseId);
     try {
       const res = await sendManualProgramEmailAction(order.supabaseId, overrideMode);
@@ -171,6 +173,7 @@ export default function AdminProgramsPage() {
   };
 
   const handleBulkSendReady = async () => {
+    if (bulkSending) return;
     const targets = orders.filter(isOrderReadyForFinalPdf);
     if (targets.length === 0) return;
     setBulkSending(true);
@@ -217,6 +220,8 @@ export default function AdminProgramsPage() {
   };
 
   const handleRemovePdfSlot = async (slot: ProgramFileSlot) => {
+    if (removingSlot) return;
+    setRemovingSlot(slot);
     try {
       const res = await removeProgramPdfSlotAction(slot);
       if (res.success) {
@@ -227,8 +232,86 @@ export default function AdminProgramsPage() {
       }
     } catch (err: any) {
       toast.error(err?.message || 'Eroare la ștergere.');
+    } finally {
+      setRemovingSlot(null);
     }
   };
+
+  const renderProgramsListSkeleton = () => (
+    <div className="space-y-4 animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+        >
+          <div className="space-y-3 flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="h-6 w-24 rounded-lg bg-slate-200" />
+              <div className="h-4 w-28 rounded bg-slate-100" />
+              <div className="h-5 w-20 rounded-md bg-slate-200/80" />
+              <div className="h-5 w-32 rounded-full bg-slate-100" />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="h-4 w-36 rounded bg-slate-200" />
+              <div className="h-4 w-44 rounded bg-slate-100" />
+              <div className="h-4 w-24 rounded bg-slate-100" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="h-8 w-44 rounded-xl bg-slate-100" />
+              <div className="h-8 w-36 rounded-xl bg-slate-100" />
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-2 shrink-0">
+            <div className="h-10 w-full sm:w-52 rounded-xl bg-slate-200" />
+            <div className="h-4 w-40 rounded bg-slate-100" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="space-y-6 pb-16 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-slate-200 shrink-0" />
+            <div className="space-y-2">
+              <div className="h-6 w-60 rounded-lg bg-slate-200" />
+              <div className="h-3.5 w-80 max-w-full rounded bg-slate-200/70" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-10 w-36 rounded-xl bg-white border border-slate-200" />
+            <div className="h-10 w-36 rounded-xl bg-white border border-slate-200" />
+          </div>
+        </div>
+
+        {/* 4 KPI Strip Skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white border border-slate-200/80 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-2">
+              <div className="h-3 w-28 rounded bg-slate-200" />
+              <div className="h-7 w-16 rounded-md bg-slate-200" />
+            </div>
+          ))}
+        </div>
+
+        {/* Search + Filter Tabs Skeleton */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-slate-100 rounded-2xl p-3 sm:p-4 shadow-xs">
+          <div className="h-10 flex-1 rounded-xl bg-slate-100" />
+          <div className="grid grid-cols-2 sm:flex gap-1.5 w-full md:w-auto">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-10 w-full sm:w-28 rounded-xl bg-slate-100" />
+            ))}
+          </div>
+        </div>
+
+        {renderProgramsListSkeleton()}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-16 animate-in fade-in duration-300">
@@ -254,10 +337,10 @@ export default function AdminProgramsPage() {
               type="button"
               onClick={handleBulkSendReady}
               disabled={bulkSending}
-              className="min-h-[40px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c81e78] text-black px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+              className="min-h-[40px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c81e78] text-black px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
               {bulkSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              <span>Trimite PDF tuturor celor gata ({stats.readyToSend})</span>
+              <span>{bulkSending ? 'Se trimit PDF-urile...' : `Trimite PDF tuturor celor gata (${stats.readyToSend})`}</span>
             </button>
           )}
 
@@ -265,7 +348,7 @@ export default function AdminProgramsPage() {
             <button
               type="button"
               onClick={() => setShowPdfManager((v) => !v)}
-              className="min-h-[40px] flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-[#e32f8c] text-slate-800 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer"
+              className="min-h-[40px] flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-[#e32f8c] text-slate-800 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer"
             >
               <FileText size={16} className="text-[#e32f8c] shrink-0" />
               <span className="truncate">
@@ -278,10 +361,10 @@ export default function AdminProgramsPage() {
               type="button"
               onClick={loadData}
               disabled={loading}
-              className="min-h-[40px] flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer"
+              className="min-h-[40px] flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
             >
-              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-              <span>Reîmprospătează</span>
+              <RefreshCw size={15} className={loading ? 'animate-spin text-[#e32f8c]' : ''} />
+              <span>{loading ? 'Se actualizează...' : 'Reîmprospătează'}</span>
             </button>
           </div>
         </div>
@@ -403,11 +486,12 @@ export default function AdminProgramsPage() {
                         </a>
                         <button
                           type="button"
+                          disabled={removingSlot === s.slot || isUploading}
                           onClick={() => handleRemovePdfSlot(s.slot)}
                           title="Elimină PDF din slot"
-                          className="p-2 rounded-lg bg-white border border-red-200 hover:bg-red-50 text-red-600"
+                          className="p-2 rounded-lg bg-white border border-red-200 hover:bg-red-50 text-red-600 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
                         >
-                          <Trash2 size={14} />
+                          {removingSlot === s.slot ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                         </button>
                       </>
                     )}
@@ -443,7 +527,7 @@ export default function AdminProgramsPage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer truncate ${
+              className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer truncate ${
                 activeTab === tab.id
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -457,10 +541,7 @@ export default function AdminProgramsPage() {
 
       {/* ORDERS LIST */}
       {loading ? (
-        <div className="bg-white border border-slate-100 rounded-2xl p-12 flex flex-col items-center justify-center gap-3 text-slate-500">
-          <Loader2 size={28} className="animate-spin text-[#e32f8c]" />
-          <span className="text-sm font-bold">Se încarcă programele vândute...</span>
-        </div>
+        renderProgramsListSkeleton()
       ) : filteredOrders.length === 0 ? (
         <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center">
           <BookOpen size={32} className="mx-auto text-slate-300 mb-3" />
@@ -583,9 +664,9 @@ export default function AdminProgramsPage() {
                   <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-2 shrink-0">
                     <button
                       type="button"
-                      disabled={isSending || !order.customerEmail}
+                      disabled={isSending || bulkSending || !order.customerEmail}
                       onClick={() => handleManualSend(order, 'auto')}
-                      className={`min-h-[40px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all disabled:opacity-50 cursor-pointer ${
+                      className={`min-h-[40px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer ${
                         allHavePdf
                           ? 'bg-[#e32f8c] hover:bg-[#c81e78] text-black shadow-sm'
                           : noneHavePdf
@@ -599,24 +680,26 @@ export default function AdminProgramsPage() {
                         <Send size={15} />
                       )}
                       <span>
-                        {allHavePdf
-                          ? lastType === 'program-delivery'
-                            ? 'Retrimite Programul (PDF)'
-                            : 'Trimite Programul (PDF)'
-                          : noneHavePdf
-                            ? 'Trimite Email „Urmează curând”'
-                            : 'Trimite Inteligent (PDF + În curând)'}
+                        {isSending
+                          ? 'Se trimite...'
+                          : allHavePdf
+                            ? lastType === 'program-delivery'
+                              ? 'Retrimite Programul (PDF)'
+                              : 'Trimite Programul (PDF)'
+                            : noneHavePdf
+                              ? 'Trimite Email „Urmează curând”'
+                              : 'Trimite Inteligent (PDF + În curând)'}
                       </span>
                     </button>
 
                     {!noneHavePdf && (
                       <button
                         type="button"
-                        disabled={isSending || !order.customerEmail}
+                        disabled={isSending || bulkSending || !order.customerEmail}
                         onClick={() => handleManualSend(order, 'force_pending')}
-                        className="text-[11px] font-bold text-slate-500 hover:text-amber-700 underline underline-offset-2 text-center lg:text-right disabled:opacity-40"
+                        className="text-[11px] font-bold text-slate-500 hover:text-amber-700 underline underline-offset-2 text-center lg:text-right transition-all active:scale-[0.98] cursor-pointer disabled:opacity-40"
                       >
-                        Trimite doar notificare „Urmează curând”
+                        {isSending ? 'Se trimite...' : 'Trimite doar notificare „Urmează curând”'}
                       </button>
                     )}
                   </div>

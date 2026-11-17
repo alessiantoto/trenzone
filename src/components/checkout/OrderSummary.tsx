@@ -6,7 +6,7 @@ import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { formatPrice } from "@/utils/currency";
 import { useTranslations, useLocale } from "next-intl";
 import Image from "next/image";
-import { ShieldCheck, Zap, ChevronDown, ShoppingBag, Loader2, RotateCcw, Ticket } from "lucide-react";
+import { ShieldCheck, ChevronDown, ShoppingBag, Ticket, CreditCard } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { getLocalized, cn } from "@/lib/utils";
@@ -128,8 +128,9 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
     <div className="bg-white border border-zinc-100 rounded-[2.5rem] overflow-hidden shadow-sm transition-all duration-500">
       {/* Mobile Toggle & Header */}
       <button
+        type="button"
         onClick={() => isMobile && setIsExpanded(!isExpanded)}
-        className={`w-full px-5 py-4 md:px-8 md:py-6 flex items-center justify-between transition-colors ${isMobile ? 'hover:bg-zinc-50/50 cursor-pointer' : 'cursor-default'}`}
+        className={`w-full px-5 py-4 md:px-8 md:py-6 flex items-center justify-between transition-all ${isMobile ? 'hover:bg-zinc-50/50 active:scale-[0.99] cursor-pointer' : 'cursor-default'}`}
       >
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -271,10 +272,7 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-600">{t('shipping_cost')}</span>
                   {isShippingPending ? (
-                    <div className="flex items-center gap-1.5 text-zinc-400 opacity-70">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      <span className="text-[11px] italic">{locale === 'en' ? 'Calculating...' : 'Calculare...'}</span>
-                    </div>
+                    <span className="h-4 w-24 rounded-md bg-zinc-100 animate-pulse inline-block" aria-label={locale === 'en' ? 'Calculating...' : 'Calculare...'} />
                   ) : (isFreeShipping || shippingCost === 0) ? (
                     <div className="flex flex-col items-end">
                       {isFreeShipping && !digitalOnly && rawShippingCost > 0 && (
@@ -309,7 +307,8 @@ export function OrderSummary({ paymentMethod, currentStep: propStep }: OrderSumm
                 {cardDiscount > 0 && (
                   <div className="flex justify-between items-center text-sm bg-green-50/50 p-2 rounded-xl border border-green-100">
                     <span className="font-bold uppercase tracking-widest text-[10px] text-green-600 flex items-center gap-1.5">
-                      💳 {locale === 'en' ? 'Card Discount' : 'Reducere Card'}
+                      <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                      <span>{locale === 'en' ? 'Card Discount' : 'Reducere Card'}</span>
                     </span>
                     <span className="font-black text-[#00e676] drop-shadow-[0_0_8px_rgba(0,230,118,0.4)]">-{formatPrice(cardDiscount, displayCurrency)}</span>
                   </div>

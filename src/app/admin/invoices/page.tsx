@@ -19,7 +19,8 @@ import {
   ChevronUp,
   FileSpreadsheet,
   FileCode,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -153,6 +154,9 @@ export default function InvoicesPage() {
 
   const [togglingOblio, setTogglingOblio] = useState(false);
   const [emittingOblio, setEmittingOblio] = useState<Record<string, boolean>>({});
+  const [bulkEmitting, setBulkEmitting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingXml, setExportingXml] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -305,6 +309,7 @@ export default function InvoicesPage() {
 
   // Export CSV (Excel)
   const handleExportCsv = () => {
+    if (exportingCsv) return;
     const toExport = selectedOrders.length > 0 
       ? filteredInvoices.filter((inv: any) => selectedOrders.includes(inv.supabaseId || inv.id))
       : filteredInvoices.filter((inv: any) => !isCancelled(inv.status));
@@ -314,7 +319,9 @@ export default function InvoicesPage() {
       return;
     }
 
-    const headers = [
+    setExportingCsv(true);
+    try {
+      const headers = [
       'Nr. Comanda',
       'Data',
       'Client',
@@ -351,20 +358,24 @@ export default function InvoicesPage() {
       ].join(',');
     });
 
-    // Adăugăm UTF-8 BOM (\uFEFF) pentru ca Excel să deschidă corect diacriticele
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Facturi_TrenZone_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Export realizat cu succes (${toExport.length} facturi)!`);
+      // Adăugăm UTF-8 BOM (\uFEFF) pentru ca Excel să deschidă corect diacriticele
+      const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Facturi_TrenZone_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Export realizat cu succes (${toExport.length} facturi)!`);
+    } finally {
+      setTimeout(() => setExportingCsv(false), 300);
+    }
   };
 
   // Export XML
   const handleExportXml = () => {
+    if (exportingXml) return;
     const toExport = selectedOrders.length > 0 
       ? filteredInvoices.filter((inv: any) => selectedOrders.includes(inv.supabaseId || inv.id))
       : filteredInvoices;
@@ -374,7 +385,9 @@ export default function InvoicesPage() {
       return;
     }
 
-    let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n<Facturi>\n';
+    setExportingXml(true);
+    try {
+      let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n<Facturi>\n';
     toExport.forEach((inv: any) => {
       const safeCustomer = (inv.customer || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const curr = String(inv.currency || 'RON').toUpperCase().trim();
@@ -391,17 +404,21 @@ export default function InvoicesPage() {
     });
     xmlContent += '</Facturi>';
 
-    const blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Facturi_Export_${new Date().toISOString().slice(0, 10)}.xml`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Export XML descărcat (${toExport.length} facturi)!`);
+      const blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Facturi_Export_${new Date().toISOString().slice(0, 10)}.xml`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Export XML descărcat (${toExport.length} facturi)!`);
+    } finally {
+      setTimeout(() => setExportingXml(false), 300);
+    }
   };
 
   const handleToggleOblio = async (newValue: boolean) => {
+    if (togglingOblio) return;
     const previous = oblioStatus.enabled;
     setOblioStatus(prev => ({ ...prev, enabled: newValue }));
     setTogglingOblio(true);
@@ -434,6 +451,7 @@ export default function InvoicesPage() {
 
   // Emit in Oblio Action
   const handleEmitOblio = async (orderId: string) => {
+    if (emittingOblio[orderId] || bulkEmitting) return;
     if (!oblioStatus.enabled) {
       toast.error('Integrarea Oblio este dezactivată din Admin. Activează toggle-ul Oblio pentru a emite facturi.');
       return;
@@ -464,6 +482,7 @@ export default function InvoicesPage() {
 
   // Bulk Emit in Oblio Action
   const handleBulkEmitOblio = async () => {
+    if (bulkEmitting) return;
     if (!oblioStatus.enabled) {
       toast.error('Integrarea Oblio este dezactivată din Admin. Activează toggle-ul Oblio pentru a emite facturi.');
       return;
@@ -483,32 +502,135 @@ export default function InvoicesPage() {
       return;
     }
 
+    setBulkEmitting(true);
     const toastId = toast.loading(`Se emit ${toEmit.length} facturi în Oblio & SPV...`);
     let successCount = 0;
 
-    for (const inv of toEmit) {
-      const id = inv.supabaseId || inv.id;
-      setEmittingOblio(prev => ({ ...prev, [id]: true }));
-      try {
-        const res = await emitOblioInvoiceAction(id);
-        if (res.success) successCount++;
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setEmittingOblio(prev => ({ ...prev, [id]: false }));
+    try {
+      for (const inv of toEmit) {
+        const id = inv.supabaseId || inv.id;
+        setEmittingOblio(prev => ({ ...prev, [id]: true }));
+        try {
+          const res = await emitOblioInvoiceAction(id);
+          if (res.success) successCount++;
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setEmittingOblio(prev => ({ ...prev, [id]: false }));
+        }
+        
+        // 30 secunde intre fiecare factura - zero sansa de limitare Oblio
+        if (toEmit.indexOf(inv) + 1 < toEmit.length) {
+          const processedCount = toEmit.indexOf(inv) + 1;
+          toast.loading(`[${processedCount}/${toEmit.length}] Așteptăm 30s...`, { id: toastId });
+          await new Promise(r => setTimeout(r, 30000));
+        }
       }
-      
-      // 30 secunde intre fiecare factura - zero sansa de limitare Oblio
-      if (toEmit.indexOf(inv) + 1 < toEmit.length) {
-        const processedCount = toEmit.indexOf(inv) + 1;
-        toast.loading(`[${processedCount}/${toEmit.length}] Așteptăm 30s...`, { id: toastId });
-        await new Promise(r => setTimeout(r, 30000));
-      }
-    }
 
-    toast.success(`${successCount} facturi emise și transmise cu succes în SPV!`, { id: toastId });
-    await loadData();
+      toast.success(`${successCount} facturi emise și transmise cu succes în SPV!`, { id: toastId });
+      await loadData();
+    } finally {
+      setBulkEmitting(false);
+    }
   };
+
+  const renderInvoicesListSkeleton = () => (
+    <div className="space-y-3 sm:space-y-4 animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 flex flex-col gap-3.5 shadow-xs"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="w-5 h-5 rounded-md bg-slate-200" />
+              <div className="h-7 w-28 rounded-lg bg-slate-200" />
+              <div className="h-7 w-24 rounded-lg bg-slate-100" />
+              <div className="h-5 w-16 rounded-md bg-slate-100" />
+            </div>
+            <div className="h-4 w-28 rounded bg-slate-100" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-slate-50/70 rounded-xl border border-slate-100">
+            <div className="space-y-2">
+              <div className="h-3 w-16 rounded bg-slate-200" />
+              <div className="h-4 w-36 rounded bg-slate-200" />
+              <div className="h-3 w-44 rounded bg-slate-100" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-3 w-24 rounded bg-slate-200" />
+              <div className="h-3.5 w-48 rounded bg-slate-100" />
+              <div className="h-3 w-24 rounded bg-slate-100" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-3 w-28 rounded bg-slate-200" />
+              <div className="h-5 w-36 rounded bg-slate-200/80" />
+              <div className="h-3 w-40 rounded bg-slate-100" />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="h-10 w-28 rounded-xl bg-slate-100" />
+            <div className="h-10 w-36 rounded-xl bg-slate-200" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="space-y-5 sm:space-y-6 pb-12 text-slate-900 max-w-full animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2.5">
+              <div className="h-7 w-44 rounded-lg bg-slate-200" />
+              <div className="h-5 w-20 rounded-full bg-slate-100" />
+            </div>
+            <div className="h-3.5 w-80 max-w-full rounded bg-slate-100" />
+          </div>
+          <div className="h-10 w-full sm:w-40 rounded-xl bg-slate-100" />
+        </div>
+
+        {/* 4 KPI Strip Skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-2">
+              <div className="h-3 w-24 rounded bg-slate-200" />
+              <div className="h-7 w-24 rounded bg-slate-200" />
+              <div className="h-3 w-20 rounded bg-slate-100" />
+            </div>
+          ))}
+        </div>
+
+        {/* Oblio Banner Skeleton */}
+        <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0" />
+            <div className="space-y-2">
+              <div className="h-4 w-56 rounded bg-slate-200" />
+              <div className="h-3 w-72 max-w-full rounded bg-slate-100" />
+            </div>
+          </div>
+          <div className="h-8 w-36 rounded-xl bg-slate-100" />
+        </div>
+
+        {/* Search & Filters Skeleton */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          <div className="h-10 w-full lg:max-w-sm rounded-xl bg-slate-100" />
+          <div className="grid grid-cols-2 sm:flex items-center gap-2">
+            <div className="h-10 w-full sm:w-28 rounded-xl bg-slate-100" />
+            <div className="h-10 w-full sm:w-28 rounded-xl bg-slate-100" />
+            <div className="h-10 w-full sm:w-32 rounded-xl bg-slate-200" />
+            <div className="h-10 w-full sm:w-28 rounded-xl bg-slate-200" />
+          </div>
+        </div>
+
+        {renderInvoicesListSkeleton()}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 sm:space-y-6 pb-12 text-slate-900 max-w-full">
@@ -532,10 +654,10 @@ export default function InvoicesPage() {
           <button 
             onClick={loadData}
             disabled={loading}
-            className="w-full sm:w-auto min-h-[40px] px-4 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+            className="w-full sm:w-auto min-h-[40px] px-4 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-60"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            <span>Reîmprospătează</span>
+            <RefreshCw size={13} className={loading ? 'animate-spin text-[#e32f8c]' : ''} />
+            <span>{loading ? 'Se actualizează...' : 'Reîmprospătează'}</span>
           </button>
         </div>
       </div>
@@ -636,8 +758,9 @@ export default function InvoicesPage() {
 
           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-700">
-                {oblioStatus.enabled ? 'Pornit' : 'Oprit'}
+              <span className="text-xs font-bold text-slate-700 inline-flex items-center gap-1">
+                {togglingOblio && <Loader2 size={12} className="animate-spin text-[#e32f8c]" />}
+                {togglingOblio ? 'Se salvează...' : oblioStatus.enabled ? 'Pornit' : 'Oprit'}
               </span>
               <button
                 type="button"
@@ -646,7 +769,7 @@ export default function InvoicesPage() {
                 aria-label="Activează sau dezactivează integrarea Oblio"
                 disabled={togglingOblio}
                 onClick={() => handleToggleOblio(!oblioStatus.enabled)}
-                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/20 disabled:opacity-60 ${
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all active:scale-[0.98] duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/20 disabled:opacity-60 ${
                   oblioStatus.enabled ? 'bg-emerald-500' : 'bg-slate-300'
                 }`}
               >
@@ -749,21 +872,23 @@ export default function InvoicesPage() {
           {/* Export CSV (Excel) */}
           <button 
             onClick={handleExportCsv}
-            className="min-h-[40px] px-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer"
+            disabled={exportingCsv}
+            className="min-h-[40px] px-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer disabled:opacity-60"
             title="Exportă în format Excel / CSV pentru contabilitate"
           >
-            <FileSpreadsheet size={14} />
-            <span className="truncate">Export Excel {selectedOrders.length > 0 ? `(${selectedOrders.length})` : '(Toate)'}</span>
+            {exportingCsv ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
+            <span className="truncate">{exportingCsv ? 'Se exportă...' : `Export Excel ${selectedOrders.length > 0 ? `(${selectedOrders.length})` : '(Toate)'}`}</span>
           </button>
 
           {/* Export XML */}
           <button 
             onClick={handleExportXml}
-            className="min-h-[40px] px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+            disabled={exportingXml}
+            className="min-h-[40px] px-3.5 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
             title="Exportă în format XML"
           >
-            <FileCode size={14} />
-            <span>Export XML</span>
+            {exportingXml ? <Loader2 size={14} className="animate-spin" /> : <FileCode size={14} />}
+            <span>{exportingXml ? 'Se exportă...' : 'Export XML'}</span>
           </button>
         </div>
       </div>
@@ -812,21 +937,23 @@ export default function InvoicesPage() {
 
             <button
               onClick={handleExportCsv}
-              className="h-8 sm:h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+              disabled={exportingCsv}
+              className="h-8 sm:h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
               title="Exportă facturile selectate în Excel"
             >
-              <FileSpreadsheet size={13} />
-              <span>Exportă Excel ({selectedOrders.length})</span>
+              {exportingCsv ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}
+              <span>{exportingCsv ? 'Se exportă...' : `Exportă Excel (${selectedOrders.length})`}</span>
             </button>
 
             {oblioStatus.enabled && (
               <button
                 onClick={handleBulkEmitOblio}
-                className="h-8 sm:h-9 px-3 bg-[#e32f8c] hover:bg-[#00bad9] text-slate-950 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                disabled={bulkEmitting}
+                className="h-8 sm:h-9 px-3 bg-[#e32f8c] hover:bg-[#00bad9] text-slate-950 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
                 title="Emite facturile selectate în Oblio și trimite în SPV"
               >
-                <Send size={13} />
-                <span>Emite în Oblio ({selectedOrders.length})</span>
+                {bulkEmitting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                <span>{bulkEmitting ? 'Se emit în Oblio...' : `Emite în Oblio (${selectedOrders.length})`}</span>
               </button>
             )}
           </div>
@@ -836,10 +963,7 @@ export default function InvoicesPage() {
       {/* 📄 INVOICES CARD LIST (Zero Horizontal Scroll!) */}
       <div className="space-y-3 sm:space-y-4">
         {loading ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-3">
-            <RefreshCw size={24} className="mx-auto text-slate-400 animate-spin" />
-            <p className="text-xs sm:text-sm font-bold text-slate-600">Se încarcă facturile...</p>
-          </div>
+          renderInvoicesListSkeleton()
         ) : filteredInvoices.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-2">
             <FileText size={32} className="mx-auto text-slate-300" />
@@ -991,17 +1115,17 @@ export default function InvoicesPage() {
                     {oblioStatus.enabled && !isCancelled(inv.status) && (
                       <button
                         onClick={() => handleEmitOblio(targetOrderId)}
-                        disabled={isEmitting}
-                        className={`min-h-[40px] px-3.5 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                        disabled={isEmitting || bulkEmitting}
+                        className={`min-h-[40px] px-3.5 sm:px-4 rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-60 ${
                           oblioInfo 
                             ? 'bg-slate-800 hover:bg-slate-700 text-white shadow-xs'
-                            : 'bg-[#e32f8c] hover:bg-[#00bad9] active:scale-95 text-slate-950 shadow-md shadow-[#e32f8c]/20'
+                            : 'bg-[#e32f8c] hover:bg-[#00bad9] text-slate-950 shadow-md shadow-[#e32f8c]/20'
                         }`}
                       >
-                        <Send size={13} className={isEmitting ? 'animate-spin' : ''} />
+                        {isEmitting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                         <span>
                           {isEmitting 
-                            ? 'Se trimite în SPV...' 
+                            ? 'Se emite...' 
                             : oblioInfo 
                               ? 'Re-emite în Oblio' 
                               : 'Emite în Oblio (SPV)'}

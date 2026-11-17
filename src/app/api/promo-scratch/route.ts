@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { normalizePromoSettings } from '@/lib/promo-config';
 import {
@@ -11,16 +11,61 @@ import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/rate
 
 export const dynamic = 'force-dynamic';
 
+const SCRATCH_COOKIE_NAME = 'tz_scratch_coupon';
+
 export async function POST() {
+  const noStoreHeaders = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' };
+
   try {
     const headersList = await headers();
     const ip = getClientIpFromHeaders(headersList);
-    const { allowed } = await checkRateLimit(rateLimiters.checkoutUpdate, ip, 'promo-scratch');
+    const { allowed, retryAfter, headers: rlHeaders } = await checkRateLimit(
+      rateLimiters.promoScratch,
+      ip,
+      'promoScratch'
+    );
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Too many requests. Please try again later.' },
-        { status: 429 }
+        { success: false, error: 'Too many requests. Please try again later.', retryAfter },
+        { status: 429, headers: { ...rlHeaders, ...noStoreHeaders } }
       );
+    }
+
+    // Reuse active cookie-bound scratch coupon if already issued to this visitor
+    const cookieStore = await cookies();
+    const existingRaw = cookieStore.get(SCRATCH_COOKIE_NAME)?.value;
+    if (existingRaw) {
+      try {
+        const parsed = JSON.parse(Buffer.from(existingRaw, 'base64').toString('utf8'));
+        const existingCode = typeof parsed?.code === 'string' ? parsed.code.trim().toUpperCase() : '';
+        if (/^SCRATCH-[A-Z0-9-]+$/i.test(existingCode)) {
+          const { data: existingCoupon } = await supabaseAdmin
+            .from('coupons')
+            .select('code, value, expires_at, is_active, used_count, usage_limit')
+            .eq('code', existingCode)
+            .maybeSingle();
+
+          const notExpired =
+            !existingCoupon?.expires_at || new Date(existingCoupon.expires_at).getTime() > Date.now();
+          const notExhausted =
+            existingCoupon?.usage_limit == null ||
+            Number(existingCoupon.used_count || 0) < Number(existingCoupon.usage_limit);
+
+          if (existingCoupon && existingCoupon.is_active && notExpired && notExhausted) {
+            return NextResponse.json(
+              {
+                success: true,
+                code: existingCoupon.code,
+                discountPercent: Number(existingCoupon.value),
+                expiresAt: existingCoupon.expires_at || parsed.expiresAt,
+              },
+              { headers: noStoreHeaders }
+            );
+          }
+        }
+      } catch {
+        // Invalid cookie payload — proceed to issue a fresh coupon
+      }
     }
 
     // Opportunistic DB cleanup of expired unused scratch coupons
@@ -36,7 +81,7 @@ export async function POST() {
     if (!config.isActive) {
       return NextResponse.json(
         { success: false, error: 'Promoția nu este activă momentan.' },
-        { status: 400 }
+        { status: 400, headers: noStoreHeaders }
       );
     }
 
@@ -44,7 +89,7 @@ export async function POST() {
     const ttlHours = Math.max(1, Math.min(168, Number(config.scratchTtlHours) || 24));
     const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
 
-    let createdCoupon: any = null;
+    let createdCoupon: { code: string; value: number; expires_at: string } | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
       const code = generateUniqueScratchCode();
       const { data, error } = await supabaseAdmin
@@ -61,7 +106,7 @@ export async function POST() {
           is_active: true,
           is_stackable: false,
         })
-        .select('*')
+        .select('code, value, expires_at')
         .single();
 
       if (!error && data) {
@@ -73,8 +118,30 @@ export async function POST() {
     if (!createdCoupon) {
       return NextResponse.json(
         { success: false, error: 'Nu s-a putut genera codul promoțional unic.' },
-        { status: 500 }
+        { status: 500, headers: noStoreHeaders }
       );
+    }
+
+    try {
+      cookieStore.set(
+        SCRATCH_COOKIE_NAME,
+        Buffer.from(
+          JSON.stringify({
+            code: createdCoupon.code,
+            value: discountPercent,
+            expiresAt,
+          })
+        ).toString('base64'),
+        {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: ttlHours * 3600,
+          path: '/',
+        }
+      );
+    } catch {
+      // Non-fatal if cookie cannot be written
     }
 
     return NextResponse.json(
@@ -84,20 +151,14 @@ export async function POST() {
         discountPercent,
         expiresAt,
         ttlHours,
-        coupon: createdCoupon,
       },
-      {
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        },
-      }
+      { headers: noStoreHeaders }
     );
   } catch (err: any) {
     console.error('[promo-scratch] Error generating scratch coupon:', err);
     return NextResponse.json(
       { success: false, error: 'Eroare internă la generarea premiului.' },
-      { status: 500 }
+      { status: 500, headers: noStoreHeaders }
     );
   }
 }
-

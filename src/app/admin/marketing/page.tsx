@@ -51,6 +51,7 @@ export default function MarketingPage() {
   }, []);
 
   const handleSend = async () => {
+    if (sending) return;
     if (!formData.subject || !formData.title || !formData.message) {
       toast.error("Te rugăm să completezi Subiectul, Titlul și Mesajul.");
       return;
@@ -86,15 +87,17 @@ export default function MarketingPage() {
         <div className="flex gap-4 w-full md:w-auto">
           {activeTab === 'editor' && (
             <button 
+              type="button"
               onClick={() => setActiveTab('campaigns')}
-              className="h-10 px-4 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all flex-1 md:flex-none"
+              className="h-10 px-4 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 active:scale-[0.98] transition-all flex-1 md:flex-none cursor-pointer"
             >
               Anulează
             </button>
           )}
           <button 
+            type="button"
             onClick={() => setActiveTab('editor')}
-            className={`h-10 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 flex-1 md:flex-none ${
+            className={`h-10 px-4 rounded-lg text-sm font-bold active:scale-[0.98] transition-all flex items-center justify-center gap-2 flex-1 md:flex-none cursor-pointer ${
               activeTab === 'editor' 
               ? 'bg-[#e32f8c] text-black shadow-sm' 
               : 'bg-[#e32f8c] text-black hover:bg-[#c41a72] shadow-sm'
@@ -108,9 +111,27 @@ export default function MarketingPage() {
       {activeTab === 'campaigns' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-bottom-4 duration-500">
           {loading ? (
-            <div className="col-span-1 md:col-span-2 flex justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-[#e32f8c]" />
-            </div>
+            [...Array(4)].map((_, idx) => (
+              <div key={idx} className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-sm animate-pulse">
+                <div className="flex items-start justify-between gap-3 mb-6 sm:mb-8">
+                  <div className="space-y-2 flex-1">
+                    <div className="h-6 bg-slate-200 rounded-xl w-3/4" />
+                    <div className="h-3.5 bg-slate-100 rounded-lg w-1/3" />
+                  </div>
+                  <div className="h-6 w-16 bg-slate-200 rounded-full shrink-0" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-2">
+                    <div className="h-3 bg-slate-200 rounded w-20" />
+                    <div className="h-7 bg-slate-200 rounded-lg w-14" />
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-2">
+                    <div className="h-3 bg-slate-200 rounded w-20" />
+                    <div className="h-7 bg-slate-200 rounded-lg w-14" />
+                  </div>
+                </div>
+              </div>
+            ))
           ) : campaigns.length === 0 ? (
             <div className="col-span-1 md:col-span-2 p-12 text-center text-slate-500 font-bold bg-white border border-slate-200 rounded-3xl shadow-sm">
               Nicio campanie trimisă încă.
@@ -264,11 +285,12 @@ export default function MarketingPage() {
                  </div>
                )}
                <button 
+                 type="button"
                  onClick={handleSend}
                  disabled={sending}
-                 className="w-full h-12 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                 className="w-full h-12 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                >
-                 {sending ? <Loader2 className="animate-spin" size={18} /> : <><Send size={18} /> Trimite Campania Acum</>}
+                 {sending ? <><Loader2 className="animate-spin" size={18} /> <span>Se trimite...</span></> : <><Send size={18} /> Trimite Campania Acum</>}
                </button>
              </div>
           </div>

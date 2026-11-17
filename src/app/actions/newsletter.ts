@@ -24,13 +24,27 @@ export async function subscribeToNewsletter(
       };
     }
 
-    const cleanEmail = (email || '').trim().toLowerCase().slice(0, 150);
+    const cleanEmail = (email || '').replace(/[\r\n]/g, '').trim().toLowerCase().slice(0, 150);
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return { success: false, error: locale === 'en' ? "Invalid email address." : "Adresă de email invalidă." };
     }
 
-    const displayName = (name?.trim() || (locale === 'ro' ? 'TrenZone' : 'Champion')).slice(0, 80);
-    console.log(`📩 [NEWSLETTER] New subscription attempt from ${source}: ${cleanEmail} (${displayName})`);
+    const safeLocale: "ro" | "en" = locale === "en" ? "en" : "ro";
+    const safeSource = String(source || "promo-popup").replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 50) || "promo-popup";
+    const displayName = (name?.trim() || (safeLocale === 'ro' ? 'TrenZone' : 'Champion')).slice(0, 80);
+
+    // Secondary per-email rate limit to prevent Resend inbox-bombing across rotating IPs
+    const { allowed: emailAllowed } = await checkRateLimit(rateLimiters.contact, `nl-email:${cleanEmail}`, 'contact');
+    if (!emailAllowed) {
+      return {
+        success: false,
+        error: safeLocale === 'en'
+          ? "Please wait a few minutes before subscribing with this email again."
+          : "Te rugăm să aștepți câteva minute înainte de a reîncerca cu acest email."
+      };
+    }
+
+    console.log(`[NEWSLETTER] New subscription attempt from ${safeSource}: ${cleanEmail}`);
 
     // Use the ADMIN client to bypass RLS and perform upsert (insert or update)
     const { error: dbError } = await supabaseAdmin
@@ -39,8 +53,8 @@ export async function subscribeToNewsletter(
         { 
           email: cleanEmail, 
           full_name: displayName, 
-          locale, 
-          source: source,
+          locale: safeLocale, 
+          source: safeSource,
           is_active: true,
           subscribed_at: new Date().toISOString()
         },
@@ -48,13 +62,13 @@ export async function subscribeToNewsletter(
       );
 
     if (dbError) {
-      console.error("❌ [NEWSLETTER ACTION] Database Error:", dbError);
+      console.error("[NEWSLETTER ACTION] Database Error:", dbError);
       return { 
         success: false, 
-        error: `Database Error: ${dbError.message || JSON.stringify(dbError)}` 
+        error: safeLocale === 'en' ? 'Database error while subscribing.' : 'Eroare la salvarea abonării.' 
       };
     } else {
-      console.log("✅ [NEWSLETTER ACTION] Successfully saved to database.");
+      console.log("[NEWSLETTER ACTION] Successfully saved to database.");
       
       // Dacă s-a abonat, ne asigurăm că îl ștergem din lista de dezabonați (opt-in explicit)
       await supabaseAdmin
@@ -64,14 +78,14 @@ export async function subscribeToNewsletter(
     }
 
     // 2. Trigger Welcome Email via Resend (sends active 5% coupon e.g. TREN5)
-    console.log("📧 [NEWSLETTER ACTION] Triggering welcome email...");
+    console.log("[NEWSLETTER ACTION] Triggering welcome email...");
     let emailSent = false;
     try {
-      await sendWelcomeEmail(cleanEmail, displayName, locale);
+      await sendWelcomeEmail(cleanEmail, displayName, safeLocale);
       emailSent = true;
-      console.log("✅ [NEWSLETTER ACTION] Welcome email sent successfully.");
+      console.log("[NEWSLETTER ACTION] Welcome email sent successfully.");
     } catch (emailErr: any) {
-      console.error("⚠️ [NEWSLETTER ACTION] Email failed but user saved:", emailErr);
+      console.error("[NEWSLETTER ACTION] Email failed but user saved:", emailErr);
     }
 
     return { success: true, emailSent };

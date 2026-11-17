@@ -5,8 +5,7 @@ import Image from 'next/image';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { X, ArrowLeft, Star, Image as ImageIcon, Video, CheckCircle2, ChevronDown, Check } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { X, ArrowLeft, Star, Image as ImageIcon, CheckCircle2, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { localizeBadge } from '@/lib/utils';
 
 const DEFAULT_PRODUCTS = [
@@ -139,6 +138,7 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
       setName("");
       setEmail("");
       setPhotos([]);
+      setSubmitError(null);
       setIsSubmitting(false);
     }, 300);
     onClose();
@@ -153,7 +153,9 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       const uploadedImageUrls: string[] = [];
       
@@ -264,14 +266,14 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
             {step < 4 && (
               <div className="flex items-center justify-between p-4 absolute top-0 left-0 w-full z-10 bg-zinc-950/90 backdrop-blur-md border-b border-white/10">
                 {step > 0 ? (
-                  <button onClick={handlePrev} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                  <button type="button" onClick={handlePrev} className="p-2 hover:bg-white/10 rounded-full transition-all active:scale-[0.98] cursor-pointer">
                     <ArrowLeft className="w-5 h-5 text-white" />
                   </button>
                 ) : (
                   <div className="w-9" /> // Spacer
                 )}
 
-                <button onClick={handleClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white text-sm font-bold">
+                <button type="button" onClick={handleClose} className="p-2 hover:bg-white/10 rounded-full transition-all active:scale-[0.98] text-white text-sm font-bold cursor-pointer">
                   {step === 1 ? t.skip : <X className="w-5 h-5" />}
                 </button>
               </div>
@@ -494,8 +496,9 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
                             </Reorder.Group>
 
                             <button
+                              type="button"
                               onClick={handleNext}
-                              className="w-full py-4 mt-2 bg-white text-black font-black uppercase text-xs md:text-sm tracking-wider rounded-xl hover:bg-[#e32f8c] transition-all shadow-md cursor-pointer"
+                              className="w-full py-4 mt-2 bg-white text-black font-black uppercase text-xs md:text-sm tracking-wider rounded-xl hover:bg-[#e32f8c] transition-all active:scale-[0.98] shadow-md cursor-pointer"
                             >
                               {t.next}
                             </button>
@@ -524,9 +527,10 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
                       className="w-full flex-1 min-h-[200px] p-4 bg-zinc-900 border border-white/10 rounded-xl resize-none outline-none focus:border-[#e32f8c] text-white placeholder:text-zinc-500 transition-all font-medium"
                     />
                     <button
+                      type="button"
                       onClick={handleNext}
                       disabled={reviewText.trim().length < 5}
-                      className="w-full py-4 mt-6 bg-white text-black font-black uppercase text-xs md:text-sm tracking-wider rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#e32f8c] hover:text-black transition-all cursor-pointer"
+                      className="w-full py-4 mt-6 bg-white text-black font-black uppercase text-xs md:text-sm tracking-wider rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#e32f8c] hover:text-black transition-all active:scale-[0.98] cursor-pointer"
                     >
                       {t.next}
                     </button>
@@ -574,14 +578,19 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
                     )}
 
                     <button
+                      type="button"
                       onClick={handleSubmit}
-                      disabled={isSubmitting || !name || !email.includes('@')}
-                      className="w-full py-4 mt-6 bg-white text-black font-black uppercase text-xs md:text-sm tracking-wider rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#e32f8c] hover:text-black transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      disabled={isSubmitting || !name.trim() || !email.includes('@')}
+                      className="w-full py-4 mt-6 bg-white text-black font-black uppercase text-xs md:text-sm tracking-wider rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#e32f8c] hover:text-black transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      {isSubmitting ? (
-                        <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                      ) : null}
-                      {isSubmitting ? t.submitting : t.submit}
+                      {isSubmitting && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                      <span>
+                        {isSubmitting
+                          ? photos.length > 0
+                            ? (locale === 'ro' ? 'Se încarcă pozele și se trimite...' : 'Uploading & submitting...')
+                            : t.submitting
+                          : t.submit}
+                      </span>
                     </button>
                   </motion.div>
                 )}
@@ -604,8 +613,9 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
                       {t.success_sub}
                     </p>
                     <button
+                      type="button"
                       onClick={handleClose}
-                      className="w-full py-4 bg-white text-black font-black uppercase text-xs md:text-sm tracking-wider rounded-xl hover:bg-[#e32f8c] transition-all cursor-pointer"
+                      className="w-full py-4 bg-white text-black font-black uppercase text-xs md:text-sm tracking-wider rounded-xl hover:bg-[#e32f8c] transition-all active:scale-[0.98] cursor-pointer"
                     >
                       {t.close}
                     </button>

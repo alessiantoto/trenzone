@@ -8,7 +8,6 @@ import {
   ArrowUpRight,
   ChevronDown,
   Banknote,
-  Loader2,
   Calendar,
   MapPin,
   Globe,
@@ -27,6 +26,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
+import AdminLoading from './loading';
 import { ModernDateRangePicker } from './components/ModernDateRangePicker';
 import {
   Line,
@@ -353,11 +353,7 @@ export default function AdminDashboard() {
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
 
   if (isRedirecting || (loading && !stats)) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#e32f8c]" />
-      </div>
-    );
+    return <AdminLoading />;
   }
 
   const actionCenter = stats?.actionCenter || {};
@@ -404,15 +400,26 @@ export default function AdminDashboard() {
             <button
               type="button"
               onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold border transition-all active:scale-[0.98] cursor-pointer ${
                 autoRefresh
                   ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
                   : 'bg-white/[0.05] text-zinc-400 border-white/10'
               }`}
               title={`Ultima sincronizare: ${lastRefreshedAt.toLocaleTimeString('ro-RO')}`}
             >
-              <RefreshCw size={11} className={isRefreshing ? 'animate-spin text-emerald-400' : ''} />
-              <span className="hidden sm:inline">{autoRefresh ? 'Sync 10s' : 'Pauză'}</span>
+              <RefreshCw size={11} className={isRefreshing || loading ? 'animate-spin text-emerald-400' : ''} />
+              <span className="hidden sm:inline">{loading ? 'Se actualizează...' : autoRefresh ? 'Sync 10s' : 'Pauză'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fetchData(true)}
+              disabled={isRefreshing || loading}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 border border-white/10 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
+              title="Reîmprospătează datele acum"
+            >
+              <RefreshCw size={11} className={isRefreshing || loading ? 'animate-spin text-[#ff6eb6]' : ''} />
+              <span className="hidden sm:inline">{isRefreshing || loading ? 'Se procesează...' : 'Actualizează'}</span>
             </button>
 
             <Link
@@ -534,7 +541,7 @@ export default function AdminDashboard() {
                           key={p.label}
                           type="button"
                           onClick={() => handlePresetSelect(p)}
-                          className={`text-xs font-bold px-3 py-2 rounded-lg text-left transition-colors ${
+                          className={`text-xs font-bold px-3 py-2 rounded-lg text-left transition-all active:scale-[0.98] cursor-pointer ${
                             datePreset === p.label ? 'bg-[#e32f8c] text-black' : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
                           }`}
                         >
@@ -570,7 +577,7 @@ export default function AdminDashboard() {
                 key={p.label}
                 type="button"
                 onClick={() => handlePresetSelect(p)}
-                className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] font-bold transition-all active:scale-[0.98] cursor-pointer ${
                   active ? 'bg-white text-black font-black shadow-sm' : 'bg-white/[0.06] text-zinc-300 hover:bg-white/[0.12]'
                 }`}
               >
@@ -585,7 +592,7 @@ export default function AdminDashboard() {
           <button
             type="button"
             onClick={() => setHeroMetric('revenue')}
-            className={`text-left rounded-2xl p-3 sm:p-3.5 border transition-all cursor-pointer ${
+            className={`text-left rounded-2xl p-3 sm:p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
               heroMetric === 'revenue'
                 ? 'bg-white/[0.11] border-[#e32f8c]/60 shadow-[0_0_24px_-8px_rgba(227,47,140,0.45)]'
                 : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'
@@ -609,7 +616,7 @@ export default function AdminDashboard() {
           <button
             type="button"
             onClick={() => setHeroMetric('orders')}
-            className={`text-left rounded-2xl p-3 sm:p-3.5 border transition-all cursor-pointer ${
+            className={`text-left rounded-2xl p-3 sm:p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
               heroMetric === 'orders'
                 ? 'bg-white/[0.11] border-sky-400/60 shadow-[0_0_24px_-8px_rgba(56,189,248,0.45)]'
                 : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCartStore, isPreorder } from "@/store/useCartStore";
-import { ChevronRight, Truck, MapPin, ShieldCheck, Check } from "lucide-react";
+import { ChevronRight, Truck, MapPin, ShieldCheck, Check, Loader2, Lock } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter, Link } from "@/i18n/routing";
 import { getShippingServices, getLocalizedServiceName, getShippingCost, isServiceAvailable, ParcelMetrics, COUNTRY_SERVICES, ALLOWED_SHIPPING_COUNTRIES, EXPRESS_ALLOWED_COUNTRIES, toStripeIsoCountryCode, isEuCustomsCountry } from "@/lib/shipping-config";
@@ -266,11 +266,24 @@ const StripePaymentSection = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-zinc-100 p-6 rounded-3xl border border-zinc-100 font-bold min-h-[100px] flex flex-col justify-center relative overflow-hidden">
+      <div className="bg-zinc-100 p-6 rounded-3xl border border-zinc-100 font-bold min-h-[220px] flex flex-col justify-center relative overflow-hidden">
         {(isUpdatingPaymentInfo || !stripe || !elements) && (
-          <div className="absolute inset-0 bg-zinc-100/80 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center gap-4 p-6">
-            <div className="w-4 h-4 border-2 border-[#e32f8c] border-t-transparent rounded-full animate-spin" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('loading_payment_methods')}</p>
+          <div className="absolute inset-0 bg-zinc-100/95 backdrop-blur-[2px] z-10 flex flex-col justify-center gap-3 p-6" aria-label={t('loading_payment_methods')}>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="h-11 rounded-xl bg-zinc-200/80 animate-pulse" />
+              <div className="h-11 rounded-xl bg-zinc-200/80 animate-pulse" />
+            </div>
+            <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-32 rounded bg-zinc-200 animate-pulse" />
+                <div className="h-4 w-16 rounded bg-zinc-100 animate-pulse" />
+              </div>
+              <div className="h-11 w-full rounded-xl bg-zinc-100 animate-pulse" />
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="h-11 rounded-xl bg-zinc-100 animate-pulse" />
+                <div className="h-11 rounded-xl bg-zinc-100 animate-pulse" />
+              </div>
+            </div>
           </div>
         )}
         
@@ -398,13 +411,20 @@ const StripePaymentSection = ({
       </AnimatePresence>
 
       <div className="flex gap-4 pt-2">
-        <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px]">{t('back')}</Button>
+        <Button type="button" variant="outline" onClick={handleBack} disabled={loading} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer">{t('back')}</Button>
         <Button 
           onClick={handleStripeSubmit} 
           disabled={loading || isUpdatingPaymentInfo || !stripe || !elements} 
-          className="relative flex-[1.5] h-14 rounded-2xl font-black uppercase tracking-wider text-xs overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98] bg-[#e32f8c] hover:bg-black text-black hover:text-white"
+          className="relative flex-[1.5] h-14 rounded-2xl font-black uppercase tracking-wider text-xs overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98] bg-[#e32f8c] hover:bg-black text-black hover:text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
         >
-          {loading ? t('processing') : t('pay_now')}
+          {loading ? (
+            <span className="inline-flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              <span>{t('processing')}</span>
+            </span>
+          ) : (
+            t('pay_now')
+          )}
         </Button>
       </div>
     </div>
@@ -1851,7 +1871,7 @@ export default function CheckoutForm({
                   items: items.filter(i => isDigitalProgramItem(i) || isPreorder(i, i.selectedVariant))
                 });
               }}
-              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-colors"
+              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-all active:scale-[0.98] cursor-pointer"
             >
               {locale === 'ro' ? 'Păstrează doar Precomanda' : 'Keep only Pre-order items'}
             </button>
@@ -1862,7 +1882,7 @@ export default function CheckoutForm({
                   items: items.filter(i => !isPreorder(i, i.selectedVariant))
                 });
               }}
-              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition-colors"
+              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition-all active:scale-[0.98] cursor-pointer"
             >
               {locale === 'ro' ? 'Păstrează doar Produsele în Stoc' : 'Keep only In-Stock items'}
             </button>
@@ -1916,8 +1936,9 @@ export default function CheckoutForm({
                     errors.email && "!border-red-500 !ring-2 !ring-red-100"
                   )}
                 />
-                <p className="text-[9px] text-zinc-400 font-bold leading-normal px-2 mt-1 select-none">
-                  🔒 {t('abandoned_cart_disclosure')}
+                <p className="text-[9px] text-zinc-400 font-bold leading-normal px-2 mt-1 select-none flex items-center gap-1">
+                  <Lock className="w-3 h-3 shrink-0 text-zinc-400" />
+                  <span>{t('abandoned_cart_disclosure')}</span>
                 </p>
               </div>
 
@@ -2096,7 +2117,7 @@ export default function CheckoutForm({
 
             {message && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-bold border border-red-100">{message}</div>}
 
-            <Button type="submit" className="w-full bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px]">
+            <Button type="submit" className="w-full bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all active:scale-[0.98] shadow-lg hover:shadow-xl cursor-pointer">
               {t('continue_to_shipping')}
               <ChevronRight className="w-5 h-5 ml-2" />
             </Button>
@@ -2233,7 +2254,7 @@ export default function CheckoutForm({
                                     <button 
                                       type="button"
                                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsSamedayLockerOpen(true); }}
-                                      className="mt-2 w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors shadow-sm"
+                                      className="mt-2 w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
                                     >
                                       {locale === 'en' ? 'Select Easybox on Map' : 'Alege Easybox de pe Hartă'}
                                     </button>
@@ -2260,8 +2281,8 @@ export default function CheckoutForm({
             {message && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-bold border border-red-100 mb-4">{message}</div>}
 
             <div className="flex gap-4">
-              <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px]">{t('back')}</Button>
-              <Button type="submit" disabled={!selectedServiceId} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98]">{locale === 'en' ? 'Next Step' : 'Următorul Pas'}</Button>
+              <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer">{t('back')}</Button>
+              <Button type="submit" disabled={!selectedServiceId} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-50 cursor-pointer">{locale === 'en' ? 'Next Step' : 'Următorul Pas'}</Button>
             </div>
           </motion.div>
         )}
@@ -2519,12 +2540,12 @@ export default function CheckoutForm({
             </div>
 
             <div className="flex gap-4 pt-4">
-              <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px]">{t('back')}</Button>
+              <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer">{t('back')}</Button>
               <Button type="button" onClick={() => {
                 // Ensure online payment method is selected (or COD if Stripe disabled in RO) before Step 4
                 setPaymentMethod(country === 'RO' && isStripeDisabled ? 'cod' : 'online');
                 setCurrentStep(4);
-              }} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98]">{t('continue_to_payment')}</Button>
+              }} className="relative flex-[1.5] bg-[#e32f8c] hover:bg-black text-black hover:text-white h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98] cursor-pointer">{t('continue_to_payment')}</Button>
             </div>
           </motion.div>
         )}
@@ -2553,7 +2574,7 @@ export default function CheckoutForm({
                     // Sync Stripe so Apple Pay / Google Pay shows correct total with -5 lei card discount
                     await syncStripePaymentMethod('online');
                   }}
-                  className={`relative overflow-hidden flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 transition-all h-full ${paymentMethod === 'online' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'}`}
+                  className={`relative overflow-hidden flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 transition-all active:scale-[0.98] cursor-pointer h-full ${paymentMethod === 'online' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'}`}
                 >
                   <div className="absolute top-0 right-0 bg-[#ff007a] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-2xl shadow-sm">
                     -{formatPrice(getProductPrice(5, currency), currency)} {locale === 'ro' ? 'REDUCERE' : 'DISCOUNT'}
@@ -2571,7 +2592,7 @@ export default function CheckoutForm({
                       if (hasPreorderItems || hasDigitalItems) return;
                       setPaymentMethod('cod');
                     }}
-                    className={`flex-1 w-full flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'cod' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'} ${(hasPreorderItems || hasDigitalItems) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`flex-1 w-full flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'cod' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'} ${(hasPreorderItems || hasDigitalItems) ? 'opacity-50 cursor-not-allowed' : 'active:scale-[0.98] cursor-pointer'}`}
                   >
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${paymentMethod === 'cod' ? 'bg-[#e32f8c] text-white' : 'bg-white text-zinc-400'}`}>
                       <Truck className="w-5 h-5" />
@@ -2708,7 +2729,7 @@ export default function CheckoutForm({
               </AnimatePresence>
               
               <div className="flex gap-4">
-                <Button type="button" variant="outline" onClick={handleBack} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px]">{t('back')}</Button>
+                <Button type="button" variant="outline" onClick={handleBack} disabled={loading} className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all cursor-pointer">{t('back')}</Button>
                 <Button 
                   type="submit" 
                   onClick={(e) => {
@@ -2718,9 +2739,16 @@ export default function CheckoutForm({
                     }
                   }}
                   disabled={loading} 
-                  className="relative flex-[1.5] h-14 rounded-2xl font-black uppercase tracking-wider text-xs overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98] bg-[#e32f8c] hover:bg-black text-black hover:text-white"
+                  className="relative flex-[1.5] h-14 rounded-2xl font-black uppercase tracking-wider text-xs overflow-hidden transition-all shadow-lg hover:shadow-xl active:scale-[0.98] bg-[#e32f8c] hover:bg-black text-black hover:text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  {loading ? t('processing') : t('pay_now')}
+                  {loading ? (
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span>{t('processing')}</span>
+                    </span>
+                  ) : (
+                    t('pay_now')
+                  )}
                 </Button>
               </div>
               </div>

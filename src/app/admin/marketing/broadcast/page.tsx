@@ -60,6 +60,9 @@ export default function BroadcastMarketingPage() {
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('desktop');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedCampaignForPreview, setSelectedCampaignForPreview] = useState<CampaignItem | null>(null);
+  const [togglingSubId, setTogglingSubId] = useState<string | null>(null);
+  const [deletingSubId, setDeletingSubId] = useState<string | null>(null);
+  const [deletingCampId, setDeletingCampId] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -195,6 +198,7 @@ export default function BroadcastMarketingPage() {
 
   // Handle Send Campaign
   const executeSendCampaign = async () => {
+    if (sending) return;
     setShowConfirmModal(false);
     setSending(true);
 
@@ -275,8 +279,10 @@ export default function BroadcastMarketingPage() {
 
   // Delete Campaign
   const handleDeleteCampaign = async (id: number, imageUrl?: string) => {
+    if (deletingCampId === id) return;
     if (!confirm('Ești sigur că vrei să ștergi această campanie din istoric?')) return;
 
+    setDeletingCampId(id);
     try {
       const res = await deleteMarketingCampaign(id, imageUrl);
       if (res.success) {
@@ -287,25 +293,34 @@ export default function BroadcastMarketingPage() {
       }
     } catch (err) {
       toast.error('Eroare la ștergere.');
+    } finally {
+      setDeletingCampId(null);
     }
   };
 
   // Subscriber Management Actions
   const handleToggleSubscriber = async (id: string, currentStatus: boolean) => {
+    if (togglingSubId === id) return;
+    setTogglingSubId(id);
+    const newStatus = !currentStatus;
+    // Optimistic update for instant feedback
+    setSubscribers(prev => prev.map(s => s.id === id ? { ...s, isActive: newStatus } : s));
     try {
-      const newStatus = !currentStatus;
       await toggleSubscriberActiveStatus(id, newStatus);
-      setSubscribers(prev => prev.map(s => s.id === id ? { ...s, isActive: newStatus } : s));
       toast.success(newStatus ? 'Abonat reactivat!' : 'Abonat marcat ca inactiv.');
-      fetchData();
     } catch (err) {
+      setSubscribers(prev => prev.map(s => s.id === id ? { ...s, isActive: currentStatus } : s));
       toast.error('Eroare la modificarea statusului.');
+    } finally {
+      setTogglingSubId(null);
     }
   };
 
   const handleDeleteSubscriber = async (id: string, email: string) => {
+    if (deletingSubId === id) return;
     if (!confirm(`Sigur dorești să elimini permanent abonatul "${email}"?`)) return;
 
+    setDeletingSubId(id);
     try {
       await deleteSubscriber(id);
       setSubscribers(prev => prev.filter(s => s.id !== id));
@@ -313,6 +328,8 @@ export default function BroadcastMarketingPage() {
       fetchData();
     } catch (err) {
       toast.error('Eroare la eliminarea abonatului.');
+    } finally {
+      setDeletingSubId(null);
     }
   };
 
@@ -466,8 +483,9 @@ export default function BroadcastMarketingPage() {
         <div className="flex items-center gap-2.5 w-full md:w-auto">
           <button
             type="button"
-            onClick={() => { fetchData(); toast.success('Date actualizate!'); }}
-            className="h-11 w-11 shrink-0 text-slate-500 hover:text-slate-800 hover:bg-slate-100 bg-white rounded-xl border border-slate-200 transition-colors flex items-center justify-center cursor-pointer"
+            disabled={loading}
+            onClick={() => { if (!loading) { fetchData(); toast.success('Date actualizate!'); } }}
+            className="h-11 w-11 shrink-0 text-slate-500 hover:text-slate-800 hover:bg-slate-100 active:scale-[0.98] bg-white rounded-xl border border-slate-200 transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
             title="Reîmprospătează datele"
             aria-label="Reîmprospătează datele"
           >
@@ -477,10 +495,10 @@ export default function BroadcastMarketingPage() {
           <button
             type="button"
             onClick={() => setActiveTab('editor')}
-            className={`h-11 px-5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 flex-1 md:flex-none shadow-sm cursor-pointer ${
+            className={`h-11 px-5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 flex-1 md:flex-none shadow-sm cursor-pointer active:scale-[0.98] ${
               activeTab === 'editor'
                 ? 'bg-slate-900 text-white shadow-md'
-                : 'bg-[#e32f8c] text-white hover:bg-[#c41a72] active:scale-95 shadow-md shadow-[#e32f8c]/20'
+                : 'bg-[#e32f8c] text-white hover:bg-[#c41a72] shadow-md shadow-[#e32f8c]/20'
             }`}
           >
             <Plus size={16} /> Campanie Nouă
@@ -499,7 +517,7 @@ export default function BroadcastMarketingPage() {
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
-            {stats.totalAudience}
+            {loading ? <div className="h-8 w-16 bg-slate-200 rounded-lg animate-pulse my-0.5" /> : stats.totalAudience}
           </div>
           <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
             Persoane unice contactabile
@@ -515,7 +533,7 @@ export default function BroadcastMarketingPage() {
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
-            {stats.subscribersCount}
+            {loading ? <div className="h-8 w-16 bg-slate-200 rounded-lg animate-pulse my-0.5" /> : stats.subscribersCount}
           </div>
           <div className="flex flex-wrap gap-1 mt-2">
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
@@ -539,7 +557,7 @@ export default function BroadcastMarketingPage() {
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
-            {stats.customersCount}
+            {loading ? <div className="h-8 w-16 bg-slate-200 rounded-lg animate-pulse my-0.5" /> : stats.customersCount}
           </div>
           <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
             Cumpărători cu comenzi finalizate
@@ -555,7 +573,7 @@ export default function BroadcastMarketingPage() {
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
-            {stats.campaignsCount}
+            {loading ? <div className="h-8 w-16 bg-slate-200 rounded-lg animate-pulse my-0.5" /> : stats.campaignsCount}
           </div>
           <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
             Broadcast-uri expediate
@@ -607,7 +625,27 @@ export default function BroadcastMarketingPage() {
       {/* ========================================================================= */}
       {activeTab === 'campaigns' && (
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
-          {campaigns.length === 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+              {[...Array(6)].map((_, idx) => (
+                <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="h-5 w-24 bg-slate-200 rounded-full" />
+                    <div className="h-5 w-16 bg-slate-100 rounded-full" />
+                  </div>
+                  <div className="h-32 w-full bg-slate-100 rounded-xl" />
+                  <div className="space-y-2">
+                    <div className="h-4 w-4/5 bg-slate-200 rounded" />
+                    <div className="h-3 w-1/2 bg-slate-100 rounded" />
+                  </div>
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                    <div className="h-3.5 w-20 bg-slate-100 rounded" />
+                    <div className="h-7 w-28 bg-slate-200 rounded-lg" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : campaigns.length === 0 ? (
             /* RICH EMPTY STATE */
             <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center max-w-2xl mx-auto shadow-sm">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#e32f8c] to-purple-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-[#e32f8c]/30 mb-5">
@@ -794,7 +832,22 @@ export default function BroadcastMarketingPage() {
 
           {/* Subscribers Table / List */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            {filteredSubscribers.length === 0 ? (
+            {loading ? (
+              <div className="divide-y divide-slate-100 animate-pulse">
+                {[...Array(5)].map((_, idx) => (
+                  <div key={idx} className="p-4 sm:px-6 sm:py-4 flex items-center justify-between gap-4">
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-4 w-48 bg-slate-200 rounded" />
+                      <div className="h-3 w-28 bg-slate-100 rounded" />
+                    </div>
+                    <div className="hidden md:block h-5 w-16 bg-slate-100 rounded-md" />
+                    <div className="hidden md:block h-5 w-10 bg-slate-100 rounded" />
+                    <div className="hidden md:block h-4 w-28 bg-slate-100 rounded" />
+                    <div className="h-6 w-16 bg-slate-200 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : filteredSubscribers.length === 0 ? (
               <div className="p-12 text-center">
                 <BellRing size={32} className="mx-auto text-slate-300 mb-3" />
                 <h4 className="text-base font-black text-slate-800">Niciun abonat găsit</h4>
@@ -1173,7 +1226,7 @@ export default function BroadcastMarketingPage() {
               )}
             </div>
 
-            {/* ✉️ STEP 2: EMAIL CONTENT */}
+            {/* STEP 2: EMAIL CONTENT */}
             <div className="space-y-5 pt-4 border-t border-slate-100">
               <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
                 2. Subiect & Conținut Email
@@ -1315,9 +1368,10 @@ export default function BroadcastMarketingPage() {
               </div>
 
               <button
+                type="button"
                 onClick={handleOpenSendConfirmation}
                 disabled={sending || (formData.segment === 'custom' && customRecipients.length === 0)}
-                className="w-full sm:w-auto px-8 py-3.5 bg-slate-950 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-black/10 active:scale-95 disabled:opacity-50 transition-all"
+                className="w-full sm:w-auto px-8 py-3.5 bg-slate-950 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-black/10 active:scale-[0.98] disabled:opacity-50 transition-all cursor-pointer"
               >
                 {sending ? (
                   <>
@@ -1580,16 +1634,20 @@ export default function BroadcastMarketingPage() {
 
             <div className="flex gap-3 pt-2">
               <button
+                type="button"
+                disabled={sending}
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors"
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
               >
                 Renunță
               </button>
               <button
+                type="button"
+                disabled={sending}
                 onClick={executeSendCampaign}
-                className="flex-1 py-3 rounded-xl bg-[#e32f8c] hover:bg-[#c41a72] text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-[#e32f8c]/25 transition-all"
+                className="flex-1 py-3 rounded-xl bg-[#e32f8c] hover:bg-[#c41a72] active:scale-[0.98] text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-[#e32f8c]/25 transition-all cursor-pointer disabled:opacity-50"
               >
-                Confirmă & Trimite
+                {sending ? 'Se expediază...' : 'Confirmă & Trimite'}
               </button>
             </div>
           </div>

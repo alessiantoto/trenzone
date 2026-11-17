@@ -62,6 +62,32 @@ const nextConfig: NextConfig = {
     }
   },
 
+  // Legacy Shopify URL Redirects (308 Permanent Redirect)
+  async redirects() {
+    return [
+      {
+        source: '/products/x5-elbow-wraps-blue-red-pre-order',
+        destination: '/ro/product/x5-elbow-wraps',
+        permanent: true,
+      },
+      {
+        source: '/products/:slug',
+        destination: '/ro/product/:slug',
+        permanent: true,
+      },
+      {
+        source: '/products',
+        destination: '/ro/shop',
+        permanent: true,
+      },
+      {
+        source: '/collections/:path*',
+        destination: '/ro/shop',
+        permanent: true,
+      },
+    ];
+  },
+
   // Rewrites for Supabase Proxy (Cached by Cloudflare)
   async rewrites() {
     return [

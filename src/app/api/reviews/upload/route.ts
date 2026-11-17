@@ -5,27 +5,91 @@ import { uploadToR2, getR2PublicBaseUrl } from '@/lib/r2';
 
 export const dynamic = 'force-dynamic';
 
+type DetectedImageFormat = {
+  ext: 'jpg' | 'png' | 'webp' | 'gif' | 'avif';
+  mime: string;
+};
+
+function detectImageMagicBytes(bytes: Uint8Array): DetectedImageFormat | null {
+  if (bytes.length < 12) return null;
+
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { ext: 'jpg', mime: 'image/jpeg' };
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return { ext: 'png', mime: 'image/png' };
+  }
+
+  // GIF87a or GIF89a
+  if (
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38 &&
+    (bytes[4] === 0x37 || bytes[4] === 0x39) &&
+    bytes[5] === 0x61
+  ) {
+    return { ext: 'gif', mime: 'image/gif' };
+  }
+
+  // WebP: RIFF....WEBP
+  if (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return { ext: 'webp', mime: 'image/webp' };
+  }
+
+  // AVIF / HEIF ISO BMFF: ....ftyp(avif|avis|mif1|heic)
+  if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]).toLowerCase();
+    if (brand === 'avif' || brand === 'avis' || brand === 'mif1') {
+      return { ext: 'avif', mime: 'image/avif' };
+    }
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
   try {
     const ip = getClientIp(request);
-    const { allowed, retryAfter } = await checkRateLimit(
-      rateLimiters.reviews,
+    const { allowed, retryAfter, headers: rlHeaders } = await checkRateLimit(
+      rateLimiters.reviewsUpload,
       ip,
-      'reviews-upload'
+      'reviewsUpload'
     );
 
     if (!allowed) {
       return NextResponse.json(
         { success: false, error: 'Prea multe cereri de încărcare. Vă rugăm să așteptați.', retryAfter },
-        { status: 429 }
+        { status: 429, headers: rlHeaders }
       );
     }
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
-    if (!file) {
-      return NextResponse.json({ success: false, error: 'Niciun fișier furnizat.' }, { status: 400 });
+    if (!file || file.size <= 0) {
+      return NextResponse.json({ success: false, error: 'Niciun fișier valid furnizat.' }, { status: 400 });
     }
 
     // Limit to 10MB
@@ -45,15 +109,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Inspect magic bytes / file header to block HTML/SVG/script files spoofing image MIME types
-    const headerSlice = new Uint8Array(await file.slice(0, 256).arrayBuffer());
-    const headerText = Buffer.from(headerSlice).toString('utf8').toLowerCase();
+    // Read file bytes and validate BOTH positive raster image magic bytes and block active markup headers
+    const bytes = await file.arrayBuffer();
+    const byteArray = new Uint8Array(bytes);
+    const headerText = Buffer.from(byteArray.subarray(0, 256)).toString('utf8').toLowerCase();
     if (
       headerText.includes('<svg') ||
       headerText.includes('<html') ||
       headerText.includes('<script') ||
       headerText.includes('<!doctype') ||
-      headerText.includes('<?xml')
+      headerText.includes('<?xml') ||
+      headerText.includes('<?php')
     ) {
       return NextResponse.json(
         { success: false, error: 'Conținutul fișierului nu este o imagine raster validă.' },
@@ -61,15 +127,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const cleanExt = rawExt;
+    const detected = detectImageMagicBytes(byteArray);
+    if (!detected) {
+      return NextResponse.json(
+        { success: false, error: 'Semnătura fișierului nu corespunde unei imagini valide (JPG, PNG, WebP, AVIF, GIF).' },
+        { status: 400 }
+      );
+    }
+
+    const cleanExt = detected.ext;
+    const verifiedMime = detected.mime;
     const fileName = `reviews/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${cleanExt}`;
 
     // 1. Prefer Cloudflare R2 if configured
     const r2Base = getR2PublicBaseUrl();
     if (process.env.R2_BUCKET_NAME && r2Base) {
-      const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      const r2Url = await uploadToR2(buffer, fileName, file.type || `image/${cleanExt}`);
+      const r2Url = await uploadToR2(buffer, fileName, verifiedMime);
       return NextResponse.json({
         success: true,
         url: r2Url
@@ -79,15 +153,15 @@ export async function POST(request: Request) {
     // 2. Fallback to Supabase Storage
     const { error: uploadError } = await supabaseAdmin.storage
       .from('review-images')
-      .upload(fileName, file, {
+      .upload(fileName, Buffer.from(bytes), {
         cacheControl: '3600',
         upsert: false,
-        contentType: file.type
+        contentType: verifiedMime
       });
 
     if (uploadError) {
       console.error('Error uploading review image to storage:', uploadError);
-      return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'Eroare la încărcarea imaginii.' }, { status: 500 });
     }
 
     const { data: publicUrlData } = supabaseAdmin.storage
@@ -100,6 +174,6 @@ export async function POST(request: Request) {
     });
   } catch (err: any) {
     console.error('Server error in review image upload:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Eroare internă la încărcarea imaginii.' }, { status: 500 });
   }
 }

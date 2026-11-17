@@ -6,13 +6,14 @@ import { createServerClient } from "@supabase/ssr"
 const intlMiddleware = createMiddleware(routing);
 
 /**
- * 🛡️ ELITE MIDDLEWARE - TRENZONE STORE (Next.js 16+ convention)
+ * ELITE MIDDLEWARE - TRENZONE STORE (Next.js 16+ convention)
  * Handles Internationalization, Supabase Session Management, and Admin Security.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. EARLY EXIT: Skip proxy for static assets, media, next internals, API routes, and ALL POST requests (Server Actions, webhooks)
+  // Always strip/overwrite any client-supplied `x-pathname` header so callers cannot spoof `/admin/login`.
   if (
     request.method === 'POST' ||
     pathname.includes('.') || 
@@ -26,7 +27,15 @@ export async function proxy(request: NextRequest) {
     pathname === '/icon' ||
     pathname.startsWith('/icon')
   ) {
-    return NextResponse.next();
+    const cleanHeaders = new Headers(request.headers);
+    if (pathname.startsWith('/admin')) {
+      cleanHeaders.set('x-pathname', pathname);
+    } else {
+      cleanHeaders.delete('x-pathname');
+    }
+    return NextResponse.next({
+      request: { headers: cleanHeaders },
+    });
   }
 
   // 2. ADMIN REDIRECT: Prevent localized admin URLs (e.g., /ro/admin -> /admin)
@@ -72,6 +81,8 @@ export async function proxy(request: NextRequest) {
     const adminResponse = NextResponse.next({
       request: { headers: requestHeaders },
     });
+    adminResponse.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    adminResponse.headers.set('Cache-Control', 'private, no-store, max-age=0');
     response.cookies.getAll().forEach(cookie => {
       adminResponse.cookies.set(cookie);
     });
@@ -90,6 +101,7 @@ export async function proxy(request: NextRequest) {
   if (country && !request.cookies.get('tz_geo_country')?.value) {
     intlResponse.cookies.set('tz_geo_country', country.toUpperCase(), {
       httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: 21600, // 6h — avoids hitting external ipapi.co rate limits at 50k+ users/mo

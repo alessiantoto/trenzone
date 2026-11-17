@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { Mail, MapPin, Send, CheckCircle2, MessageSquare, ChevronRight } from 'lucide-react';
+import { Mail, MapPin, Send, CheckCircle2, MessageSquare, ChevronRight, Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,6 +31,7 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (status === 'sending') return;
     if (!name.trim() || !email.trim() || !message.trim()) return;
     
     setStatus('sending');
@@ -116,8 +117,9 @@ export default function ContactPage() {
                     </div>
                     <p className="text-xl font-bold uppercase tracking-tight mb-2 text-black">{t('form_success')}</p>
                     <button 
+                      type="button"
                       onClick={() => setStatus('idle')}
-                      className="text-zinc-500 text-xs font-black uppercase tracking-widest hover:text-black transition-colors mt-4"
+                      className="text-zinc-500 text-xs font-black uppercase tracking-widest hover:text-black transition-all active:scale-[0.98] mt-4 cursor-pointer"
                     >
                       {t('form_reset')}
                     </button>
@@ -160,7 +162,7 @@ export default function ContactPage() {
                         <button
                           type="button"
                           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                          className="w-full bg-white border border-zinc-200 group-hover:border-zinc-300 rounded-2xl px-6 py-4 text-sm focus:outline-none transition-all font-medium text-black text-left flex justify-between items-center"
+                          className="w-full bg-white border border-zinc-200 group-hover:border-zinc-300 rounded-2xl px-6 py-4 text-sm focus:outline-none transition-all active:scale-[0.99] font-medium text-black text-left flex justify-between items-center cursor-pointer"
                         >
                           {subjectOptions.find(opt => opt.value === subject)?.label || t('form_subject_general')}
                           <ChevronRight className={`w-4 h-4 text-zinc-400 transition-transform ${isDropdownOpen ? '-rotate-90' : 'rotate-90'}`} />
@@ -235,13 +237,17 @@ export default function ContactPage() {
                     <button 
                       type="submit"
                       disabled={status === 'sending'}
-                      className="w-full bg-black hover:bg-zinc-800 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 shadow-xl mt-4"
+                      className="w-full bg-black hover:bg-zinc-800 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-xl mt-4 cursor-pointer"
                     >
                       {status === 'sending' ? (
-                        <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                          <span>{isRo ? 'Se trimite...' : 'Sending...'}</span>
+                        </>
                       ) : (
                         <>
-                          {t('form_button')} <Send className="w-4 h-4" />
+                          <span>{t('form_button')}</span>
+                          <Send className="w-4 h-4" />
                         </>
                       )}
                     </button>

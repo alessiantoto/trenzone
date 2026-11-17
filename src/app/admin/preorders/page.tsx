@@ -29,6 +29,7 @@ import {
   Banknote,
   Zap,
   Gift,
+  Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -408,7 +409,7 @@ export default function AdminPreordersPage() {
 
   const handleSaveShipping = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingOrder) return;
+    if (!editingOrder || savingShipping) return;
     setSavingShipping(true);
     const toastId = toast.loading('Se actualizează datele de livrare...');
     try {
@@ -429,6 +430,7 @@ export default function AdminPreordersPage() {
 
   const handleEmitOblio = async (orderId: string, supabaseId?: string) => {
     const targetId = supabaseId || orderId;
+    if (emittingOblio[targetId]) return;
     setEmittingOblio((prev) => ({ ...prev, [targetId]: true }));
     const toastId = toast.loading('Se emite factura în Oblio...');
     try {
@@ -453,7 +455,7 @@ export default function AdminPreordersPage() {
   };
 
   const handleExecuteRelease = async (mode: ReleaseActionMode) => {
-    if (!releasingEntry || !releaseConfirmedStock) return;
+    if (!releasingEntry || !releaseConfirmedStock || releasingAction) return;
     const { order } = releasingEntry;
     const targetId = order.supabaseId || order.id;
 
@@ -709,6 +711,131 @@ export default function AdminPreordersPage() {
     });
   }, [tabScopedEntries, quickFilter, selectedProductFilter, products, searchQuery]);
 
+  const renderPreordersListSkeleton = () => (
+    <div className="space-y-3 animate-pulse">
+      {/* Desktop Table Skeleton */}
+      <div className="hidden lg:block bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div className="grid grid-cols-5 gap-4 py-3 px-4 border-b border-slate-200 bg-slate-50/80">
+          <div className="h-3 w-28 rounded bg-slate-200" />
+          <div className="h-3 w-28 rounded bg-slate-200" />
+          <div className="h-3 w-32 rounded bg-slate-200" />
+          <div className="h-3 w-24 rounded bg-slate-200" />
+          <div className="h-3 w-16 rounded bg-slate-200 ml-auto" />
+        </div>
+        <div className="divide-y divide-slate-100">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="grid grid-cols-5 gap-4 py-4 px-4 items-start">
+              <div className="space-y-2">
+                <div className="h-4 w-28 rounded bg-slate-200" />
+                <div className="h-3 w-20 rounded bg-slate-100" />
+                <div className="h-5 w-32 rounded-full bg-slate-100" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 w-32 rounded bg-slate-200" />
+                <div className="h-3 w-24 rounded bg-slate-100" />
+                <div className="h-3 w-40 rounded bg-slate-100" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-10 w-full rounded-xl bg-slate-100" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 w-20 rounded bg-slate-200" />
+                <div className="h-5 w-16 rounded-full bg-slate-100" />
+                <div className="h-6 w-24 rounded-lg bg-slate-100" />
+              </div>
+              <div className="flex items-center justify-end gap-1.5">
+                <div className="h-8 w-24 rounded-lg bg-slate-200" />
+                <div className="h-8 w-8 rounded-lg bg-slate-100" />
+                <div className="h-8 w-8 rounded-lg bg-slate-100" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile Cards Skeleton */}
+      <div className="lg:hidden space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+            <div className="p-3.5 border-b border-slate-100 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="h-4 w-32 rounded bg-slate-200" />
+                <div className="h-5 w-20 rounded bg-slate-200" />
+              </div>
+              <div className="flex gap-1.5">
+                <div className="h-5 w-32 rounded-full bg-slate-100" />
+                <div className="h-5 w-16 rounded-full bg-slate-100" />
+              </div>
+            </div>
+            <div className="p-3.5 space-y-2.5">
+              <div className="h-4 w-40 rounded bg-slate-200" />
+              <div className="h-3 w-52 rounded bg-slate-100" />
+              <div className="h-12 w-full rounded-xl bg-slate-100" />
+            </div>
+            <div className="px-3.5 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex gap-1.5">
+                <div className="h-8 w-24 rounded-lg bg-slate-200" />
+                <div className="h-8 w-16 rounded-lg bg-slate-100" />
+              </div>
+              <div className="h-8 w-16 rounded-lg bg-slate-100" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="space-y-3 sm:space-y-4 pb-16 max-w-full min-w-0 animate-pulse">
+        {/* Header + Toolbar Skeleton */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 sm:p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-slate-200 shrink-0" />
+              <div className="space-y-1.5">
+                <div className="h-5 w-48 rounded bg-slate-200" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-9 w-28 rounded-xl bg-slate-100" />
+              <div className="h-9 w-24 rounded-xl bg-slate-200" />
+            </div>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-2.5">
+            <div className="h-9 w-full lg:w-96 rounded-xl bg-slate-100" />
+            <div className="h-9 flex-1 rounded-xl bg-slate-100" />
+          </div>
+        </div>
+
+        {/* 4 KPI Strip Skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <div className="h-2.5 w-24 rounded bg-slate-200" />
+                <div className="h-5 w-16 rounded bg-slate-200" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Product Lot Strip Skeleton */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs px-3 py-2.5 space-y-2">
+          <div className="h-4 w-52 rounded bg-slate-200" />
+          <div className="flex items-center gap-2 overflow-hidden">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-12 w-48 rounded-xl bg-slate-100 shrink-0" />
+            ))}
+          </div>
+        </div>
+
+        {renderPreordersListSkeleton()}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 sm:space-y-4 pb-16 max-w-full min-w-0">
       {/* ═══ Compact Header & Primary Controls ═══ */}
@@ -742,15 +869,15 @@ export default function AdminPreordersPage() {
               type="button"
               onClick={fetchOrders}
               disabled={loading}
-              className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+              className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
             >
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">Reîmprospătează</span>
+              <RefreshCw size={13} className={loading ? 'animate-spin text-amber-600' : ''} />
+              <span className="hidden sm:inline">{loading ? 'Se actualizează...' : 'Reîmprospătează'}</span>
             </button>
 
             <Link
               href="/admin/orders"
-              className="h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
+              className="h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all active:scale-[0.98]"
             >
               <ShoppingBag size={13} />
               <span>Comenzi</span>
@@ -764,7 +891,7 @@ export default function AdminPreordersPage() {
             <button
               type="button"
               onClick={() => setPrimaryTab('active')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 primaryTab === 'active'
                   ? 'bg-white text-amber-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -781,7 +908,7 @@ export default function AdminPreordersPage() {
             <button
               type="button"
               onClick={() => setPrimaryTab('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 primaryTab === 'all'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -798,7 +925,7 @@ export default function AdminPreordersPage() {
             <button
               type="button"
               onClick={() => setPrimaryTab('completed')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 primaryTab === 'completed'
                   ? 'bg-white text-emerald-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -1085,10 +1212,7 @@ export default function AdminPreordersPage() {
 
       {/* ═══ Preorders List (Right Above the Fold!) ═══ */}
       {loading ? (
-        <div className="bg-white p-10 rounded-2xl border border-slate-200 text-center flex flex-col items-center justify-center gap-2.5">
-          <RefreshCw size={24} className="animate-spin text-amber-500" />
-          <div className="text-xs font-bold text-slate-500">Se încarcă precomenzile...</div>
-        </div>
+        renderPreordersListSkeleton()
       ) : filteredEntries.length === 0 ? (
         <div className="bg-white p-10 rounded-2xl border border-slate-200 text-center flex flex-col items-center justify-center gap-2.5">
           <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center">
@@ -1340,9 +1464,9 @@ export default function AdminPreordersPage() {
                                   type="button"
                                   onClick={() => handleEmitOblio(order.id, order.supabaseId)}
                                   disabled={emittingOblio[targetId] || order.status === 'cancelled'}
-                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
                                 >
-                                  <FileText size={11} />
+                                  {emittingOblio[targetId] ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
                                   <span>{emittingOblio[targetId] ? 'Se emite...' : 'Emite Oblio'}</span>
                                 </button>
                               )}
@@ -1356,7 +1480,7 @@ export default function AdminPreordersPage() {
                                 <button
                                   type="button"
                                   onClick={() => openReleaseModal(entry)}
-                                  className={`h-8 px-2.5 rounded-lg text-[11px] font-black flex items-center gap-1 transition-colors cursor-pointer ${
+                                  className={`h-8 px-2.5 rounded-lg text-[11px] font-black flex items-center gap-1 transition-all active:scale-[0.98] cursor-pointer ${
                                     entry.catalogStockArrived
                                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
                                       : 'bg-amber-500 hover:bg-amber-600 text-white shadow-2xs'
@@ -1716,7 +1840,7 @@ export default function AdminPreordersPage() {
                         <button
                           type="button"
                           onClick={() => openReleaseModal(entry)}
-                          className={`h-8 px-2.5 rounded-lg text-[11px] font-black flex items-center gap-1 cursor-pointer ${
+                          className={`h-8 px-2.5 rounded-lg text-[11px] font-black flex items-center gap-1 transition-all active:scale-[0.98] cursor-pointer ${
                             entry.catalogStockArrived
                               ? 'bg-emerald-600 text-white'
                               : 'bg-amber-500 text-white'
@@ -1742,10 +1866,10 @@ export default function AdminPreordersPage() {
                           type="button"
                           onClick={() => handleEmitOblio(order.id, order.supabaseId)}
                           disabled={emittingOblio[targetId] || order.status === 'cancelled'}
-                          className="h-8 px-2.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          className="h-8 px-2.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
                         >
-                          <FileText size={12} />
-                          <span>{emittingOblio[targetId] ? 'Emite...' : 'Oblio'}</span>
+                          {emittingOblio[targetId] ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                          <span>{emittingOblio[targetId] ? 'Se emite...' : 'Oblio'}</span>
                         </button>
                       )}
 
@@ -1885,9 +2009,9 @@ export default function AdminPreordersPage() {
                   type="button"
                   disabled={!releaseConfirmedStock || releasingAction !== null}
                   onClick={() => handleExecuteRelease('processing')}
-                  className="w-full h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <CheckCircle2 size={14} />
+                  {releasingAction === 'processing' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                   <span>
                     {releasingAction === 'processing'
                       ? 'Se procesează...'
@@ -1900,9 +2024,9 @@ export default function AdminPreordersPage() {
                     type="button"
                     disabled={!releaseConfirmedStock || releasingAction !== null}
                     onClick={() => handleExecuteRelease('processing_and_dispatch')}
-                    className="w-full h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    <Send size={14} />
+                    {releasingAction === 'processing_and_dispatch' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     <span>
                       {releasingAction === 'processing_and_dispatch'
                         ? 'Se trimite la fulfillment...'
@@ -1920,9 +2044,9 @@ export default function AdminPreordersPage() {
                   type="button"
                   disabled={!releaseConfirmedStock || releasingAction !== null}
                   onClick={() => handleExecuteRelease('shipped')}
-                  className="w-full h-9 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full h-9 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Truck size={13} />
+                  {releasingAction === 'shipped' ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
                   <span>
                     {releasingAction === 'shipped'
                       ? 'Se actualizează...'
@@ -2063,9 +2187,10 @@ export default function AdminPreordersPage() {
                 <button
                   type="submit"
                   disabled={savingShipping}
-                  className="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  className="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-all active:scale-[0.98] cursor-pointer shadow-xs disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
-                  {savingShipping ? 'Se salvează...' : 'Salvează Modificările'}
+                  {savingShipping && <Loader2 size={13} className="animate-spin" />}
+                  <span>{savingShipping ? 'Se salvează...' : 'Salvează Modificările'}</span>
                 </button>
               </div>
             </form>

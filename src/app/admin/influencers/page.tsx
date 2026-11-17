@@ -62,6 +62,7 @@ export default function AdminInfluencersPage() {
 
   // Video replacement uploading state
   const [replacingVideoId, setReplacingVideoId] = useState<string | null>(null);
+  const [isDeletingInf, setIsDeletingInf] = useState(false);
 
   // Mobile form toggle
   const [showMobileAddForm, setShowMobileAddForm] = useState(false);
@@ -137,6 +138,7 @@ export default function AdminInfluencersPage() {
   };
 
   const handleSaveProgramVideoConfig = async () => {
+    if (savingProgramConfig) return;
     setSavingProgramConfig(true);
     try {
       const res = await fetch('/api/admin/data?action=save-digital-video-config', {
@@ -209,6 +211,7 @@ export default function AdminInfluencersPage() {
 
   const handleUploadAndAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploading) return;
     if (!newName.trim() || !newFile) {
       toast.error('Completează numele și alege un fișier video.');
       return;
@@ -269,6 +272,7 @@ export default function AdminInfluencersPage() {
   };
 
   const handleSaveEdit = async (id: string) => {
+    if (isSavingEdit) return;
     setIsSavingEdit(true);
     try {
       const formattedHandle = editHandle.trim() 
@@ -297,14 +301,18 @@ export default function AdminInfluencersPage() {
   };
 
   const handleDelete = async (inf: InfluencerVideo) => {
-    setInfluencerToDelete(null);
+    if (isDeletingInf) return;
+    setIsDeletingInf(true);
     try {
       await deleteInfluencerAdmin(inf.id, inf.video_url);
-      setInfluencers(influencers.filter(i => i.id !== inf.id));
+      setInfluencers(prev => prev.filter(i => i.id !== inf.id));
+      setInfluencerToDelete(null);
       toast.success('Clipul a fost șters definitiv.');
     } catch (e) {
       console.error('Error deleting influencer:', e);
       toast.error('Eroare la ștergere.');
+    } finally {
+      setIsDeletingInf(false);
     }
   };
 
@@ -388,7 +396,7 @@ export default function AdminInfluencersPage() {
           </div>
           <div className="min-w-0 w-full">
             <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 leading-tight">Total Clipuri</p>
-            <p className="text-base sm:text-xl font-black text-slate-900 mt-0.5">{influencers.length}</p>
+            {loading ? <div className="h-6 w-10 bg-slate-200 rounded-md animate-pulse mt-1" /> : <p className="text-base sm:text-xl font-black text-slate-900 mt-0.5">{influencers.length}</p>}
           </div>
         </div>
 
@@ -398,7 +406,7 @@ export default function AdminInfluencersPage() {
           </div>
           <div className="min-w-0 w-full">
             <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 leading-tight">Active pe Site</p>
-            <p className="text-base sm:text-xl font-black text-emerald-700 mt-0.5">{activeCount}</p>
+            {loading ? <div className="h-6 w-10 bg-slate-200 rounded-md animate-pulse mt-1" /> : <p className="text-base sm:text-xl font-black text-emerald-700 mt-0.5">{activeCount}</p>}
           </div>
         </div>
 
@@ -408,7 +416,7 @@ export default function AdminInfluencersPage() {
           </div>
           <div className="min-w-0 w-full">
             <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 leading-tight">Dezactivate</p>
-            <p className="text-base sm:text-xl font-black text-amber-700 mt-0.5">{inactiveCount}</p>
+            {loading ? <div className="h-6 w-10 bg-slate-200 rounded-md animate-pulse mt-1" /> : <p className="text-base sm:text-xl font-black text-amber-700 mt-0.5">{inactiveCount}</p>}
           </div>
         </div>
       </div>
@@ -455,10 +463,10 @@ export default function AdminInfluencersPage() {
               type="button"
               disabled={savingProgramConfig}
               onClick={handleSaveProgramVideoConfig}
-              className="px-4 py-2 rounded-xl bg-[#e32f8c] hover:bg-[#c41a72] text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-[#e32f8c] hover:bg-[#c41a72] active:scale-[0.98] text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
             >
               {savingProgramConfig ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              <span>Salvează pentru Programe</span>
+              <span>{savingProgramConfig ? 'Se salvează...' : 'Salvează pentru Programe'}</span>
             </button>
           </div>
         </div>
@@ -770,9 +778,29 @@ export default function AdminInfluencersPage() {
 
             {/* Loading Skeleton / Empty State */}
             {loading ? (
-              <div className="p-12 flex flex-col items-center justify-center text-center gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-[#e32f8c]" />
-                <p className="text-xs font-bold text-slate-400">Se încarcă lista de influenceri...</p>
+              <div className="divide-y divide-slate-100 animate-pulse">
+                {[...Array(5)].map((_, idx) => (
+                  <div key={idx} className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-6 h-16 bg-slate-100 rounded-lg shrink-0" />
+                      <div className="w-16 sm:w-20 aspect-[9/16] bg-slate-200 rounded-xl shrink-0" />
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 w-36 bg-slate-200 rounded" />
+                          <div className="h-5 w-14 bg-slate-100 rounded-full" />
+                        </div>
+                        <div className="h-3 w-24 bg-slate-100 rounded" />
+                        <div className="h-3 w-28 bg-slate-100 rounded" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="h-8 w-24 bg-slate-200 rounded-xl" />
+                      <div className="h-8 w-20 bg-slate-100 rounded-xl" />
+                      <div className="h-8 w-28 bg-slate-100 rounded-xl" />
+                      <div className="h-8 w-8 bg-slate-100 rounded-xl" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : influencers.length === 0 ? (
               <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
@@ -906,10 +934,10 @@ export default function AdminInfluencersPage() {
                                               type="button"
                                               onClick={() => handleSaveEdit(inf.id)}
                                               disabled={isSavingEdit}
-                                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-black transition-colors flex items-center gap-1 cursor-pointer"
+                                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
                                             >
                                               {isSavingEdit ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} className="text-[#e32f8c]" />}
-                                              <span>Salvează</span>
+                                              <span>{isSavingEdit ? 'Se salvează...' : 'Salvează'}</span>
                                             </button>
                                             <button
                                               type="button"
@@ -1136,18 +1164,20 @@ export default function AdminInfluencersPage() {
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
               <button
                 type="button"
+                disabled={isDeletingInf}
                 onClick={() => setInfluencerToDelete(null)}
-                className="px-4 py-2.5 font-bold text-xs sm:text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                className="px-4 py-2.5 font-bold text-xs sm:text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] rounded-xl transition-all cursor-pointer disabled:opacity-50"
               >
                 Anulează
               </button>
               <button
                 type="button"
+                disabled={isDeletingInf}
                 onClick={() => handleDelete(influencerToDelete)}
-                className="px-4 py-2.5 font-black text-xs sm:text-sm text-white bg-red-600 hover:bg-red-700 active:scale-95 rounded-xl transition-all flex items-center gap-1.5 shadow-sm shadow-red-500/20 cursor-pointer"
+                className="px-4 py-2.5 font-black text-xs sm:text-sm text-white bg-red-600 hover:bg-red-700 active:scale-[0.98] rounded-xl transition-all flex items-center gap-1.5 shadow-sm shadow-red-500/20 cursor-pointer disabled:opacity-50"
               >
-                <Trash2 size={15} />
-                <span>Șterge Definitiv</span>
+                {isDeletingInf ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                <span>{isDeletingInf ? 'Se șterge...' : 'Șterge Definitiv'}</span>
               </button>
             </div>
           </div>

@@ -284,6 +284,8 @@ export default function AbandonedCartsPage() {
   const [expandedCartIds, setExpandedCartIds] = useState<Record<string, boolean>>({});
   const [selectedCartForDetail, setSelectedCartForDetail] = useState<FormattedAbandonedCart | null>(null);
   const [sendingEmailFor, setSendingEmailFor] = useState<string | null>(null);
+  const [updatingStatusFor, setUpdatingStatusFor] = useState<string | null>(null);
+  const [deletingCart, setDeletingCart] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Modern Discount & Recovery Email Modal State
@@ -404,7 +406,7 @@ export default function AbandonedCartsPage() {
 
   // Trigger manual recovery email with selected/custom coupon
   const handleSendDiscountEmail = async () => {
-    if (!discountModal.cart) return;
+    if (!discountModal.cart || sendingEmailFor) return;
     const cart = discountModal.cart;
     const isReminderOnly = discountModal.mode === 'reminder_only';
     const templateType = isReminderOnly ? '24h' : '72h';
@@ -457,6 +459,7 @@ export default function AbandonedCartsPage() {
 
   // Run bulk automation (24h reminder + 72h 10% coupon)
   const handleRunAutomation = async () => {
+    if (runningAutomation) return;
     setRunningAutomation(true);
     const toastId = toast.loading("Se verifică și se trimit automat reminderele de coș (24h și 72h -10%)...");
     try {
@@ -476,6 +479,8 @@ export default function AbandonedCartsPage() {
 
   // Trigger status update
   const handleStatusChange = async (cartId: string, newStatus: 'initiated' | 'recovered' | 'completed') => {
+    if (updatingStatusFor === cartId) return;
+    setUpdatingStatusFor(cartId);
     const toastId = toast.loading("Se actualizează statusul...");
     try {
       await updateAbandonedCartStatus(cartId, newStatus);
@@ -483,12 +488,15 @@ export default function AbandonedCartsPage() {
       await loadData(true);
     } catch (err: any) {
       toast.error(err.message || "Eroare la actualizarea statusului.", { id: toastId });
+    } finally {
+      setUpdatingStatusFor(null);
     }
   };
 
   // Delete cart session
   const handleDeleteCart = async () => {
-    if (!deleteModal.cartId) return;
+    if (!deleteModal.cartId || deletingCart) return;
+    setDeletingCart(true);
     const cartId = deleteModal.cartId;
     setDeleteModal({ isOpen: false, cartId: null, customerName: '' });
 
@@ -499,6 +507,8 @@ export default function AbandonedCartsPage() {
       await loadData(true);
     } catch (err: any) {
       toast.error(err.message || "Eroare la ștergerea sesiunii.", { id: toastId });
+    } finally {
+      setDeletingCart(false);
     }
   };
 
@@ -712,8 +722,9 @@ export default function AbandonedCartsPage() {
           </Link>
 
           <button
+            type="button"
             onClick={exportToCsv}
-            className="px-3 py-2.5 sm:py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+            className="px-3 py-2.5 sm:py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 active:scale-[0.98] rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
             title="Exportă lista filtrată în format CSV"
           >
             <Download size={14} />
@@ -721,9 +732,10 @@ export default function AbandonedCartsPage() {
           </button>
 
           <button
-            onClick={() => loadData(true)}
+            type="button"
+            onClick={() => { if (!refreshing) loadData(true); }}
             disabled={refreshing || loading}
-            className="col-span-2 sm:col-span-1 px-4 py-2.5 sm:py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            className="col-span-2 sm:col-span-1 px-4 py-2.5 sm:py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 active:scale-[0.98] rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
             <span>{refreshing ? "Se actualizează..." : "Reîmprospătează"}</span>
@@ -929,7 +941,7 @@ export default function AbandonedCartsPage() {
             <span className="p-1.5 bg-orange-50 text-orange-600 rounded-lg shrink-0"><ShoppingCart size={14} /></span>
           </div>
           <div className="text-xl sm:text-3xl font-black text-orange-600">
-            {stats?.abandonedCount ?? (loading ? "..." : 0)}
+            {loading && !stats ? <div className="h-8 w-16 bg-slate-200 rounded-lg animate-pulse my-0.5" /> : (stats?.abandonedCount ?? 0)}
           </div>
           <p className="text-[11px] text-slate-500 font-semibold mt-1">
             {stats?.todayCount || 0} inițiate astăzi
@@ -944,7 +956,7 @@ export default function AbandonedCartsPage() {
             <span className="p-1.5 bg-red-50 text-red-600 rounded-lg shrink-0"><TrendingDown size={14} /></span>
           </div>
           <div className="text-lg sm:text-2xl xl:text-3xl font-black text-slate-900 truncate">
-            {stats ? formatMoney(stats.potentialLostRevenue, 'RON') : (loading ? "..." : "0,00 RON")}
+            {loading && !stats ? <div className="h-8 w-32 bg-slate-200 rounded-lg animate-pulse my-0.5" /> : (stats ? formatMoney(stats.potentialLostRevenue, 'RON') : "0,00 RON")}
           </div>
           <p className="text-[11px] text-slate-500 font-semibold mt-1">
             Total convertit în RON
@@ -959,7 +971,7 @@ export default function AbandonedCartsPage() {
             <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg shrink-0"><CheckCircle2 size={14} /></span>
           </div>
           <div className="text-xl sm:text-3xl font-black text-emerald-600">
-            {stats?.recoveredCount ?? (loading ? "..." : 0)}
+            {loading && !stats ? <div className="h-8 w-16 bg-slate-200 rounded-lg animate-pulse my-0.5" /> : (stats?.recoveredCount ?? 0)}
           </div>
           <p className="text-[11px] text-slate-500 font-semibold mt-1 truncate">
             Valoare: <span className="font-bold text-slate-900">{stats ? formatMoney(stats.recoveredRevenue, 'RON') : "0,00 RON"}</span>
@@ -974,7 +986,7 @@ export default function AbandonedCartsPage() {
             <span className="p-1.5 bg-[#e32f8c]/10 text-[#00b0ce] rounded-lg shrink-0"><Percent size={14} /></span>
           </div>
           <div className="text-xl sm:text-3xl font-black text-slate-900">
-            {stats?.recoveryRate ?? (loading ? "..." : 0)}%
+            {loading && !stats ? <div className="h-8 w-16 bg-slate-200 rounded-lg animate-pulse my-0.5" /> : `${stats?.recoveryRate ?? 0}%`}
           </div>
           <p className="text-[11px] text-slate-500 font-semibold mt-1">
             {(stats?.activeCount || 0)} coșuri active &lt; 30 min
@@ -1154,10 +1166,50 @@ export default function AbandonedCartsPage() {
 
       {/* RESULTS LIST */}
       {loading ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-sm">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-[#e32f8c] rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-sm font-bold text-slate-700">Se încarcă coșurile abandonate...</p>
-          <p className="text-xs text-slate-400 mt-1">Se analizează sesiunile de checkout și comenzile plasate.</p>
+        <div className="space-y-3.5 animate-pulse">
+          {[...Array(4)].map((_, idx) => (
+            <div key={idx} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="p-3.5 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/40">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-24 bg-slate-200 rounded-full" />
+                    <div className="h-6 w-28 bg-slate-100 rounded-full" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="h-4 w-44 bg-slate-200 rounded" />
+                    <div className="h-3 w-56 bg-slate-100 rounded" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="space-y-1">
+                    <div className="h-6 w-24 bg-slate-200 rounded-lg" />
+                    <div className="h-3 w-16 bg-slate-100 rounded ml-auto" />
+                  </div>
+                  <div className="w-9 h-9 bg-slate-200 rounded-xl" />
+                </div>
+              </div>
+              <div className="px-4 sm:px-5 py-3 bg-slate-50/70 border-b border-slate-100 flex flex-wrap gap-2">
+                <div className="h-7 w-28 bg-slate-200 rounded-lg" />
+                <div className="h-7 w-32 bg-slate-100 rounded-lg" />
+                <div className="h-7 w-28 bg-slate-100 rounded-lg" />
+                <div className="h-7 w-32 bg-slate-100 rounded-lg" />
+              </div>
+              <div className="p-3.5 sm:p-5 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                <div className="md:col-span-5 space-y-2">
+                  <div className="h-3.5 w-48 bg-slate-200 rounded" />
+                  <div className="h-3.5 w-36 bg-slate-100 rounded" />
+                </div>
+                <div className="md:col-span-4 flex items-center gap-2">
+                  <div className="h-12 w-36 bg-slate-100 rounded-lg" />
+                  <div className="h-12 w-36 bg-slate-100 rounded-lg" />
+                </div>
+                <div className="md:col-span-3 flex flex-col md:items-end gap-2">
+                  <div className="h-5 w-36 bg-slate-100 rounded" />
+                  <div className="h-7 w-40 bg-slate-200 rounded-lg" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : filteredCarts.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-sm">
@@ -1872,11 +1924,13 @@ export default function AbandonedCartsPage() {
                               {/* Mark as recovered manual button */}
                               {cart.status !== 'recovered' && (
                                 <button
+                                  type="button"
+                                  disabled={updatingStatusFor === cart.id}
                                   onClick={() => handleStatusChange(cart.id, 'recovered')}
-                                  className="w-full py-2 px-3 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1.5"
+                                  className="w-full py-2 px-3 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 active:scale-[0.98] border border-emerald-200 rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                                 >
                                   <CheckCircle2 size={13} />
-                                  <span>Marchează ca Recuperat Manual</span>
+                                  <span>{updatingStatusFor === cart.id ? 'Se actualizează...' : 'Marchează ca Recuperat Manual'}</span>
                                 </button>
                               )}
 
@@ -2254,10 +2308,12 @@ export default function AbandonedCartsPage() {
                   Anulează
                 </button>
                 <button
+                  type="button"
                   onClick={handleDeleteCart}
-                  className="px-4 py-2 text-xs font-black text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm"
+                  disabled={deletingCart}
+                  className="px-4 py-2 text-xs font-black text-white bg-red-600 hover:bg-red-700 active:scale-[0.98] rounded-xl transition-all shadow-sm disabled:opacity-50 cursor-pointer"
                 >
-                  Șterge Definitiv
+                  {deletingCart ? 'Se șterge...' : 'Șterge Definitiv'}
                 </button>
               </div>
             </motion.div>

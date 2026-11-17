@@ -74,10 +74,10 @@ export async function submitAffiliateApplication(data: {
       };
     }
 
-    // Trim, filter empty, limit to max 5 socials, each max 200 chars
-    const socialLinks = (data.socials || [])
-      .map(s => s.trim().slice(0, 200))
-      .filter(s => s.length > 0)
+    // Trim, filter empty, reject dangerous URI schemes, limit to max 5 socials, each max 200 chars
+    const socialLinks = (Array.isArray(data.socials) ? data.socials : [])
+      .map(s => String(s || '').trim().slice(0, 200))
+      .filter(s => s.length > 0 && !/^(javascript|data|vbscript):/i.test(s))
       .slice(0, 5);
 
     if (socialLinks.length === 0) {

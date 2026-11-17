@@ -39,8 +39,9 @@ export async function verifyCsrfToken(token: string): Promise<boolean> {
   const cookieStore = await cookies();
   const storedToken = cookieStore.get(CSRF_COOKIE_NAME)?.value || '';
 
-  // Check if tokens exist
-  if (!cleanToken || !storedToken) {
+  // Check if tokens exist and are valid 64-char hex strings (32 bytes)
+  const HEX_TOKEN_REGEX = /^[0-9a-f]{64}$/i;
+  if (!HEX_TOKEN_REGEX.test(cleanToken) || !HEX_TOKEN_REGEX.test(storedToken)) {
     return false;
   }
 

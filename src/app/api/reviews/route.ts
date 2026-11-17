@@ -107,39 +107,55 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      console.error("❌ [REVIEWS API] Error inserting review:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[REVIEWS API] Error inserting review:", error);
+      return NextResponse.json(
+        { error: reqLocale === 'en' ? 'Failed to save review.' : 'Eroare la salvarea recenziei.' },
+        { status: 500 }
+      );
     }
 
     if (data?.id) {
       await upsertReviewTranslation(data.id, { [reqLocale]: text }).catch(() => {});
     }
 
-    console.log(`✅ [REVIEWS API] New review saved with status PENDING (id: ${data?.id})`);
+    console.log(`[REVIEWS API] New review saved with status PENDING (id: ${data?.id})`);
 
-    // 4. Send discount email to customer if email provided
+    // 4. Send discount email to customer if email provided (max 1 coupon per email per 24h to prevent coupon farming)
     let generatedCoupon = '';
     if (email) {
-      const uniqueCode = `REVIEW10-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      const couponValue = 10;
-      generatedCoupon = uniqueCode;
+      const safeHeaderEmail = email.replace(/[\r\n]/g, '');
+      const oneDayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentReviewForEmail } = await supabaseAdmin
+        .from('reviews')
+        .select('id')
+        .eq('email', safeHeaderEmail)
+        .gte('created_at', oneDayAgoIso)
+        .neq('id', data?.id || '')
+        .limit(1)
+        .maybeSingle();
 
-      await supabaseAdmin.from('coupons').insert({
-        code: uniqueCode,
-        description: `Reducere 10% acordată pentru recenzia lui ${name}`,
-        type: 'percentage',
-        value: couponValue,
-        usage_limit: 1,
-        is_active: true,
-        used_count: 0
-      });
+      if (!recentReviewForEmail) {
+        const uniqueCode = `REVIEW10-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const couponValue = 10;
+        generatedCoupon = uniqueCode;
 
-      try {
-        const reqLocale = (locale === 'en' ? 'en' : 'ro') as 'ro' | 'en';
-        await sendReviewDiscountEmail(email, name || (reqLocale === 'en' ? 'Champion' : 'Campionule'), reqLocale, uniqueCode, couponValue);
-        console.log(`✅ [REVIEWS API] Discount email sent to customer: ${email}`);
-      } catch (err) {
-        console.error("⚠️ [REVIEWS API] Error sending review discount email to customer:", err);
+        await supabaseAdmin.from('coupons').insert({
+          code: uniqueCode,
+          description: `Reducere 10% acordată pentru recenzia lui ${name}`,
+          type: 'percentage',
+          value: couponValue,
+          usage_limit: 1,
+          is_active: true,
+          used_count: 0
+        });
+
+        try {
+          const emailLocale = (locale === 'en' ? 'en' : 'ro') as 'ro' | 'en';
+          await sendReviewDiscountEmail(safeHeaderEmail, name || (emailLocale === 'en' ? 'Champion' : 'Campionule'), emailLocale, uniqueCode, couponValue);
+          console.log(`[REVIEWS API] Discount email sent to customer: ${safeHeaderEmail}`);
+        } catch (err) {
+          console.error("[REVIEWS API] Error sending review discount email to customer:", err);
+        }
       }
     }
 
@@ -157,11 +173,12 @@ export async function POST(request: Request) {
       const cleanSubjectName = String(name || '').replace(/[\r\n]+/g, ' ').trim();
       const safeEmail = escapeHtml(email || 'Nespecificat');
       const safeText = escapeHtml(text);
+      const safeReplyTo = email ? email.replace(/[\r\n]/g, '') : 'trenzone483@gmail.com';
 
       await resend.emails.send({
         from: getResendFromEmail('TrenZone Alerts'),
         to: ['trenzone483@gmail.com'],
-        reply_to: email || 'trenzone483@gmail.com',
+        reply_to: safeReplyTo,
         subject: `[Recenzie Nouă În Așteptare] ${rating}★ de la ${cleanSubjectName}`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #eaeaea; border-radius: 16px; background: #ffffff;">

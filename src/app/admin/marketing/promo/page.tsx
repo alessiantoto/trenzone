@@ -42,6 +42,7 @@ export default function PromoSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [resettingTarget, setResettingTarget] = useState<'pc' | 'mobile' | null>(null);
 
   // Crop states (shared for PC & Mobile image upload targets)
   const [uploadTarget, setUploadTarget] = useState<'pc' | 'mobile'>('pc');
@@ -112,6 +113,7 @@ export default function PromoSettingsPage() {
   }, []);
 
   const handleSave = async () => {
+    if (saving) return;
     setSaving(true);
     try {
       const normalized = normalizePromoSettings(settings);
@@ -191,19 +193,27 @@ export default function PromoSettingsPage() {
   };
 
   const handleResetDefaultImage = async (target: 'pc' | 'mobile') => {
-    const prevUrl = target === 'pc' ? settings.image : settings.mobileImage;
-    if (prevUrl && prevUrl.startsWith('http')) {
-      await deletePromoImage(prevUrl);
+    if (resettingTarget) return;
+    setResettingTarget(target);
+    try {
+      const prevUrl = target === 'pc' ? settings.image : settings.mobileImage;
+      if (prevUrl && prevUrl.startsWith('http')) {
+        await deletePromoImage(prevUrl);
+      }
+      const fallbackUrl = target === 'pc' ? DEFAULT_PROMO_SETTINGS.image : DEFAULT_PROMO_SETTINGS.mobileImage;
+      const updated = target === 'pc' ? { ...settings, image: fallbackUrl } : { ...settings, mobileImage: fallbackUrl };
+      setSettings(updated);
+      await updateSiteSetting('active_promotion', normalizePromoSettings(updated));
+      toast.success(`Fundalul ${target === 'pc' ? 'PC' : 'Mobil'} a fost resetat la varianta TrenZone.`);
+    } catch (err: any) {
+      toast.error('Eroare la resetare: ' + (err?.message || 'Necunoscută'));
+    } finally {
+      setResettingTarget(null);
     }
-    const fallbackUrl = target === 'pc' ? DEFAULT_PROMO_SETTINGS.image : DEFAULT_PROMO_SETTINGS.mobileImage;
-    const updated = target === 'pc' ? { ...settings, image: fallbackUrl } : { ...settings, mobileImage: fallbackUrl };
-    setSettings(updated);
-    await updateSiteSetting('active_promotion', normalizePromoSettings(updated));
-    toast.success(`Fundalul ${target === 'pc' ? 'PC' : 'Mobil'} a fost resetat la varianta TrenZone.`);
   };
 
   const handleCropUpload = async () => {
-    if (!imgRef.current || !completedCrop) return;
+    if (!imgRef.current || !completedCrop || uploadingImage) return;
     setUploadingImage(true);
     try {
       const blob = await getCroppedImg(imgRef.current, completedCrop);
@@ -218,7 +228,7 @@ export default function PromoSettingsPage() {
   };
 
   const handleOriginalUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || uploadingImage) return;
     setUploadingImage(true);
     try {
       await uploadBlobOrFile(selectedFile);
@@ -256,8 +266,81 @@ export default function PromoSettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-8 flex justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#e32f8c]" />
+      <div className="max-w-6xl mx-auto space-y-5 sm:space-y-8 pb-6 sm:pb-12 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-slate-200 shrink-0" />
+            <div className="space-y-2">
+              <div className="h-7 w-72 max-w-full bg-slate-200 rounded-xl" />
+              <div className="h-4 w-96 max-w-full bg-slate-100 rounded-lg" />
+            </div>
+          </div>
+          <div className="h-12 w-full sm:w-52 bg-slate-200 rounded-2xl shrink-0" />
+        </div>
+
+        {/* 2-Column Configurator + Live Preview Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+          <div className="lg:col-span-5 space-y-5">
+            <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-5">
+              <div className="h-4 w-44 bg-slate-200 rounded-lg" />
+              <div className="flex items-center justify-between">
+                <div className="space-y-1.5">
+                  <div className="h-4 w-36 bg-slate-200 rounded" />
+                  <div className="h-3 w-48 bg-slate-100 rounded" />
+                </div>
+                <div className="h-7 w-14 bg-slate-200 rounded-full" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="h-11 bg-slate-100 rounded-xl" />
+                <div className="h-11 bg-slate-100 rounded-xl" />
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-20 bg-slate-100 rounded-xl" />
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="h-11 bg-slate-100 rounded-xl" />
+                <div className="h-11 bg-slate-100 rounded-xl" />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+              <div className="h-4 w-52 bg-slate-200 rounded-lg" />
+              <div className="aspect-video rounded-xl bg-slate-200" />
+              <div className="flex items-center gap-4">
+                <div className="w-28 aspect-[9/16] rounded-xl bg-slate-200 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-10 w-40 bg-slate-100 rounded-xl" />
+                  <div className="h-3 w-full bg-slate-100 rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-7 space-y-5">
+            <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-36 bg-slate-200 rounded-lg" />
+                <div className="h-8 w-40 bg-slate-100 rounded-xl" />
+              </div>
+              <div className="h-[320px] rounded-2xl bg-slate-900/10" />
+            </div>
+
+            {[...Array(2)].map((_, idx) => (
+              <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+                <div className="h-4 w-32 bg-slate-200 rounded-lg" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="h-11 bg-slate-100 rounded-xl" />
+                  <div className="h-11 bg-slate-100 rounded-xl" />
+                  <div className="h-11 bg-slate-100 rounded-xl" />
+                  <div className="h-11 bg-slate-100 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -308,27 +391,30 @@ export default function PromoSettingsPage() {
             <div className="flex flex-col sm:flex-row justify-between mt-4 gap-2 sm:gap-3">
               {selectedFile && (
                 <button
+                  type="button"
                   onClick={handleOriginalUpload}
                   disabled={uploadingImage}
-                  className="px-4 py-2.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 text-xs sm:text-sm"
+                  className="px-4 py-2.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] transition-all text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
                 >
-                  Încarcă Original (fără decupare)
+                  {uploadingImage ? 'Se încarcă...' : 'Încarcă Original (fără decupare)'}
                 </button>
               )}
               <div className="flex gap-2 sm:ml-auto">
                 <button
+                  type="button"
                   onClick={() => {
                     setImgSrc('');
                     setSelectedFile(null);
                   }}
-                  className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm"
+                  className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 active:scale-[0.98] transition-all text-sm cursor-pointer"
                 >
                   Anulează
                 </button>
                 <button
+                  type="button"
                   onClick={handleCropUpload}
                   disabled={uploadingImage || !completedCrop?.width}
-                  className="flex items-center gap-2 bg-[#e32f8c] text-black px-6 py-3 rounded-xl font-black hover:bg-[#c41a72] text-sm"
+                  className="flex items-center gap-2 bg-[#e32f8c] text-black px-6 py-3 rounded-xl font-black hover:bg-[#c41a72] active:scale-[0.98] transition-all text-sm disabled:opacity-50 cursor-pointer"
                 >
                   {uploadingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload size={16} />}
                   <span>{uploadingImage ? 'Se încarcă...' : 'Salvează Imaginea'}</span>
@@ -354,9 +440,10 @@ export default function PromoSettingsPage() {
         </div>
 
         <button
+          type="button"
           onClick={handleSave}
           disabled={saving}
-          className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-black px-6 py-3 rounded-2xl font-black shadow-md shadow-[#e32f8c]/20 transition-all disabled:opacity-50 text-sm sm:text-base"
+          className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-[0.98] text-black px-6 py-3 rounded-2xl font-black shadow-md shadow-[#e32f8c]/20 transition-all disabled:opacity-50 text-sm sm:text-base cursor-pointer"
         >
           {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save size={18} />}
           <span>{saving ? 'Se salvează...' : 'Salvează Modificările'}</span>
@@ -591,7 +678,7 @@ export default function PromoSettingsPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-black text-slate-700 flex items-center gap-1.5"><Monitor size={14} /> Fundal PC (Landscape 16:9)</span>
-                <button type="button" onClick={() => handleResetDefaultImage('pc')} className="text-[11px] font-bold text-slate-400 hover:text-[#e32f8c] shrink-0">Reset TrenZone</button>
+                <button type="button" disabled={resettingTarget !== null} onClick={() => handleResetDefaultImage('pc')} className="text-[11px] font-bold text-slate-400 hover:text-[#e32f8c] active:scale-[0.98] transition-all shrink-0 disabled:opacity-50 cursor-pointer">{resettingTarget === 'pc' ? 'Se resetează...' : 'Reset TrenZone'}</button>
               </div>
               <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-200 bg-black group">
                 <Image src={getOptimizedImageUrl(settings.image)} alt="PC Promo Bg" fill sizes="400px" className="object-cover" />
@@ -608,7 +695,7 @@ export default function PromoSettingsPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-black text-slate-700 flex items-center gap-1.5"><Smartphone size={14} /> Fundal Mobil (Portrait 9:16)</span>
-                <button type="button" onClick={() => handleResetDefaultImage('mobile')} className="text-[11px] font-bold text-slate-400 hover:text-[#e32f8c] shrink-0">Reset TrenZone</button>
+                <button type="button" disabled={resettingTarget !== null} onClick={() => handleResetDefaultImage('mobile')} className="text-[11px] font-bold text-slate-400 hover:text-[#e32f8c] active:scale-[0.98] transition-all shrink-0 disabled:opacity-50 cursor-pointer">{resettingTarget === 'mobile' ? 'Se resetează...' : 'Reset TrenZone'}</button>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="relative w-28 aspect-[9/16] rounded-xl overflow-hidden border border-slate-200 bg-black shrink-0">
@@ -743,7 +830,7 @@ export default function PromoSettingsPage() {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-black px-5 py-3 rounded-xl font-black shadow-sm transition-all disabled:opacity-50 text-sm"
+            className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-[0.98] text-black px-5 py-3 rounded-xl font-black shadow-sm transition-all disabled:opacity-50 text-sm cursor-pointer"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save size={17} />}
             <span>{saving ? 'Se salvează...' : 'Salvează Modificările'}</span>

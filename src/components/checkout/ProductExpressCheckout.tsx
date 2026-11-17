@@ -369,10 +369,9 @@ const ExpressCheckoutInner = ({
   return (
     <div className="w-full relative mt-2">
       {!isExpressReady && (
-        <div className="h-12 w-full bg-zinc-100 animate-pulse rounded-xl flex items-center justify-center">
-          <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">
-            {locale === 'ro' ? 'Se încarcă plata rapidă...' : 'Loading express checkout...'}
-          </span>
+        <div className="grid grid-cols-2 gap-2.5 w-full" aria-hidden="true">
+          <div className="h-12 rounded-xl bg-zinc-900/80 border border-white/10 animate-pulse" />
+          <div className="h-12 rounded-xl bg-zinc-900/80 border border-white/10 animate-pulse" />
         </div>
       )}
       <div className={isExpressReady && hasWallets ? "block" : isExpressReady ? "hidden" : "invisible h-0 overflow-hidden"}>

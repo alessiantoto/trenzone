@@ -56,7 +56,7 @@ export default function ProductEditorPage() {
   };
 
   const handleSave = async () => {
-    if (!product || !product.id) return;
+    if (saving || !product || !product.id) return;
     setSaving(true);
     try {
       const res = await fetch('/api/admin/data?action=update-product', {
@@ -94,9 +94,75 @@ export default function ProductEditorPage() {
 
   if (loading) {
     return (
-        <div className="flex items-center justify-center py-20 mt-8">
-          <Loader2 className="w-8 h-8 animate-spin text-[#e32f8c]" />
+      <div className="max-w-5xl mx-auto space-y-5 sm:space-y-6 pb-8 sm:pb-16 mt-1 sm:mt-4 animate-pulse">
+        {/* Title Bar Skeleton */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 shrink-0" />
+            <div className="space-y-2 flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-52 sm:w-64 rounded-lg bg-slate-200" />
+                <div className="h-5 w-14 rounded-full bg-slate-200/80" />
+              </div>
+              <div className="h-3.5 w-36 rounded bg-slate-200/70" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 shrink-0">
+            <div className="h-11 w-full sm:w-36 rounded-xl bg-white border border-slate-200" />
+            <div className="h-11 w-full sm:w-48 rounded-xl bg-slate-200" />
+          </div>
         </div>
+
+        {/* Tab Pills Skeleton */}
+        <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+          <div className="h-9 w-36 rounded-xl bg-slate-200" />
+          <div className="h-9 w-24 rounded-xl bg-slate-100" />
+          <div className="h-9 w-24 rounded-xl bg-slate-100" />
+        </div>
+
+        {/* Main Editor Card Skeleton */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100 space-y-7">
+          {/* Delivery Toggle Card Skeleton */}
+          <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1.5">
+              <div className="h-3.5 w-44 rounded bg-slate-200" />
+              <div className="h-3 w-72 max-w-full rounded bg-slate-100" />
+            </div>
+            <div className="h-10 w-full sm:w-80 rounded-xl bg-slate-200/70 shrink-0" />
+          </div>
+
+          {/* Cover Card Skeleton */}
+          <div className="p-4 bg-slate-50/60 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="w-24 h-24 rounded-2xl bg-slate-200 shrink-0" />
+            <div className="flex-1 space-y-2.5">
+              <div className="h-4 w-40 rounded bg-slate-200" />
+              <div className="h-3 w-64 max-w-full rounded bg-slate-100" />
+              <div className="h-9 w-40 rounded-xl bg-slate-200" />
+            </div>
+          </div>
+
+          {/* Form Field Blocks Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-3 w-28 rounded bg-slate-200" />
+                <div className="h-11 w-full rounded-xl bg-slate-100 border border-slate-200/70" />
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+            <div className="space-y-2">
+              <div className="h-3 w-32 rounded bg-slate-200" />
+              <div className="h-28 w-full rounded-xl bg-slate-100 border border-slate-200/70" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-3 w-32 rounded bg-slate-200" />
+              <div className="h-28 w-full rounded-xl bg-slate-100 border border-slate-200/70" />
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -149,12 +215,13 @@ export default function ProductEditorPage() {
               <span className="truncate">Vezi în Magazin</span>
             </a>
             <button
+              type="button"
               onClick={handleSave}
               disabled={saving}
-              className="min-h-[44px] px-3 sm:px-6 rounded-xl bg-[#e32f8c] text-black font-black text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-[#c41a72] transition-all disabled:opacity-50 shadow-sm cursor-pointer"
+              className="min-h-[44px] px-3 sm:px-6 rounded-xl bg-[#e32f8c] text-black font-black text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-[#c41a72] transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm cursor-pointer"
             >
               {saving ? <Loader2 size={17} className="animate-spin shrink-0" /> : <Save size={17} className="shrink-0" />}
-              <span className="truncate">Salvează Modificările</span>
+              <span className="truncate">{saving ? 'Se salvează...' : 'Salvează Modificările'}</span>
             </button>
           </div>
         </div>
@@ -162,22 +229,25 @@ export default function ProductEditorPage() {
         {/* Tabs */}
         <div className="flex items-center gap-1 sm:gap-2 border-b border-slate-200 overflow-x-auto pb-0.5">
           <button
+            type="button"
             onClick={() => setActiveTab('general')}
-            className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'general' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+            className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-all active:scale-[0.98] border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'general' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
           >
             Informații Generale
           </button>
           {product.variants && (
             <button
+              type="button"
               onClick={() => setActiveTab('variants')}
-              className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'variants' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+              className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-all active:scale-[0.98] border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'variants' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
             >
               Variante
             </button>
           )}
           <button
+            type="button"
             onClick={() => setActiveTab('images')}
-            className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'images' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+            className={`min-h-[44px] px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black uppercase tracking-wider transition-all active:scale-[0.98] border-b-2 whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'images' ? 'border-[#e32f8c] text-[#e32f8c]' : 'border-transparent text-slate-400 hover:text-slate-900'}`}
           >
             Imagini
           </button>
@@ -215,7 +285,7 @@ export default function ProductEditorPage() {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 h-11 px-4 rounded-xl bg-[#e32f8c] text-black font-black text-sm flex items-center justify-center gap-2 hover:bg-[#c41a72] transition-all disabled:opacity-50 shadow-sm cursor-pointer"
+              className="flex-1 h-11 px-4 rounded-xl bg-[#e32f8c] text-black font-black text-sm flex items-center justify-center gap-2 hover:bg-[#c41a72] transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm cursor-pointer"
             >
               {saving ? <Loader2 size={17} className="animate-spin shrink-0" /> : <Save size={17} className="shrink-0" />}
               <span>{saving ? 'Se salvează...' : 'Salvează Modificările'}</span>

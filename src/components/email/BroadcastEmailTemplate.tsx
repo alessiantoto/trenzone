@@ -15,8 +15,44 @@ interface BroadcastEmailTemplateProps {
 }
 
 /**
+ * Escapes HTML to prevent XSS/phishing injection while permitting simple
+ * attribute-free inline formatting tags (b, strong, i, em, u, br) and newlines.
+ */
+function sanitizeBroadcastMessage(rawMessage: string): string {
+  const escaped = String(rawMessage || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  return escaped
+    .replace(/&lt;(\/?)(b|strong|i|em|u)&gt;/gi, (_, slash, tag) => `<${slash}${tag.toLowerCase()}>`)
+    .replace(/&lt;br\s*\/?&gt;/gi, '<br />')
+    .replace(/\r?\n/g, '<br />');
+}
+
+function sanitizeSafeHttpUrl(rawUrl?: string): string | undefined {
+  if (!rawUrl || typeof rawUrl !== 'string') return undefined;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return trimmed;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return parsed.toString();
+    }
+  } catch {
+    // invalid URL
+  }
+  return undefined;
+}
+
+/**
  * ELITE BROADCAST EMAIL TEMPLATE
- * Design versatile prentru campanii de marketing TrenZone.
+ * Design versatile pentru campanii de marketing TrenZone.
  */
 export const BroadcastEmailTemplate: React.FC<Readonly<BroadcastEmailTemplateProps>> = ({
   title,
@@ -28,14 +64,17 @@ export const BroadcastEmailTemplate: React.FC<Readonly<BroadcastEmailTemplatePro
   userEmail,
   baseUrl = getSiteUrl()
 }) => {
-  
+  const safeImageUrl = sanitizeSafeHttpUrl(imageUrl);
+  const safeCtaLink = sanitizeSafeHttpUrl(ctaLink);
+  const safeHtmlMessage = sanitizeBroadcastMessage(message);
+
   return (
     <BaseEmailLayout locale={locale} baseUrl={baseUrl} userEmail={userEmail}>
       {/* Header Image (Optional) */}
-      {imageUrl && (
+      {safeImageUrl && (
         <div style={{ padding: '0', textAlign: 'center', backgroundColor: '#111' }}>
           <img 
-            src={imageUrl} 
+            src={safeImageUrl} 
             alt={title} 
             style={{ 
               width: '100%', 
@@ -70,12 +109,12 @@ export const BroadcastEmailTemplate: React.FC<Readonly<BroadcastEmailTemplatePro
           maxWidth: '480px',
           margin: '0 auto',
           fontWeight: '500'
-        }} dangerouslySetInnerHTML={{ __html: message.replace(/\n/g, '<br />') }} />
+        }} dangerouslySetInnerHTML={{ __html: safeHtmlMessage }} />
 
         {/* Call to Action */}
-        {ctaText && ctaLink && (
+        {ctaText && safeCtaLink && (
           <div style={{ marginTop: '50px', marginBottom: '20px' }}>
-            <a href={ctaLink} style={{
+            <a href={safeCtaLink} style={{
               display: 'inline-block',
               backgroundColor: '#000',
               color: '#fff',

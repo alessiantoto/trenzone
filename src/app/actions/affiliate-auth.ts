@@ -7,8 +7,28 @@ import crypto from 'crypto';
 
 const AFFILIATE_COOKIE_NAME = 'affiliate_session';
 
+let ephemeralAffiliateSecret: string | null = null;
+
 function getAffiliateSigningSecret(): string {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || 'trenzone-affiliate-hmac-secret';
+  const configured =
+    process.env.AFFILIATE_SESSION_SECRET ||
+    process.env.PROGRAM_DOWNLOAD_SECRET ||
+    process.env.CSRF_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.STRIPE_SECRET_KEY;
+
+  if (configured && configured.trim().length >= 16) {
+    return configured.trim();
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[AFFILIATE AUTH] Missing server signing secret environment variable.');
+  }
+
+  if (!ephemeralAffiliateSecret) {
+    ephemeralAffiliateSecret = crypto.randomBytes(32).toString('hex');
+  }
+  return ephemeralAffiliateSecret;
 }
 
 function signAffiliatePayload(payloadBase64: string): string {
@@ -81,7 +101,22 @@ export async function affiliateLoginAction(email: string, code: string, locale: 
     const escapedEmail = cleanedEmail.replace(/[\\%_]/g, '\\$&');
     const escapedCode = cleanedCode.replace(/[\\%_]/g, '\\$&');
 
-    // 🛡️ 3. Safe Database Lookup (wildcards escaped above)
+    // Secondary per-email rate limit to block distributed brute force against a target account
+    const { allowed: emailAllowed } = await checkRateLimit(
+      rateLimiters.affiliateLogin,
+      `aff-email:${cleanedEmail}`,
+      'affiliateLogin'
+    );
+    if (!emailAllowed) {
+      return {
+        success: false,
+        error: isEn
+          ? 'Too many attempts for this account. Please wait 1 minute before trying again.'
+          : 'Prea multe încercări pentru acest cont. Te rugăm să aștepți 1 minut înainte de a reîncerca.'
+      };
+    }
+
+    // 3. Safe Database Lookup (wildcards escaped above)
     const { data: affiliate, error } = await supabaseAdmin
       .from('affiliates')
       .select('id, name, email, code, status, social_links')
@@ -155,7 +190,15 @@ export async function getAffiliateSession() {
     const decoded = verifyAffiliateToken(sessionCookie.value);
     if (!decoded) return null;
     const parsed = JSON.parse(decoded);
-    if (!parsed || typeof parsed.id !== 'string' || typeof parsed.code !== 'string') {
+    if (
+      !parsed ||
+      typeof parsed.id !== 'string' ||
+      !parsed.id ||
+      typeof parsed.code !== 'string' ||
+      !parsed.code ||
+      typeof parsed.email !== 'string' ||
+      !parsed.email
+    ) {
       return null;
     }
     return parsed as {

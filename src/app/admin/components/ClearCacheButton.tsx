@@ -39,6 +39,7 @@ export function ClearCacheButton({ variant = "header" }: { variant?: "header" | 
           type="button"
           onClick={handleClearCache}
           disabled={loading}
+          aria-busy={loading}
           className={`w-full sm:w-auto min-h-[48px] px-6 py-3.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2.5 shadow-sm active:scale-[0.98] disabled:opacity-60 cursor-pointer select-none ${
             justCleared
               ? "bg-emerald-600 text-white shadow-emerald-500/20"
@@ -77,8 +78,9 @@ export function ClearCacheButton({ variant = "header" }: { variant?: "header" | 
       type="button"
       onClick={handleClearCache}
       disabled={loading}
+      aria-busy={loading}
       title="Golește tot cache-ul site-ului (Produse, Clipuri, Setări, Pagini) pentru a afișa instant ultimele modificări"
-      className={`h-10 px-3 sm:px-4 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer active:scale-95 disabled:opacity-60 select-none whitespace-nowrap shrink-0 ${
+      className={`h-10 px-3 sm:px-4 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer active:scale-[0.98] disabled:opacity-60 select-none whitespace-nowrap shrink-0 ${
         justCleared
           ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-2xs"
           : "bg-slate-900 hover:bg-[#e32f8c] active:bg-[#e32f8c] text-white border-transparent shadow-xs"

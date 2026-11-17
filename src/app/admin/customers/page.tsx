@@ -116,7 +116,7 @@ export default function CustomersPage() {
   };
 
   const handleConfirmDelete = async () => {
-    if (!customerToDelete) return;
+    if (!customerToDelete || isDeleting) return;
     setIsDeleting(true);
     try {
       await deleteAdminCustomer(customerToDelete.email);
@@ -145,7 +145,7 @@ export default function CustomersPage() {
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingCustomer || !originalEmail) return;
+    if (!editingCustomer || !originalEmail || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
@@ -170,6 +170,7 @@ export default function CustomersPage() {
   // Add Customer Handlers
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAdding) return;
     if (!newCustomer.name || !newCustomer.email) {
       toast.error("Numele și adresa de email sunt obligatorii.");
       return;
@@ -237,8 +238,62 @@ export default function CustomersPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#e32f8c]" />
+      <div className="pb-12 max-w-6xl mx-auto space-y-6 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="h-7 w-36 bg-slate-200 rounded-xl" />
+            <div className="h-4 w-72 max-w-full bg-slate-100 rounded-lg" />
+          </div>
+          <div className="h-11 w-full sm:w-44 bg-slate-200 rounded-xl shrink-0" />
+        </div>
+
+        {/* 4 KPI Card Skeletons */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[...Array(4)].map((_, idx) => (
+            <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0" />
+              <div className="flex-1 space-y-1.5 min-w-0">
+                <div className="h-2.5 w-20 bg-slate-100 rounded" />
+                <div className="h-6 w-16 bg-slate-200 rounded-lg" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Search & Filter Pills Skeleton */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="h-10 w-full sm:max-w-md bg-slate-100 rounded-xl" />
+          <div className="flex items-center gap-2">
+            {[...Array(4)].map((_, idx) => (
+              <div key={idx} className="h-8 w-20 bg-slate-100 rounded-lg" />
+            ))}
+          </div>
+        </div>
+
+        {/* Table / Cards Skeleton */}
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+          <div className="divide-y divide-slate-100">
+            {[...Array(5)].map((_, idx) => (
+              <div key={idx} className="p-4 sm:px-6 sm:py-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-10 h-10 rounded-xl bg-slate-200 shrink-0" />
+                  <div className="space-y-1.5 flex-1 max-w-xs">
+                    <div className="h-4 w-36 bg-slate-200 rounded" />
+                    <div className="h-3 w-48 bg-slate-100 rounded" />
+                  </div>
+                </div>
+                <div className="hidden md:block h-4 w-28 bg-slate-100 rounded" />
+                <div className="hidden md:block h-4 w-20 bg-slate-100 rounded" />
+                <div className="hidden md:block h-4 w-24 bg-slate-200 rounded" />
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="h-8 w-20 bg-slate-100 rounded-lg" />
+                  <div className="h-8 w-8 bg-slate-100 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -255,8 +310,9 @@ export default function CustomersPage() {
           </p>
         </div>
         <button 
+          type="button"
           onClick={() => setIsAddModalOpen(true)}
-          className="h-11 px-5 bg-[#e32f8c] text-black rounded-xl text-sm font-black hover:bg-[#c41a72] transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto shrink-0 cursor-pointer"
+          className="h-11 px-5 bg-[#e32f8c] text-black rounded-xl text-sm font-black hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto shrink-0 cursor-pointer"
         >
           <Plus size={18} /> Adaugă Client Nou
         </button>
@@ -712,7 +768,7 @@ export default function CustomersPage() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full px-6 py-3.5 bg-[#e32f8c] text-black font-black text-sm rounded-xl hover:bg-[#c41a72] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full px-6 py-3.5 bg-[#e32f8c] text-black font-black text-sm rounded-xl hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     {isSubmitting ? (
                       <><Loader2 size={18} className="animate-spin" /> Se salvează...</>
@@ -808,7 +864,7 @@ export default function CustomersPage() {
                   <button
                     type="submit"
                     disabled={isAdding}
-                    className="w-full px-6 py-3.5 bg-[#e32f8c] text-black font-black text-sm rounded-xl hover:bg-[#c41a72] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full px-6 py-3.5 bg-[#e32f8c] text-black font-black text-sm rounded-xl hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     {isAdding ? (
                       <><Loader2 size={18} className="animate-spin" /> Se creează...</>
@@ -854,10 +910,13 @@ export default function CustomersPage() {
                   type="button"
                   onClick={handleConfirmDelete}
                   disabled={isDeleting}
-                  className="flex-1 py-3 px-4 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 py-3 px-4 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
-                  {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                  Șterge Definitiv
+                  {isDeleting ? (
+                    <><Loader2 size={16} className="animate-spin" /> Se șterge...</>
+                  ) : (
+                    <><Trash2 size={16} /> Șterge Definitiv</>
+                  )}
                 </button>
               </div>
             </motion.div>

@@ -3,7 +3,7 @@
 import { useTranslations, useLocale } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { motion } from "framer-motion";
-import { CheckCircle2, ShoppingBag, ArrowRight, Home, AlertCircle } from "lucide-react";
+import { CheckCircle2, ShoppingBag, ArrowRight, Home, AlertCircle, BookOpen, Download, Loader2 } from "lucide-react";
 import { useEffect, useState, Suspense } from "react";
 import { useCartStore } from "@/store/useCartStore";
 import { useCheckoutStore } from "@/store/useCheckoutStore";
@@ -18,6 +18,7 @@ function OrderSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'processing' | 'success' | 'error'>('loading');
+  const [isCheckingAgain, setIsCheckingAgain] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string>('');
   const [digitalDownloads, setDigitalDownloads] = useState<
     Array<{ programKey: string; lang: string; title: string; downloadUrl: string }>
@@ -151,25 +152,7 @@ function OrderSuccessContent() {
     <div className="min-h-screen bg-[#fafafc] flex items-center justify-center p-6">
       <div className="max-w-xl w-full">
         {status === 'loading' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-[3rem] p-8 md:p-12 shadow-sm border border-zinc-100 text-center"
-          >
-            <div className="relative mb-10 inline-block">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                className="w-24 h-24 border-4 border-zinc-200 border-t-primary rounded-full"
-              />
-            </div>
-            <h1 className="text-2xl font-black uppercase text-zinc-600 mb-2">
-              {t('verifying_payment')}
-            </h1>
-            <p className="text-sm text-zinc-400">
-              {t('processing_order')}
-            </p>
-          </motion.div>
+          <OrderSuccessCardSkeleton label={t('verifying_payment')} sublabel={t('processing_order')} />
         )}
 
         {status === 'success' && (
@@ -243,20 +226,26 @@ function OrderSuccessContent() {
                 transition={{ delay: 0.55 }}
                 className="mb-8 p-5 rounded-3xl bg-purple-50 border-2 border-purple-200 text-left space-y-3"
               >
-                <div className="text-xs font-black uppercase tracking-wider text-purple-900">
-                  {isEn
-                    ? "📚 Your Digital Programs (Also sent to your email):"
-                    : "📚 Programele Tale Digitale (Trimise și pe email):"}
+                <div className="text-xs font-black uppercase tracking-wider text-purple-900 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 shrink-0 text-purple-700" />
+                  <span>
+                    {isEn
+                      ? "Your Digital Programs (Also sent to your email):"
+                      : "Programele Tale Digitale (Trimise și pe email):"}
+                  </span>
                 </div>
                 <div className="space-y-2">
                   {digitalDownloads.map((dl, idx) => (
                     <a
                       key={idx}
                       href={dl.downloadUrl}
-                      className="w-full py-3 px-4 rounded-2xl bg-[#111111] hover:bg-[#e32f8c] text-white font-black text-xs uppercase tracking-wider flex items-center justify-between transition-colors"
+                      className="w-full py-3 px-4 rounded-2xl bg-[#111111] hover:bg-[#e32f8c] text-white font-black text-xs uppercase tracking-wider flex items-center justify-between transition-all active:scale-[0.98]"
                     >
-                      <span>⬇️ {dl.title}</span>
-                      <span className="text-[10px] underline">
+                      <span className="inline-flex items-center gap-2 min-w-0 truncate">
+                        <Download className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{dl.title}</span>
+                      </span>
+                      <span className="text-[10px] underline shrink-0 ml-2">
                         {isEn ? "Download PDF" : "Descarcă PDF"}
                       </span>
                     </a>
@@ -319,14 +308,24 @@ function OrderSuccessContent() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 type="button"
-                onClick={() => window.location.reload()}
-                className="flex items-center justify-center gap-3 bg-primary text-black px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary/80 transition-all cursor-pointer"
+                disabled={isCheckingAgain}
+                onClick={() => {
+                  if (isCheckingAgain) return;
+                  setIsCheckingAgain(true);
+                  window.location.reload();
+                }}
+                className="flex items-center justify-center gap-2.5 bg-primary text-black px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary/80 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
               >
-                {isEn ? 'Check Status Again' : 'Verifică din nou statusul'}
+                {isCheckingAgain && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}
+                <span>
+                  {isCheckingAgain
+                    ? (isEn ? 'Checking...' : 'Se verifică...')
+                    : (isEn ? 'Check Status Again' : 'Verifică din nou statusul')}
+                </span>
               </button>
               <Link
                 href="/"
-                className="flex items-center justify-center gap-3 bg-zinc-50 text-zinc-600 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-zinc-100 hover:text-black transition-all"
+                className="flex items-center justify-center gap-3 bg-zinc-50 text-zinc-600 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-zinc-100 hover:text-black transition-all active:scale-[0.98]"
               >
                 <Home className="w-4 h-4" />
                 <span>{t('go_home')}</span>
@@ -407,11 +406,40 @@ function OrderSuccessContent() {
   );
 }
 
+function OrderSuccessCardSkeleton({ label, sublabel }: { label?: string; sublabel?: string }) {
+  return (
+    <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-sm border border-zinc-100 text-center relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-2 bg-primary/30 animate-pulse" />
+      <div className="w-24 h-24 rounded-full bg-primary/10 mx-auto mb-8 flex items-center justify-center animate-pulse">
+        <div className="w-12 h-12 rounded-full bg-primary/20" />
+      </div>
+      {label ? (
+        <>
+          <h1 className="text-2xl font-black uppercase text-zinc-700 mb-2">{label}</h1>
+          {sublabel && <p className="text-sm text-zinc-400 mb-8">{sublabel}</p>}
+        </>
+      ) : (
+        <div className="space-y-3 mb-8">
+          <div className="h-10 w-64 mx-auto rounded-2xl bg-zinc-200 animate-pulse" />
+          <div className="h-4 w-72 max-w-full mx-auto rounded bg-zinc-100 animate-pulse" />
+        </div>
+      )}
+      <div className="h-5 w-44 mx-auto rounded-lg bg-zinc-100 animate-pulse mb-8" />
+      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="h-14 w-full sm:w-48 rounded-2xl bg-zinc-900/15 animate-pulse" />
+        <div className="h-14 w-full sm:w-40 rounded-2xl bg-zinc-100 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
 export default function OrderSuccessPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#fafafc] flex items-center justify-center p-6">
+        <div className="max-w-xl w-full">
+          <OrderSuccessCardSkeleton />
+        </div>
       </div>
     }>
       <OrderSuccessContent />

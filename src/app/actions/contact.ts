@@ -38,28 +38,36 @@ export async function sendContactMessage(formData: {
            .replace(/'/g, "&#039;");
     };
 
-    const cleanEmail = (formData.email || '').trim().toLowerCase().slice(0, 150);
+    const cleanEmail = (formData.email || '').replace(/[\r\n]/g, '').trim().toLowerCase().slice(0, 150);
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return { success: false, error: isEn ? "Invalid email address." : "Adresă de email invalidă." };
     }
 
-    const name = escapeHtml(formData.name || '').slice(0, 100);
+    const rawName = (formData.name || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 100);
+    const rawSubject = (formData.subject || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 150);
+    const rawMessage = (formData.message || '').trim().slice(0, 3000);
+
+    if (!rawName || !rawMessage) {
+      return { success: false, error: isEn ? "Name and message are required." : "Numele și mesajul sunt obligatorii." };
+    }
+
+    const name = escapeHtml(rawName);
     const email = escapeHtml(cleanEmail);
-    const subject = escapeHtml(formData.subject || '').slice(0, 150);
-    const message = escapeHtml(formData.message || '').slice(0, 3000);
+    const subject = escapeHtml(rawSubject || 'Mesaj nou');
+    const message = escapeHtml(rawMessage);
     
-    console.log(`📨 [CONTACT ACTION] New message from ${name} (${email}) with subject: ${subject}`);
+    console.log(`[CONTACT ACTION] New message from ${name} (${email})`);
 
     if (!process.env.RESEND_API_KEY) {
-      console.error("❌ [CONTACT ACTION] Missing RESEND_API_KEY!");
+      console.error("[CONTACT ACTION] Missing RESEND_API_KEY!");
       return { success: false, error: "Configuration Error" };
     }
 
     const response = await resend.emails.send({
       from: getResendFromEmail('TrenZone Contact'),
       to: ['trenzone483@gmail.com'],
-      reply_to: email,
-      subject: `[Formular Contact] ${subject} - ${name}`,
+      reply_to: cleanEmail,
+      subject: `[Formular Contact] ${rawSubject || 'Mesaj'} - ${rawName}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; rounded: 12px; background: #ffffff;">
           <h2 style="color: #000000; font-size: 24px; font-weight: 800; border-bottom: 2px solid #eaeaea; padding-bottom: 10px; text-transform: uppercase;">
@@ -134,9 +142,12 @@ export async function sendContactReply(data: {
     throw new Error("RESEND_API_KEY nu este configurat.");
   }
 
-  const { toEmail, clientName, subject, replyMessage } = data;
-  if (!toEmail || !replyMessage) {
-    return { success: false, error: "Destinatarul sau mesajul lipsește." };
+  const cleanToEmail = String(data.toEmail || '').replace(/[\r\n]/g, '').trim().toLowerCase().slice(0, 150);
+  const cleanSubject = String(data.subject || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 200);
+  const replyMessage = String(data.replyMessage || '').trim().slice(0, 5000);
+
+  if (!cleanToEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanToEmail) || !replyMessage) {
+    return { success: false, error: "Destinatarul sau mesajul este invalid." };
   }
 
   try {
@@ -148,7 +159,7 @@ export async function sendContactReply(data: {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
-    const safeSubject = escapeHtml(subject);
+    const safeSubject = escapeHtml(cleanSubject);
     const safeReplyMessage = escapeHtml(replyMessage);
 
     const formattedHtml = `
@@ -183,9 +194,9 @@ export async function sendContactReply(data: {
 
     const res = await resend.emails.send({
       from: fromAddress,
-      to: [toEmail],
+      to: [cleanToEmail],
       reply_to: 'trenzone483@gmail.com',
-      subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+      subject: cleanSubject.startsWith('Re:') ? cleanSubject : `Re: ${cleanSubject}`,
       html: formattedHtml
     });
 

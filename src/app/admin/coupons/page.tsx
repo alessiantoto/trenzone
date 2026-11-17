@@ -476,6 +476,7 @@ export default function CouponsPage() {
   const [couponToDelete, setCouponToDelete] = useState<{ id: string; code: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [togglingIds, setTogglingIds] = useState<Record<string, boolean>>({});
 
   // Form State
   const [formData, setFormData] = useState({
@@ -515,6 +516,8 @@ export default function CouponsPage() {
   };
 
   const handleToggleStatus = async (coupon: any) => {
+    if (togglingIds[coupon.id]) return;
+    setTogglingIds(prev => ({ ...prev, [coupon.id]: true }));
     try {
       const current = coupon.is_active ?? true;
       // Optimistic update
@@ -524,11 +527,18 @@ export default function CouponsPage() {
     } catch (err) {
       toast.error("Nu s-a putut actualiza statusul cuponului.");
       fetchCoupons();
+    } finally {
+      setTogglingIds(prev => {
+        const next = { ...prev };
+        delete next[coupon.id];
+        return next;
+      });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!formData.code.trim()) {
       toast.error("Te rugăm să introduci codul cuponului.");
       return;
@@ -596,7 +606,7 @@ export default function CouponsPage() {
   };
 
   const handleConfirmDelete = async () => {
-    if (!couponToDelete) return;
+    if (!couponToDelete || isDeleting) return;
     setIsDeleting(true);
     try {
       const res = await deleteCoupon(couponToDelete.id);
@@ -718,8 +728,9 @@ export default function CouponsPage() {
         </div>
 
         <button 
+          type="button"
           onClick={openCreateModal}
-          className="h-11 px-5 bg-[#e32f8c] hover:bg-[#00bee0] active:scale-98 text-black rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 shadow-md shadow-[#e32f8c]/20 w-full sm:w-auto cursor-pointer"
+          className="h-11 px-5 bg-[#e32f8c] hover:bg-[#00bee0] active:scale-[0.98] text-black rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 shadow-md shadow-[#e32f8c]/20 w-full sm:w-auto cursor-pointer"
         >
           <Plus size={18} />
           <span>Adaugă Cupon Nou</span>
@@ -734,7 +745,7 @@ export default function CouponsPage() {
           </div>
           <div className="min-w-0">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block truncate">Total Cupoane</span>
-            <span className="text-lg sm:text-xl font-black text-slate-900">{stats.total}</span>
+            {loading ? <div className="h-6 w-12 bg-slate-200 rounded-md animate-pulse mt-1" /> : <span className="text-lg sm:text-xl font-black text-slate-900">{stats.total}</span>}
           </div>
         </div>
 
@@ -744,7 +755,7 @@ export default function CouponsPage() {
           </div>
           <div className="min-w-0">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block truncate">Active Acum</span>
-            <span className="text-lg sm:text-xl font-black text-emerald-600">{stats.active}</span>
+            {loading ? <div className="h-6 w-12 bg-slate-200 rounded-md animate-pulse mt-1" /> : <span className="text-lg sm:text-xl font-black text-emerald-600">{stats.active}</span>}
           </div>
         </div>
 
@@ -754,7 +765,7 @@ export default function CouponsPage() {
           </div>
           <div className="min-w-0">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block truncate">Utilizări Totale</span>
-            <span className="text-lg sm:text-xl font-black text-slate-900">{stats.usages}</span>
+            {loading ? <div className="h-6 w-14 bg-slate-200 rounded-md animate-pulse mt-1" /> : <span className="text-lg sm:text-xl font-black text-slate-900">{stats.usages}</span>}
           </div>
         </div>
 
@@ -764,7 +775,7 @@ export default function CouponsPage() {
           </div>
           <div className="min-w-0">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block truncate">Expirate</span>
-            <span className="text-lg sm:text-xl font-black text-red-500">{stats.expired}</span>
+            {loading ? <div className="h-6 w-12 bg-slate-200 rounded-md animate-pulse mt-1" /> : <span className="text-lg sm:text-xl font-black text-red-500">{stats.expired}</span>}
           </div>
         </div>
       </div>
@@ -996,8 +1007,9 @@ export default function CouponsPage() {
                     {/* Toggle Active Button */}
                     <button
                       type="button"
+                      disabled={!!togglingIds[coupon.id]}
                       onClick={() => handleToggleStatus(coupon)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black active:scale-[0.98] transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60 ${
                         isActive
                           ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
@@ -1046,11 +1058,22 @@ export default function CouponsPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                [...Array(4)].map((_, i) => (
+                [...Array(5)].map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td colSpan={6} className="px-6 py-5">
-                      <div className="h-5 bg-slate-100 rounded-xl w-full" />
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-slate-200 shrink-0" />
+                        <div className="space-y-1.5">
+                          <div className="h-5 w-24 bg-slate-200 rounded-lg" />
+                          <div className="h-3 w-32 bg-slate-100 rounded" />
+                        </div>
+                      </div>
                     </td>
+                    <td className="px-6 py-4"><div className="h-6 w-28 bg-slate-100 rounded-xl" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-100 rounded" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-100 rounded" /></td>
+                    <td className="px-6 py-4 text-center"><div className="h-6 w-16 bg-slate-200 rounded-full mx-auto" /></td>
+                    <td className="px-6 py-4 text-right"><div className="h-8 w-16 bg-slate-100 rounded-xl ml-auto" /></td>
                   </tr>
                 ))
               ) : filteredCoupons.length === 0 ? (
@@ -1154,8 +1177,9 @@ export default function CouponsPage() {
                       <td className="px-6 py-4 text-center">
                         <button
                           type="button"
+                          disabled={!!togglingIds[coupon.id]}
                           onClick={() => handleToggleStatus(coupon)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer ${
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60 ${
                             isExpired
                               ? 'bg-red-50 text-red-700 border border-red-200'
                               : isActive
@@ -1438,9 +1462,10 @@ export default function CouponsPage() {
                   Anulează
                 </button>
                 <button
+                  type="button"
                   onClick={handleSubmit}
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-[#e32f8c] hover:bg-[#00bee0] active:scale-98 text-black font-black text-xs sm:text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-md shadow-[#e32f8c]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer w-full sm:w-auto"
+                  className="px-6 py-2.5 bg-[#e32f8c] hover:bg-[#00bee0] active:scale-[0.98] text-black font-black text-xs sm:text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-md shadow-[#e32f8c]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer w-full sm:w-auto"
                 >
                   {isSubmitting ? (
                     <><Loader2 size={16} className="animate-spin" /> Se salvează...</>
@@ -1486,10 +1511,10 @@ export default function CouponsPage() {
                   type="button"
                   onClick={handleConfirmDelete}
                   disabled={isDeleting}
-                  className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                  <span>Șterge</span>
+                  <span>{isDeleting ? 'Se șterge...' : 'Șterge'}</span>
                 </button>
               </div>
             </motion.div>

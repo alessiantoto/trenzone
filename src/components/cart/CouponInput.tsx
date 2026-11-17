@@ -25,7 +25,7 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
   const { subtotal } = getTotals("RON");
 
   const handleApply = async () => {
-    if (!code.trim()) return;
+    if (loading || !code.trim()) return;
     setLoading(true);
     setError(null);
 
@@ -82,9 +82,16 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
             type="button"
             onClick={handleApply}
             disabled={loading || !code.trim()}
-            className="h-10 px-5 rounded-lg bg-[#111111] hover:bg-[#e32f8c] text-white text-xs font-bold tracking-wide transition-colors disabled:bg-zinc-200 disabled:text-zinc-500 disabled:cursor-not-allowed cursor-pointer shrink-0 flex items-center justify-center"
+            className="h-10 px-4 sm:px-5 rounded-lg bg-[#111111] hover:bg-[#e32f8c] text-white text-xs font-bold tracking-wide transition-all active:scale-[0.98] disabled:bg-zinc-200 disabled:text-zinc-500 disabled:cursor-not-allowed cursor-pointer shrink-0 flex items-center justify-center gap-1.5"
           >
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (isEn ? "Apply" : "Aplică")}
+            {loading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                <span>{isEn ? "Checking..." : "Se verifică..."}</span>
+              </>
+            ) : (
+              isEn ? "Apply" : "Aplică"
+            )}
           </button>
         </div>
 
@@ -125,8 +132,9 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
           </div>
         </div>
         <button 
+          type="button"
           onClick={handleRemove}
-          className="p-2 hover:bg-green-500/10 rounded-xl transition-colors text-green-600"
+          className="p-2 hover:bg-green-500/10 rounded-xl transition-all active:scale-[0.98] text-green-600 cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -146,11 +154,19 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
           disabled={loading}
         />
         <Button 
+          type="button"
           onClick={handleApply}
-          disabled={loading || !code}
-          className="h-10 px-6 rounded-xl bg-black hover:bg-zinc-800 text-white text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+          disabled={loading || !code.trim()}
+          className="h-10 px-5 sm:px-6 rounded-xl bg-black hover:bg-zinc-800 text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t('apply')}
+          {loading ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+              <span>{isEn ? "Checking..." : "Se verifică..."}</span>
+            </>
+          ) : (
+            t('apply')
+          )}
         </Button>
       </div>
       

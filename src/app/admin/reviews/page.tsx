@@ -85,6 +85,8 @@ export default function ReviewsPage() {
 
   // Delete confirmation modal state
   const [reviewToDelete, setReviewToDelete] = useState<any | null>(null);
+  const [isDeletingReview, setIsDeletingReview] = useState(false);
+  const [togglingReviewId, setTogglingReviewId] = useState<string | null>(null);
 
   // Add / Edit modal state
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
@@ -215,9 +217,13 @@ export default function ReviewsPage() {
   };
 
   const handleStatusChange = async (id: string, newStatus: 'approved' | 'rejected' | 'pending') => {
+    if (togglingReviewId === id) return;
+    const prevReviews = reviews;
+    setTogglingReviewId(id);
+    // Optimistic update for instant feedback
+    setReviews(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
     try {
       await updateReviewStatus(id, newStatus);
-      setReviews(reviews.map(r => r.id === id ? { ...r, status: newStatus } : r));
       toast.success(
         newStatus === 'approved' 
           ? "Recenzia a fost aprobată!" 
@@ -227,24 +233,32 @@ export default function ReviewsPage() {
       );
     } catch (error) {
       console.error("Failed to update status", error);
+      setReviews(prevReviews);
       toast.error("A apărut o eroare la actualizarea statusului.");
+    } finally {
+      setTogglingReviewId(null);
     }
   };
 
   const handleDelete = async (id: string) => {
+    if (isDeletingReview) return;
+    setIsDeletingReview(true);
     try {
       await deleteReview(id);
-      setReviews(reviews.filter(r => r.id !== id));
+      setReviews(prev => prev.filter(r => r.id !== id));
       setReviewToDelete(null);
       toast.success("Recenzia a fost ștearsă definitiv.");
     } catch (error) {
       console.error("Failed to delete", error);
       toast.error("A apărut o eroare la ștergere.");
+    } finally {
+      setIsDeletingReview(false);
     }
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!reviewForm.product_id || !reviewForm.customer_name.trim() || (!reviewForm.comment_ro.trim() && !reviewForm.comment_en.trim())) {
       toast.error("Completează produsul, numele și cel puțin un text (RO sau EN).");
       return;
@@ -328,8 +342,9 @@ export default function ReviewsPage() {
         </div>
 
         <button 
+          type="button"
           onClick={openAddModal}
-          className="w-full sm:w-auto h-11 px-5 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-98 text-slate-950 font-black rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm shadow-[#e32f8c]/20 cursor-pointer text-xs sm:text-sm"
+          className="w-full sm:w-auto h-11 px-5 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-[0.98] text-slate-950 font-black rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm shadow-[#e32f8c]/20 cursor-pointer text-xs sm:text-sm"
         >
           <Plus size={16} />
           <span>Adaugă Manual</span>
@@ -498,11 +513,31 @@ export default function ReviewsPage() {
 
       {/* LIST CONTAINER */}
       {loading ? (
-        <div className="p-16 bg-white border border-slate-200/80 rounded-3xl flex flex-col items-center justify-center text-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#e32f8c]/10 text-[#008ba3] flex items-center justify-center animate-spin">
-            <MessageSquare size={20} />
-          </div>
-          <p className="text-xs font-bold text-slate-400">Se încarcă recenziile...</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 animate-pulse">
+          {[...Array(4)].map((_, idx) => (
+            <div key={idx} className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 p-4 sm:p-5 space-y-4 shadow-2xs">
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-slate-200 shrink-0" />
+                  <div className="space-y-1.5">
+                    <div className="h-4 w-32 bg-slate-200 rounded" />
+                    <div className="h-3 w-20 bg-slate-100 rounded" />
+                  </div>
+                </div>
+                <div className="h-6 w-20 bg-slate-200 rounded-full shrink-0" />
+              </div>
+              <div className="h-10 bg-slate-50 border border-slate-100 rounded-xl" />
+              <div className="space-y-2">
+                <div className="h-16 bg-slate-50 border border-slate-100 rounded-xl" />
+                <div className="h-12 bg-slate-50/70 border border-slate-100 rounded-xl" />
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <div className="h-10 flex-1 bg-slate-200 rounded-xl" />
+                <div className="h-10 w-24 bg-slate-100 rounded-xl" />
+                <div className="h-10 w-10 bg-slate-100 rounded-xl" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filteredReviews.length === 0 ? (
         <div className="p-16 bg-white border border-slate-200/80 rounded-3xl text-center flex flex-col items-center justify-center gap-3">
@@ -1048,18 +1083,20 @@ export default function ReviewsPage() {
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
               <button
                 type="button"
+                disabled={isDeletingReview}
                 onClick={() => setReviewToDelete(null)}
-                className="min-h-[44px] px-4 py-2.5 font-bold text-xs sm:text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                className="min-h-[44px] px-4 py-2.5 font-bold text-xs sm:text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] rounded-xl transition-all cursor-pointer disabled:opacity-50"
               >
                 Anulează
               </button>
               <button
                 type="button"
+                disabled={isDeletingReview}
                 onClick={() => handleDelete(reviewToDelete.id)}
-                className="min-h-[44px] px-4 py-2.5 font-black text-xs sm:text-sm text-white bg-red-600 hover:bg-red-700 active:scale-95 rounded-xl transition-all flex items-center gap-1.5 shadow-sm shadow-red-500/20 cursor-pointer"
+                className="min-h-[44px] px-4 py-2.5 font-black text-xs sm:text-sm text-white bg-red-600 hover:bg-red-700 active:scale-[0.98] rounded-xl transition-all flex items-center gap-1.5 shadow-sm shadow-red-500/20 cursor-pointer disabled:opacity-50"
               >
                 <Trash2 size={15} />
-                <span>Șterge Definitiv</span>
+                <span>{isDeletingReview ? 'Se șterge...' : 'Șterge Definitiv'}</span>
               </button>
             </div>
           </div>
@@ -1370,7 +1407,7 @@ export default function ReviewsPage() {
                 <button
                   type="submit"
                   disabled={submitting || uploadingPhoto}
-                  className="w-full h-12 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-98 text-white font-black rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-[#e32f8c]/20"
+                  className="w-full h-12 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-[0.98] text-white font-black rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-[#e32f8c]/20"
                 >
                   {submitting
                     ? 'Se salvează...'

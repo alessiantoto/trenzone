@@ -38,6 +38,9 @@ export default function ShippingPage() {
   });
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [togglingLockers, setTogglingLockers] = useState(false);
+  const [togglingManual, setTogglingManual] = useState(false);
 
   // Fulfillment State
   const [fulfillmentEmail, setFulfillmentEmail] = useState('');
@@ -78,6 +81,8 @@ export default function ShippingPage() {
         }
       } catch (err) {
         console.error('Error fetching fulfillment settings:', err);
+      } finally {
+        setLoadingConfig(false);
       }
 
       // Check Sameday
@@ -107,6 +112,7 @@ export default function ShippingPage() {
   }, []);
 
   const handleSaveConfig = async () => {
+    if (isSavingConfig) return;
     setIsSavingConfig(true);
     setConfigSaved(false);
     const res = await saveShippingConfig(config);
@@ -124,6 +130,8 @@ export default function ShippingPage() {
   };
 
   const handleToggleLockers = async (newValue: boolean) => {
+    if (togglingLockers) return;
+    setTogglingLockers(true);
     const previous = config.lockers_enabled;
     const nextConfig = { ...config, lockers_enabled: newValue };
     setConfig(nextConfig);
@@ -140,10 +148,14 @@ export default function ShippingPage() {
     } catch (e: any) {
       setConfig(prev => ({ ...prev, lockers_enabled: previous }));
       toast.error('Eroare la actualizare: ' + (e?.message || 'Necunoscută'));
+    } finally {
+      setTogglingLockers(false);
     }
   };
 
   const handleToggleManualShipping = async (newValue: boolean) => {
+    if (togglingManual) return;
+    setTogglingManual(true);
     setManualShipping(newValue);
     try {
       await updateFulfillmentSettings({ manual_shipping_enabled: newValue });
@@ -155,10 +167,13 @@ export default function ShippingPage() {
     } catch (e: any) {
       setManualShipping(!newValue);
       toast.error('Eroare la actualizare: ' + (e?.message || 'Necunoscută'));
+    } finally {
+      setTogglingManual(false);
     }
   };
 
   const handleSaveFulfillment = async () => {
+    if (fulfillmentSaving) return;
     setFulfillmentSaving(true);
     setFulfillmentSaved(false);
     try {
@@ -266,6 +281,24 @@ export default function ShippingPage() {
         </div>
 
         {/* Card Body - 2 Columns on desktop, 1 column on mobile */}
+        {loadingConfig ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 pt-6 relative z-10 animate-pulse">
+            <div className="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200/60 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-44 bg-slate-200 rounded" />
+                <div className="h-8 w-14 bg-slate-200 rounded-full" />
+              </div>
+              <div className="h-12 bg-slate-100 rounded-xl" />
+              <div className="h-14 bg-slate-200/70 rounded-xl" />
+            </div>
+            <div className="space-y-4">
+              <div className="h-11 bg-slate-100 rounded-xl" />
+              <div className="h-11 bg-slate-100 rounded-xl" />
+              <div className="h-20 bg-slate-100 rounded-xl" />
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 pt-6 relative z-10">
           
           {/* Left Column: Manual Mode & AWB blocking notice */}
@@ -444,6 +477,8 @@ export default function ShippingPage() {
             Modificările se aplică instantaneu în panoul de comenzi.
           </p>
         </div>
+        </>
+        )}
       </motion.div>
 
       {/* DASHBOARD GRID */}
@@ -495,7 +530,9 @@ export default function ShippingPage() {
             </div>
             
             <div className="mt-4 sm:mt-5 p-3.5 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs sm:text-sm text-slate-600 break-words">
-               {samedayStatus.message}
+               {samedayStatus.status === 'loading' ? (
+                 <div className="h-4 w-48 bg-slate-200 rounded animate-pulse" />
+               ) : samedayStatus.message}
             </div>
           </motion.div>
 
@@ -539,7 +576,9 @@ export default function ShippingPage() {
             </div>
             
             <div className="mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600 break-words">
-               {packetaStatus.message}
+               {packetaStatus.status === 'loading' ? (
+                 <div className="h-4 w-48 bg-slate-200 rounded animate-pulse" />
+               ) : packetaStatus.message}
             </div>
           </motion.div>
         </div>
@@ -551,6 +590,26 @@ export default function ShippingPage() {
           </h2>
 
           <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-200/50 shadow-sm relative overflow-hidden">
+             {loadingConfig ? (
+               <div className="space-y-6 animate-pulse">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div className="space-y-2">
+                     <div className="h-4 w-36 bg-slate-200 rounded" />
+                     <div className="h-11 bg-slate-100 rounded-2xl" />
+                   </div>
+                   <div className="space-y-2">
+                     <div className="h-4 w-40 bg-slate-200 rounded" />
+                     <div className="h-11 bg-slate-100 rounded-2xl" />
+                   </div>
+                 </div>
+                 <div className="space-y-2 pt-2 border-t border-slate-100">
+                   <div className="h-4 w-44 bg-slate-200 rounded" />
+                   <div className="h-11 bg-slate-100 rounded-2xl" />
+                 </div>
+                 <div className="h-24 bg-slate-100 rounded-2xl" />
+                 <div className="h-14 bg-slate-200 rounded-2xl" />
+               </div>
+             ) : (
              <div className="space-y-6">
                
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -639,9 +698,10 @@ export default function ShippingPage() {
                </div>
 
                <button 
+                 type="button"
                  onClick={handleSaveConfig}
                  disabled={isSavingConfig}
-                 className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-colors shadow-lg shadow-slate-900/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                 className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all shadow-lg shadow-slate-900/20 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
                >
                  {isSavingConfig ? <Loader2 size={18} className="animate-spin" /> : 
                   configSaved ? <CheckCircle2 size={18} className="text-emerald-400" /> : 
@@ -650,6 +710,7 @@ export default function ShippingPage() {
                </button>
 
              </div>
+             )}
           </div>
         </div>
       </div>

@@ -90,9 +90,9 @@ export async function submitReturnRequest(formData: FormData) {
     const canonicalInput = getCanonicalOrderNumber(cleanOrderId);
     const numberOnly = safeOrderId.replace(/^(?:tz|odin)[-_ ]?/i, '');
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanOrderId);
-    const safeEmail = email.replace(/[%_(),]/g, '');
+    const safeEmail = email.replace(/[\\%_(),]/g, '');
 
-    if (!safeOrderId || !safeEmail) {
+    if (!safeOrderId || safeOrderId.length < 3 || !safeEmail) {
       return {
         success: false,
         error: locale === 'en'
@@ -140,11 +140,12 @@ export async function submitReturnRequest(formData: FormData) {
         .select('id, customer_email, status, payment_intent_id, receipt_url, total_amount, carrier_metadata, tracking_metadata')
         .ilike('customer_email', safeEmail);
 
+      const escapedOrderId = safeOrderId.replace(/_/g, '\\_');
       if (isUuid) {
-        globalQuery = globalQuery.or(`id.eq.${cleanOrderId},payment_intent_id.ilike.%${safeOrderId}%,receipt_url.ilike.%${safeOrderId}%`);
+        globalQuery = globalQuery.or(`id.eq.${cleanOrderId},payment_intent_id.ilike.%${escapedOrderId}%,receipt_url.ilike.%${escapedOrderId}%`);
       } else {
-        const queryTerm = (numberOnly.length >= 3 ? numberOnly : safeOrderId).replace(/[^A-Za-z0-9_-]/g, '');
-        globalQuery = globalQuery.or(`payment_intent_id.ilike.%${queryTerm}%,receipt_url.ilike.%${queryTerm}%,payment_intent_id.ilike.%${safeOrderId}%`);
+        const queryTerm = (numberOnly.length >= 3 ? numberOnly : safeOrderId).replace(/[^A-Za-z0-9_-]/g, '').replace(/_/g, '\\_');
+        globalQuery = globalQuery.or(`payment_intent_id.ilike.%${queryTerm}%,receipt_url.ilike.%${queryTerm}%,payment_intent_id.ilike.%${escapedOrderId}%`);
       }
 
       const { data: matchedOrders } = await globalQuery.limit(5);
@@ -262,17 +263,25 @@ export async function updateReturnStatus(returnId: string, newStatus: string, or
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) return { success: false, error: 'Neautorizat' };
 
+  const ALLOWED_RETURN_STATUSES = new Set(['pending', 'approved', 'rejected', 'returned', 'refunded']);
+  const cleanStatus = String(newStatus || '').trim().toLowerCase();
+  const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+  if (!ALLOWED_RETURN_STATUSES.has(cleanStatus) || !isUuid(returnId) || !isUuid(orderId)) {
+    return { success: false, error: 'Parametri invalizi.' };
+  }
+
   try {
     // 1. Update return status
     const { error: updateError } = await supabaseAdmin
       .from('returns')
-      .update({ status: newStatus })
+      .update({ status: cleanStatus })
       .eq('id', returnId);
 
     if (updateError) throw updateError;
 
     // 2. If it's refunded or marked as returned, update original order status in orders table to 'returned'
-    if (newStatus === 'refunded' || newStatus === 'returned') {
+    if (cleanStatus === 'refunded' || cleanStatus === 'returned') {
       const { error: orderUpdateError } = await supabaseAdmin
         .from('orders')
         .update({ status: 'returned' })

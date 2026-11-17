@@ -129,6 +129,7 @@ export default function AdminEmailsPage() {
   };
 
   const handleRemoveProgramPdf = async (slot: ProgramFileSlot) => {
+    if (uploadingSlot) return;
     setUploadingSlot(slot);
     try {
       const res = await removeProgramPdfSlotAction(slot);
@@ -188,7 +189,7 @@ export default function AdminEmailsPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedId) return;
+    if (!selectedId || saving) return;
     setSaving(true);
     try {
       await updateEmailTemplate(selectedId, editedTemplate);
@@ -441,7 +442,73 @@ export default function AdminEmailsPage() {
   };
 
   if (loading) {
-    return <div className="p-8 text-slate-500 animate-pulse font-bold">Se încarcă template-urile...</div>;
+    return (
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 pb-8 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="space-y-2.5">
+          <div className="h-8 w-72 bg-slate-200 rounded-xl" />
+          <div className="h-4 w-96 max-w-full bg-slate-100 rounded-lg" />
+        </div>
+
+        {/* Program PDFs Panel Skeleton */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-4">
+          <div className="space-y-2">
+            <div className="h-5 w-80 max-w-full bg-slate-200 rounded-lg" />
+            <div className="h-3.5 w-full max-w-2xl bg-slate-100 rounded-lg" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {[...Array(6)].map((_, idx) => (
+              <div key={idx} className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
+                <div className="h-4 w-44 bg-slate-200 rounded-lg" />
+                <div className="h-8 w-full bg-white border border-slate-200 rounded-lg" />
+                <div className="h-10 w-full bg-slate-200 rounded-xl" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sidebar + Editor Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 lg:gap-8">
+          <div className="hidden lg:block lg:col-span-1 space-y-2">
+            {[...Array(6)].map((_, idx) => (
+              <div key={idx} className="h-14 rounded-2xl bg-white border border-slate-200/70 p-3.5 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-slate-200 shrink-0" />
+                <div className="h-4 bg-slate-200 rounded-lg flex-1" />
+              </div>
+            ))}
+          </div>
+
+          <div className="lg:col-span-3 bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-slate-200/70 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100">
+              <div className="h-10 w-48 bg-slate-100 rounded-xl" />
+              <div className="flex items-center gap-2">
+                <div className="h-10 w-36 bg-slate-100 rounded-xl" />
+                <div className="h-11 w-28 bg-slate-200 rounded-xl" />
+              </div>
+            </div>
+            <div className="h-14 bg-slate-50 border border-slate-100 rounded-2xl" />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="h-4 w-36 bg-slate-200 rounded-lg" />
+                <div className="h-11 w-full bg-slate-100 rounded-xl" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 w-44 bg-slate-200 rounded-lg" />
+                <div className="h-11 w-full bg-slate-100 rounded-xl" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 w-48 bg-slate-200 rounded-lg" />
+                <div className="h-36 w-full bg-slate-100 rounded-xl" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 w-32 bg-slate-200 rounded-lg" />
+                <div className="h-11 w-full bg-slate-100 rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -547,9 +614,9 @@ export default function AdminEmailsPage() {
                       onClick={() => handleRemoveProgramPdf(slot)}
                       disabled={isUploading}
                       title="Șterge PDF-ul definitiv"
-                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl bg-white border border-red-200 hover:bg-red-50 text-red-600 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl bg-white border border-red-200 hover:bg-red-50 active:scale-[0.98] text-red-600 transition-all cursor-pointer disabled:opacity-50 shrink-0"
                     >
-                      <Trash2 size={15} />
+                      {isUploading ? <RefreshCw size={15} className="animate-spin" /> : <Trash2 size={15} />}
                     </button>
                   )}
                 </div>
@@ -700,9 +767,10 @@ export default function AdminEmailsPage() {
                     </button>
                   </div>
                   <button 
+                    type="button"
                     onClick={handleSave} 
                     disabled={saving} 
-                    className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md shadow-[#e32f8c]/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-2 bg-[#e32f8c] hover:bg-[#c41a72] text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md shadow-[#e32f8c]/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                   >
                     {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
                     <span>{saving ? 'Se salvează...' : 'Salvează'}</span>

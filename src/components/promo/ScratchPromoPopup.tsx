@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Sparkles, Check, Copy, ArrowRight, Mail, Clock } from "lucide-react";
+import { X, Check, Copy, ArrowRight, Mail } from "lucide-react";
 import { useLocale } from "next-intl";
 import { usePathname } from "next/navigation";
 import { validateCoupon } from "@/app/actions/coupons";
@@ -586,40 +586,33 @@ export function ScratchPromoPopup() {
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-3.5 text-center">
                       {prize ? (
                         <>
-                          <div className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#ff6eb6]">
-                            <Sparkles className="h-3.5 w-3.5" />
-                            <span>
-                              -{prize.discountPercent}% {isRo ? "REDUCERE UNICĂ" : "UNIQUE DISCOUNT"}
-                            </span>
+                          <div className="text-[12px] font-black uppercase tracking-[0.16em] text-[#ff6eb6]">
+                            -{prize.discountPercent}% {isRo ? "REDUCERE" : "OFF"}
                           </div>
 
-                          <div className="mt-1.5 flex items-center gap-2">
-                            <span className="font-mono text-xl font-black tracking-[0.16em] text-white bg-white/[0.06] border border-white/15 px-3 py-1 rounded-lg">
+                          <div className="mt-2 flex items-center justify-center gap-1.5 w-full">
+                            <span className="font-mono text-base sm:text-[17px] font-black tracking-[0.1em] text-white bg-white/[0.06] border border-white/15 px-3 py-1.5 rounded-lg whitespace-nowrap">
                               {prize.code}
                             </span>
                             <button
                               type="button"
                               onClick={handleCopy}
-                              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors shrink-0 cursor-pointer"
                               aria-label={isRo ? "Copiază codul" : "Copy code"}
                             >
                               {isCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                             </button>
                           </div>
 
-                          <div className="mt-2 flex items-center gap-2">
+                          <div className="mt-2.5 flex items-center justify-center">
                             <button
                               type="button"
                               onClick={() => handleApplyCode(prize.code, true)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-[#e32f8c] hover:bg-[#f03f99] px-3.5 py-1.5 text-[11px] font-black uppercase tracking-wider text-white shadow-md transition-all active:scale-95"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-[#e32f8c] hover:bg-[#f03f99] px-4 py-1.5 text-[11px] font-black uppercase tracking-wider text-white shadow-md transition-colors active:scale-95 cursor-pointer"
                             >
                               <Check className="h-3.5 w-3.5" />
                               <span>{isApplied ? (isRo ? "Aplicat!" : "Applied!") : isRo ? "Aplică în Coș" : "Apply Now"}</span>
                             </button>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-400">
-                              <Clock className="h-3 w-3 text-[#e32f8c]" />
-                              24h
-                            </span>
                           </div>
                         </>
                       ) : (
@@ -709,8 +702,8 @@ export function ScratchPromoPopup() {
                   ) : (
                     <p className="mt-2.5 text-[11px] text-zinc-400">
                       {isRo
-                        ? "Cod de o singură utilizare · expiră automat în 24h"
-                        : "Single-use unique code · expires in 24h"}
+                        ? "Valabil 24h · o singură utilizare"
+                        : "Valid 24h · single use"}
                     </p>
                   )}
                 </>

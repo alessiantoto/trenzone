@@ -169,13 +169,23 @@ export function TrenZoneAssistant() {
   };
 
   useEffect(() => {
-    if (!isOpen) {
-      const timer = setTimeout(() => {
-        setStep("welcome");
-        setActiveFaq(null);
-      }, 500);
-      return () => clearTimeout(timer);
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setIsOpen(false);
+      };
+      window.addEventListener("keydown", onKey);
+      return () => {
+        document.body.style.overflow = prevOverflow;
+        window.removeEventListener("keydown", onKey);
+      };
     }
+    const timer = setTimeout(() => {
+      setStep("welcome");
+      setActiveFaq(null);
+    }, 500);
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   const [showTrigger, setShowTrigger] = useState(false);
@@ -255,14 +265,14 @@ export function TrenZoneAssistant() {
       <AnimatePresence>
         {isOpen && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60]" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[110]" />
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed bottom-2 sm:bottom-6 right-0 sm:right-6 z-[70] w-full sm:w-[440px] max-h-[90vh] flex flex-col bg-zinc-950 text-white rounded-[2.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] border border-white/10 mx-auto sm:mx-0 overflow-hidden"
+              className="fixed bottom-2 sm:bottom-6 right-0 sm:right-6 z-[120] w-full sm:w-[440px] max-h-[90dvh] flex flex-col bg-zinc-950 text-white rounded-[2.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] border border-white/10 mx-auto sm:mx-0 overflow-hidden"
             >
               {/* Drag Handle for Mobile UX */}
               <div className="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1 bg-white/10 rounded-full sm:hidden" />

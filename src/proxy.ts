@@ -86,7 +86,16 @@ export async function proxy(request: NextRequest) {
   }
 
   // 5. STOREFRONT LOCALIZATION (Runs only for non-admin routes)
-  return intlMiddleware(request);
+  const intlResponse = intlMiddleware(request);
+  if (country && !request.cookies.get('tz_geo_country')?.value) {
+    intlResponse.cookies.set('tz_geo_country', country.toUpperCase(), {
+      httpOnly: false,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 21600, // 6h — avoids hitting external ipapi.co rate limits at 50k+ users/mo
+    });
+  }
+  return intlResponse;
 }
 
 export const config = {

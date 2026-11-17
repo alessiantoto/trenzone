@@ -20,8 +20,29 @@ const DEFAULT_CLIENT_CONFIG: ClientShippingConfig = {
 let sharedConfig: ClientShippingConfig | null = null;
 let inflightRequest: Promise<ClientShippingConfig> | null = null;
 let lastFetchedAt = 0;
-const CLIENT_TTL_MS = 15_000;
+const CLIENT_TTL_MS = 15 * 60 * 1000;
+const SESSION_KEY = "tz_shipping_cfg_v1";
 const listeners = new Set<(cfg: ClientShippingConfig) => void>();
+
+function readSessionConfig(): ClientShippingConfig | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.ts && Date.now() - parsed.ts < CLIENT_TTL_MS && parsed?.cfg) {
+      return parsed.cfg;
+    }
+  } catch {}
+  return null;
+}
+
+function writeSessionConfig(cfg: ClientShippingConfig) {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ts: Date.now(), cfg }));
+  } catch {}
+}
 
 function notifyListeners(cfg: ClientShippingConfig) {
   listeners.forEach((cb) => cb(cfg));
@@ -33,6 +54,7 @@ export function setShippingConfigCache(cfg: Partial<ClientShippingConfig>) {
     ...cfg,
   };
   lastFetchedAt = Date.now();
+  writeSessionConfig(sharedConfig);
   notifyListeners(sharedConfig);
 }
 
@@ -41,11 +63,17 @@ async function loadShippingConfig(): Promise<ClientShippingConfig> {
   if (sharedConfig && now - lastFetchedAt < CLIENT_TTL_MS) {
     return sharedConfig;
   }
+  const sessionCached = readSessionConfig();
+  if (sessionCached) {
+    sharedConfig = sessionCached;
+    lastFetchedAt = now;
+    return sessionCached;
+  }
   if (inflightRequest) {
     return inflightRequest;
   }
 
-  inflightRequest = fetch("/api/shipping-config", { cache: "no-store" })
+  inflightRequest = fetch("/api/shipping-config")
     .then((res) => (res.ok ? res.json() : null))
     .then((json) => {
       if (json?.success && json.config) {
@@ -56,6 +84,7 @@ async function loadShippingConfig(): Promise<ClientShippingConfig> {
           lockers_enabled: Boolean(json.config.lockers_enabled),
         };
         lastFetchedAt = Date.now();
+        writeSessionConfig(sharedConfig);
         notifyListeners(sharedConfig);
         return sharedConfig;
       }

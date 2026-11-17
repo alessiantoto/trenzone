@@ -9,6 +9,7 @@ import { validateCoupon } from "@/app/actions/coupons";
 import { subscribeToNewsletter } from "@/app/actions/newsletter";
 import { useCartStore } from "@/store/useCartStore";
 import { getOptimizedImageUrl } from "@/lib/utils/imageProxy";
+import { getCdnUrl } from "@/lib/utils/cdn";
 import { DEFAULT_PROMO_SETTINGS, ResolvedPromoConfig } from "@/lib/promo-config";
 import toast from "react-hot-toast";
 
@@ -39,10 +40,14 @@ export function ScratchPromoPopup() {
 
   // Scratch canvas refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const progressBarRef = useRef<HTMLDivElement | null>(null);
   const isDrawingRef = useRef(false);
+  const hasStartedScratchingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const canvasSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const scratchGridRef = useRef<Uint8Array>(new Uint8Array(16 * 8));
+  const coveredCountRef = useRef(0);
   const drawRequestedRef = useRef(false);
-  const strokeCountRef = useRef(0);
 
   const locale = useLocale();
   const pathname = usePathname();
@@ -69,13 +74,19 @@ export function ScratchPromoPopup() {
       new URLSearchParams(window.location.search).has("ref");
     if (appliedCoupon || hasReferral) return;
 
+    // 1. Check 24h cooldown FIRST before hitting /api/promo-config (saves ~100k+ requests/mo)
+    const defaultCooldownMs = (DEFAULT_PROMO_SETTINGS.cooldownHours || 24) * 60 * 60 * 1000;
+    const lastSeenRaw = localStorage.getItem(STORAGE_COOLDOWN_KEY);
+    if (lastSeenRaw && Date.now() - Number(lastSeenRaw) < defaultCooldownMs) return;
+
     // Restore valid active scratch prize if user already won within 24h
     try {
       const savedRaw = localStorage.getItem(STORAGE_PRIZE_KEY);
       if (savedRaw) {
         const parsed: ScratchPrize = JSON.parse(savedRaw);
         if (parsed?.code && parsed?.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now()) {
-          // User already holds an active un-expired prize code; respect cooldown
+          // User already holds an active un-expired prize code; skip popup
+          return;
         } else {
           localStorage.removeItem(STORAGE_PRIZE_KEY);
         }
@@ -89,10 +100,28 @@ export function ScratchPromoPopup() {
 
     (async () => {
       try {
-        const res = await fetch("/api/promo-config", { cache: "no-store" });
-        if (!res.ok || cancelled) return;
-        const data: ResolvedPromoConfig = await res.json();
-        if (cancelled || !data.isActive) return;
+        let data: ResolvedPromoConfig | null = null;
+        const SESSION_CFG_KEY = "tz_promo_cfg_v1";
+        try {
+          const cachedRaw = sessionStorage.getItem(SESSION_CFG_KEY);
+          if (cachedRaw) {
+            const parsed = JSON.parse(cachedRaw);
+            if (parsed?.ts && Date.now() - parsed.ts < 15 * 60 * 1000 && parsed?.data) {
+              data = parsed.data;
+            }
+          }
+        } catch {}
+
+        if (!data) {
+          const res = await fetch("/api/promo-config");
+          if (!res.ok || cancelled) return;
+          data = await res.json();
+          try {
+            sessionStorage.setItem(SESSION_CFG_KEY, JSON.stringify({ ts: Date.now(), data }));
+          } catch {}
+        }
+
+        if (cancelled || !data?.isActive) return;
 
         const cooldownMs = (data.cooldownHours || 24) * 60 * 60 * 1000;
         const lastSeen = localStorage.getItem(STORAGE_COOLDOWN_KEY);
@@ -117,63 +146,139 @@ export function ScratchPromoPopup() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [pathname]);
+  }, []);
 
-  // Paint metallic pink-obsidian scratch foil onto canvas when popup opens
-  const paintScratchFoil = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+  // Paint metallic pink-obsidian scratch foil onto canvas (only before user scratches so user progress is never wiped)
+  const paintScratchFoil = useCallback(
+    (force = false) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      if (!force && hasStartedScratchingRef.current) return;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (w === 0 || h === 0) return;
 
-    ctx.scale(dpr, dpr);
-    const w = rect.width;
-    const h = rect.height;
+      // Avoid redundant repaint/reset when dimensions haven't changed
+      if (!force && canvasSizeRef.current.w === w && canvasSizeRef.current.h === h) return;
 
-    // Dark obsidian metallic base gradient
-    const bgGrad = ctx.createLinearGradient(0, 0, w, h);
-    bgGrad.addColorStop(0, "#150914");
-    bgGrad.addColorStop(0.5, "#230b20");
-    bgGrad.addColorStop(1, "#120711");
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, w, h);
+      canvasSizeRef.current = { w, h };
+      scratchGridRef.current.fill(0);
+      coveredCountRef.current = 0;
+      if (progressBarRef.current) {
+        progressBarRef.current.style.transform = "scaleX(0)";
+      }
 
-    // Subtle diagonal decorative ribbons matching reference scratch foil
-    ctx.strokeStyle = "rgba(227, 47, 140, 0.14)";
-    ctx.lineWidth = 24;
-    ctx.beginPath();
-    ctx.moveTo(-20, h * 0.8);
-    ctx.quadraticCurveTo(w * 0.45, h * 0.1, w + 20, h * 0.55);
-    ctx.stroke();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-    ctx.beginPath();
-    ctx.moveTo(w * 0.25, -20);
-    ctx.quadraticCurveTo(w * 0.7, h * 0.65, w * 0.9, h + 20);
-    ctx.stroke();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Neon pink "SCRATCH HERE" / "RĂZUIEȘTE AICI" text with glow
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "900 18px Oswald, Impact, system-ui, sans-serif";
-    ctx.shadowColor = "rgba(227, 47, 140, 0.95)";
-    ctx.shadowBlur = 16;
-    ctx.fillStyle = "#ff4fa8";
-    ctx.fillText(copy.button || (isRo ? "RĂZUIEȘTE AICI" : "SCRATCH HERE"), w / 2, h / 2);
-    ctx.restore();
-  }, [copy.button, isRo]);
+      // Dark obsidian metallic base gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+      bgGrad.addColorStop(0, "#170916");
+      bgGrad.addColorStop(0.5, "#280c24");
+      bgGrad.addColorStop(1, "#120711");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Brushed foil diagonal sheen
+      const sheen = ctx.createLinearGradient(0, 0, w, 0);
+      sheen.addColorStop(0, "rgba(255,255,255,0)");
+      sheen.addColorStop(0.45, "rgba(255,255,255,0.06)");
+      sheen.addColorStop(0.55, "rgba(227,47,140,0.10)");
+      sheen.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = sheen;
+      ctx.fillRect(0, 0, w, h);
+
+      // Subtle diagonal decorative ribbons matching reference scratch foil
+      ctx.strokeStyle = "rgba(227, 47, 140, 0.16)";
+      ctx.lineWidth = 24;
+      ctx.beginPath();
+      ctx.moveTo(-20, h * 0.8);
+      ctx.quadraticCurveTo(w * 0.45, h * 0.1, w + 20, h * 0.55);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(w * 0.25, -20);
+      ctx.quadraticCurveTo(w * 0.7, h * 0.65, w * 0.9, h + 20);
+      ctx.stroke();
+
+      // Dashed inner scratch frame hint
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 79, 168, 0.25)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 6]);
+      ctx.strokeRect(10, 10, w - 20, h - 20);
+      ctx.restore();
+
+      // Neon pink "SCRATCH HERE" / "RĂZUIEȘTE AICI" text with glow
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "900 18px Oswald, Impact, system-ui, sans-serif";
+      ctx.shadowColor = "rgba(227, 47, 140, 0.95)";
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = "#ff4fa8";
+      ctx.fillText(copy.button || (isRo ? "RĂZUIEȘTE AICI" : "SCRATCH HERE"), w / 2, h / 2 - 8);
+      ctx.shadowBlur = 0;
+      ctx.font = "700 10px Inter, system-ui, sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+      ctx.fillText(isRo ? "Glisează pentru a dezvălui" : "Swipe to reveal", w / 2, h / 2 + 14);
+      ctx.restore();
+    },
+    [copy.button, isRo]
+  );
 
   useEffect(() => {
-    if (!isOpen || isScratched || config?.mode === "newsletter") return;
-    const id = requestAnimationFrame(() => paintScratchFoil());
-    return () => cancelAnimationFrame(id);
+    if (!isOpen) {
+      hasStartedScratchingRef.current = false;
+      canvasSizeRef.current = { w: 0, h: 0 };
+      return;
+    }
+    if (isScratched || config?.mode === "newsletter") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rafId = requestAnimationFrame(() => paintScratchFoil());
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => {
+        if (!hasStartedScratchingRef.current) {
+          paintScratchFoil();
+        }
+      });
+      ro.observe(canvas);
+    }
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro?.disconnect();
+    };
   }, [isOpen, isScratched, config?.mode, paintScratchFoil]);
+
+  // Body scroll lock & Escape handler while popup is open
+  useEffect(() => {
+    if (!isOpen || !config) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_COOLDOWN_KEY, String(Date.now()));
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isOpen, config]);
 
   const markSeen = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -232,68 +337,113 @@ export function ScratchPromoPopup() {
     return null;
   }, [prize, markSeen]);
 
-  const checkScratchedProgress = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || isScratched) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    try {
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let cleared = 0;
-      const step = 16; // sample every 4th pixel (4 * 4 channels) for crisp 60fps
-      let sampled = 0;
-      for (let i = 3; i < imgData.length; i += step) {
-        sampled++;
-        if (imgData[i] < 128) cleared++;
-      }
-      if (sampled > 0 && cleared / sampled >= 0.34) {
-        setIsScratched(true);
-      }
-    } catch {
-      // ignore
-    }
-  }, [isScratched]);
+  // 0ms spatial grid progress tracking (no CPU-GPU getImageData readback stalls)
+  const GRID_COLS = 16;
+  const GRID_ROWS = 8;
+  const UNLOCK_THRESHOLD = 0.42;
 
-  const scratchAt = (clientX: number, clientY: number) => {
+  const markGridArea = (normX: number, normY: number, brushRadiusX: number, brushRadiusY: number) => {
+    const grid = scratchGridRef.current;
+    const minC = Math.max(0, Math.floor((normX - brushRadiusX) * GRID_COLS));
+    const maxC = Math.min(GRID_COLS - 1, Math.floor((normX + brushRadiusX) * GRID_COLS));
+    const minR = Math.max(0, Math.floor((normY - brushRadiusY) * GRID_ROWS));
+    const maxR = Math.min(GRID_ROWS - 1, Math.floor((normY + brushRadiusY) * GRID_ROWS));
+
+    for (let r = minR; r <= maxR; r++) {
+      for (let c = minC; c <= maxC; c++) {
+        const idx = r * GRID_COLS + c;
+        if (grid[idx] === 0) {
+          grid[idx] = 1;
+          coveredCountRef.current += 1;
+        }
+      }
+    }
+  };
+
+  const updateScratchProgressUI = () => {
+    const ratio = coveredCountRef.current / (GRID_COLS * GRID_ROWS);
+    const barFraction = Math.min(1, ratio / UNLOCK_THRESHOLD);
+    if (progressBarRef.current) {
+      progressBarRef.current.style.transform = `scaleX(${barFraction})`;
+    }
+    if (!isScratched && ratio >= UNLOCK_THRESHOLD) {
+      setIsScratched(true);
+      try {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(25);
+        }
+      } catch {}
+    }
+  };
+
+  const scratchPoints = (points: Array<{ x: number; y: number }>) => {
     const canvas = canvasRef.current;
-    if (!canvas || isScratched) return;
+    if (!canvas || isScratched || points.length === 0) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    const dpr = canvas.width / Math.max(1, rect.width);
-    const x = (clientX - rect.left) * dpr;
-    const y = (clientY - rect.top) * dpr;
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const brushDiameterCss = 46;
+    const brushRadiusCss = brushDiameterCss / 2;
+    const normRx = brushRadiusCss / rect.width;
+    const normRy = brushRadiusCss / rect.height;
 
     ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = "destination-out";
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.lineWidth = 34 * dpr;
+    ctx.lineWidth = brushDiameterCss * Math.max(scaleX, scaleY);
 
-    if (lastPointRef.current) {
-      ctx.beginPath();
-      ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      ctx.arc(x, y, 17 * dpr, 0, Math.PI * 2);
-      ctx.fill();
+    for (let i = 0; i < points.length; i++) {
+      const pt = points[i];
+      const cx = (pt.x - rect.left) * scaleX;
+      const cy = (pt.y - rect.top) * scaleY;
+      const normX = (pt.x - rect.left) / rect.width;
+      const normY = (pt.y - rect.top) / rect.height;
+
+      if (lastPointRef.current) {
+        const prev = lastPointRef.current;
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(cx, cy);
+        ctx.stroke();
+
+        // Sample intermediate points along fast segments so grid coverage never skips
+        const dx = cx - prev.x;
+        const dy = cy - prev.y;
+        const dist = Math.hypot(dx, dy);
+        const steps = Math.min(12, Math.max(1, Math.ceil(dist / (brushRadiusCss * 0.8))));
+        for (let s = 1; s <= steps; s++) {
+          const ix = prev.x + (dx * s) / steps;
+          const iy = prev.y + (dy * s) / steps;
+          markGridArea(ix / canvas.width, iy / canvas.height, normRx, normRy);
+        }
+      } else {
+        ctx.beginPath();
+        ctx.arc(cx, cy, (brushDiameterCss / 2) * Math.max(scaleX, scaleY), 0, Math.PI * 2);
+        ctx.fill();
+        markGridArea(normX, normY, normRx, normRy);
+      }
+
+      lastPointRef.current = { x: cx, y: cy };
     }
+
     ctx.restore();
-
-    lastPointRef.current = { x, y };
-    strokeCountRef.current += 1;
-    if (strokeCountRef.current % 6 === 0) {
-      checkScratchedProgress();
-    }
+    updateScratchProgressUI();
   };
 
   const handleInstantReveal = async () => {
-    await ensurePrizeGenerated();
     setIsScratched(true);
+    if (progressBarRef.current) {
+      progressBarRef.current.style.transform = "scaleX(1)";
+    }
     markSeen();
+    await ensurePrizeGenerated();
   };
 
   const activeCode = prize?.code || config?.couponCode || DEFAULT_PROMO_SETTINGS.couponId;
@@ -367,11 +517,11 @@ export function ScratchPromoPopup() {
           <div className="absolute inset-0" onClick={handleClose} />
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.94, y: 16 }}
+            initial={{ opacity: 0, scale: 0.97, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className="relative z-10 w-full max-w-[390px] md:max-w-[780px] min-h-[600px] md:min-h-[440px] max-h-[92dvh] overflow-hidden rounded-[26px] border border-white/15 bg-[#07070b] shadow-[0_32px_90px_-16px_rgba(0,0,0,0.95),0_0_60px_-18px_rgba(227,47,140,0.35)] flex flex-col md:flex-row"
+            exit={{ opacity: 0, scale: 0.97, y: 8 }}
+            transition={{ type: "spring", damping: 32, stiffness: 420, mass: 0.8 }}
+            className="relative z-10 w-full max-w-[390px] md:max-w-[780px] min-h-[540px] sm:min-h-[600px] md:min-h-[440px] max-h-[92dvh] overflow-x-clip overflow-y-auto md:overflow-hidden rounded-[26px] border border-white/15 bg-[#07070b] shadow-[0_32px_90px_-16px_rgba(0,0,0,0.95),0_0_60px_-18px_rgba(227,47,140,0.35)] flex flex-col md:flex-row transform-gpu"
           >
             {/* DESKTOP BACKGROUND (Landscape diagonal split + products right) */}
             <img
@@ -393,7 +543,7 @@ export function ScratchPromoPopup() {
             <button
               type="button"
               onClick={handleClose}
-              className="absolute top-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/65 text-zinc-200 backdrop-blur-md transition-all hover:border-white/35 hover:bg-black/85 hover:text-white active:scale-95"
+              className="absolute top-3.5 right-3.5 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/75 text-zinc-200 transition-colors hover:border-white/35 hover:bg-black/90 hover:text-white active:scale-95 cursor-pointer"
               aria-label={isRo ? "Închide" : "Close"}
             >
               <X className="h-4 w-4" />
@@ -403,7 +553,7 @@ export function ScratchPromoPopup() {
             <div className="relative z-20 w-full md:w-[48%] px-5 pt-6 pb-52 sm:pb-56 md:px-8 md:py-8 flex flex-col items-center justify-center text-center">
               {/* Brand Mark */}
               <img
-                src="/images/logos/trenzone_logo_transparent.png"
+                src={getCdnUrl("/images/logos/trenzone_logo_transparent.png")}
                 alt="TrenZone"
                 className="h-7 sm:h-8 w-auto object-contain opacity-90 mb-3"
               />
@@ -488,33 +638,63 @@ export function ScratchPromoPopup() {
                       )}
                     </div>
 
-                    {/* TOP SCRATCHABLE FOIL CANVAS */}
-                    {!isScratched && (
-                      <canvas
-                        ref={canvasRef}
-                        onPointerDown={(e) => {
+                    {/* TOP SCRATCHABLE FOIL CANVAS (Smooth dissolve when unlocked, 120Hz coalesced input) */}
+                    <canvas
+                      ref={canvasRef}
+                      onPointerDown={(e) => {
+                        if (isScratched) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        try {
                           e.currentTarget.setPointerCapture(e.pointerId);
-                          isDrawingRef.current = true;
-                          lastPointRef.current = null;
-                          ensurePrizeGenerated();
-                          scratchAt(e.clientX, e.clientY);
-                        }}
-                        onPointerMove={(e) => {
-                          if (!isDrawingRef.current) return;
-                          scratchAt(e.clientX, e.clientY);
-                        }}
-                        onPointerUp={() => {
-                          isDrawingRef.current = false;
-                          lastPointRef.current = null;
-                          checkScratchedProgress();
-                        }}
-                        onPointerCancel={() => {
-                          isDrawingRef.current = false;
-                          lastPointRef.current = null;
-                        }}
-                        className="absolute inset-0 h-full w-full cursor-crosshair touch-none z-10"
+                        } catch {}
+                        isDrawingRef.current = true;
+                        hasStartedScratchingRef.current = true;
+                        lastPointRef.current = null;
+                        ensurePrizeGenerated();
+                        scratchPoints([{ x: e.clientX, y: e.clientY }]);
+                      }}
+                      onPointerMove={(e) => {
+                        if (!isDrawingRef.current || isScratched) return;
+                        e.preventDefault();
+                        const coalesced = (e.nativeEvent as PointerEvent).getCoalescedEvents?.();
+                        const pts =
+                          coalesced && coalesced.length > 0
+                            ? coalesced.map((ev) => ({ x: ev.clientX, y: ev.clientY }))
+                            : [{ x: e.clientX, y: e.clientY }];
+                        scratchPoints(pts);
+                      }}
+                      onPointerUp={() => {
+                        isDrawingRef.current = false;
+                        lastPointRef.current = null;
+                      }}
+                      onPointerCancel={() => {
+                        isDrawingRef.current = false;
+                        lastPointRef.current = null;
+                      }}
+                      onLostPointerCapture={() => {
+                        isDrawingRef.current = false;
+                        lastPointRef.current = null;
+                      }}
+                      className={`absolute inset-0 h-full w-full touch-none select-none z-10 transition-all duration-500 ease-out ${
+                        isScratched
+                          ? "opacity-0 scale-105 pointer-events-none"
+                          : "opacity-100 cursor-grab active:cursor-grabbing"
+                      }`}
+                    />
+
+                    {/* Subtle GPU scratch progress bar along bottom edge */}
+                    <div
+                      className={`pointer-events-none absolute bottom-0 left-0 right-0 h-1 bg-white/10 z-20 transition-opacity duration-300 ${
+                        isScratched ? "opacity-0" : "opacity-100"
+                      }`}
+                    >
+                      <div
+                        ref={progressBarRef}
+                        style={{ transform: "scaleX(0)" }}
+                        className="h-full w-full origin-left bg-gradient-to-r from-[#e32f8c] to-[#ff7fc0] transition-transform duration-75"
                       />
-                    )}
+                    </div>
                   </div>
 
                   {/* Subtle accessibility fallback / instruction */}

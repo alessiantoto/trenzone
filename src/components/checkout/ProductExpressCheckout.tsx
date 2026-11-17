@@ -15,6 +15,34 @@ import { isDigitalProgramItem } from "@/lib/programs";
 const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim();
 const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
 
+let cachedExpressCsrfToken = "";
+let cachedExpressCsrfAt = 0;
+let csrfInflightPromise: Promise<string> | null = null;
+
+async function getOrFetchExpressCsrfToken(): Promise<string> {
+  if (cachedExpressCsrfToken && Date.now() - cachedExpressCsrfAt < 20 * 60 * 1000) {
+    return cachedExpressCsrfToken;
+  }
+  if (csrfInflightPromise) return csrfInflightPromise;
+
+  csrfInflightPromise = fetch("/api/csrf-token")
+    .then((res) => res.json())
+    .then((data) => {
+      const token = data?.csrfToken || data?.token || "";
+      if (token) {
+        cachedExpressCsrfToken = token;
+        cachedExpressCsrfAt = Date.now();
+      }
+      return token;
+    })
+    .catch(() => cachedExpressCsrfToken || "")
+    .finally(() => {
+      csrfInflightPromise = null;
+    });
+
+  return csrfInflightPromise;
+}
+
 interface ProductExpressCheckoutProps {
   orderItems: any[]; // The exact items array to send to /api/checkout
   basePrice: number; // The pre-calculated total price in RON (before shipping)
@@ -23,7 +51,6 @@ interface ProductExpressCheckoutProps {
 }
 
 interface ExpressCheckoutInnerProps extends ProductExpressCheckoutProps {
-  csrfToken: string;
   locale: string;
   appliedCoupon: any;
 }
@@ -32,7 +59,6 @@ const ExpressCheckoutInner = ({
   orderItems,
   basePrice,
   disabled,
-  csrfToken,
   locale,
   appliedCoupon,
   onWalletsReady
@@ -209,6 +235,8 @@ const ExpressCheckoutInner = ({
         return;
       }
 
+      const activeCsrfToken = await getOrFetchExpressCsrfToken();
+
       // 2. Create PaymentIntent on server with exact items, coupon, online discount, and shipping
       const effectiveCouponCode =
         confirmDetails.calc.couponApplied && appliedCoupon?.code
@@ -219,7 +247,7 @@ const ExpressCheckoutInner = ({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-csrf-token": csrfToken
+          "x-csrf-token": activeCsrfToken
         },
         body: JSON.stringify({
           items: orderItems,
@@ -272,7 +300,7 @@ const ExpressCheckoutInner = ({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-csrf-token": csrfToken
+          "x-csrf-token": activeCsrfToken
         },
         body: JSON.stringify({
           paymentIntentId: piId,
@@ -366,6 +394,8 @@ const ExpressCheckoutInner = ({
               e?.reject?.();
               return;
             }
+            // Prefetch CSRF lazily only when a user taps Express Checkout (saves 40k-70k API hits/mo)
+            getOrFetchExpressCsrfToken();
             const initialDetails = buildExpressDetails(selectedCountryRef.current || 'RO');
             if (stripeElements && typeof stripeElements.update === 'function') {
               stripeElements.update({ amount: Math.max(1, initialDetails.calc.total) });
@@ -399,7 +429,6 @@ const ExpressCheckoutInner = ({
 };
 
 export const ProductExpressCheckout = (props: ProductExpressCheckoutProps) => {
-  const [csrfToken, setCsrfToken] = useState<string>("");
   const { currency, countryCode: regionCountryCode } = useRegionStore();
   const checkoutCountry = useCheckoutStore((s) => s.country);
   const initialCountry = (checkoutCountry && ALLOWED_SHIPPING_COUNTRIES.includes(checkoutCountry)
@@ -410,28 +439,6 @@ export const ProductExpressCheckout = (props: ProductExpressCheckoutProps) => {
   const shippingConfig = useShippingConfig();
   const { appliedCoupon } = useCartStore();
   const locale = useLocale();
-
-  useEffect(() => {
-    fetch("/api/csrf-token")
-      .then(res => res.json())
-      .then(data => {
-        const token = data?.csrfToken || data?.token || "";
-        setCsrfToken(token);
-      })
-      .catch(err => {
-        console.error("CSRF token fetch error in ProductExpressCheckout:", err);
-      });
-  }, []);
-
-  if (!csrfToken) {
-    return (
-      <div className="h-12 w-full bg-zinc-900/60 border border-white/5 animate-pulse rounded-xl mt-2 flex items-center justify-center">
-        <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
-          {locale === 'ro' ? 'Se încarcă plata rapidă...' : 'Loading express checkout...'}
-        </span>
-      </div>
-    );
-  }
 
   const calculationItems: CartItem[] = (props.orderItems || []).map(item => ({
     id: item.id,
@@ -474,7 +481,6 @@ export const ProductExpressCheckout = (props: ProductExpressCheckoutProps) => {
     >
       <ExpressCheckoutInner
         {...props}
-        csrfToken={csrfToken}
         locale={locale}
         appliedCoupon={appliedCoupon}
       />

@@ -28,6 +28,7 @@ const SAMEDAY_API_ENV = 'production';
 export function SamedayLockerSelector({ isOpen, onClose, onSelect, selectedLockerId }: SamedayLockerSelectorProps) {
   const locale = useLocale();
   const pluginRef = useRef<any>(null);
+  const [isInitializing, setIsInitializing] = React.useState(false);
 
   const onSelectRef = useRef(onSelect);
   const onCloseRef = useRef(onClose);
@@ -38,10 +39,14 @@ export function SamedayLockerSelector({ isOpen, onClose, onSelect, selectedLocke
   }, [onSelect, onClose]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setIsInitializing(false);
+      return;
+    }
 
     let cancelled = false;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    setIsInitializing(true);
     const scriptId = 'sameday-locker-plugin-script';
     let script = document.getElementById(scriptId) as HTMLScriptElement | null;
 
@@ -78,6 +83,7 @@ export function SamedayLockerSelector({ isOpen, onClose, onSelect, selectedLocke
         pluginRef.current.unsubscribe();
       }
       pluginRef.current.subscribe(handleLockerSelect);
+      if (!cancelled) setIsInitializing(false);
       pluginRef.current.open();
       return true;
     };
@@ -114,7 +120,18 @@ export function SamedayLockerSelector({ isOpen, onClose, onSelect, selectedLocke
     };
   }, [isOpen, locale]);
 
-  // We don't render a visual modal anymore because Sameday's plugin renders its own overlay modal over the entire screen.
-  return null;
+  // Show lightweight responsive loader while external Sameday SDK script is still initializing
+  if (!isOpen || !isInitializing) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-zinc-950 border border-white/15 text-white rounded-2xl px-6 py-4 flex items-center gap-3 shadow-2xl">
+        <Loader2 className="w-5 h-5 text-[#e32f8c] animate-spin shrink-0" />
+        <span className="text-xs font-bold uppercase tracking-wider">
+          {locale === 'en' ? 'Loading Sameday Lockers...' : 'Se încarcă harta Easybox...'}
+        </span>
+      </div>
+    </div>
+  );
 }
 

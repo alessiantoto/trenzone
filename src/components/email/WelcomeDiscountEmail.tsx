@@ -28,8 +28,8 @@ export const WelcomeDiscountEmail: React.FC<Readonly<WelcomeDiscountEmailProps>>
   templateData,
   userEmail,
   baseUrl = getSiteUrl(),
-  couponCode = "TRENZONE10",
-  couponValue = 10,
+  couponCode = "TREN5",
+  couponValue = 5,
   isReviewDiscount = false
 }) => {
   const isEn = locale === 'en';

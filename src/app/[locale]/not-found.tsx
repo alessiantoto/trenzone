@@ -4,6 +4,7 @@ import { Link } from '@/i18n/routing';
 import { useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Home, Zap } from 'lucide-react';
+import { getCdnUrl } from '@/lib/utils/cdn';
 
 export default function NotFound() {
   const locale = useLocale();
@@ -17,7 +18,7 @@ export default function NotFound() {
         <div 
           className="absolute inset-0 opacity-15 mix-blend-screen" 
           style={{ 
-            backgroundImage: `url(/images/logos/trenzone_logo.webp)`, 
+            backgroundImage: `url(${getCdnUrl('/images/logos/trenzone_logo.webp')})`, 
             backgroundSize: '140px', 
             backgroundRepeat: 'repeat',
             transform: 'rotate(-15deg) scale(1.5)'

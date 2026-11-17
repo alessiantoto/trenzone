@@ -36,15 +36,40 @@ export function StoreTracker({ enabled = false }: { enabled?: boolean }) {
     return { visitorId, sessionId };
   };
 
+  const fireGaEvent = (event: "pageview" | "cart" | "checkout" | "vitals") => {
+    try {
+      if (typeof window === "undefined") return;
+      if (window.location.pathname.startsWith("/admin")) return;
+      const gtagFn = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
+      if (typeof gtagFn !== "function") return;
+
+      if (event === "cart") {
+        gtagFn("event", "add_to_cart", { event_category: "ecommerce", page_path: window.location.pathname });
+      } else if (event === "checkout") {
+        if (window.location.pathname.includes("/checkout/success")) {
+          gtagFn("event", "purchase", { event_category: "ecommerce", page_path: window.location.pathname });
+        } else {
+          gtagFn("event", "begin_checkout", { event_category: "ecommerce", page_path: window.location.pathname });
+        }
+      } else if (event === "pageview" && window.location.pathname.includes("/product/")) {
+        gtagFn("event", "view_item", { event_category: "ecommerce", page_path: window.location.pathname });
+      }
+    } catch {}
+  };
+
   const sendEvent = (event: "pageview" | "cart" | "checkout" | "vitals", meta?: Record<string, any>) => {
     try {
-      if (!enabled || typeof window === "undefined") return;
-
-      // Don't track admin console activity or automated bots/crawlers
+      if (typeof window === "undefined") return;
       if (window.location.pathname.startsWith("/admin")) return;
       if (navigator.webdriver || /bot|crawler|spider|bytespider|facebookexternalhit|lighthouse|headless|prerender/i.test(navigator.userAgent || "")) {
         return;
       }
+
+      // Always forward standard GA4 e-commerce events client-side (0 Vercel/Redis cost)
+      fireGaEvent(event);
+
+      // Only send internal /api/analytics/track payload if Redis analytics is explicitly enabled
+      if (!enabled) return;
 
       const { visitorId, sessionId } = getClientIdentifiers();
 
@@ -60,22 +85,6 @@ export function StoreTracker({ enabled = false }: { enabled?: boolean }) {
       };
 
       const payload = JSON.stringify(payloadObj);
-
-      // Fire standard GA4 E-Commerce events when gtag is loaded
-      const gtagFn = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
-      if (typeof gtagFn === "function") {
-        if (event === "cart") {
-          gtagFn("event", "add_to_cart", { event_category: "ecommerce", page_path: window.location.pathname });
-        } else if (event === "checkout") {
-          if (window.location.pathname.includes("/checkout/success")) {
-            gtagFn("event", "purchase", { event_category: "ecommerce", page_path: window.location.pathname });
-          } else {
-            gtagFn("event", "begin_checkout", { event_category: "ecommerce", page_path: window.location.pathname });
-          }
-        } else if (event === "pageview" && window.location.pathname.includes("/product/")) {
-          gtagFn("event", "view_item", { event_category: "ecommerce", page_path: window.location.pathname });
-        }
-      }
 
       // Primary: fetch with keepalive and application/json
       if (typeof fetch === 'function') {
@@ -101,11 +110,16 @@ export function StoreTracker({ enabled = false }: { enabled?: boolean }) {
     }
   };
 
-  // 1. Track Pageviews, Checkout entrance & Core Web Vitals in a SINGLE request (cuts serverless invocations & Redis commands by 50%)
+  // 1. Track Pageviews, Checkout entrance & Core Web Vitals (GA4 runs client-side even when internal Redis tracking is off)
   useEffect(() => {
-    if (!enabled) return;
     if (!pathname || pathname.startsWith("/admin")) return;
     if (lastPathname.current === pathname) return;
+
+    if (!enabled) {
+      lastPathname.current = pathname;
+      fireGaEvent(pathname.includes("/checkout") ? "checkout" : "pageview");
+      return;
+    }
 
     // Deduplicate rapid repeat visits to the same path within 3 minutes in the same session (saves Vercel Function Invocations & CPU)
     try {
@@ -177,7 +191,6 @@ export function StoreTracker({ enabled = false }: { enabled?: boolean }) {
 
   // 2. Track Cart additions (triggered from useCartStore or buttons)
   useEffect(() => {
-    if (!enabled) return;
     const handleCartAdd = () => {
       sendEvent("cart");
     };

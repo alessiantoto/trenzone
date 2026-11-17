@@ -2,26 +2,33 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { 
-  Loader2, 
-  Lock, 
-  KeyRound, 
-  Mail, 
-  CheckCircle2, 
-  ArrowRight, 
+import {
+  Loader2,
+  Lock,
+  KeyRound,
+  Mail,
+  CheckCircle2,
+  ArrowRight,
   Clock,
   ShieldCheck,
-  X
+  X,
 } from 'lucide-react';
 import { verifyMaintenancePassword } from '@/app/actions/admin-settings';
 import { subscribeToNewsletter } from '@/app/actions/newsletter';
+import { parseUniversalDropEndDateMs } from '@/lib/maintenance-time';
+import { getCdnUrl } from '@/lib/utils/cdn';
 
 interface MaintenanceViewProps {
   endDate?: string | null;
+  serverNowIso?: string | null;
   locale?: string;
 }
 
-export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps) {
+export function MaintenanceView({
+  endDate,
+  serverNowIso,
+  locale = 'ro',
+}: MaintenanceViewProps) {
   const isRo = locale !== 'en';
 
   // Bypass logic
@@ -30,13 +37,13 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
   const [bypassing, setBypassing] = useState(false);
   const [bypassError, setBypassError] = useState('');
 
-  // Countdown logic
+  // Synchronized global countdown logic (identical instant across all timezones)
   const [isClient, setIsClient] = useState(false);
   const [isEnded, setIsEnded] = useState(false);
   const [hasValidDate, setHasValidDate] = useState(false);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
-  // Newsletter lead capture
+  // Newsletter / VIP drop capture (5% discount)
   const [email, setEmail] = useState('');
   const [submittingEmail, setSubmittingEmail] = useState(false);
   const [emailSuccess, setEmailSuccess] = useState(false);
@@ -44,27 +51,39 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
 
   useEffect(() => {
     setIsClient(true);
-    
-    if (!endDate) {
-      setHasValidDate(false);
-      return;
-    }
 
-    const targetTime = new Date(endDate).getTime();
-    if (isNaN(targetTime)) {
+    const targetTime = parseUniversalDropEndDateMs(endDate);
+    if (targetTime === null) {
       setHasValidDate(false);
       return;
     }
 
     setHasValidDate(true);
 
+    // Sync client clock offset against SSR server time so wrong local device clocks stay synced globally
+    const serverMs = serverNowIso ? Date.parse(serverNowIso) : NaN;
+    const clockSkewMs = Number.isFinite(serverMs) ? serverMs - Date.now() : 0;
+
+    const triggerUnlockReload = () => {
+      try {
+        const key = `tz_drop_unlocked_${targetTime}`;
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, '1');
+          window.location.reload();
+        }
+      } catch {
+        window.location.reload();
+      }
+    };
+
     const updateTimer = () => {
-      const now = new Date().getTime();
-      const distance = targetTime - now;
+      const effectiveNow = Date.now() + clockSkewMs;
+      const distance = targetTime - effectiveNow;
 
       if (distance <= 0) {
         setIsEnded(true);
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        triggerUnlockReload();
         return;
       }
 
@@ -73,14 +92,14 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
         days: Math.floor(distance / (1000 * 60 * 60 * 24)),
         hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
         minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((distance % (1000 * 60)) / 1000)
+        seconds: Math.floor((distance % (1000 * 60)) / 1000),
       });
     };
 
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [endDate]);
+  }, [endDate, serverNowIso]);
 
   const handleBypass = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,8 +122,9 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !email.includes('@')) {
-      setEmailError(isRo ? 'Te rugăm să introduci un email valid.' : 'Please enter a valid email.');
+    const trimmed = email.trim();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setEmailError(isRo ? 'Te rugăm să introduci o adresă de email validă.' : 'Please enter a valid email address.');
       return;
     }
 
@@ -112,9 +132,9 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
     setEmailError('');
     try {
       const res = await subscribeToNewsletter(
-        undefined, 
-        email, 
-        (locale === 'en' ? 'en' : 'ro'), 
+        undefined,
+        trimmed,
+        locale === 'en' ? 'en' : 'ro',
         'maintenance_page'
       );
       if (res.success) {
@@ -130,133 +150,168 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
     }
   };
 
+  const switchLocaleHref = isRo ? '/en' : '/ro';
+
   return (
-    <main className="min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 md:p-8 relative overflow-hidden font-sans text-white bg-[#030305] selection:bg-[#e32f8c] selection:text-white">
-      
-      {/* 🏋️‍♂️ FULLSCREEN CINEMATIC SHOP BACKGROUND */}
-      <div className="absolute inset-0 z-0">
+    <main className="min-h-[100dvh] w-full flex flex-col items-center justify-between px-4 py-5 sm:px-6 sm:py-7 md:px-10 md:py-8 relative overflow-hidden font-sans text-white bg-[#030305] selection:bg-[#e32f8c] selection:text-white">
+      {/* 🏋️‍♂️ FULLSCREEN CINEMATIC BACKGROUND */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
         <Image
-          src="/images/home/hero.jpg"
-          alt="TrenZone Gym Hardcore Gear"
+          src={getCdnUrl("/images/home/hero.jpg")}
+          alt="TrenZone Hardcore Strength Equipment"
           fill
           priority
           sizes="100vw"
-          className="object-cover object-[center_25%] filter brightness-90 contrast-115 transform scale-105 transition-transform duration-1000"
+          className="object-cover object-[center_22%] brightness-[0.55] contrast-125 scale-105"
         />
-        {/* Deep dark gradient vignettes for razor-sharp readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#030305] via-[#030305]/85 to-[#030305]/90 z-10 pointer-events-none" />
-        <div className="absolute inset-0 bg-[#030305]/50 backdrop-blur-[2px] z-10 pointer-events-none" />
-        {/* Signature TrenZone Hot-Pink Ambient Radial Glow */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-[#e32f8c]/15 blur-[120px] rounded-full pointer-events-none z-10" />
-        {/* Subtle grid texture overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:4rem_4rem] z-10 pointer-events-none" />
+        {/* Deep Obsidian Vignette & Radial Hot-Pink Spotlight */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#030305]/95 via-[#030305]/70 to-[#030305]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_22%,rgba(227,47,140,0.18),transparent_62%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:3.5rem_3.5rem]" />
       </div>
 
-      {/* 🌟 TOP BRAND HEADER */}
-      <header className="relative z-20 w-full max-w-6xl mx-auto flex flex-col items-center pt-2 sm:pt-4">
-        <div className="flex flex-col items-center gap-2.5">
-          <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+      {/* 🌐 SUBTLE LANGUAGE SWITCHER */}
+      <div className="relative z-20 w-full max-w-5xl mx-auto flex items-center justify-end">
+        <a
+          href={switchLocaleHref}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 hover:border-white/25 text-[11px] font-black uppercase tracking-widest text-zinc-300 hover:text-white backdrop-blur-md transition-all"
+        >
+          <span className={isRo ? 'text-[#e32f8c]' : 'text-zinc-400'}>RO</span>
+          <span className="text-zinc-600">/</span>
+          <span className={!isRo ? 'text-[#e32f8c]' : 'text-zinc-400'}>EN</span>
+        </a>
+      </div>
+
+      {/* 🚀 CENTERED DROP HERO & VIP CAPTURE */}
+      <section className="relative z-20 w-full max-w-2xl mx-auto flex flex-col items-center justify-center my-auto py-4 sm:py-6 text-center">
+        {/* Brand Emblem & Lockup */}
+        <div className="flex flex-col items-center mb-5 sm:mb-6">
+          <div className="relative w-14 h-14 sm:w-16 sm:h-16 mb-3 flex items-center justify-center">
             <Image
-              src="/images/vladtren-logo.png"
-              alt="TrenZone Logo"
-              width={80}
-              height={80}
+              src={getCdnUrl("/images/vladtren-logo.png")}
+              alt="TrenZone"
+              width={72}
+              height={72}
               priority
-              className="w-full h-full object-contain drop-shadow-[0_0_25px_rgba(227,47,140,0.4)]"
+              className="w-full h-full object-contain drop-shadow-[0_0_24px_rgba(227,47,140,0.45)]"
             />
           </div>
+          <p className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white font-[family-name:var(--font-oswald)] leading-none">
+            TRENZONE <span className="text-[#e32f8c]">BY VLAD TREN</span>
+          </p>
 
-          <div className="text-center">
-            <span className="text-2xl sm:text-3xl md:text-4xl font-black uppercase tracking-tight text-white font-[family-name:var(--font-oswald)]">
-              TRENZONE <span className="text-[#e32f8c]">BY VLAD TREN</span>
-            </span>
-          </div>
-
-          {/* Live Status Badge */}
-          <div className="mt-1 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#e32f8c] shadow-lg">
+          {/* Live Drop Pill */}
+          <div className="mt-3 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/[0.05] border border-white/10 backdrop-blur-md text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-zinc-200 shadow-lg">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#e32f8c] opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-[#e32f8c]" />
             </span>
             <span>
-              {isRo ? 'Pregătim Noul Drop · Mentenanță' : 'Dropping Soon · Store Maintenance'}
+              {isRo ? 'Noul Drop · Pregătim Lansarea' : 'New Drop · Launching Simultaneously'}
             </span>
           </div>
         </div>
-      </header>
 
-      {/* 🚀 MAIN CONTENT HERO */}
-      <section className="relative z-20 w-full max-w-4xl mx-auto flex flex-col items-center justify-center my-auto py-8 sm:py-12 text-center px-2">
-        
-        {/* Massive Headline */}
-        <h2 className="text-4xl sm:text-6xl md:text-7xl font-black uppercase text-white leading-[0.92] tracking-tighter drop-shadow-2xl mb-4 font-[family-name:var(--font-oswald)]">
+        {/* Massive Editorial Headline */}
+        <h1 className="text-4xl sm:text-6xl md:text-[64px] font-black uppercase text-white leading-[0.92] tracking-tighter mb-3.5 sm:mb-4 font-[family-name:var(--font-oswald)]">
           {isRo ? (
             <>
-              NOUL DROP ESTE <br />
-              <span className="text-[#e32f8c] drop-shadow-[0_0_35px_rgba(227,47,140,0.5)]">APROAPE AICI</span>
+              NOUL DROP ESTE{' '}
+              <span className="block text-[#e32f8c] drop-shadow-[0_0_32px_rgba(227,47,140,0.45)]">
+                APROAPE AICI
+              </span>
             </>
           ) : (
             <>
-              THE NEW DROP IS <br />
-              <span className="text-[#e32f8c] drop-shadow-[0_0_35px_rgba(227,47,140,0.5)]">COMING SOON</span>
+              THE NEW DROP IS{' '}
+              <span className="block text-[#e32f8c] drop-shadow-[0_0_32px_rgba(227,47,140,0.45)]">
+                ALMOST HERE
+              </span>
             </>
           )}
-        </h2>
+        </h1>
 
-        <p className="text-sm sm:text-base md:text-lg text-zinc-300 max-w-xl mx-auto leading-relaxed font-normal mb-8 sm:mb-10 text-balance">
-          {isRo 
-            ? 'Actualizăm magazinul și pregătim lotul de echipamente hardcore TrenZone. Revenim în cel mai scurt timp posibil!' 
-            : 'We are updating our store and preparing the newest TrenZone hardcore drop. We will be back online shortly!'}
+        <p className="text-xs sm:text-sm md:text-base text-zinc-300/90 max-w-md mx-auto leading-relaxed mb-6 sm:mb-8">
+          {isRo
+            ? 'Lansăm noul site TrenZone cu echipamente hardcore de forță, apparel și programe de antrenament & nutriție.'
+            : 'Launching the all-new TrenZone store with heavy-duty strength gear, apparel, and training & nutrition programs.'}
         </p>
 
-        {/* ⏳ COUNTDOWN DISPLAY */}
+        {/* ⏳ GLOBAL SYNCHRONIZED COUNTDOWN */}
         {isClient && hasValidDate && !isEnded && (
-          <div className="w-full max-w-2xl mx-auto mb-10 sm:mb-12 animate-in fade-in duration-700">
-            <div className="grid grid-cols-4 gap-2.5 sm:gap-4 md:gap-6">
+          <div className="w-full max-w-xl mx-auto mb-6 sm:mb-8 animate-in fade-in duration-500">
+            <div className="grid grid-cols-4 gap-2 sm:gap-3.5 md:gap-4">
               <TimeCard value={timeLeft.days} label={isRo ? 'Zile' : 'Days'} />
               <TimeCard value={timeLeft.hours} label={isRo ? 'Ore' : 'Hours'} />
               <TimeCard value={timeLeft.minutes} label={isRo ? 'Min' : 'Min'} />
-              <TimeCard value={timeLeft.seconds} label={isRo ? 'Sec' : 'Sec'} animate />
+              <TimeCard value={timeLeft.seconds} label={isRo ? 'Sec' : 'Sec'} highlight />
             </div>
           </div>
         )}
 
-        {/* Alternative Banner if no timer is configured */}
+        {/* Fallback while timer reaches 0 / no date configured */}
         {isClient && (!hasValidDate || isEnded) && (
-          <div className="w-full max-w-md mx-auto mb-10 sm:mb-12 bg-white/[0.03] border border-white/10 rounded-2xl p-5 sm:p-6 backdrop-blur-md shadow-2xl">
-            <div className="flex items-center justify-center gap-2 text-[#e32f8c] font-black text-xs sm:text-sm uppercase tracking-wider mb-1.5">
-              <Clock size={15} />
-              <span>{isRo ? 'Lansare Iminentă' : 'Imminent Release'}</span>
+          <div className="w-full max-w-md mx-auto mb-6 sm:mb-8 bg-white/[0.04] border border-white/10 rounded-2xl p-4 sm:p-5 backdrop-blur-md shadow-2xl">
+            <div className="flex items-center justify-center gap-2 text-[#e32f8c] font-black text-xs uppercase tracking-widest mb-1">
+              <Clock size={14} />
+              <span>
+                {isEnded
+                  ? isRo
+                    ? 'Se deschide acum...'
+                    : 'Unlocking store...'
+                  : isRo
+                    ? 'Lansare Iminentă'
+                    : 'Imminent Release'}
+              </span>
             </div>
-            <p className="text-xs sm:text-sm text-zinc-400">
-              {isRo 
-                ? 'Finalizăm ultimele detalii de configurare. Rămâi pregătit!' 
-                : 'Finalizing inventory and store configuration. Stay tuned!'}
+            <p className="text-xs text-zinc-400">
+              {isRo
+                ? 'Finalizăm ultimele detalii. Magazinul se deschide în curând!'
+                : 'Finalizing inventory. Store opens shortly!'}
             </p>
           </div>
         )}
 
-        {/* 📬 VIP NOTIFICATION LEAD CAPTURE ("Fii primul care află") */}
-        <div className="w-full max-w-lg mx-auto bg-zinc-950/70 border border-white/10 hover:border-[#e32f8c]/40 rounded-3xl p-5 sm:p-7 backdrop-blur-xl shadow-2xl transition-all">
-          <div className="flex items-center justify-center gap-2 mb-2 text-white font-black text-sm sm:text-base uppercase tracking-wide">
-            <Mail size={16} className="text-[#e32f8c]" />
-            <span>{isRo ? 'Fii Primul Care Află Când Deschidem' : 'Be The First To Know When We Launch'}</span>
+        {/* 📬 VIP NOTIFICATION CARD (5% DISCOUNT) */}
+        <div className="w-full max-w-lg mx-auto bg-zinc-950/75 border border-white/12 hover:border-[#e32f8c]/40 rounded-3xl p-5 sm:p-6 backdrop-blur-xl shadow-[0_24px_60px_-15px_rgba(0,0,0,0.85)] transition-all">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#e32f8c]/15 border border-[#e32f8c]/35 text-[#ff66b5] text-[10px] font-black uppercase tracking-widest mb-2.5">
+            <span>VIP EARLY ACCESS · -5%</span>
           </div>
 
-          <p className="text-xs text-zinc-400 mb-5 text-center leading-normal">
-            {isRo 
-              ? 'Introdu adresa de email pentru a primi acces prioritar și 10% reducere la noul drop.' 
-              : 'Enter your email for priority early access and 10% discount on the drop.'}
+          <h2 className="text-base sm:text-lg font-black uppercase tracking-wide text-white font-[family-name:var(--font-oswald)] mb-1.5">
+            {isRo ? 'Fii primul care află când deschidem' : 'Be the first to know when we drop'}
+          </h2>
+
+          <p className="text-xs sm:text-[13px] text-zinc-400 mb-4 leading-relaxed max-w-sm mx-auto">
+            {isRo ? (
+              <>
+                Introdu emailul pentru acces prioritar și{' '}
+                <span className="text-white font-bold">5% reducere</span> la noul drop.
+              </>
+            ) : (
+              <>
+                Enter your email for priority access and{' '}
+                <span className="text-white font-bold">5% off</span> the new drop.
+              </>
+            )}
           </p>
 
           {emailSuccess ? (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-center gap-2.5 text-emerald-400 text-xs sm:text-sm font-bold animate-in fade-in">
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-center gap-2.5 text-emerald-300 text-xs sm:text-sm font-bold animate-in fade-in">
               <CheckCircle2 size={18} className="shrink-0 text-emerald-400" />
-              <span>{isRo ? 'Te-am înregistrat cu succes! Îți vom trimite un email la lansare.' : 'Successfully registered! We will notify you at launch.'}</span>
+              <span>
+                {isRo
+                  ? 'Te-am înregistrat! Verifică emailul pentru reducerea de 5% și accesul la lansare.'
+                  : "You're registered! Check your email for your 5% discount & launch alert."}
+              </span>
             </div>
           ) : (
             <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-2.5">
               <div className="relative flex-1">
+                <Mail
+                  size={16}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+                />
                 <input
                   type="email"
                   value={email}
@@ -264,13 +319,14 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
                   placeholder={isRo ? 'adresa.ta@email.ro' : 'your.email@domain.com'}
                   required
                   disabled={submittingEmail}
-                  className="w-full h-12 bg-white/5 border border-white/15 focus:border-[#e32f8c] rounded-xl px-4 text-sm text-white placeholder-zinc-500 outline-none transition-all"
+                  aria-label={isRo ? 'Adresă de email' : 'Email address'}
+                  className="w-full h-12 bg-white/[0.05] hover:bg-white/[0.07] focus:bg-white/[0.08] border border-white/15 focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/20 rounded-xl pl-10 pr-4 text-sm text-white placeholder-zinc-500 outline-none transition-all"
                 />
               </div>
               <button
                 type="submit"
-                disabled={submittingEmail || !email}
-                className="h-12 px-6 bg-[#e32f8c] hover:bg-[#c92477] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(227,47,140,0.4)] hover:shadow-[0_0_30px_rgba(227,47,140,0.6)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95 shrink-0"
+                disabled={submittingEmail || !email.trim()}
+                className="h-12 px-6 bg-[#e32f8c] hover:bg-[#ff3b9e] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_24px_rgba(227,47,140,0.38)] hover:shadow-[0_0_32px_rgba(227,47,140,0.6)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] shrink-0"
               >
                 {submittingEmail ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -292,40 +348,22 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
         </div>
       </section>
 
-      {/* 🌐 FOOTER & SOCIAL LINKS */}
-      <footer className="relative z-20 w-full max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 pb-2 border-t border-white/5 text-zinc-500 text-xs">
-        <div className="flex items-center gap-4">
-          <a
-            href="https://www.instagram.com/vladtren/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-zinc-400 hover:text-[#e32f8c] transition-colors"
-          >
-            <InstagramIcon size={14} />
-            <span>@vladtren</span>
-          </a>
-          <span className="text-zinc-700">·</span>
-          <a
-            href="mailto:trenzone483@gmail.com"
-            className="text-zinc-400 hover:text-white transition-colors"
-          >
-            trenzone483@gmail.com
-          </a>
-        </div>
-
-        <div className="text-[11px] font-medium tracking-wider text-zinc-500">
-          &copy; {new Date().getFullYear()} TRENZONE. All Rights Reserved.
-        </div>
+      {/* 🌐 CLEAN MINIMAL COPYRIGHT FOOTER */}
+      <footer className="relative z-20 w-full max-w-5xl mx-auto flex items-center justify-center pt-3 pb-1 text-zinc-500">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500/90">
+          &copy; {new Date().getFullYear()} TRENZONE. {isRo ? 'Toate drepturile rezervate.' : 'All Rights Reserved.'}
+        </p>
       </footer>
 
-      {/* 🔐 FLOATING ADMIN BYPASS TRIGGER (Accessible on Mobile and Desktop) */}
+      {/* 🔐 FLOATING ADMIN BYPASS TRIGGER */}
       <button
+        type="button"
         onClick={() => setShowSecret(true)}
-        className="fixed bottom-5 right-5 z-40 w-10 h-10 rounded-full bg-zinc-950/80 hover:bg-zinc-900 border border-white/10 hover:border-[#e32f8c]/60 text-zinc-400 hover:text-white shadow-xl backdrop-blur-md flex items-center justify-center transition-all cursor-pointer group hover:scale-105 active:scale-95"
+        className="fixed bottom-4 right-4 z-40 w-9 h-9 rounded-full bg-zinc-950/75 hover:bg-zinc-900 border border-white/10 hover:border-[#e32f8c]/60 text-zinc-400 hover:text-white opacity-60 hover:opacity-100 shadow-xl backdrop-blur-md flex items-center justify-center transition-all cursor-pointer group hover:scale-105 active:scale-95"
         title={isRo ? 'Acces Administrator (Bypass)' : 'Admin Access (Bypass)'}
         aria-label="Admin Bypass"
       >
-        <Lock size={15} className="group-hover:text-[#e32f8c] transition-colors" />
+        <Lock size={14} className="group-hover:text-[#e32f8c] transition-colors" />
       </button>
 
       {/* 🛡️ SECRET BYPASS MODAL */}
@@ -333,12 +371,14 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-sm bg-zinc-950 border border-white/15 p-6 sm:p-7 rounded-3xl shadow-2xl relative text-left">
             <button
+              type="button"
               onClick={() => {
                 setShowSecret(false);
                 setBypassError('');
                 setPassword('');
               }}
               className="absolute top-5 right-5 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              aria-label={isRo ? 'Închide' : 'Close'}
             >
               <X size={16} />
             </button>
@@ -351,8 +391,8 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
               {isRo ? 'Deblocare Administrator' : 'Administrator Bypass'}
             </h3>
             <p className="text-xs text-zinc-400 mt-1 mb-5 leading-relaxed">
-              {isRo 
-                ? 'Introdu parola de mentenanță configurată în panoul de control pentru a accesa magazinul live.' 
+              {isRo
+                ? 'Introdu parola de mentenanță configurată în panoul de control pentru a accesa magazinul live.'
                 : 'Enter your maintenance bypass password to browse the live store.'}
             </p>
 
@@ -395,29 +435,32 @@ export function MaintenanceView({ endDate, locale = 'ro' }: MaintenanceViewProps
   );
 }
 
-// Subcomponent: Glowing Countdown Time Card
-function TimeCard({ value, label, animate = false }: { value: number; label: string; animate?: boolean }) {
+function TimeCard({
+  value,
+  label,
+  highlight = false,
+}: {
+  value: number;
+  label: string;
+  highlight?: boolean;
+}) {
   return (
-    <div className="bg-zinc-950/80 border border-white/10 hover:border-[#e32f8c]/40 rounded-2xl p-3 sm:p-5 flex flex-col items-center justify-center backdrop-blur-md shadow-2xl relative overflow-hidden group transition-all">
-      {/* Top subtle glow line */}
-      <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-[#e32f8c] to-transparent opacity-60" />
-      
-      <span className={`text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-white font-[family-name:var(--font-oswald)] ${animate ? 'animate-[pulse_1.5s_ease-in-out_infinite]' : ''}`}>
+    <div className="bg-zinc-950/80 border border-white/12 hover:border-[#e32f8c]/45 rounded-2xl py-3.5 px-2 sm:py-5 sm:px-4 flex flex-col items-center justify-center backdrop-blur-md shadow-[0_16px_40px_-12px_rgba(0,0,0,0.85)] relative overflow-hidden transition-colors">
+      <div
+        className={`absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent ${
+          highlight ? 'via-[#e32f8c]' : 'via-[#e32f8c]/65'
+        } to-transparent`}
+      />
+      <span
+        className={`text-3xl sm:text-5xl md:text-[54px] font-black tabular-nums leading-none tracking-tight font-[family-name:var(--font-oswald)] ${
+          highlight ? 'text-[#ff70ba]' : 'text-white'
+        }`}
+      >
         {String(Math.max(0, value)).padStart(2, '0')}
       </span>
-      <span className="text-[9px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-[0.2em] mt-1.5 sm:mt-2">
+      <span className="text-[9px] sm:text-[11px] font-extrabold text-zinc-400 uppercase tracking-[0.2em] mt-2">
         {label}
       </span>
     </div>
-  );
-}
-
-function InstagramIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-    </svg>
   );
 }

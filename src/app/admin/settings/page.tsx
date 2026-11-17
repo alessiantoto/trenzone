@@ -89,16 +89,14 @@ function ModernMaintenanceDatePicker({
     const minutes = selectedDate ? selectedDate.getMinutes() : 0;
     const updated = new Date(d);
     updated.setHours(hours, minutes, 0, 0);
-    const formatted = format(updated, "yyyy-MM-dd'T'HH:mm");
-    onChange(formatted);
+    onChange(updated.toISOString());
   };
 
   const applyTime = (hours: number, minutes: number) => {
     const base = selectedDate || new Date();
     const updated = new Date(base);
     updated.setHours(hours, minutes, 0, 0);
-    const formatted = format(updated, "yyyy-MM-dd'T'HH:mm");
-    onChange(formatted);
+    onChange(updated.toISOString());
   };
 
   const adjustHour = (delta: number) => {
@@ -117,11 +115,11 @@ function ModernMaintenanceDatePicker({
     applyTime(base.getHours(), m);
   };
 
-  const applyPreset = async (presetFn: () => Date, label: string) => {
+  const applyPreset = async (presetFn: () => Date, _label: string) => {
     const newDate = presetFn();
-    const formatted = format(newDate, "yyyy-MM-dd'T'HH:mm");
-    onChange(formatted);
-    await onSave(formatted);
+    const utcIso = newDate.toISOString();
+    onChange(utcIso);
+    await onSave(utcIso);
   };
 
   const handleClear = async () => {

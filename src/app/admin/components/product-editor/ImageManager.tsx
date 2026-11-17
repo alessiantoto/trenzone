@@ -182,7 +182,7 @@ export function ImageManager({ product, onChange }: ImageManagerProps) {
             <Image src={img} alt={`Product ${idx}`} fill sizes="200px" className="object-cover" />
             
             {/* Overlay controls */}
-            <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
+            <div className="absolute inset-0 bg-slate-900/45 [@media(hover:hover)]:bg-slate-900/60 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] [@media(hover:hover)]:backdrop-blur-sm">
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => handleMoveImage(idx, 'up')}
@@ -252,7 +252,7 @@ export function ImageManager({ product, onChange }: ImageManagerProps) {
                   ) : opt.image ? (
                     <>
                       <img src={getOptimizedImageUrl(opt.image)} alt={nameRO} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-sm">
+                      <div className="absolute inset-0 bg-slate-900/45 [@media(hover:hover)]:bg-slate-900/60 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px] [@media(hover:hover)]:backdrop-blur-sm">
                         <label className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors cursor-pointer">
                           <Upload size={16} />
                           <input 

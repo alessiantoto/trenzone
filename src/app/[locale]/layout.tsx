@@ -17,6 +17,7 @@ import { DeferredOverlay } from "@/components/performance/DeferredOverlay";
 import { cookies } from 'next/headers';
 import { MaintenanceView } from '@/components/layout/MaintenanceView';
 import { getGlobalSettings, hasValidMaintenanceBypass } from '@/app/actions/admin-settings';
+import { parseUniversalDropEndDateMs } from '@/lib/maintenance-time';
 import { getSiteUrl } from '@/lib/site-config';
 
 const inter = Inter({
@@ -230,23 +231,33 @@ export default async function LocaleLayout({
   // Only invoke dynamic cookies() if maintenance mode is actually turned on.
   // This allows Vercel Edge CDN to cache all storefront pages when the store is open!
   const { maintenance_mode: IS_MAINTENANCE_MODE, maintenance_end_date: MAINTENANCE_END_DATE } = await getGlobalSettings();
+  const dropEndMs = parseUniversalDropEndDateMs(MAINTENANCE_END_DATE);
+  const nowServerMs = Date.now();
+  let isMaintenanceCurrentlyBlocking = false;
 
   if (IS_MAINTENANCE_MODE) {
+    // Reading cookies() while maintenance_mode=true keeps SSR dynamic so every timezone unlocks simultaneously at dropEndMs
     const hasBypassCookie = await hasValidMaintenanceBypass();
+    const isDropPending = dropEndMs === null || nowServerMs < dropEndMs;
+    isMaintenanceCurrentlyBlocking = isDropPending;
 
-    if (!hasBypassCookie) {
+    if (isDropPending && !hasBypassCookie) {
       return (
         <html lang={locale} className={`${inter.variable} ${oswald.variable} h-full antialiased dark`} data-scroll-behavior="smooth" suppressHydrationWarning>
           <head>
             <title>TrenZone | Dropping Soon</title>
-            <meta name="description" content="Magazinul TrenZone se pregătește pentru noul drop hardcore. Revenim în curând!" />
+            <meta name="description" content="Lansăm noul site TrenZone cu echipamente hardcore de forță și programe de antrenament & nutriție. Revenim în curând!" />
             <meta name="robots" content="noindex, nofollow" />
             <link rel="icon" href="/favicon.ico" sizes="any" />
             <link rel="icon" type="image/png" href="/favicon.png" />
             <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           </head>
-          <body className="min-h-full flex flex-col font-sans bg-black text-white selection:bg-[#e32f8c] selection:text-white">
-            <MaintenanceView endDate={MAINTENANCE_END_DATE} locale={locale} />
+          <body className="min-h-full flex flex-col font-sans bg-[#030305] text-white selection:bg-[#e32f8c] selection:text-white">
+            <MaintenanceView
+              endDate={MAINTENANCE_END_DATE}
+              serverNowIso={new Date(nowServerMs).toISOString()}
+              locale={locale}
+            />
           </body>
         </html>
       );
@@ -257,7 +268,6 @@ export default async function LocaleLayout({
     <html
       lang={locale}
       className={`${inter.variable} ${oswald.variable} dark h-full antialiased`}
-      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <head>
@@ -347,10 +357,10 @@ export default async function LocaleLayout({
           <StoreTracker enabled={enableStoreTracker} />
 
           <Navbar />
-          <main className="flex-1 overflow-x-hidden">
+          <main className="flex-1 overflow-x-clip">
             {children}
           </main>
-          <ClientSideWidgets isMaintenanceMode={IS_MAINTENANCE_MODE} />
+          <ClientSideWidgets isMaintenanceMode={isMaintenanceCurrentlyBlocking} />
 
         </NextIntlClientProvider>
       </body>

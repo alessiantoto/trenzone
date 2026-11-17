@@ -90,7 +90,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <html lang="ro" className={`${inter.variable} ${oswald.variable} h-full antialiased`} data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html lang="ro" className={`${inter.variable} ${oswald.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="h-full bg-[#f4f6f8] text-slate-900 font-sans selection:bg-[#e32f8c]/30 overflow-hidden">
         <NextIntlClientProvider messages={messages} locale="ro">
           <AdminShellProvider>
@@ -99,7 +99,7 @@ export default async function AdminLayout({
                 {children}
               </div>
             ) : (
-              <div className="flex h-screen w-full overflow-hidden relative">
+              <div className="flex h-dvh w-full overflow-hidden relative">
                 {/* 🚀 ELITE FRAME (NEW SIDEBAR) */}
                 <EliteFrame />
 
@@ -125,7 +125,7 @@ export default async function AdminLayout({
                   </header>
 
                   {/* SCROLLABLE CONTENT AREA */}
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 custom-scrollbar bg-[#f4f6f8] relative z-20">
+                  <div className="flex-1 overflow-y-auto overflow-x-clip p-4 sm:p-6 lg:p-8 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] custom-scrollbar bg-[#f4f6f8] relative">
                     <div className="max-w-7xl mx-auto">
                       {children}
                     </div>
@@ -135,7 +135,10 @@ export default async function AdminLayout({
             )}
           </AdminShellProvider>
         </NextIntlClientProvider>
-        <Toaster position="bottom-right" />
+        <Toaster
+          position="bottom-right"
+          containerClassName="!bottom-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+        />
       </body>
     </html>
   );

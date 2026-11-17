@@ -2,7 +2,7 @@
 
 import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
 import { getSingleFlavorImage, resolveItemImage } from '@/lib/product-images';
-import React, { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef, Suspense } from 'react';
 import { 
   ShoppingBag, 
   Search, 
@@ -244,6 +244,32 @@ function OrdersPageContent() {
   const [monthFilter, setMonthFilter] = useState('all');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const monthDropdownRef = useRef<HTMLDivElement>(null);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (monthDropdownRef.current && !monthDropdownRef.current.contains(target)) {
+        setIsDropdownOpen(false);
+      }
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(target)) {
+        setIsFilterDropdownOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsDropdownOpen(false);
+        setIsFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
   const [statusFilter, setStatusFilter] = useState(initialStatus); // all, pending_awb, generated_awb, returned, delivered, preorder
   const [paymentFilter, setPaymentFilter] = useState('all'); // all, card, cod
   const [error, setError] = useState<string | null>(null);
@@ -978,7 +1004,7 @@ function OrdersPageContent() {
         </div>
 
         {/* Global actions (Refresh & Expand All) */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <button
             onClick={fetchOrders}
             disabled={loading}
@@ -1307,7 +1333,7 @@ function OrdersPageContent() {
         {/* Filter dropdowns: 50% / 50% on mobile, no mystery package buttons */}
         <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
           {/* Month selector */}
-          <div className="relative w-full sm:w-44">
+          <div ref={monthDropdownRef} className="relative w-full sm:w-44">
             <div 
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="h-10 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3 flex items-center justify-between gap-1.5 cursor-pointer transition-all text-xs font-bold text-slate-700"
@@ -1355,7 +1381,7 @@ function OrdersPageContent() {
           </div>
 
           {/* Combined Filters Button */}
-          <div className="relative w-full sm:w-auto">
+          <div ref={filterDropdownRef} className="relative w-full sm:w-auto">
             <button 
               onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
               className={`w-full h-10 px-3.5 border rounded-xl text-xs font-bold transition-all flex items-center justify-between sm:justify-center gap-1.5 cursor-pointer ${
@@ -1799,7 +1825,7 @@ function OrdersPageContent() {
                     </div>
 
                     {/* Actions & Detail Toggle Column (Cleanly aligned on right, never overlapping) */}
-                    <div className="flex items-center justify-start md:justify-end gap-1.5 shrink-0 pt-2 md:pt-0 border-t md:border-0 border-slate-100">
+                    <div className="flex flex-wrap items-center justify-start md:justify-end gap-1.5 shrink-0 pt-2 md:pt-0 border-t md:border-0 border-slate-100">
                       {/* Invoice button */}
                       <a 
                         href={order.oblioInvoice?.link || `/api/admin/orders/${order.supabaseId || order.id}/invoice`} 
@@ -2571,7 +2597,7 @@ function OrdersPageContent() {
             initial={{ opacity: 0, y: 40, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.95 }}
-            className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-1.5rem)] sm:w-fit bg-slate-900/95 text-white backdrop-blur-xl border border-slate-700/80 rounded-2xl px-3 sm:px-5 py-2 sm:py-3 shadow-2xl flex items-center justify-between sm:justify-start gap-2 sm:gap-4"
+            className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-1.5rem)] sm:w-fit bg-slate-900/95 text-white backdrop-blur-xl border border-slate-700/80 rounded-2xl px-3 sm:px-5 py-2 sm:py-3 shadow-2xl flex items-center justify-between sm:justify-start gap-2 sm:gap-4"
           >
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <span className="w-2 h-2 rounded-full bg-[#e32f8c] animate-pulse shrink-0" />

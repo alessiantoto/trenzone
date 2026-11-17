@@ -30,6 +30,7 @@ export function ClientSideWidgets({ isMaintenanceMode }: { isMaintenanceMode: bo
       <PreorderConflictModal />
       <Toaster 
         position="bottom-right"
+        containerClassName="!bottom-24 sm:!bottom-6"
         toastOptions={{
           style: {
             background: '#090d16',

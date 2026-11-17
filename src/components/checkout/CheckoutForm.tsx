@@ -429,13 +429,13 @@ const CustomSelect = ({ value, onChange, options, placeholder, error, label }: C
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: PointerEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleClickOutside);
+    return () => document.removeEventListener("pointerdown", handleClickOutside);
   }, []);
 
   const sortedOptions = useMemo(() => {
@@ -528,7 +528,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, error, label }: C
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="absolute z-[100] w-full mt-2 bg-white border border-zinc-100 rounded-2xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto premium-scrollbar"
+              className="absolute z-[100] w-full mt-2 bg-white border border-zinc-100 rounded-2xl shadow-2xl overflow-hidden max-h-[min(18rem,45dvh)] overflow-y-auto premium-scrollbar"
               ref={scrollRef}
             >
               <div className="p-1">
@@ -579,7 +579,7 @@ const CustomPrefixSelect = ({ value, onChange, options }: { value: string; onCha
   const selectedOption = options.find(opt => opt.value === value);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: PointerEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
@@ -587,10 +587,10 @@ const CustomPrefixSelect = ({ value, onChange, options }: { value: string; onCha
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setIsOpen(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("pointerdown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
   }, []);
@@ -658,7 +658,7 @@ const CustomPrefixSelect = ({ value, onChange, options }: { value: string; onCha
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute left-0 bottom-full mb-2 w-48 bg-white border border-zinc-200 rounded-2xl shadow-2xl overflow-hidden z-[110] max-h-64 overflow-y-auto premium-scrollbar"
+            className="absolute left-0 bottom-full mb-2 w-[min(15rem,calc(100vw-3rem))] bg-white border border-zinc-200 rounded-2xl shadow-2xl overflow-hidden z-[110] max-h-[min(16rem,45dvh)] overflow-y-auto premium-scrollbar"
             ref={scrollRef}
           >
             <div className="p-1">
@@ -1921,7 +1921,7 @@ export default function CheckoutForm({
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 ml-1">
                     {t('first_name')} <span className="text-red-500 font-black">*</span>
@@ -2031,7 +2031,7 @@ export default function CheckoutForm({
                 />
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 ml-1">
                     {t('city_label')} <span className="text-red-500 font-black">*</span>
@@ -2545,7 +2545,7 @@ export default function CheckoutForm({
 
             {/* Payment Method Selector */}
             {country === 'RO' && !isStripeDisabled && (
-              <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 items-start">
                 <button
                   type="button"
                   onClick={async () => {
@@ -2553,7 +2553,7 @@ export default function CheckoutForm({
                     // Sync Stripe so Apple Pay / Google Pay shows correct total with -5 lei card discount
                     await syncStripePaymentMethod('online');
                   }}
-                  className={`relative overflow-hidden flex flex-col items-center justify-center gap-3 p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'online' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'}`}
+                  className={`relative overflow-hidden flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 transition-all h-full ${paymentMethod === 'online' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'}`}
                 >
                   <div className="absolute top-0 right-0 bg-[#ff007a] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-2xl shadow-sm">
                     -{formatPrice(getProductPrice(5, currency), currency)} {locale === 'ro' ? 'REDUCERE' : 'DISCOUNT'}
@@ -2563,7 +2563,7 @@ export default function CheckoutForm({
                   </div>
                   <span className="text-[10px] font-black uppercase tracking-widest">{t('card_payment')}</span>
                 </button>
-                <div className="relative h-full">
+                <div className="flex flex-col gap-1.5 h-full">
                   <button
                     type="button"
                     disabled={hasPreorderItems || hasDigitalItems}
@@ -2571,7 +2571,7 @@ export default function CheckoutForm({
                       if (hasPreorderItems || hasDigitalItems) return;
                       setPaymentMethod('cod');
                     }}
-                    className={`h-full w-full flex flex-col items-center justify-center gap-3 p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'cod' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'} ${(hasPreorderItems || hasDigitalItems) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`flex-1 w-full flex flex-col items-center justify-center gap-3 p-5 sm:p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'cod' ? 'border-[#e32f8c] bg-[#e32f8c]/5' : 'border-zinc-100 bg-zinc-100 hover:bg-zinc-100'} ${(hasPreorderItems || hasDigitalItems) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${paymentMethod === 'cod' ? 'bg-[#e32f8c] text-white' : 'bg-white text-zinc-400'}`}>
                       <Truck className="w-5 h-5" />
@@ -2579,13 +2579,11 @@ export default function CheckoutForm({
                     <span className="text-[10px] font-black uppercase tracking-widest">{t('cod_payment')}</span>
                   </button>
                   {(hasPreorderItems || hasDigitalItems) && (
-                    <div className="absolute -bottom-6 left-0 w-full text-center">
-                      <span className="text-[8px] font-bold text-red-500">
-                        {hasDigitalItems
-                          ? (locale === 'ro' ? '*Programele digitale se achită online' : '*Online payment required for digital programs')
-                          : (locale === 'ro' ? '*Indisponibil pentru precomandă' : '*Unavailable for preorder')}
-                      </span>
-                    </div>
+                    <span className="text-[9px] font-bold text-red-500 text-center px-1 leading-tight">
+                      {hasDigitalItems
+                        ? (locale === 'ro' ? '*Programele digitale se achită online' : '*Online payment required for digital programs')
+                        : (locale === 'ro' ? '*Indisponibil pentru precomandă' : '*Unavailable for preorder')}
+                    </span>
                   )}
                 </div>
               </div>

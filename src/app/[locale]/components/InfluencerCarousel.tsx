@@ -82,13 +82,18 @@ export function InfluencerCarousel({
     }
   };
 
+  const scrollRafRef = useRef<number | null>(null);
   const handleScroll = () => {
-    const el = sliderRef.current;
-    if (!el || isDraggingRef.current) return;
-    const index = Math.round(el.scrollLeft / el.offsetWidth);
-    if (index !== activeSlide && index >= 0 && index < slideCount) {
-      setActiveSlide(index);
-    }
+    if (scrollRafRef.current !== null) return;
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const el = sliderRef.current;
+      if (!el || isDraggingRef.current) return;
+      const index = Math.round(el.scrollLeft / el.offsetWidth);
+      if (index !== activeSlide && index >= 0 && index < slideCount) {
+        setActiveSlide(index);
+      }
+    });
   };
 
   // Continuous Auto-Scroll every 7 seconds
@@ -325,14 +330,13 @@ export function InfluencerCarousel({
       {mounted && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {selectedVideo && (
-            <div className="fixed inset-0 z-[95] flex flex-col items-center justify-start pt-24 sm:pt-28 md:pt-32 pb-4 sm:pb-6 px-4 pointer-events-none overscroll-none">
+            <div className="fixed inset-0 z-[110] flex flex-col items-center justify-start pt-24 sm:pt-28 md:pt-32 pb-4 sm:pb-6 px-4 pointer-events-none overscroll-none">
               {/* Backdrop */}
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto overscroll-none"
-                onTouchMove={(e) => e.preventDefault()}
+                className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto overscroll-none touch-none"
                 onClick={() => setSelectedVideo(null)}
               />
 
@@ -342,7 +346,7 @@ export function InfluencerCarousel({
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 24 }}
                 transition={{ type: "spring", damping: 26, stiffness: 240 }}
-                className="relative w-full max-w-[400px] h-full max-h-[calc(100vh-112px)] sm:max-h-[calc(100vh-136px)] aspect-[9/16] bg-black rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] border border-white/20 flex flex-col pointer-events-auto z-10"
+                className="relative w-full max-w-[400px] h-full max-h-[calc(100dvh-112px)] sm:max-h-[calc(100dvh-136px)] aspect-[9/16] bg-black rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] border border-white/20 flex flex-col pointer-events-auto z-10"
                 style={{ overscrollBehavior: "contain" }}
                 onClick={(e) => e.stopPropagation()}
               >

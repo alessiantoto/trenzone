@@ -6,6 +6,7 @@ import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import crypto from 'crypto';
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/ratelimit';
+import { normalizeDropDateToUtcIso } from '@/lib/maintenance-time';
 
 function computeMaintenanceBypassToken(): string {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || 'trenzone-maintenance-secret';
@@ -112,9 +113,11 @@ export async function setMaintenanceEndDate(endDate: string | null) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
+  const normalizedUtcIso = endDate ? normalizeDropDateToUtcIso(endDate) : null;
+
   const { error } = await supabaseAdmin
     .from('global_settings')
-    .upsert({ id: 1, maintenance_end_date: endDate ? endDate : null });
+    .upsert({ id: 1, maintenance_end_date: normalizedUtcIso });
 
   if (error) {
     console.error('Error setting maintenance end date:', error);

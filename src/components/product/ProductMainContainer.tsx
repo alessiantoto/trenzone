@@ -102,6 +102,20 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
   });
   const [openDropdownIndex, setOpenDropdownIndex] = useState<number | null>(null);
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isSizeGuideOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSizeGuideOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isSizeGuideOpen]);
   const touchStartXRef = useRef<number | null>(null);
 
   const allGalleryImages = Array.from(
@@ -322,7 +336,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
   };
 
   return (
-    <div className="relative w-full overflow-hidden min-h-screen text-white">
+    <div className="relative w-full overflow-x-clip min-h-dvh text-white">
       {/* Ambient Radial Spotlight Accents */}
       <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#e32f8c]/10 rounded-full blur-[140px] pointer-events-none -z-10" />
       <div className="absolute top-1/2 right-1/4 w-[400px] h-[400px] bg-[#0b3b4f]/15 rounded-full blur-[120px] pointer-events-none -z-10" />
@@ -882,7 +896,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       ? "grid-cols-1"
                       : highlights.length === 2
                       ? "grid-cols-2"
-                      : "grid-cols-3"
+                      : "grid-cols-1 sm:grid-cols-3"
                   )}
                 >
                   {highlights.map((item, idx) => (
@@ -918,7 +932,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsSizeGuideOpen(false)}
-              className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+              className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
             >
               <motion.div
                 initial={{ scale: 0.95, opacity: 0, y: 12 }}
@@ -1043,7 +1057,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 120, opacity: 0 }}
               transition={{ type: "spring", stiffness: 350, damping: 30 }}
-              className="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-zinc-950/95 backdrop-blur-2xl border-t border-white/10 px-4 py-3 shadow-[0_-12px_35px_rgba(0,0,0,0.85)] pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
+              className="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-zinc-950/95 backdrop-blur-md border-t border-white/10 px-4 py-3 shadow-[0_-12px_35px_rgba(0,0,0,0.85)] pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
             >
               <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">

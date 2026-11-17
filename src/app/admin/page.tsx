@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
   ArrowUpRight,
@@ -26,6 +27,7 @@ import {
   BookOpen,
   CreditCard,
   Truck,
+  Check,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -45,12 +47,54 @@ import {
 } from 'recharts';
 
 const AVAILABLE_CURRENCIES = [
-  { code: 'RON', label: 'RON (lei)', symbol: 'RON', flag: '🇷🇴' },
-  { code: 'EUR', label: 'EUR (€)', symbol: '€', flag: '🇪🇺' },
-  { code: 'USD', label: 'USD ($)', symbol: '$', flag: '🇺🇸' },
-  { code: 'GBP', label: 'GBP (£)', symbol: '£', flag: '🇬🇧' },
-  { code: 'PLN', label: 'PLN (zł)', symbol: 'zł', flag: '🇵🇱' },
+  { code: 'RON', label: 'RON', symbol: 'RON', flag: 'RO' },
+  { code: 'EUR', label: 'EUR', symbol: '€', flag: 'EU' },
+  { code: 'USD', label: 'USD', symbol: '$', flag: 'US' },
+  { code: 'GBP', label: 'GBP', symbol: '£', flag: 'GB' },
 ];
+
+function CurrencyFlagIcon({ code }: { code: string }) {
+  switch (code) {
+    case 'RON':
+      return (
+        <svg viewBox="0 0 24 16" className="w-4 h-3 rounded-[2px] border border-white/15 shrink-0" aria-hidden="true">
+          <rect width="8" height="16" x="0" fill="#002B7F" />
+          <rect width="8" height="16" x="8" fill="#FCD116" />
+          <rect width="8" height="16" x="16" fill="#CE1126" />
+        </svg>
+      );
+    case 'EUR':
+      return (
+        <svg viewBox="0 0 24 16" className="w-4 h-3 rounded-[2px] border border-white/15 shrink-0" aria-hidden="true">
+          <rect width="24" height="16" fill="#003399" />
+          <circle cx="12" cy="8" r="4.3" fill="none" stroke="#FFCC00" strokeWidth="1.2" strokeDasharray="1.1 1.65" />
+        </svg>
+      );
+    case 'USD':
+      return (
+        <svg viewBox="0 0 24 16" className="w-4 h-3 rounded-[2px] border border-white/15 shrink-0" aria-hidden="true">
+          <rect width="24" height="16" fill="#FFFFFF" />
+          <rect width="24" height="2.3" y="0" fill="#B22234" />
+          <rect width="24" height="2.3" y="4.6" fill="#B22234" />
+          <rect width="24" height="2.3" y="9.2" fill="#B22234" />
+          <rect width="24" height="2.3" y="13.7" fill="#B22234" />
+          <rect width="10.5" height="9" fill="#3C3B6E" />
+        </svg>
+      );
+    case 'GBP':
+      return (
+        <svg viewBox="0 0 60 40" className="w-4 h-3 rounded-[2px] border border-white/15 shrink-0" aria-hidden="true">
+          <rect width="60" height="40" fill="#012169" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#FFFFFF" strokeWidth="7" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="3.5" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#FFFFFF" strokeWidth="11" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6.5" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
 
 type HeroMetric = 'revenue' | 'orders';
 
@@ -79,7 +123,34 @@ export default function AdminDashboard() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('RON');
   const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
+  const currencyDropdownRef = useRef<HTMLDivElement>(null);
+  const datePickerRef = useRef<HTMLDivElement>(null);
   const [heroMetric, setHeroMetric] = useState<HeroMetric>('revenue');
+
+  useEffect(() => {
+    if (!isCurrencyDropdownOpen && !isDatePickerOpen) return;
+    const handleOutside = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (isCurrencyDropdownOpen && currencyDropdownRef.current && !currencyDropdownRef.current.contains(target)) {
+        setIsCurrencyDropdownOpen(false);
+      }
+      if (isDatePickerOpen && datePickerRef.current && !datePickerRef.current.contains(target)) {
+        setIsDatePickerOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsCurrencyDropdownOpen(false);
+        setIsDatePickerOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutside);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutside);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [isCurrencyDropdownOpen, isDatePickerOpen]);
 
   // Real-time auto-refresh state
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -110,9 +181,9 @@ export default function AdminDashboard() {
     setIsDatePickerOpen(false);
   };
 
-  const formatMoney = (ronAmount: number) => {
+  const formatMoneyFor = (ronAmount: number, currencyCode: string) => {
     const num = Number(ronAmount) || 0;
-    if (selectedCurrency === 'RON') {
+    if (currencyCode === 'RON') {
       return {
         value: num,
         formatted: num.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -120,12 +191,12 @@ export default function AdminDashboard() {
         display: `${num.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RON`,
       };
     }
-    const rawRate = stats?.exchangeRates?.[selectedCurrency] || 1;
-    const isRonPerUnit = rawRate > 1.5 || (selectedCurrency === 'HUF' && rawRate < 0.1);
+    const rawRate = stats?.exchangeRates?.[currencyCode] || 1;
+    const isRonPerUnit = rawRate > 1.5;
     const foreignPerRon = isRonPerUnit ? 1 / rawRate : rawRate;
     const converted = num * foreignPerRon;
-    const cfg = AVAILABLE_CURRENCIES.find((c) => c.code === selectedCurrency);
-    const symbol = cfg?.symbol || selectedCurrency;
+    const cfg = AVAILABLE_CURRENCIES.find((c) => c.code === currencyCode);
+    const symbol = cfg?.symbol || currencyCode;
     return {
       value: converted,
       formatted: converted.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -133,6 +204,8 @@ export default function AdminDashboard() {
       display: `${converted.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`,
     };
   };
+
+  const formatMoney = (ronAmount: number) => formatMoneyFor(ronAmount, selectedCurrency);
 
   const fetchData = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -182,6 +255,14 @@ export default function AdminDashboard() {
     }));
   }, [stats?.timeseries, selectedCurrency, stats?.exchangeRates, heroMetric]);
 
+  const currencyTotals = useMemo(() => {
+    const rev = stats?.revenue || 0;
+    return AVAILABLE_CURRENCIES.map((c) => ({
+      ...c,
+      display: formatMoneyFor(rev, c.code).display,
+    }));
+  }, [stats?.revenue, stats?.exchangeRates]);
+
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
 
   if (loading && !stats) {
@@ -203,11 +284,13 @@ export default function AdminDashboard() {
       {/* ========================================================================= */}
       {/* SHOPIFY-STYLE DARK HERO COMMAND CARD (MOBILE-FIRST + DESKTOP PRO)         */}
       {/* ========================================================================= */}
-      <div className="bg-[#09090d] text-white rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/10 relative overflow-hidden">
-        <div className="pointer-events-none absolute -top-24 right-0 w-72 h-72 rounded-full bg-[#e32f8c]/15 blur-[80px]" />
+      <div className="bg-[#09090d] text-white rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/10 relative">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
+          <div className="absolute -top-24 right-0 w-72 h-72 rounded-full bg-[#e32f8c]/15 blur-[80px]" />
+        </div>
 
         {/* TOP BAR: Live indicator + Sync + Currency + Custom Date */}
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2.5 mb-4">
+        <div className="relative z-40 flex flex-wrap items-center justify-between gap-2.5 mb-4">
           <div className="flex items-center gap-2 min-w-0">
             <div className="inline-flex items-center gap-2 bg-white/[0.06] border border-white/10 px-3 py-1.5 rounded-full">
               {liveUsers > 0 ? (
@@ -239,72 +322,102 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Currency Switcher */}
-            <div className="relative">
+            {/* Native iOS-smooth Currency Switcher (Zero gray dimming, zero backdrop-blur lag, zero scale reflow) */}
+            <div ref={currencyDropdownRef} className="relative">
               <button
                 type="button"
-                onClick={() => setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)}
-                className="flex items-center gap-1.5 bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-bold text-white transition-all"
+                onClick={() => {
+                  setIsCurrencyDropdownOpen((prev) => !prev);
+                  setIsDatePickerOpen(false);
+                }}
+                aria-expanded={isCurrencyDropdownOpen}
+                className={`flex items-center gap-1.5 border rounded-xl px-2.5 py-1.5 text-xs font-bold text-white transition-colors duration-150 cursor-pointer active:scale-[0.97] ${
+                  isCurrencyDropdownOpen
+                    ? 'bg-white/15 border-[#e32f8c]/70 shadow-[0_0_16px_-4px_rgba(227,47,140,0.45)]'
+                    : 'bg-white/[0.08] hover:bg-white/[0.13] border-white/10'
+                }`}
               >
-                <span className="text-sm leading-none">
-                  {AVAILABLE_CURRENCIES.find((c) => c.code === selectedCurrency)?.flag}
-                </span>
-                <span className="font-black">{selectedCurrency}</span>
-                <ChevronDown size={12} className={`text-zinc-400 transition-transform ${isCurrencyDropdownOpen ? 'rotate-180' : ''}`} />
+                <CurrencyFlagIcon code={selectedCurrency} />
+                <span className="font-black tracking-tight tabular-nums">{selectedCurrency}</span>
+                <ChevronDown size={12} className={`text-zinc-400 transition-transform duration-150 ${isCurrencyDropdownOpen ? 'rotate-180 text-[#ff6eb6]' : ''}`} />
               </button>
 
-              {isCurrencyDropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-[199]" onClick={() => setIsCurrencyDropdownOpen(false)} />
-                  <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-x-auto sm:top-full sm:mt-1.5 sm:right-0 sm:w-48 bg-white text-slate-900 border border-slate-200 rounded-xl shadow-2xl p-1.5 z-[200]">
-                    <div className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Monedă Statistici
+              <AnimatePresence initial={false}>
+                {isCurrencyDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ type: 'spring', stiffness: 520, damping: 36, mass: 0.6 }}
+                    style={{ willChange: 'transform, opacity' }}
+                    className="absolute right-[-54px] sm:right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-[#14141d] text-white border border-white/15 rounded-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.85)] p-1.5 z-[200] transform-gpu"
+                  >
+                    <div className="flex items-center justify-between px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-400 border-b border-white/[0.07] mb-1">
+                      <span>Monedă</span>
+                      <span>Vânzări totale</span>
                     </div>
-                    {AVAILABLE_CURRENCIES.map((c) => {
-                      const isSelected = selectedCurrency === c.code;
-                      return (
-                        <button
-                          key={c.code}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCurrency(c.code);
-                            setIsCurrencyDropdownOpen(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-bold transition-colors ${
-                            isSelected ? 'bg-[#e32f8c]/10 text-[#c81e78] font-black' : 'text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">{c.flag}</span>
-                            <span>{c.code}</span>
-                          </div>
-                          <span className="text-[11px] text-slate-400">{c.symbol}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
+                    <div className="space-y-0.5">
+                      {currencyTotals.map((c) => {
+                        const isSelected = selectedCurrency === c.code;
+                        return (
+                          <button
+                            key={c.code}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCurrency(c.code);
+                              setIsCurrencyDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-2.5 py-2.5 rounded-xl text-xs transition-colors duration-100 cursor-pointer active:scale-[0.98] ${
+                              isSelected
+                                ? 'bg-[#e32f8c]/20 text-white border border-[#e32f8c]/45 font-black'
+                                : 'text-zinc-300 hover:bg-white/[0.08] hover:text-white border border-transparent font-bold'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <CurrencyFlagIcon code={c.code} />
+                              <span>{c.code}</span>
+                              {isSelected && <Check size={12} className="text-[#ff6eb6]" />}
+                            </div>
+                            <span className={`tabular-nums text-[11px] font-black ${isSelected ? 'text-[#ff7fc0]' : 'text-zinc-400'}`}>
+                              {c.display}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Date Picker Trigger */}
-            <div className="relative">
+            <div ref={datePickerRef} className="relative">
               <button
                 type="button"
-                onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                className="flex items-center gap-1.5 bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-bold text-white transition-colors"
+                onClick={() => {
+                  setIsDatePickerOpen((prev) => !prev);
+                  setIsCurrencyDropdownOpen(false);
+                }}
+                aria-expanded={isDatePickerOpen}
+                className="flex items-center gap-1.5 bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-bold text-white transition-colors duration-150 cursor-pointer active:scale-[0.97]"
               >
                 <Calendar size={13} className="text-[#ff6eb6]" />
                 <span className="truncate max-w-[125px] sm:max-w-none">
                   {datePreset === 'Custom' ? `${startDate} · ${endDate}` : datePreset}
                 </span>
-                <ChevronDown size={12} className={`text-zinc-400 transition-transform ${isDatePickerOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={12} className={`text-zinc-400 transition-transform duration-150 ${isDatePickerOpen ? 'rotate-180 text-[#ff6eb6]' : ''}`} />
               </button>
 
-              {isDatePickerOpen && (
-                <>
-                  <div className="fixed inset-0 z-[199]" onClick={() => setIsDatePickerOpen(false)} />
-                  <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:right-0 sm:w-80 bg-white text-slate-900 border border-slate-200 rounded-2xl shadow-2xl overflow-y-auto max-h-[80vh] sm:max-h-none p-4 z-[200]">
+              <AnimatePresence initial={false}>
+                {isDatePickerOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ type: 'spring', stiffness: 520, damping: 36, mass: 0.6 }}
+                    style={{ willChange: 'transform, opacity' }}
+                    className="fixed inset-x-4 top-20 sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:right-0 sm:w-80 bg-white text-slate-900 border border-slate-200 rounded-2xl shadow-2xl overflow-y-auto max-h-[75dvh] sm:max-h-none p-4 z-[200] transform-gpu"
+                  >
                     <div className="grid grid-cols-2 gap-2 mb-4">
                       {presets.map((p) => (
                         <button
@@ -331,9 +444,9 @@ export default function AdminDashboard() {
                         }}
                       />
                     </div>
-                  </div>
-                </>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -372,7 +485,7 @@ export default function AdminDashboard() {
           >
             <div className="text-[11px] font-bold text-zinc-400">Vânzări totale</div>
             <div className="mt-1 flex items-baseline justify-between gap-1.5 flex-wrap">
-              <span className="text-base sm:text-xl font-black text-white tracking-tight">
+              <span className="text-base sm:text-xl font-black text-white tracking-tight tabular-nums">
                 {formatMoney(stats?.revenue || 0).formatted}{' '}
                 <span className="text-[11px] font-bold text-zinc-400">{formatMoney(stats?.revenue || 0).symbol}</span>
               </span>
@@ -420,7 +533,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* HERO CURVE CHART (Solid Current Period + Dashed Previous Period) */}
-        <div className="relative z-10 h-[210px] sm:h-[260px] w-full">
+        <div className="relative z-10 h-[210px] sm:h-[260px] w-full touch-pan-y">
           {displayTimeseries && displayTimeseries.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={displayTimeseries} margin={{ top: 8, right: 6, left: -16, bottom: 0 }}>

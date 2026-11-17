@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from "@/lib/utils";
 import { WriteReviewModal } from './WriteReviewModal';
 import { extractReviewImages, resolveReviewComment, resolveReviewField, sanitizeReviewImageUrl } from '@/lib/utils/reviews';
+import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
 
 function mapClientReviews(list: any[], locale: string) {
   const dateLocale = locale === 'ro' ? 'ro-RO' : 'en-US';
@@ -395,7 +396,7 @@ function ReviewCard({
       {hasImage && (
         <div className="relative w-full aspect-[4/5] bg-zinc-900 overflow-hidden shrink-0">
           <img
-            src={review.image}
+            src={getOptimizedImageUrl(review.image)}
             alt={`Review by ${review.name}`}
             loading="lazy"
             className="w-full h-full object-cover object-[50%_20%] group-hover:scale-105 transition-transform duration-500 ease-out"
@@ -512,7 +513,7 @@ function ReviewModal({
           {review.image && typeof review.image === 'string' && !review.image.includes('cdn.shopify.com') && (
             <div className="w-full md:w-[48%] aspect-[4/5] md:aspect-auto md:min-h-[480px] relative bg-zinc-950 shrink-0 overflow-hidden">
               <Image
-                src={review.image}
+                src={getOptimizedImageUrl(review.image)}
                 alt={`Review by ${review.name}`}
                 fill
                 className="object-cover object-[50%_20%]"
@@ -606,7 +607,7 @@ function ProductThumbnail({
     <div className={`${dimensions} rounded-lg sm:rounded-xl overflow-hidden bg-black/60 border border-[#e32f8c]/30 flex items-center justify-center shrink-0 shadow-inner`} aria-hidden="true">
       {product.image && typeof product.image === 'string' && !product.image.includes('cdn.shopify.com') && !imageFailed ? (
         <Image
-          src={product.image}
+          src={getOptimizedImageUrl(product.image)}
           alt=""
           width={size === 'small' ? 28 : 48}
           height={size === 'small' ? 28 : 48}

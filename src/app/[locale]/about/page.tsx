@@ -7,6 +7,7 @@ import { Product } from "@/lib/api";
 import { ProductCard } from "@/components/product/ProductCard";
 import { FormattedPrice } from "@/components/common/FormattedPrice";
 import { getProductsServer } from "@/app/actions/products";
+import { getCdnUrl } from "@/lib/utils/cdn";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: rawLocale } = await params;
@@ -203,7 +204,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
             <div className="lg:col-span-5 flex justify-center w-full">
               <div className="relative aspect-[4/3] sm:aspect-[4/5] w-full max-w-md lg:max-w-none rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 shadow-2xl group min-h-0 sm:min-h-[440px] lg:min-h-[500px]">
                 <Image
-                  src="/images/home/hero.jpg"
+                  src={getCdnUrl("/images/home/hero.jpg")}
                   alt="Tren Zone in action"
                   fill
                   className="object-cover object-center transition-transform duration-700 group-hover:scale-105"
@@ -344,7 +345,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
                 {/* Square Product Image */}
                 <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-black/50 border border-white/5 my-1.5">
                   <Image
-                    src="/images/products/x5_elbow_wraps_purple_square.webp"
+                    src={getCdnUrl("/images/products/x5_elbow_wraps_purple_square.webp")}
                     alt="TrenZone X5 Elbow Wraps"
                     fill
                     sizes="(max-width: 640px) 45vw, 300px"
@@ -388,7 +389,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
                 {/* Square Product Image */}
                 <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-black/50 border border-white/5 my-1.5">
                   <Image
-                    src="/images/products/x10_elbow_wraps_purple.webp"
+                    src={getCdnUrl("/images/products/x10_elbow_wraps_purple.webp")}
                     alt="TrenZone X10 Elbow Wraps"
                     fill
                     sizes="(max-width: 640px) 45vw, 300px"

@@ -54,13 +54,19 @@ export function Navbar() {
       }
     }
 
+    let ticking = false;
     const handleScroll = () => {
-      const scrolled = window.scrollY > 20;
-      setIsScrolled(scrolled);
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        const scrolled = window.scrollY > 20;
+        setIsScrolled((prev) => (prev === scrolled ? prev : scrolled));
+        ticking = false;
+      });
     };
 
-    window.addEventListener("scroll", handleScroll);
-    handleScroll(); // init on mount
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    setIsScrolled(window.scrollY > 20);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [pathname, isRootPath]);
 
@@ -68,8 +74,8 @@ export function Navbar() {
 
   // Common Transition Definition for perfect synchronization
   const transition = {
-    duration: 0.6,
-    ease: [0.16, 1, 0.3, 1] as const // Fixed: as const for cubic-bezier array
+    duration: 0.35,
+    ease: [0.16, 1, 0.3, 1] as const
   };
 
   return (
@@ -96,7 +102,6 @@ export function Navbar() {
                   borderRadius: 24,
                   backgroundColor: isHeroPath ? "rgba(10, 10, 10, 0.15)" : "rgba(10, 10, 10, 0.95)",
                   borderColor: isHeroPath ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.08)",
-                  backdropFilter: "blur(0px)",
                 },
                 scrolled: {
                   width: "98%",
@@ -104,20 +109,20 @@ export function Navbar() {
                   y: 12,
                   height: "80px",
                   borderRadius: 24,
-                  backgroundColor: "rgba(10, 10, 10, 0.75)",
+                  backgroundColor: "rgba(10, 10, 10, 0.85)",
                   borderColor: "rgba(255, 255, 255, 0.15)",
-                  backdropFilter: "blur(16px)",
                 }
               }}
               transition={transition}
               style={{
                 borderWidth: "1px",
                 borderStyle: "solid",
-                willChange: "background-color, border-color, backdrop-filter",
+                willChange: "transform, background-color",
                 margin: "0 auto",
                 pointerEvents: "auto",
                 transformOrigin: "top center",
-                WebkitBackdropFilter: isScrolled ? "blur(16px)" : "blur(0px)",
+                backdropFilter: isScrolled ? "blur(12px)" : "none",
+                WebkitBackdropFilter: isScrolled ? "blur(12px)" : "none",
               }}
               className="absolute top-0 left-0 right-0 z-[-1] shadow-2xl overflow-hidden"
             />

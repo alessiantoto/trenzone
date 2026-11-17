@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getShippingConfig } from '@/app/actions/shipping';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 export async function GET() {
   try {
@@ -10,7 +10,8 @@ export async function GET() {
       { success: true, config },
       {
         headers: {
-          'Cache-Control': 'no-store, max-age=0',
+          'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
+          'CDN-Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
         },
       }
     );

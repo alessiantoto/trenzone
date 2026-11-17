@@ -277,8 +277,8 @@ export function ShippingRatesTable() {
                            {COUNTRY_SERVICES[countryCode]?.[shippingType]?.[0]?.name || 'Packeta / Sameday'}
                         </span>
                       </div>
-                      <div className="">
-                        <table className="w-full text-left text-sm text-slate-600">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600 min-w-[440px]">
                           <thead className="bg-white text-slate-400 font-semibold text-xs tracking-wider">
                             <tr>
                               <th className="px-4 sm:px-6 py-2 w-1/3">Până la (kg)</th>
@@ -322,7 +322,7 @@ export function ShippingRatesTable() {
                                     <td className="px-4 sm:px-6 py-3 font-black text-slate-900 text-sm sm:text-base">{rate.price_ron} lei</td>
                                     <td className="px-4 sm:px-6 py-3 text-sm font-medium text-slate-400">{rate.price_eur || (rate.price_ron / 4.97).toFixed(2)} €</td>
                                     <td className="px-4 sm:px-6 py-3 text-right">
-                                      <div className="flex items-center justify-end gap-1 sm:gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <div className="flex items-center justify-end gap-1 sm:gap-2 opacity-100 [@media(hover:hover)]:sm:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
                                         <button onClick={() => handleEditClick(rate)} className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 hover:text-blue-600 shadow-sm"><Edit2 size={14} /></button>
                                         <button onClick={() => handleDelete(rate.id)} className="p-2 bg-white border border-slate-200 text-red-400 rounded-lg hover:bg-red-50 hover:text-red-600 shadow-sm hover:border-red-200"><Trash2 size={14} /></button>
                                       </div>

@@ -32,7 +32,7 @@ const appearance = {
     fontFamily: 'Inter, sans-serif',
     spacingUnit: '4px',
     borderRadius: '16px',
-    fontSizeBase: '14px',
+    fontSizeBase: '16px',
   },
   rules: {
     '.Input': {

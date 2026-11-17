@@ -207,7 +207,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             className={cn(
-              "w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl flex items-center justify-center md:opacity-0 md:translate-y-2 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-300 shadow-[0_6px_20px_rgba(0,0,0,0.35)] border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e32f8c]",
+              "w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl flex items-center justify-center [@media(hover:hover)]:md:opacity-0 [@media(hover:hover)]:md:translate-y-2 [@media(hover:hover)]:md:group-hover:translate-y-0 [@media(hover:hover)]:md:group-hover:opacity-100 transition-all duration-300 shadow-[0_6px_20px_rgba(0,0,0,0.35)] border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e32f8c]",
               isAdded
                 ? "bg-emerald-500 border-emerald-500 text-white"
                 : "bg-white hover:bg-[#e32f8c] text-black hover:text-white border-black/15 hover:border-[#e32f8c]"

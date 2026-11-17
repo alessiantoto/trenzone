@@ -78,9 +78,7 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
                       e.preventDefault();
                       onOpenChange(false);
                       if (pathname !== item.href && pathname !== item.href + '/') {
-                        setTimeout(() => {
-                          router.push(item.href as any);
-                        }, 300);
+                        router.push(item.href as any);
                       }
                     }}
                     className="group flex items-center justify-between py-4 border-b border-zinc-100/80 last:border-b-0 transition-colors outline-none"

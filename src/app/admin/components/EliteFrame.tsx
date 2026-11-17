@@ -78,7 +78,7 @@ export function EliteFrame() {
       {/* 🚀 ELITE PANEL */}
       <div 
         className={`
-          flex flex-col h-screen bg-white border-r border-slate-200 z-[10001]
+          flex flex-col h-dvh bg-white border-r border-slate-200 z-[10001] md:z-30
           fixed top-0 transition-all duration-300 ease-in-out
           w-[280px] min-w-[280px]
           ${isSidebarOpen ? 'left-0' : '-left-[280px] md:left-0'}
@@ -108,7 +108,7 @@ export function EliteFrame() {
             type="button"
             onClick={() => setSidebarOpen(false)}
             aria-label="Închide meniul"
-            className="md:hidden w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors active:scale-90 shrink-0 cursor-pointer"
+            className="md:hidden w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors active:scale-90 shrink-0 cursor-pointer"
           >
             <X size={18} strokeWidth={2.5} />
           </button>

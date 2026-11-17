@@ -41,13 +41,13 @@ export function RegionSwitcher({
 
   useEffect(() => {
     setMounted(true);
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: PointerEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleClickOutside);
+    return () => document.removeEventListener("pointerdown", handleClickOutside);
   }, []);
 
   if (!mounted) return null;
@@ -60,11 +60,9 @@ export function RegionSwitcher({
     useRegionStore.getState().setHasDetectedIP(true);
     if (newLocale === locale) return;
     if (scrollContainerRef?.current) {
-      scrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      scrollContainerRef.current.scrollTo({ top: 0 });
     }
-    setTimeout(() => {
-      router.push(pathname, { locale: newLocale });
-    }, 180);
+    router.push(pathname, { locale: newLocale });
   };
 
   const handleCurrencyChange = (newCurrency: Currency) => {
@@ -106,7 +104,7 @@ export function RegionSwitcher({
                 type="button"
                 onClick={() => handleLocaleChange(lang.code)}
                 className={cn(
-                  "flex items-center justify-center gap-2 h-11 px-3 rounded-xl border text-[12px] font-extrabold transition-all cursor-pointer active:scale-[0.98]",
+                  "flex items-center justify-center gap-2 h-11 px-3 rounded-xl border text-[12px] font-extrabold transition-[colors,transform] duration-150 cursor-pointer active:scale-[0.98]",
                   isSelected
                     ? darkSurface
                       ? "bg-[#e32f8c] border-[#e32f8c] text-black shadow-md shadow-[#e32f8c]/25"
@@ -143,7 +141,7 @@ export function RegionSwitcher({
                 type="button"
                 onClick={() => handleCurrencyChange(curr.code)}
                 className={cn(
-                  "h-12 flex flex-col items-center justify-center gap-0.5 rounded-xl border transition-all cursor-pointer active:scale-[0.97]",
+                  "h-12 flex flex-col items-center justify-center gap-0.5 rounded-xl border transition-[colors,transform] duration-150 cursor-pointer active:scale-[0.97]",
                   isSelected
                     ? darkSurface
                       ? "bg-[#e32f8c]/15 text-[#e32f8c] border-[#e32f8c]/70 shadow-sm shadow-[#e32f8c]/15"
@@ -212,15 +210,15 @@ export function RegionSwitcher({
       </button>
 
       {/* Dropdown Panel */}
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-            style={{ willChange: "transform, opacity", transformOrigin: "top right" }}
-            className="absolute right-0 top-[calc(100%+10px)] w-[280px] z-[110] rounded-2xl bg-[#0b0b0f]/95 backdrop-blur-xl border border-white/15 p-4 shadow-2xl text-white"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ type: "spring", stiffness: 520, damping: 36, mass: 0.6 }}
+            style={{ willChange: "transform, opacity" }}
+            className="absolute right-0 top-[calc(100%+10px)] w-[280px] z-[110] rounded-2xl bg-[#0e0e14] border border-white/15 p-4 shadow-2xl text-white transform-gpu"
           >
             <div className="flex items-center gap-2 pb-2.5 mb-3 border-b border-white/10">
               <Globe className="w-3.5 h-3.5 text-[#e32f8c]" />

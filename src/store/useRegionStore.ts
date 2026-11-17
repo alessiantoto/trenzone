@@ -77,10 +77,22 @@ export const useRegionStore = create<RegionState>()(
           (document.documentElement.lang?.toLowerCase().startsWith("en") ||
             window.location.pathname.startsWith("/en"));
         try {
-          const res = await fetch("https://ipapi.co/json/");
-          if (!res.ok) throw new Error(`Geo HTTP ${res.status}`);
-          const data = await res.json();
-          const detectedCountry = String(data?.country_code || "").trim().toUpperCase();
+          // Prefer free Edge-injected tz_geo_country cookie (0 external API calls, no 30k/mo ipapi limit)
+          let detectedCountry = "";
+          if (typeof document !== "undefined") {
+            const match = document.cookie.match(/(?:^|;\s*)tz_geo_country=([A-Za-z]{2})/);
+            if (match?.[1]) detectedCountry = match[1].toUpperCase();
+          }
+
+          let currencyFromApi = "";
+          if (!detectedCountry) {
+            const res = await fetch("https://ipapi.co/json/");
+            if (!res.ok) throw new Error(`Geo HTTP ${res.status}`);
+            const data = await res.json();
+            detectedCountry = String(data?.country_code || "").trim().toUpperCase();
+            currencyFromApi = String(data?.currency || "").trim().toUpperCase();
+          }
+
           if (!detectedCountry) throw new Error("Missing country_code");
           const isRO = detectedCountry === "RO";
 
@@ -89,12 +101,15 @@ export const useRegionStore = create<RegionState>()(
           if (!isRO) {
             const validCurrencies: Currency[] = ["EUR", "USD", "GBP"];
 
-            if (["PL", "CH", "HU", "CZ", "BG", "HR", "SK", "SI"].includes(detectedCountry)) {
+            if (detectedCountry === "US") {
+              detectedCurrency = "USD";
+            } else if (detectedCountry === "GB") {
+              detectedCurrency = "GBP";
+            } else if (["PL", "CH", "HU", "CZ", "BG", "HR", "SK", "SI"].includes(detectedCountry)) {
               detectedCurrency = "EUR";
             } else {
-              // Map BGN directly to EUR fallback if present in data
-              if (data.currency === "BGN") data.currency = "EUR";
-              detectedCurrency = validCurrencies.includes(data.currency as any) ? (data.currency as Currency) : "EUR";
+              if (currencyFromApi === "BGN") currencyFromApi = "EUR";
+              detectedCurrency = validCurrencies.includes(currencyFromApi as any) ? (currencyFromApi as Currency) : "EUR";
             }
           }
 
@@ -119,6 +134,15 @@ export const useRegionStore = create<RegionState>()(
       ensureCountryDetected: async () => {
         if (get().hasDetectedCountry) return;
         try {
+          if (typeof document !== "undefined") {
+            const match = document.cookie.match(/(?:^|;\s*)tz_geo_country=([A-Za-z]{2})/);
+            if (match?.[1]) {
+              const detectedCountry = match[1].toUpperCase();
+              set({ countryCode: detectedCountry, hasDetectedCountry: true });
+              useCheckoutStore.getState().setDetectedCountry(detectedCountry);
+              return;
+            }
+          }
           const res = await fetch("https://ipapi.co/json/");
           const data = await res.json();
           const detectedCountry = String(data?.country_code || "RO").trim().toUpperCase() || "RO";

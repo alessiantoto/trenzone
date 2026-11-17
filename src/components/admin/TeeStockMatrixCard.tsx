@@ -253,7 +253,7 @@ export function TeeStockMatrixCard({
                   {rowTotal} buc.
                 </span>
               </div>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {TEE_STOCK_SIZES.map((sz) => {
                   const qty = Number(row[sz]) ?? 0;
                   const sold = Number(initialSold?.[model]?.[sz]) || 0;
@@ -265,7 +265,7 @@ export function TeeStockMatrixCard({
                         min={0}
                         value={qty}
                         onChange={(e) => handleQtyChange(model, sz, e.target.value)}
-                        className={`w-full h-9 text-center rounded-xl border text-xs font-black font-mono focus:outline-none ${getCellStyle(qty)}`}
+                        className={`compact-stock-input w-full h-10 text-center rounded-xl border text-sm font-black font-mono focus:outline-none ${getCellStyle(qty)}`}
                       />
                       {sold > 0 && <span className="text-[9px] text-slate-400">-{sold}</span>}
                     </div>

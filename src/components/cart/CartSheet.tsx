@@ -154,14 +154,19 @@ function CartUpsellCarousel({
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
 
+  const scrollRafRef = useRef<number | null>(null);
   const checkScroll = () => {
-    const el = carouselRef.current;
-    if (!el) return;
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    const maxScroll = scrollWidth - clientWidth;
-    setCanScrollLeft(scrollLeft > 4);
-    setCanScrollRight(maxScroll > 4 && scrollLeft < maxScroll - 4);
-    setScrollProgress(maxScroll > 0 ? (scrollLeft / maxScroll) * 100 : 0);
+    if (scrollRafRef.current !== null) return;
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const el = carouselRef.current;
+      if (!el) return;
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      const maxScroll = scrollWidth - clientWidth;
+      setCanScrollLeft(scrollLeft > 4);
+      setCanScrollRight(maxScroll > 4 && scrollLeft < maxScroll - 4);
+      setScrollProgress(maxScroll > 0 ? (scrollLeft / maxScroll) * 100 : 0);
+    });
   };
 
   useEffect(() => {

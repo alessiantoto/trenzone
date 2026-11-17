@@ -130,7 +130,7 @@ export function ImageCropperModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 p-6 border-t border-slate-100 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-6 border-t border-slate-100 bg-white">
           <div className="flex items-center gap-2">
             <button 
               onClick={() => handleAspectChange(1)} 
@@ -145,17 +145,17 @@ export function ImageCropperModal({
               4:5 Vertical
             </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <button
               onClick={onClose}
-              className="px-6 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+              className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
             >
               Anulează
             </button>
             <button
               onClick={handleCropSave}
               disabled={!completedCrop || isProcessing}
-              className="px-6 py-3 rounded-xl font-bold text-black bg-[#e32f8c] hover:bg-[#c41a72] transition-colors flex items-center gap-2 disabled:opacity-50"
+              className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-sm text-black bg-[#e32f8c] hover:bg-[#c41a72] transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               {isProcessing ? (
                 <><Loader2 size={18} className="animate-spin" /> Se procesează...</>

@@ -8,6 +8,7 @@ import { useLocale } from "next-intl";
 import { useRegionStore } from "@/store/useRegionStore";
 import { formatPrice } from "@/utils/currency";
 import { getProductPrice } from "@/utils/pricing";
+import { getCdnUrl } from "@/lib/utils/cdn";
 
 interface ModelGuideProps {
   onSelectModel?: (model: "x5" | "x10") => void;
@@ -54,7 +55,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
         {/* Product Visual - Sleek Aspect */}
         <div className="relative w-full aspect-[16/9] my-1.5 rounded-xl overflow-hidden bg-zinc-950 border border-white/10">
           <Image
-            src="/images/products/x5_elbow_wraps_purple_square.webp"
+            src={getCdnUrl("/images/products/x5_elbow_wraps_purple_square.webp")}
             alt={isRo ? "Benzi de cot TrenZone X5" : "TrenZone X5 Elbow Wraps"}
             fill
             sizes="(max-width: 768px) 100vw, 450px"
@@ -168,7 +169,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
         {/* Product Visual - Sleek Aspect */}
         <div className="relative w-full aspect-[16/9] my-1.5 rounded-xl overflow-hidden bg-zinc-950 border border-white/10">
           <Image
-            src="/images/products/x10_elbow_wraps_purple.webp"
+            src={getCdnUrl("/images/products/x10_elbow_wraps_purple.webp")}
             alt={isRo ? "Benzi de cot TrenZone X10" : "TrenZone X10 Elbow Wraps"}
             fill
             sizes="(max-width: 768px) 100vw, 450px"

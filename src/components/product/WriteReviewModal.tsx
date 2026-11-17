@@ -258,7 +258,7 @@ export function WriteReviewModal({ isOpen, onClose, locale, product }: WriteRevi
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 20 }}
-            className="w-full max-w-[450px] bg-zinc-950 border border-white/10 text-white md:rounded-3xl rounded-2xl shadow-2xl flex flex-col relative h-[90vh] md:h-[650px] overflow-hidden"
+            className="w-full max-w-[450px] bg-zinc-950 border border-white/10 text-white md:rounded-3xl rounded-2xl shadow-2xl flex flex-col relative h-[90dvh] md:h-[650px] overflow-hidden"
           >
             {/* Header controls */}
             {step < 4 && (

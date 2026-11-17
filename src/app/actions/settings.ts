@@ -59,6 +59,9 @@ export async function updateSiteSetting(id: string, value: any) {
 
   revalidateTag('store_settings', 'max');
   revalidatePath('/[locale]', 'page');
+  if (id === 'active_promotion') {
+    revalidatePath('/api/promo-config');
+  }
   return data.value;
 }
 

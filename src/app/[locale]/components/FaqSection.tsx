@@ -166,7 +166,7 @@ const FaqAccordionItem = memo(function FaqAccordionItem({
         aria-expanded={isOpen}
         aria-controls={`faq-panel-${faq.id}`}
         style={{ WebkitTapHighlightColor: "transparent" }}
-        className="w-full px-5 py-4.5 sm:px-7 sm:py-5 flex items-center justify-between gap-4 text-left cursor-pointer touch-manipulation select-none group"
+        className="w-full px-5 py-4.5 sm:px-7 sm:py-5 flex items-center justify-between gap-4 text-left cursor-pointer touch-manipulation select-none group active:scale-[0.98] transition-all"
       >
         <h3 className="text-[15px] sm:text-base font-semibold tracking-tight text-white leading-snug group-hover:text-zinc-200">
           {pick(faq.question)}
@@ -207,7 +207,7 @@ const FaqAccordionItem = memo(function FaqAccordionItem({
                   <Link
                     key={card.slug}
                     href={`/product/${card.slug}`}
-                    className={`group rounded-xl p-4 border transition-colors duration-150 flex flex-col justify-between gap-3 ${
+                    className={`group rounded-xl p-4 border transition-all duration-150 active:scale-[0.98] flex flex-col justify-between gap-3 ${
                       card.featured
                         ? "bg-[#e32f8c]/[0.07] border-[#e32f8c]/40 hover:border-[#e32f8c]"
                         : "bg-[#090a0f] border-white/10 hover:border-white/25"
@@ -494,14 +494,14 @@ export function FaqSection({
           <div className="flex items-center gap-2.5 shrink-0">
             <Link
               href="/shop"
-              className="inline-flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-[#e32f8c] hover:bg-white text-white hover:text-black font-bold text-xs uppercase tracking-wider transition-colors duration-150"
+              className="inline-flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-[#e32f8c] hover:bg-white text-white hover:text-black font-bold text-xs uppercase tracking-wider transition-all duration-150 active:scale-[0.98]"
             >
               <span>{isRo ? "Vezi produsele" : "Shop wraps"}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
             <Link
               href="/contact"
-              className="inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.12] border border-white/15 text-white font-semibold text-xs uppercase tracking-wider transition-colors duration-150"
+              className="inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.12] border border-white/15 text-white font-semibold text-xs uppercase tracking-wider transition-all duration-150 active:scale-[0.98]"
             >
               {isRo ? "Contact" : "Contact"}
             </Link>

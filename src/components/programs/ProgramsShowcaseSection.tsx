@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale } from "next-intl";
 import { ShoppingCart, Check } from "lucide-react";
@@ -38,6 +38,14 @@ export function ProgramsShowcaseSection({
   const [bundleLang, setBundleLang] = useState<"ro" | "en">(() =>
     locale === "en" ? "en" : "ro"
   );
+  const [justAddedBundle, setJustAddedBundle] = useState(false);
+  const bundleAddedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (bundleAddedTimerRef.current) clearTimeout(bundleAddedTimerRef.current);
+    };
+  }, []);
 
   // Always sync preselected bundle language when site locale changes
   useEffect(() => {
@@ -83,7 +91,7 @@ export function ProgramsShowcaseSection({
       bundleLang === "en"
         ? { ro: "Engleză", en: "English" }
         : { ro: "Română", en: "Romanian" };
-    addItem(
+    const added = addItem(
       bundleProduct,
       {
         name: variantName as any,
@@ -93,7 +101,12 @@ export function ProgramsShowcaseSection({
       },
       1
     );
-    setCartOpen(true);
+    if (added) {
+      setJustAddedBundle(true);
+      if (bundleAddedTimerRef.current) clearTimeout(bundleAddedTimerRef.current);
+      bundleAddedTimerRef.current = setTimeout(() => setJustAddedBundle(false), 1800);
+      setCartOpen(true);
+    }
   };
 
   return (
@@ -226,7 +239,7 @@ export function ProgramsShowcaseSection({
                       type="button"
                       onClick={() => setBundleLang("en")}
                       className={cn(
-                        "h-9 px-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 text-xs font-extrabold cursor-pointer",
+                        "h-9 px-3 rounded-lg transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-1.5 text-xs font-extrabold cursor-pointer",
                         bundleLang === "en"
                           ? "bg-[#e32f8c] text-white shadow-sm"
                           : "text-zinc-400 hover:text-white"
@@ -239,7 +252,7 @@ export function ProgramsShowcaseSection({
                       type="button"
                       onClick={() => setBundleLang("ro")}
                       className={cn(
-                        "h-9 px-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 text-xs font-extrabold cursor-pointer",
+                        "h-9 px-3 rounded-lg transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-1.5 text-xs font-extrabold cursor-pointer",
                         bundleLang === "ro"
                           ? "bg-[#e32f8c] text-white shadow-sm"
                           : "text-zinc-400 hover:text-white"
@@ -255,10 +268,24 @@ export function ProgramsShowcaseSection({
                 <button
                   type="button"
                   onClick={handleAddBundleToCart}
-                  className="w-full py-3.5 sm:py-4 px-6 rounded-xl bg-white hover:bg-[#e32f8c] hover:text-white text-black font-black uppercase text-xs sm:text-sm tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-lg active:scale-[0.99] cursor-pointer"
+                  className={cn(
+                    "w-full py-3.5 sm:py-4 px-6 rounded-xl font-black uppercase text-xs sm:text-sm tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] cursor-pointer",
+                    justAddedBundle
+                      ? "bg-emerald-500 text-white shadow-[0_0_25px_rgba(16,185,129,0.4)]"
+                      : "bg-white hover:bg-[#e32f8c] hover:text-white text-black"
+                  )}
                 >
-                  <ShoppingCart className="w-4 h-4 shrink-0" />
-                  <span>{isRo ? "ADAUGĂ PACHETUL ÎN COȘ" : "ADD BUNDLE TO CART"}</span>
+                  {justAddedBundle ? (
+                    <>
+                      <Check className="w-4 h-4 shrink-0 stroke-[2.75]" />
+                      <span>{isRo ? "PACHET ADĂUGAT!" : "BUNDLE ADDED!"}</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="w-4 h-4 shrink-0" />
+                      <span>{isRo ? "ADAUGĂ PACHETUL ÎN COȘ" : "ADD BUNDLE TO CART"}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

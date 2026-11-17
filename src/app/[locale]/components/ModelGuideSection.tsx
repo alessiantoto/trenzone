@@ -138,7 +138,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
             scrollToProducts("x5");
           }
         }}
-        className="w-full py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-white text-white hover:text-black font-black uppercase text-xs tracking-wider transition-all duration-300 flex items-center justify-center gap-2 border border-white/15 cursor-pointer shadow-md active:scale-95 group/btn mt-1"
+        className="w-full py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-white text-white hover:text-black font-black uppercase text-xs tracking-wider transition-all duration-300 flex items-center justify-center gap-2 border border-white/15 cursor-pointer shadow-md active:scale-[0.98] group/btn mt-1"
       >
         <span>{isRo ? "ALEGE MODELUL X5" : "CHOOSE MODEL X5"}</span>
         <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
@@ -252,7 +252,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
             scrollToProducts("x10");
           }
         }}
-        className="w-full py-2.5 px-4 rounded-xl bg-[#e32f8c] hover:bg-[#ff3b99] text-white font-black uppercase text-xs tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(227,47,140,0.4)] cursor-pointer active:scale-95 group/btn mt-1"
+        className="w-full py-2.5 px-4 rounded-xl bg-[#e32f8c] hover:bg-[#ff3b99] text-white font-black uppercase text-xs tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(227,47,140,0.4)] cursor-pointer active:scale-[0.98] group/btn mt-1"
       >
         <span>{isRo ? "ALEGE MODELUL X10" : "CHOOSE MODEL X10"}</span>
         <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
@@ -288,7 +288,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
             <button
               type="button"
               onClick={() => setSelectedLoad("under140")}
-              className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center justify-center cursor-pointer text-center ${
+              className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.98] flex items-center justify-center cursor-pointer text-center ${
                 selectedLoad === "under140"
                   ? "bg-white text-black shadow-md font-black"
                   : "text-zinc-400 hover:text-white"
@@ -300,7 +300,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
             <button
               type="button"
               onClick={() => setSelectedLoad("over140")}
-              className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center justify-center cursor-pointer text-center ${
+              className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.98] flex items-center justify-center cursor-pointer text-center ${
                 selectedLoad === "over140"
                   ? "bg-[#e32f8c] text-white shadow-[0_0_15px_rgba(227,47,140,0.5)] font-black"
                   : "text-zinc-400 hover:text-white"

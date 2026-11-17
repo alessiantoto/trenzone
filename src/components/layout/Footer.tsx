@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link } from "@/i18n/routing";
 import { 
   ArrowRight, Mail, MapPin, ShieldCheck, Truck, Zap, 
   MoveRight, Plus, Minus, BicepsFlexed, Camera, ExternalLink,
-  ChevronDown
+  ChevronDown, Loader2
 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { subscribeToNewsletter } from "@/app/actions/newsletter";
@@ -21,6 +21,7 @@ export function Footer() {
 
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const isSubmittingRef = useRef(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -30,11 +31,13 @@ export function Footer() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || status === "submitting") return;
-    
+    const cleanEmail = email.trim();
+    if (!cleanEmail || isSubmittingRef.current || status === "submitting") return;
+
+    isSubmittingRef.current = true;
     setStatus("submitting");
     try {
-      const result = await subscribeToNewsletter(undefined, email, locale, "footer");
+      const result = await subscribeToNewsletter(undefined, cleanEmail, locale, "footer");
       if (result.success) {
         setStatus("success");
         setEmail("");
@@ -44,6 +47,8 @@ export function Footer() {
     } catch (err) {
       console.error("Footer newsletter error:", err);
       setStatus("error");
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
@@ -99,19 +104,20 @@ export function Footer() {
                           <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-1 font-[family-name:var(--font-oswald)]">
                             {locale === 'ro' ? "CODUL TĂU:" : "YOUR CODE:"}
                           </p>
-                          <div 
+                          <button 
+                            type="button"
                             onClick={() => {
                               navigator.clipboard.writeText("TREN5");
                               setCopied(true);
                               setTimeout(() => setCopied(false), 2500);
                             }}
-                            className="bg-zinc-900 border border-white/10 px-6 py-3 rounded-xl cursor-pointer hover:border-primary/50 transition-all group/code shadow-2xl relative overflow-hidden"
+                            className="bg-zinc-900 border border-white/10 px-6 py-3 rounded-xl cursor-pointer hover:border-primary/50 transition-all active:scale-[0.98] group/code shadow-2xl relative overflow-hidden"
                           >
                              <span className="text-xl font-black tracking-[0.2em] text-white font-[family-name:var(--font-oswald)]">
-                               {copied ? (locale === 'ro' ? "COPIAT! ✓" : "COPIED! ✓") : "TREN5"}
+                               {copied ? (locale === 'ro' ? "COPIAT!" : "COPIED!") : "TREN5"}
                              </span>
                              <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover/code:opacity-100 transition-opacity" />
-                          </div>
+                          </button>
                         </div>
                         <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-relaxed">
                           {locale === 'ro' ? "Folosește-l la finalizarea comenzii pentru 5% reducere." : "Use it at checkout for 5% off."}
@@ -128,7 +134,10 @@ export function Footer() {
                               type="email"
                               required
                               value={email}
-                              onChange={(e) => setEmail(e.target.value)}
+                              onChange={(e) => {
+                                setEmail(e.target.value);
+                                if (status === "error") setStatus("idle");
+                              }}
                               placeholder={t('newsletter_placeholder')}
                               disabled={status === "submitting"}
                               className="w-full bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all disabled:opacity-50"
@@ -137,12 +146,26 @@ export function Footer() {
                           <button 
                             type="submit"
                             disabled={status === "submitting"}
-                            className="w-full sm:w-auto bg-white text-black hover:bg-[#e32f8c] hover:text-white px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider text-xs transition-all active:scale-95 disabled:opacity-50 shadow-2xl cursor-pointer font-[family-name:var(--font-oswald)] shrink-0"
+                            className="w-full sm:w-auto bg-white text-black hover:bg-[#e32f8c] hover:text-white px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider text-xs transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait shadow-2xl cursor-pointer font-[family-name:var(--font-oswald)] shrink-0 inline-flex items-center justify-center gap-2"
                             aria-label={locale === 'ro' ? "Abonează-te la newsletter" : "Subscribe to newsletter"}
                           >
-                            {status === "submitting" ? "..." : t('newsletter_button')}
+                            {status === "submitting" ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                                <span>{locale === 'ro' ? "SE TRIMITE..." : "SENDING..."}</span>
+                              </>
+                            ) : (
+                              <span>{t('newsletter_button')}</span>
+                            )}
                           </button>
                         </div>
+                        {status === "error" && (
+                          <p className="mt-2 text-xs font-semibold text-red-400">
+                            {locale === 'ro'
+                              ? "Nu am putut procesa adresa de email. Încearcă din nou."
+                              : "Could not process that email address. Please try again."}
+                          </p>
+                        )}
                       </form>
                     )}
                   </AnimatePresence>
@@ -156,8 +179,9 @@ export function Footer() {
               {/* Pagini Principale Section */}
               <div className="border-b lg:border-none border-white/5 last:border-none">
                 <button 
+                  type="button"
                   onClick={() => toggleSection('main')}
-                  className="w-full lg:hidden flex items-center justify-between py-5"
+                  className="w-full lg:hidden flex items-center justify-between py-5 active:scale-[0.98] transition-all cursor-pointer"
                 >
                   <h4 className="font-black text-white text-[11px] tracking-[0.3em] uppercase">{t('main_pages')}</h4>
                   <div className="text-zinc-400">
@@ -206,8 +230,9 @@ export function Footer() {
               {/* Pagini Legale Section */}
               <div className="border-b lg:border-none border-white/5 last:border-none">
                 <button 
+                  type="button"
                   onClick={() => toggleSection('legal')}
-                  className="w-full lg:hidden flex items-center justify-between py-5"
+                  className="w-full lg:hidden flex items-center justify-between py-5 active:scale-[0.98] transition-all cursor-pointer"
                 >
                   <h4 className="font-black text-white text-[11px] tracking-[0.3em] uppercase">{t('legal_pages')}</h4>
                   <div className="text-zinc-400">

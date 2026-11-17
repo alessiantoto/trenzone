@@ -1,7 +1,7 @@
 'use client';
 
 import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { 
@@ -9,7 +9,6 @@ import {
   Copy, 
   Check, 
   TrendingUp, 
-  DollarSign, 
   ShoppingBag, 
   Users, 
   Award, 
@@ -19,16 +18,14 @@ import {
   ChevronLeft, 
   Search, 
   CreditCard, 
-  PackageCheck, 
   ExternalLink, 
-  Sparkles,
-  ArrowUpRight,
   ShieldCheck,
   CheckCircle2,
   Clock,
   Layers,
   Pencil,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { affiliateLogoutAction } from '@/app/actions/affiliate-auth';
 import { 
@@ -98,12 +95,20 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
   // State
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [period, setPeriod] = useState<PeriodFilter>('all');
   const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
+
+  // Refs for double-click guards & timers
+  const logoutRef = useRef(false);
+  const ibanSavingRef = useRef(false);
+  const ibanDeletingRef = useRef(false);
+  const copyCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Payout / IBAN state
   const [paymentDetails, setPaymentDetails] = useState(data.paymentDetails || {});
@@ -137,20 +142,34 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
   const referralLink = `${baseUrl}/${locale}?ref=${encodeURIComponent(data.code)}`;
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(data.code);
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(data.code).catch(() => {});
+    }
     setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2200);
+    if (copyCodeTimerRef.current) clearTimeout(copyCodeTimerRef.current);
+    copyCodeTimerRef.current = setTimeout(() => setCopiedCode(false), 2200);
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(referralLink);
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(referralLink).catch(() => {});
+    }
     setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2200);
+    if (copyLinkTimerRef.current) clearTimeout(copyLinkTimerRef.current);
+    copyLinkTimerRef.current = setTimeout(() => setCopiedLink(false), 2200);
   };
 
   const handleLogout = async () => {
-    await affiliateLogoutAction();
-    window.location.href = `/${locale}/affiliate/login`;
+    if (logoutRef.current || loggingOut) return;
+    logoutRef.current = true;
+    setLoggingOut(true);
+    try {
+      await affiliateLogoutAction();
+      window.location.href = `/${locale}/affiliate/login`;
+    } catch {
+      logoutRef.current = false;
+      setLoggingOut(false);
+    }
   };
 
   // Period labels
@@ -241,50 +260,66 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
 
   const handleSaveIban = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (ibanSavingRef.current || ibanSaving) return;
+    ibanSavingRef.current = true;
     setIbanSaving(true);
     setIbanError('');
     setIbanSuccess(false);
 
     const cleanIban = ibanInput.trim().replace(/\s+/g, '').toUpperCase();
 
-    const res = await updateAffiliatePaymentDetailsAction({
-      iban: cleanIban,
-      bankName: bankNameInput,
-      accountHolder: holderInput
-    });
-
-    setIbanSaving(false);
-    if (res.success) {
-      setPaymentDetails({
+    try {
+      const res = await updateAffiliatePaymentDetailsAction({
         iban: cleanIban,
-        bankName: bankNameInput.trim(),
-        accountHolder: holderInput.trim()
+        bankName: bankNameInput,
+        accountHolder: holderInput
       });
-      setIbanSuccess(true);
-      setTimeout(() => {
-        setIsIbanModalOpen(false);
-        setIbanSuccess(false);
-      }, 1000);
-    } else {
-      setIbanError(res.error || (isRo ? 'A apărut o eroare.' : 'An error occurred.'));
+
+      if (res.success) {
+        setPaymentDetails({
+          iban: cleanIban,
+          bankName: bankNameInput.trim(),
+          accountHolder: holderInput.trim()
+        });
+        setIbanSuccess(true);
+        setTimeout(() => {
+          setIsIbanModalOpen(false);
+          setIbanSuccess(false);
+        }, 1000);
+      } else {
+        setIbanError(res.error || (isRo ? 'A apărut o eroare.' : 'An error occurred.'));
+      }
+    } catch {
+      setIbanError(isRo ? 'A apărut o eroare.' : 'An error occurred.');
+    } finally {
+      ibanSavingRef.current = false;
+      setIbanSaving(false);
     }
   };
 
   const handleDeleteIban = async () => {
+    if (ibanDeletingRef.current || ibanDeleting) return;
+    ibanDeletingRef.current = true;
     setIbanDeleting(true);
     setIbanError('');
-    const res = await deleteAffiliatePaymentDetailsAction();
-    setIbanDeleting(false);
+    try {
+      const res = await deleteAffiliatePaymentDetailsAction();
 
-    if (res.success) {
-      setPaymentDetails({});
-      setIbanInput('');
-      setBankNameInput('');
-      setHolderInput(data.name);
-      setShowDeleteConfirm(false);
-      setIsIbanModalOpen(false);
-    } else {
-      setIbanError(res.error || (isRo ? 'Eroare la ștergerea contului.' : 'Failed to delete account.'));
+      if (res.success) {
+        setPaymentDetails({});
+        setIbanInput('');
+        setBankNameInput('');
+        setHolderInput(data.name);
+        setShowDeleteConfirm(false);
+        setIsIbanModalOpen(false);
+      } else {
+        setIbanError(res.error || (isRo ? 'Eroare la ștergerea contului.' : 'Failed to delete account.'));
+      }
+    } catch {
+      setIbanError(isRo ? 'Eroare la ștergerea contului.' : 'Failed to delete account.');
+    } finally {
+      ibanDeletingRef.current = false;
+      setIbanDeleting(false);
     }
   };
 
@@ -322,12 +357,23 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
 
           <div className="flex items-center gap-2.5">
             <button
+              type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 px-3.5 py-2 rounded-xl text-xs font-bold border border-red-200 transition-all active:scale-95"
+              disabled={loggingOut}
+              className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 px-3.5 py-2 rounded-xl text-xs font-bold border border-red-200 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
               title={isRo ? 'Deconectare' : 'Logout'}
             >
-              <span className="hidden sm:inline">{isRo ? 'Ieșire' : 'Logout'}</span>
-              <LogOut size={14} />
+              {loggingOut ? (
+                <>
+                  <Loader2 size={14} className="animate-spin shrink-0" />
+                  <span className="hidden sm:inline">{isRo ? 'Se deconectează...' : 'Signing out...'}</span>
+                </>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">{isRo ? 'Ieșire' : 'Logout'}</span>
+                  <LogOut size={14} />
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -341,7 +387,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
           <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div>
               <div className="flex items-center gap-2 text-[#008ba3] text-xs font-black uppercase tracking-widest mb-2">
-                <Sparkles size={14} className="text-[#e32f8c]" />
+                <ShieldCheck size={14} className="text-[#e32f8c]" />
                 <span>{isRo ? 'Partener Oficial TrenZone' : 'Official TrenZone Partner'}</span>
               </div>
               <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-slate-900 mb-2 font-heading">
@@ -357,9 +403,10 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
             {/* ACTION PILLS: CODE + LINK */}
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
               {/* CODE PILL */}
-              <div 
+              <button
+                type="button"
                 onClick={handleCopyCode}
-                className="group relative bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-[#e32f8c]/60 p-3.5 rounded-2xl flex items-center justify-between gap-4 cursor-pointer transition-all shadow-2xs active:scale-98"
+                className="group relative bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-[#e32f8c]/60 p-3.5 rounded-2xl flex items-center justify-between gap-4 cursor-pointer transition-all shadow-2xs active:scale-[0.98] text-left"
               >
                 <div>
                   <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
@@ -377,12 +424,13 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                     {isRo ? 'Copiat!' : 'Copied!'}
                   </span>
                 )}
-              </div>
+              </button>
 
               {/* LINK PILL */}
-              <div 
+              <button
+                type="button"
                 onClick={handleCopyLink}
-                className="group relative bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 p-3.5 rounded-2xl flex items-center justify-between gap-4 cursor-pointer transition-all shadow-2xs active:scale-98"
+                className="group relative bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 p-3.5 rounded-2xl flex items-center justify-between gap-4 cursor-pointer transition-all shadow-2xs active:scale-[0.98] text-left"
               >
                 <div>
                   <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
@@ -400,7 +448,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                     {isRo ? 'Link Copiat!' : 'Link Copied!'}
                   </span>
                 )}
-              </div>
+              </button>
             </div>
           </div>
         </motion.div>
@@ -590,7 +638,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
               <button
                 type="button"
                 onClick={handleOpenEditIban}
-                className="flex-1 sm:flex-initial bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-2"
+                className="flex-1 sm:flex-initial bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 transition-all shadow-2xs active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Pencil size={14} className="text-slate-600" />
                 <span>{isRo ? 'Editează' : 'Edit'}</span>
@@ -599,7 +647,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
               <button
                 type="button"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex-1 sm:flex-initial bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-4 py-2.5 rounded-xl border border-red-200 transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-2"
+                className="flex-1 sm:flex-initial bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-4 py-2.5 rounded-xl border border-red-200 transition-all shadow-2xs active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                 title={isRo ? 'Șterge contul IBAN' : 'Delete IBAN'}
               >
                 <Trash2 size={14} />
@@ -625,7 +673,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
             <button
               type="button"
               onClick={handleOpenEditIban}
-              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all shadow-md shadow-amber-600/20 active:scale-95 flex items-center gap-1.5"
+              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all shadow-md shadow-amber-600/20 active:scale-[0.98] flex items-center gap-1.5 cursor-pointer"
             >
               <span>{isRo ? '+ Adaugă IBAN' : '+ Add IBAN'}</span>
             </button>
@@ -725,7 +773,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                 <button
                   type="button"
                   onClick={() => setIsPeriodDropdownOpen(!isPeriodDropdownOpen)}
-                  className="w-full sm:w-auto bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-between sm:justify-start gap-2.5 transition-all shadow-2xs"
+                  className="w-full sm:w-auto bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-between sm:justify-start gap-2.5 transition-all active:scale-[0.98] shadow-2xs cursor-pointer"
                 >
                   <Calendar size={14} className="text-[#008ba3]" />
                   <span>{currentPeriodLabel}</span>
@@ -791,8 +839,9 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
               </p>
               {period !== 'all' && (
                 <button
+                  type="button"
                   onClick={() => setPeriod('all')}
-                  className="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors"
+                  className="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer"
                 >
                   {isRo ? 'Vezi toate perioadele' : 'View all time'}
                 </button>
@@ -1187,7 +1236,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                   type="button"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-700 shadow-2xs transition-colors"
+                  className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-700 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
                 >
                   <ChevronLeft size={16} />
                 </button>
@@ -1199,7 +1248,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                       key={pageNum}
                       type="button"
                       onClick={() => handlePageChange(pageNum)}
-                      className={`w-9 h-9 rounded-xl text-xs font-bold transition-all ${
+                      className={`w-9 h-9 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer ${
                         isActive
                           ? 'bg-[#e32f8c] text-black shadow-md shadow-[#e32f8c]/25 font-black scale-105'
                           : 'border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs'
@@ -1214,7 +1263,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                   type="button"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-700 shadow-2xs transition-colors"
+                  className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-700 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
                 >
                   <ChevronRight size={16} />
                 </button>
@@ -1319,16 +1368,23 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                   <button
                     type="button"
                     onClick={() => setIsIbanModalOpen(false)}
-                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl text-xs font-bold transition-colors"
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {isRo ? 'Anulează' : 'Cancel'}
                   </button>
                   <button
                     type="submit"
                     disabled={ibanSaving}
-                    className="flex-1 bg-[#e32f8c] hover:bg-[#c41a72] text-black py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-md shadow-[#e32f8c]/20"
+                    className="flex-1 bg-[#e32f8c] hover:bg-[#c41a72] text-black py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#e32f8c]/20 cursor-pointer flex items-center justify-center gap-2"
                   >
-                    {ibanSaving ? (isRo ? 'Se salvează...' : 'Saving...') : (isRo ? 'Salvează' : 'Save Details')}
+                    {ibanSaving ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin shrink-0" />
+                        <span>{isRo ? 'Se salvează...' : 'Saving...'}</span>
+                      </>
+                    ) : (
+                      <span>{isRo ? 'Salvează' : 'Save Details'}</span>
+                    )}
                   </button>
                 </div>
 
@@ -1385,7 +1441,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-[0.98] cursor-pointer"
                 >
                   {isRo ? 'Anulează' : 'Cancel'}
                 </button>
@@ -1393,9 +1449,16 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                   type="button"
                   disabled={ibanDeleting}
                   onClick={handleDeleteIban}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                 >
-                  {ibanDeleting ? (isRo ? 'Se șterge...' : 'Deleting...') : (isRo ? 'Da, Șterge' : 'Delete')}
+                  {ibanDeleting ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin shrink-0" />
+                      <span>{isRo ? 'Se șterge...' : 'Deleting...'}</span>
+                    </>
+                  ) : (
+                    <span>{isRo ? 'Da, Șterge' : 'Delete'}</span>
+                  )}
                 </button>
               </div>
             </motion.div>

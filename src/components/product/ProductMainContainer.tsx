@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, Minus, Check, ShoppingCart, Zap, ShieldCheck, Dumbbell, AlertCircle, Ruler, X, Truck, Mail, Sparkles, Flame, Target } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, Minus, Check, ShoppingCart, Zap, ShieldCheck, Dumbbell, AlertCircle, Ruler, X, Truck, Mail, Award, Flame, Target } from "lucide-react";
 import { Link } from "@/i18n/routing";
 import { useLocale } from "next-intl";
 import { useCartStore } from "@/store/useCartStore";
@@ -37,7 +37,7 @@ function renderHighlightIcon(key: HighlightIconKey) {
       return <Target className={cls} />;
     case "sparkles":
     default:
-      return <Sparkles className={cls} />;
+      return <Award className={cls} />;
   }
 }
 
@@ -126,6 +126,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
   );
 
   const [isAdding, setIsAdding] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
+  const addFeedbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [hasExpressWallets, setHasExpressWallets] = useState<boolean | null>(null);
   const [aromaError, setAromaError] = useState(false);
   const aromaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -253,6 +255,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
     return () => {
       if (timer) clearTimeout(timer);
       if (observer) observer.disconnect();
+      if (addFeedbackTimerRef.current) clearTimeout(addFeedbackTimerRef.current);
+      if (aromaTimeoutRef.current) clearTimeout(aromaTimeoutRef.current);
     };
   }, []);
 
@@ -325,14 +329,20 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
       return optName === selectedVariant;
     });
 
-    addItem(product, combinedVariantName ? {
+    const added = addItem(product, combinedVariantName ? {
       name: combinedVariantName,
       image: activeOpt?.image,
       imageIndex: finalImageIndex !== -1 ? finalImageIndex : (activeOpt?.imageIndex || 0),
       stock_status: activeOpt?.stock_status,
     } : undefined, standardQuantity);
 
-    setTimeout(() => setIsAdding(false), 1000);
+    if (added) {
+      setJustAdded(true);
+      if (addFeedbackTimerRef.current) clearTimeout(addFeedbackTimerRef.current);
+      addFeedbackTimerRef.current = setTimeout(() => setJustAdded(false), 1600);
+    }
+
+    setTimeout(() => setIsAdding(false), 350);
   };
 
   return (
@@ -415,7 +425,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                         const prevIdx = (curIdx - 1 + allGalleryImages.length) % allGalleryImages.length;
                         setActiveImage(allGalleryImages[prevIdx]);
                       }}
-                      className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/60 hover:bg-[#e32f8c] text-white border border-white/15 flex items-center justify-center transition-all cursor-pointer active:scale-95 backdrop-blur-md"
+                      className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/60 hover:bg-[#e32f8c] text-white border border-white/15 flex items-center justify-center transition-all cursor-pointer active:scale-[0.98] backdrop-blur-md"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -427,7 +437,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                         const nextIdx = (curIdx + 1) % allGalleryImages.length;
                         setActiveImage(allGalleryImages[nextIdx]);
                       }}
-                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/60 hover:bg-[#e32f8c] text-white border border-white/15 flex items-center justify-center transition-all cursor-pointer active:scale-95 backdrop-blur-md"
+                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/60 hover:bg-[#e32f8c] text-white border border-white/15 flex items-center justify-center transition-all cursor-pointer active:scale-[0.98] backdrop-blur-md"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
@@ -460,7 +470,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       }
                     }}
                     className={cn(
-                      "relative rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer",
+                      "relative rounded-2xl overflow-hidden transition-all duration-300 shadow-md border cursor-pointer active:scale-[0.98]",
                       isWide ? "w-20 h-14 sm:w-24 sm:h-16 bg-black" : "w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-zinc-950/80",
                       isCurrentImg
                         ? "border-[#e32f8c] ring-2 ring-[#e32f8c]/40 scale-105 z-10 shadow-[0_0_20px_rgba(227,47,140,0.35)]"
@@ -545,7 +555,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                     <button
                       type="button"
                       onClick={() => setIsSizeGuideOpen(true)}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#e32f8c] hover:text-white transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#e32f8c] hover:text-white transition-all active:scale-[0.98] cursor-pointer"
                     >
                       <Ruler className="w-3.5 h-3.5" />
                       <span>{locale === 'ro' ? 'Ghid Mărimi' : 'Size Guide'}</span>
@@ -595,7 +605,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                             setAromaError(false);
                           }}
                           className={cn(
-                            "w-full flex items-center justify-between p-3.5 bg-zinc-900 border transition-all rounded-xl cursor-pointer",
+                            "w-full flex items-center justify-between p-3.5 bg-zinc-900 border transition-all rounded-xl cursor-pointer active:scale-[0.98]",
                             aromaError && !selectedVariant
                               ? "border-red-500 ring-2 ring-red-400/40 bg-red-950/20"
                               : (isOpen ? "border-[#e32f8c]" : "border-white/15 hover:border-white/35"),
@@ -666,8 +676,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                                         }
                                       }}
                                       className={cn(
-                                        "w-full flex items-center justify-between p-3.5 hover:bg-zinc-800 transition-colors border-b border-white/5 last:border-none cursor-pointer",
-                                        isSoldOut ? "opacity-40 cursor-not-allowed bg-zinc-950/50 hover:bg-zinc-950/50" : ""
+                                        "w-full flex items-center justify-between p-3.5 hover:bg-zinc-800 transition-all active:scale-[0.98] border-b border-white/5 last:border-none cursor-pointer",
+                                        isSoldOut ? "opacity-40 cursor-not-allowed bg-zinc-950/50 hover:bg-zinc-950/50 active:scale-100" : ""
                                       )}
                                     >
                                       <div className="flex items-center gap-3">
@@ -738,7 +748,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                   <button
                     type="button"
                     onClick={() => setIsSizeGuideOpen(true)}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#e32f8c] hover:text-white transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#e32f8c] hover:text-white transition-all active:scale-[0.98] cursor-pointer"
                   >
                     <Ruler className="w-3.5 h-3.5" />
                     <span>{locale === 'ro' ? 'Ghid Mărimi' : 'Size Guide'}</span>
@@ -753,7 +763,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                         type="button"
                         onClick={() => setSelectedSize(sz)}
                         className={cn(
-                          "h-11 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider border transition-all cursor-pointer",
+                          "h-11 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider border transition-all active:scale-[0.98] cursor-pointer",
                           isSizeSelected
                             ? "bg-[#e32f8c] text-white border-[#e32f8c] shadow-[0_0_20px_rgba(227,47,140,0.35)]"
                             : "bg-zinc-900 text-zinc-300 border-white/15 hover:border-white/40 hover:text-white"
@@ -779,7 +789,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                     onClick={() => setStandardQuantity(Math.max(1, standardQuantity - 1))}
                     disabled={standardQuantity <= 1}
                     aria-label={locale === 'ro' ? 'Scade cantitatea' : 'Decrease quantity'}
-                    className="w-9 h-10 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 disabled:opacity-35 disabled:pointer-events-none transition-colors rounded-lg cursor-pointer"
+                    className="w-9 h-10 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 active:scale-[0.95] disabled:opacity-35 disabled:pointer-events-none transition-all rounded-lg cursor-pointer"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
@@ -790,7 +800,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                     type="button"
                     onClick={() => setStandardQuantity(standardQuantity + 1)}
                     aria-label={locale === 'ro' ? 'Crește cantitatea' : 'Increase quantity'}
-                    className="w-9 h-10 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 transition-colors rounded-lg cursor-pointer"
+                    className="w-9 h-10 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 active:scale-[0.95] transition-all rounded-lg cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -802,15 +812,22 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                 onClick={handleAddToCart}
                 disabled={isAdding || isCurrentVariantSoldOut}
                 className={cn(
-                  "flex-1 min-w-0 h-[54px] px-4 rounded-xl font-black uppercase tracking-wider text-sm sm:text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-[0.99]",
+                  "flex-1 min-w-0 h-[54px] px-4 rounded-xl font-black uppercase tracking-wider text-sm sm:text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-[0.98]",
                   isCurrentVariantSoldOut
                     ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5"
-                    : isSelectionIncomplete
-                      ? "bg-zinc-900 text-white border border-white/20 hover:border-[#e32f8c] hover:bg-zinc-850 hover:shadow-[0_0_20px_rgba(227,47,140,0.2)]"
-                      : "bg-[#e32f8c] text-white hover:bg-[#ff3b9e] shadow-[0_0_30px_rgba(227,47,140,0.4)] hover:shadow-[0_0_40px_rgba(227,47,140,0.6)]"
+                    : justAdded
+                      ? "bg-emerald-500 text-white shadow-[0_0_25px_rgba(16,185,129,0.45)]"
+                      : isSelectionIncomplete
+                        ? "bg-zinc-900 text-white border border-white/20 hover:border-[#e32f8c] hover:bg-zinc-850 hover:shadow-[0_0_20px_rgba(227,47,140,0.2)]"
+                        : "bg-[#e32f8c] text-white hover:bg-[#ff3b9e] shadow-[0_0_30px_rgba(227,47,140,0.4)] hover:shadow-[0_0_40px_rgba(227,47,140,0.6)]"
                 )}
               >
-                {isAdding ? (
+                {justAdded ? (
+                  <span className="flex items-center gap-2">
+                    <Check className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 stroke-[2.75]" />
+                    <span className="truncate">{locale === 'ro' ? "ADĂUGAT!" : "ADDED!"}</span>
+                  </span>
+                ) : isAdding ? (
                   <span className="animate-pulse">{locale === 'ro' ? "SE ADAUGĂ..." : "ADDING..."}</span>
                 ) : isSelectionIncomplete ? (
                   <span className="flex items-center gap-1.5 text-xs sm:text-sm truncate">
@@ -923,7 +940,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
         </div>
       </div>
 
-      {/* 📏 Interactive Size Guide Modal */}
+      {/* Interactive Size Guide Modal */}
       {mounted && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {isSizeGuideOpen && (
@@ -951,7 +968,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                   <button
                     type="button"
                     onClick={() => setIsSizeGuideOpen(false)}
-                    className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/15 flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/15 flex items-center justify-center text-zinc-400 hover:text-white transition-all active:scale-[0.98] cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1047,7 +1064,7 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
         document.body
       )}
 
-      {/* 📱 Sticky Mobile Add-to-Cart Bar (Portaled to document.body to prevent stacking context clipping) */}
+      {/* Sticky Mobile Add-to-Cart Bar (Portaled to document.body to prevent stacking context clipping) */}
       {mounted && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {showStickyBar && !isCartOpen && !isFooterVisible && (
@@ -1099,15 +1116,22 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                   onClick={handleAddToCart}
                   disabled={isAdding || isCurrentVariantSoldOut}
                   className={cn(
-                    "h-11 px-4 sm:px-5 rounded-xl font-black uppercase text-xs tracking-wider flex items-center justify-center gap-1.5 shrink-0 transition-all active:scale-95 shadow-md cursor-pointer",
+                    "h-11 px-4 sm:px-5 rounded-xl font-black uppercase text-xs tracking-wider flex items-center justify-center gap-1.5 shrink-0 transition-all active:scale-[0.98] shadow-md cursor-pointer",
                     isCurrentVariantSoldOut
                       ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5"
-                      : isSelectionIncomplete
-                        ? "bg-zinc-900 text-white border border-[#e32f8c]/60 hover:bg-zinc-850"
-                        : "bg-[#e32f8c] hover:bg-[#ff3b9e] text-white shadow-[0_0_20px_rgba(227,47,140,0.45)]"
+                      : justAdded
+                        ? "bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.45)]"
+                        : isSelectionIncomplete
+                          ? "bg-zinc-900 text-white border border-[#e32f8c]/60 hover:bg-zinc-850"
+                          : "bg-[#e32f8c] hover:bg-[#ff3b9e] text-white shadow-[0_0_20px_rgba(227,47,140,0.45)]"
                   )}
                 >
-                  {isAdding ? (
+                  {justAdded ? (
+                    <span className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 stroke-[2.75]" />
+                      <span>{locale === 'ro' ? "Adăugat!" : "Added!"}</span>
+                    </span>
+                  ) : isAdding ? (
                     <span className="animate-pulse">{locale === 'ro' ? "Se adaugă..." : "Adding..."}</span>
                   ) : isCurrentVariantSoldOut ? (
                     <span>{locale === 'ro' ? "Epuizat" : "Sold Out"}</span>

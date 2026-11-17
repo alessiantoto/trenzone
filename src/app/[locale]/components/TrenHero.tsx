@@ -117,8 +117,9 @@ export function TrenHero({ freeShippingRo = 500, freeShippingIntl = 150 }: TrenH
         {/* Clean, High-Contrast Solid White Button */}
         <div className="w-full sm:w-auto">
           <button
+            type="button"
             onClick={() => scrollTo("shop-products")}
-            className="flex w-full justify-center sm:inline-flex sm:w-auto bg-white text-black font-black uppercase text-base md:text-lg tracking-[0.15em] px-10 py-5 md:px-14 md:py-6 hover:bg-[#e32f8c] hover:text-black transition-all duration-300 shadow-2xl active:scale-95 cursor-pointer"
+            className="flex w-full justify-center sm:inline-flex sm:w-auto bg-white text-black font-black uppercase text-base md:text-lg tracking-[0.15em] px-10 py-5 md:px-14 md:py-6 hover:bg-[#e32f8c] hover:text-black transition-all duration-300 shadow-2xl active:scale-[0.98] cursor-pointer"
           >
             {isRo ? "VEZI MAGAZINUL" : "VISIT STORE"}
           </button>

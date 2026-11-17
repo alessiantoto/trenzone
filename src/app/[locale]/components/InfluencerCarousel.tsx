@@ -280,9 +280,10 @@ export function InfluencerCarousel({
           {slideCount > 1 && (
             <div className="flex items-center justify-center gap-3 sm:gap-5 mt-8 md:hidden">
               <button
+                type="button"
                 onClick={() => scrollToSlide(activeSlide - 1)}
                 aria-label={locale === 'ro' ? 'Slide anterior' : 'Previous slide'}
-                className="group w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-900/95 border-2 border-white/20 hover:border-[#e32f8c] active:border-[#e32f8c] hover:bg-zinc-800 flex items-center justify-center text-white transition-all duration-300 shadow-[0_8px_30px_rgba(0,0,0,0.8)] hover:shadow-[0_0_24px_rgba(227,47,140,0.45)] active:scale-90 cursor-pointer"
+                className="group w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-900/95 border-2 border-white/20 hover:border-[#e32f8c] active:border-[#e32f8c] hover:bg-zinc-800 flex items-center justify-center text-white transition-all duration-300 shadow-[0_8px_30px_rgba(0,0,0,0.8)] hover:shadow-[0_0_24px_rgba(227,47,140,0.45)] active:scale-[0.98] cursor-pointer"
               >
                 <ChevronLeft className="w-6 h-6 sm:w-7 sm:h-7 text-white group-hover:text-[#e32f8c] group-hover:-translate-x-0.5 stroke-[2.8] transition-all" />
               </button>
@@ -294,9 +295,10 @@ export function InfluencerCarousel({
                 {Array.from({ length: slideCount }, (_, index) => (
                   <button
                     key={index}
+                    type="button"
                     onClick={() => scrollToSlide(index)}
                     aria-label={`Slide ${index + 1}`}
-                    className="p-1 sm:p-1.5 flex items-center justify-center cursor-pointer group"
+                    className="p-1 sm:p-1.5 flex items-center justify-center cursor-pointer group active:scale-[0.98] transition-all"
                   >
                     <div
                       className={`h-2.5 sm:h-3 rounded-full transition-all duration-300 ${
@@ -314,9 +316,10 @@ export function InfluencerCarousel({
               </div>
 
               <button
+                type="button"
                 onClick={() => scrollToSlide(activeSlide + 1)}
                 aria-label={locale === 'ro' ? 'Slide următor' : 'Next slide'}
-                className="group w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-900/95 border-2 border-white/20 hover:border-[#e32f8c] active:border-[#e32f8c] hover:bg-zinc-800 flex items-center justify-center text-white transition-all duration-300 shadow-[0_8px_30px_rgba(0,0,0,0.8)] hover:shadow-[0_0_24px_rgba(227,47,140,0.45)] active:scale-90 cursor-pointer"
+                className="group w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-900/95 border-2 border-white/20 hover:border-[#e32f8c] active:border-[#e32f8c] hover:bg-zinc-800 flex items-center justify-center text-white transition-all duration-300 shadow-[0_8px_30px_rgba(0,0,0,0.8)] hover:shadow-[0_0_24px_rgba(227,47,140,0.45)] active:scale-[0.98] cursor-pointer"
               >
                 <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 text-white group-hover:text-[#e32f8c] group-hover:translate-x-0.5 stroke-[2.8] transition-all" />
               </button>
@@ -361,8 +364,9 @@ export function InfluencerCarousel({
 
                 {/* Close Button Inside Card */}
                 <button 
+                  type="button"
                   onClick={() => setSelectedVideo(null)}
-                  className="absolute top-3.5 right-3.5 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/90 backdrop-blur-md text-white rounded-full flex items-center justify-center transition-all z-20 border border-white/20 active:scale-90 shadow-md cursor-pointer"
+                  className="absolute top-3.5 right-3.5 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/90 backdrop-blur-md text-white rounded-full flex items-center justify-center transition-all z-20 border border-white/20 active:scale-[0.98] shadow-md cursor-pointer"
                   aria-label={locale === 'ro' ? 'Închide clipul' : 'Close video'}
                 >
                   <X className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -490,7 +494,7 @@ function InfluencerCard({
   return (
     <div
       ref={containerRef}
-      className="relative w-full aspect-[9/16] justify-self-center rounded-2xl overflow-hidden cursor-pointer group shadow-xl bg-zinc-900 border border-white/10 transition-transform duration-300 hover:scale-[1.02] active:scale-95 select-none"
+      className="relative w-full aspect-[9/16] justify-self-center rounded-2xl overflow-hidden cursor-pointer group shadow-xl bg-zinc-900 border border-white/10 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] select-none"
       onClick={handleClick}
     >
       {/* Video Element — Only mounted when near viewport to prevent premature error events */}

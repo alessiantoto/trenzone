@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocale } from 'next-intl';
 import { submitReturnRequest } from '@/app/actions/returns';
-import { CheckCircle, AlertCircle, ArrowLeft, RefreshCw, ShieldCheck, Mail, Clock } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowLeft, RefreshCw, ShieldCheck, Clock, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ReturPage() {
@@ -11,6 +11,7 @@ export default function ReturPage() {
   const isEn = locale === 'en';
 
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ibanValue, setIbanValue] = useState('');
@@ -44,6 +45,7 @@ export default function ReturPage() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submittingRef.current || loading) return;
     setError(null);
 
     const formData = new FormData(e.currentTarget);
@@ -60,6 +62,7 @@ export default function ReturPage() {
       return;
     }
 
+    submittingRef.current = true;
     setLoading(true);
 
     const rawOrderId = ((formData.get('order_id') as string) || '').trim();
@@ -70,22 +73,30 @@ export default function ReturPage() {
     formData.set('iban', cleanIban);
     formData.set('locale', locale || 'ro');
 
-    const res = await submitReturnRequest(formData);
+    try {
+      const res = await submitReturnRequest(formData);
 
-    if (res.success) {
-      setSubmittedData({
-        orderId: rawOrderId.toUpperCase(),
-        email: rawEmail.toLowerCase(),
-        iban: cleanIban,
-        name: rawName
-      });
-      setSuccess(true);
-    } else {
+      if (res.success) {
+        setSubmittedData({
+          orderId: rawOrderId.toUpperCase(),
+          email: rawEmail.toLowerCase(),
+          iban: cleanIban,
+          name: rawName
+        });
+        setSuccess(true);
+      } else {
+        setError(
+          res.error || (isEn ? 'An error occurred while submitting your request.' : 'A apărut o eroare la trimiterea cererii.')
+        );
+      }
+    } catch {
       setError(
-        res.error || (isEn ? 'An error occurred while submitting your request.' : 'A apărut o eroare la trimiterea cererii.')
+        isEn ? 'An error occurred while submitting your request.' : 'A apărut o eroare la trimiterea cererii.'
       );
+    } finally {
+      submittingRef.current = false;
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const homeHref = isEn ? '/en' : '/ro';
@@ -223,13 +234,13 @@ export default function ReturPage() {
               <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
                 <Link 
                   href={homeHref} 
-                  className="w-full sm:flex-1 py-3.5 px-6 bg-black text-white text-center font-black text-sm rounded-xl hover:bg-[#e32f8c] active:scale-98 transition-all shadow-md shadow-black/10 cursor-pointer"
+                  className="w-full sm:flex-1 py-3.5 px-6 bg-black text-white text-center font-black text-sm rounded-xl hover:bg-[#e32f8c] active:scale-[0.98] transition-all shadow-md shadow-black/10 cursor-pointer"
                 >
                   {isEn ? 'Back to Store' : 'Înapoi la Magazin'}
                 </Link>
                 <Link
                   href={returnPolicyHref}
-                  className="w-full sm:w-auto py-3.5 px-6 bg-slate-100 text-slate-700 hover:bg-slate-200 text-center font-bold text-sm rounded-xl transition-all cursor-pointer"
+                  className="w-full sm:w-auto py-3.5 px-6 bg-slate-100 text-slate-700 hover:bg-slate-200 text-center font-bold text-sm rounded-xl active:scale-[0.98] transition-all cursor-pointer"
                 >
                   {isEn ? 'Return Policy' : 'Politica de Retur'}
                 </Link>
@@ -281,7 +292,7 @@ export default function ReturPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
-              {/* 🛡️ Anti-Bot Honeypot (Invisible to real humans) */}
+              {/* Anti-Bot Honeypot (Invisible to real humans) */}
               <div className="sr-only" style={{ display: 'none', position: 'absolute', left: '-9999px', opacity: 0, height: 0, width: 0, pointerEvents: 'none' }} aria-hidden="true">
                 <label htmlFor="company_name">Company Name</label>
                 <input 
@@ -415,13 +426,18 @@ export default function ReturPage() {
                 <button 
                   type="submit" 
                   disabled={loading}
-                  className={`w-full py-4 bg-black text-white font-black text-base sm:text-lg rounded-xl shadow-lg shadow-black/10 transition-all ${
-                    loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-[#e32f8c] hover:shadow-[#e32f8c]/20 hover:-translate-y-0.5'
+                  className={`w-full py-4 bg-black text-white font-black text-base sm:text-lg rounded-xl shadow-lg shadow-black/10 transition-all active:scale-[0.98] flex items-center justify-center gap-2.5 ${
+                    loading ? 'opacity-75 cursor-not-allowed' : 'hover:bg-[#e32f8c] hover:shadow-[#e32f8c]/20 hover:-translate-y-0.5 cursor-pointer'
                   }`}
                 >
-                  {loading 
-                    ? (isEn ? 'Verifying & Submitting...' : 'Se verifică și se trimite...') 
-                    : (isEn ? 'Submit Return Request' : 'Trimite Cererea de Retur')}
+                  {loading ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin shrink-0" />
+                      <span>{isEn ? 'Checking order & submitting...' : 'Se caută comanda și se trimite cererea...'}</span>
+                    </>
+                  ) : (
+                    <span>{isEn ? 'Submit Return Request' : 'Trimite Cererea de Retur'}</span>
+                  )}
                 </button>
               </div>
             </form>

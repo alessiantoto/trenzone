@@ -104,7 +104,7 @@ export function RegionSwitcher({
                 type="button"
                 onClick={() => handleLocaleChange(lang.code)}
                 className={cn(
-                  "flex items-center justify-center gap-2 h-11 px-3 rounded-xl border text-[12px] font-extrabold transition-[colors,transform] duration-150 cursor-pointer active:scale-[0.98]",
+                  "flex items-center justify-center gap-2 h-11 px-3 rounded-xl border text-[12px] font-extrabold transition-all duration-150 cursor-pointer active:scale-[0.98]",
                   isSelected
                     ? darkSurface
                       ? "bg-[#e32f8c] border-[#e32f8c] text-black shadow-md shadow-[#e32f8c]/25"
@@ -141,7 +141,7 @@ export function RegionSwitcher({
                 type="button"
                 onClick={() => handleCurrencyChange(curr.code)}
                 className={cn(
-                  "h-12 flex flex-col items-center justify-center gap-0.5 rounded-xl border transition-[colors,transform] duration-150 cursor-pointer active:scale-[0.97]",
+                  "h-12 flex flex-col items-center justify-center gap-0.5 rounded-xl border transition-all duration-150 cursor-pointer active:scale-[0.98]",
                   isSelected
                     ? darkSurface
                       ? "bg-[#e32f8c]/15 text-[#e32f8c] border-[#e32f8c]/70 shadow-sm shadow-[#e32f8c]/15"
@@ -186,7 +186,7 @@ export function RegionSwitcher({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-full border transition-all active:scale-95 cursor-pointer",
+          "flex items-center gap-2 px-3 py-2 rounded-full border transition-all active:scale-[0.98] cursor-pointer",
           isDark
             ? "bg-white/[0.05] border-white/12 hover:border-[#e32f8c]/50 hover:bg-white/[0.09] text-white"
             : "bg-zinc-100 border-zinc-200 hover:border-zinc-300 text-black"

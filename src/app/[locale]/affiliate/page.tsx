@@ -2,9 +2,9 @@
 
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, ChevronRight, Send, ArrowUpRight, Plus, X, Calculator, Info, TrendingUp, AlertCircle, Check } from "lucide-react";
+import { CheckCircle2, ChevronRight, Send, ArrowUpRight, Plus, X, Info, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 import { submitAffiliateApplication } from "@/app/actions/affiliate";
 import { LanguageFlagSvg } from "@/components/programs/LanguageFlagSvg";
 import { useRegionStore } from "@/store/useRegionStore";
@@ -33,6 +33,7 @@ export default function AffiliatePage() {
   const [preferredLocale, setPreferredLocale] = useState<'ro'|'en'>(locale === 'en' ? 'en' : 'ro');
   const [loadedAt, setLoadedAt] = useState<number>(0);
   const [honeypot, setHoneypot] = useState("");
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     setLoadedAt(Date.now());
@@ -44,8 +45,10 @@ export default function AffiliatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || status === "sending") return;
     if (!lastName.trim() || !firstName.trim() || !email.trim() || !socials[0].trim()) return;
     
+    submittingRef.current = true;
     setStatus("sending");
     setErrorMessage("");
     try {
@@ -76,6 +79,8 @@ export default function AffiliatePage() {
       console.error("Affiliate submission error:", err);
       setErrorMessage(err.message || (isRo ? "A apărut o eroare. Încearcă din nou." : "An error occurred. Please try again."));
       setStatus("error");
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -171,7 +176,7 @@ export default function AffiliatePage() {
                   onSubmit={handleSubmit}
                   className="space-y-6"
                 >
-                  {/* 🛡️ Anti-Bot Honeypot (Invisible to real humans) */}
+                  {/* Anti-Bot Honeypot (Invisible to real humans) */}
                   <div className="sr-only" style={{ display: 'none', position: 'absolute', left: '-9999px', opacity: 0, height: 0, width: 0, pointerEvents: 'none' }} aria-hidden="true">
                     <label htmlFor="affiliate_company">Company</label>
                     <input 
@@ -264,7 +269,7 @@ export default function AffiliatePage() {
                     </div>
                   </div>
 
-                  {/* 🌐 Limbă Preferată / Preferred Language */}
+                  {/* Limba Preferata / Preferred Language */}
                   <div className="space-y-2">
                     <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-700 ml-1">
                       {t('form_preferred_language')}
@@ -361,11 +366,11 @@ export default function AffiliatePage() {
                   <button 
                     type="submit"
                     disabled={status === 'sending'}
-                    className="w-full bg-[#e32f8c] hover:bg-[#c41a72] text-black py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(227, 47, 140,0.3)] mt-6 cursor-pointer"
+                    className="w-full bg-[#e32f8c] hover:bg-[#c41a72] text-black py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(227, 47, 140,0.3)] mt-6 cursor-pointer"
                   >
                     {status === 'sending' ? (
                       <>
-                        <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                         <span>{t('form_button_sending')}</span>
                       </>
                     ) : (
@@ -546,7 +551,7 @@ function EarningsCalculator() {
                     key={t.rate}
                     type="button"
                     onClick={() => setCommissionRate(t.rate)}
-                    className={`py-2.5 px-2 rounded-xl border text-center transition-all duration-200 cursor-pointer ${
+                    className={`py-2.5 px-2 rounded-xl border text-center transition-all duration-200 cursor-pointer active:scale-[0.98] ${
                       isSelected 
                         ? "bg-[#e32f8c]/20 border-[#e32f8c] shadow-[0_0_15px_rgba(227,47,140,0.3)]" 
                         : "bg-zinc-900/80 border-white/5 hover:border-white/15"
@@ -590,7 +595,7 @@ function EarningsCalculator() {
                   key={qty}
                   type="button"
                   onClick={() => setSalesPerMonth(qty)}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  className={`py-1.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-[0.98] ${
                     salesPerMonth === qty
                       ? "bg-white text-black shadow-sm"
                       : "bg-white/5 hover:bg-white/10 text-zinc-400"

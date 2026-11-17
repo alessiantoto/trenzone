@@ -32,6 +32,24 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
   const [currentPage, setCurrentPage] = useState(1);
   const reviewsPerPage = 9;
 
+  const handleFilterChange = (nextFilter: "all" | "photo" | "recent" | number) => {
+    setActiveFilter(nextFilter);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    const gridEl = document.getElementById("reviews-grid-section");
+    if (gridEl) {
+      gridEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   // Aggregate Stats
   const stats = useMemo(() => {
     if (reviews.length === 0) return { avg: 4.9, count: 0, photos: 0 };
@@ -209,7 +227,7 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
                 type="text"
                 placeholder={t("search_placeholder")}
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-14 pr-6 py-8 rounded-[1.5rem] bg-zinc-900 border-white/5 text-lg font-medium focus:ring-primary/20 transition-all placeholder:text-zinc-600"
               />
             </div>
@@ -223,9 +241,10 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
               ].map((f) => (
                 <button
                   key={f.id}
-                  onClick={() => setActiveFilter(f.id as any)}
+                  type="button"
+                  onClick={() => handleFilterChange(f.id as "all" | "photo" | "recent")}
                   className={cn(
-                    "flex items-center gap-2 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
+                    "flex items-center gap-2 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] cursor-pointer",
                     activeFilter === f.id ? "bg-primary text-black" : "bg-zinc-900 text-zinc-500 hover:bg-zinc-800"
                   )}
                 >
@@ -238,9 +257,10 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
                 {[5, 4].map((stars) => (
                   <button
                     key={stars}
-                    onClick={() => setActiveFilter(activeFilter === stars ? "all" : stars)}
+                    type="button"
+                    onClick={() => handleFilterChange(activeFilter === stars ? "all" : stars)}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all",
+                      "flex items-center gap-2 px-4 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] cursor-pointer",
                       activeFilter === stars
                         ? "bg-primary/20 text-primary border border-primary/20"
                         : "bg-zinc-900 text-zinc-600 hover:bg-zinc-800 border border-transparent"
@@ -256,7 +276,7 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
       </section>
 
       {/* 3. REVIEWS GRID */}
-      <section className="py-16 md:py-24">
+      <section id="reviews-grid-section" className="py-16 md:py-24">
         <div className="container mx-auto px-6">
           <AnimatePresence mode="wait">
             {currentReviews.length > 0 ? (
@@ -370,19 +390,33 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
                 <p className="text-zinc-500 font-bold uppercase tracking-widest text-sm">
                   {t("no_results")}
                 </p>
+                {(searchTerm.trim() !== "" || activeFilter !== "all") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setActiveFilter("all");
+                      setCurrentPage(1);
+                    }}
+                    className="px-6 py-3 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-black uppercase tracking-widest text-white transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    {t("filter_all")}
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="mt-20 flex justify-center gap-2">
+            <div className="mt-20 flex flex-wrap justify-center gap-2">
               {[...Array(totalPages)].map((_, i) => (
                 <button
                   key={i}
-                  onClick={() => setCurrentPage(i + 1)}
+                  type="button"
+                  onClick={() => handlePageChange(i + 1)}
                   className={cn(
-                    "w-12 h-12 rounded-xl text-xs font-black transition-all",
+                    "w-12 h-12 rounded-xl text-xs font-black transition-all active:scale-[0.98] cursor-pointer",
                     currentPage === i + 1
                       ? "bg-primary text-black shadow-lg shadow-primary/20"
                       : "bg-zinc-900 text-zinc-500 hover:bg-zinc-800"
@@ -412,7 +446,7 @@ export function ReviewsClient({ initialReviews }: { initialReviews: any[] }) {
               </h2>
               <Link
                 href="/shop"
-                className="inline-flex items-center gap-4 bg-white text-black px-12 py-6 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-primary transition-all active:scale-95 shadow-2xl"
+                className="inline-flex items-center gap-4 bg-white text-black px-12 py-6 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-primary transition-all active:scale-[0.98] shadow-2xl cursor-pointer"
               >
                 GEAR UP NOW <ArrowRight className="w-5 h-5" />
               </Link>

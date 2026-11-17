@@ -385,7 +385,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         <div className="flex justify-center mb-12 sm:mb-16">
           <Link
             href="/shop"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 py-3.5 px-8 sm:px-12 rounded-xl bg-white/10 hover:bg-white text-white hover:text-black border border-white/15 font-black uppercase text-xs sm:text-sm tracking-wider transition-all duration-300 shadow-lg active:scale-95 group cursor-pointer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 py-3.5 px-8 sm:px-12 rounded-xl bg-white/10 hover:bg-white text-white hover:text-black border border-white/15 font-black uppercase text-xs sm:text-sm tracking-wider transition-all duration-300 shadow-lg active:scale-[0.98] group cursor-pointer"
           >
             <span>{isRo ? "VEZI TOATE PRODUSELE" : "VIEW ALL PRODUCTS"}</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -468,7 +468,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                 <button
                   type="button"
                   onClick={() => setIsDuoModalOpen(true)}
-                  className="w-full sm:w-auto py-3.5 px-8 rounded-xl bg-white hover:bg-[#e32f8c] hover:text-white text-black font-black uppercase text-xs tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-lg active:scale-95 cursor-pointer"
+                  className="w-full sm:w-auto py-3.5 px-8 rounded-xl bg-white hover:bg-[#e32f8c] hover:text-white text-black font-black uppercase text-xs tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] cursor-pointer"
                 >
                   <ShoppingCart className="w-4 h-4 shrink-0" />
                   <span>{isRo ? "ADAUGĂ PACHETUL ÎN COȘ" : "ADD DUO PACK TO CART"}</span>
@@ -521,7 +521,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                     setIsDuoModalOpen(false);
                     setOpenDropdown(null);
                   }}
-                  className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-black flex items-center justify-center transition-colors cursor-pointer shrink-0 -mt-1 -mr-1"
+                  className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-black flex items-center justify-center transition-all active:scale-[0.98] cursor-pointer shrink-0 -mt-1 -mr-1"
                   aria-label="Close"
                 >
                   <X size={16} />
@@ -550,7 +550,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                     <button
                       type="button"
                       onClick={() => setOpenDropdown(openDropdown === 'x5' ? null : 'x5')}
-                      className="w-full flex items-center justify-between py-2.5 px-3 bg-white border border-black rounded-xl hover:bg-zinc-50 transition-all cursor-pointer shadow-xs text-left"
+                      className="w-full flex items-center justify-between py-2.5 px-3 bg-white border border-black rounded-xl hover:bg-zinc-50 transition-all active:scale-[0.98] cursor-pointer shadow-xs text-left"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span 
@@ -591,8 +591,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                                   setOpenDropdown(null);
                                 }}
                                 className={cn(
-                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-colors border-b border-black/10 last:border-none text-left",
-                                  isSoldOutOpt ? "opacity-40 cursor-not-allowed bg-zinc-50" : isSelected ? "bg-[#f4f4f4] font-black cursor-pointer" : "hover:bg-[#f4f4f4] cursor-pointer"
+                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-all border-b border-black/10 last:border-none text-left",
+                                  isSoldOutOpt ? "opacity-40 cursor-not-allowed bg-zinc-50" : isSelected ? "bg-[#f4f4f4] font-black cursor-pointer active:scale-[0.98]" : "hover:bg-[#f4f4f4] cursor-pointer active:scale-[0.98]"
                                 )}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
@@ -646,7 +646,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                     <button
                       type="button"
                       onClick={() => setOpenDropdown(openDropdown === 'x10' ? null : 'x10')}
-                      className="w-full flex items-center justify-between py-2.5 px-3 bg-white border border-black rounded-xl hover:bg-zinc-50 transition-all cursor-pointer shadow-xs text-left"
+                      className="w-full flex items-center justify-between py-2.5 px-3 bg-white border border-black rounded-xl hover:bg-zinc-50 transition-all active:scale-[0.98] cursor-pointer shadow-xs text-left"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span 
@@ -693,8 +693,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
                                   setOpenDropdown(null);
                                 }}
                                 className={cn(
-                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-colors border-b border-black/10 last:border-none text-left",
-                                  isSoldOutOpt ? "opacity-40 cursor-not-allowed bg-zinc-50" : isSelected ? "bg-[#f4f4f4] font-black cursor-pointer" : "hover:bg-[#f4f4f4] cursor-pointer"
+                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-all border-b border-black/10 last:border-none text-left",
+                                  isSoldOutOpt ? "opacity-40 cursor-not-allowed bg-zinc-50" : isSelected ? "bg-[#f4f4f4] font-black cursor-pointer active:scale-[0.98]" : "hover:bg-[#f4f4f4] cursor-pointer active:scale-[0.98]"
                                 )}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">

@@ -39,7 +39,7 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
       >
         {/* Modern Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-zinc-100/80">
-           <Link href="/" onClick={() => onOpenChange(false)} className="group flex items-center gap-2.5 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0">
+           <Link href="/" onClick={() => onOpenChange(false)} className="group flex items-center gap-2.5 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 active:scale-[0.98] transition-all">
              <Image
                src={getCdnUrl("/images/logos/trenzone_logo.webp")}
                alt="TrenZone Emblem"
@@ -56,7 +56,7 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
            <button
              type="button"
              onClick={() => onOpenChange(false)}
-             className="w-9 h-9 flex items-center justify-center text-black hover:bg-zinc-100 rounded-full transition-colors outline-none cursor-pointer"
+             className="w-9 h-9 flex items-center justify-center text-black hover:bg-zinc-100 rounded-full transition-all active:scale-[0.98] outline-none cursor-pointer"
              aria-label={locale === 'ro' ? "Închide meniul" : "Close menu"}
            >
              <X className="w-5 h-5" strokeWidth={2.25} />
@@ -81,7 +81,7 @@ export function MobileMenu({ isOpen, onOpenChange }: MobileMenuProps) {
                         router.push(item.href as any);
                       }
                     }}
-                    className="group flex items-center justify-between py-4 border-b border-zinc-100/80 last:border-b-0 transition-colors outline-none"
+                    className="group flex items-center justify-between py-4 border-b border-zinc-100/80 last:border-b-0 transition-all active:scale-[0.98] outline-none"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {isActive && (

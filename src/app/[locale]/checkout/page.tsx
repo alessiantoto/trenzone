@@ -325,19 +325,56 @@ export default function CheckoutPage() {
                      <h3 className="text-sm font-black uppercase tracking-tight text-black mb-2">{t('init_error')}</h3>
                      <p className="text-zinc-500 font-bold text-[10px] max-w-[260px] leading-relaxed mb-6">{initError}</p>
                      <div className="flex items-center gap-4">
-                       <button onClick={() => window.location.reload()} className="text-[10px] font-black uppercase tracking-widest text-[#e32f8c] hover:underline">{t('retry')}</button>
+                       <button onClick={() => window.location.reload()} className="text-[10px] font-black uppercase tracking-widest text-[#e32f8c] hover:underline active:scale-[0.98] transition-all cursor-pointer">{t('retry')}</button>
                        <button
                          onClick={() => { clearCart(); setInitError(""); }}
-                         className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-black hover:underline"
+                         className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-black hover:underline active:scale-[0.98] transition-all cursor-pointer"
                        >
                          {locale === 'en' ? 'Clear Cart' : 'Golește Coșul'}
                        </button>
                      </div>
                   </div>
                 ) : currentStep === 4 && !clientSecret ? (
-                  <div className="h-[400px] flex flex-col items-center justify-center bg-white rounded-[2.5rem] border border-zinc-100 shadow-sm">
-                     <div className="w-12 h-12 border-4 border-[#e32f8c] border-t-transparent rounded-full animate-spin mb-4" />
-                     <p className="text-zinc-400 font-black uppercase tracking-widest text-[10px]">{t('initializing_payment')}</p>
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="bg-white rounded-[2.5rem] border border-zinc-100 shadow-sm p-6 md:p-8 space-y-6"
+                  >
+                    {/* Step / Payment Header Skeleton */}
+                    <div className="flex items-center justify-between gap-4 pb-4 border-b border-zinc-100">
+                      <div className="space-y-2">
+                        <div className="h-5 w-44 rounded-xl bg-zinc-200 animate-pulse" />
+                        <p className="text-zinc-400 font-black uppercase tracking-widest text-[10px]">
+                          {t('initializing_payment')}
+                        </p>
+                      </div>
+                      <div className="h-7 w-24 rounded-full bg-[#e32f8c]/15 animate-pulse" />
+                    </div>
+
+                    {/* 2-Column Payment Method & Form Card Skeleton */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-4">
+                        <div className="h-20 rounded-2xl bg-zinc-100 border border-zinc-200/60 animate-pulse" />
+                        <div className="h-20 rounded-2xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+                      </div>
+                      <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 space-y-3">
+                        <div className="h-4 w-28 rounded bg-zinc-200 animate-pulse" />
+                        <div className="h-11 w-full rounded-xl bg-white border border-zinc-100 animate-pulse" />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="h-11 rounded-xl bg-white border border-zinc-100 animate-pulse" />
+                          <div className="h-11 rounded-xl bg-white border border-zinc-100 animate-pulse" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Summary Strip & Submit CTA Skeleton */}
+                    <div className="pt-2 border-t border-zinc-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                      <div className="space-y-1.5">
+                        <div className="h-3 w-24 rounded bg-zinc-100 animate-pulse" />
+                        <div className="h-6 w-32 rounded-lg bg-zinc-200 animate-pulse" />
+                      </div>
+                      <div className="h-14 w-full sm:w-64 rounded-2xl bg-[#e32f8c]/30 animate-pulse" />
+                    </div>
                   </div>
                 ) : (
                   options && stripePromise && !isStripeDisabled ? (

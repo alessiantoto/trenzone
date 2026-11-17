@@ -17,7 +17,7 @@ export function ShopProgramsBanner() {
     <section className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 pb-6 sm:pb-8">
       <Link
         href="/programs"
-        className="group block rounded-2xl md:rounded-3xl bg-zinc-900/75 hover:bg-zinc-900/90 border border-white/10 hover:border-[#e32f8c]/50 p-5 sm:p-7 md:p-8 relative overflow-hidden shadow-2xl backdrop-blur-md transition-all duration-300"
+        className="group block rounded-2xl md:rounded-3xl bg-zinc-900/75 hover:bg-zinc-900/90 border border-white/10 hover:border-[#e32f8c]/50 p-5 sm:p-7 md:p-8 relative overflow-hidden shadow-2xl backdrop-blur-md transition-all duration-300 active:scale-[0.98]"
       >
         <div className="absolute -top-32 -right-32 w-80 h-80 bg-[#e32f8c]/15 rounded-full blur-3xl pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-70" />
 

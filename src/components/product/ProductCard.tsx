@@ -123,9 +123,11 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
       if (product.is_active === false || (!isSoftStock && typeof product.stock_quantity === 'number' && product.stock_quantity <= 0 && (product as any).stock_status !== 'preorder')) {
         return;
       }
-      addItem(product);
-      setIsAdded(true);
-      setTimeout(() => setIsAdded(false), 2000);
+      const added = addItem(product);
+      if (added) {
+        setIsAdded(true);
+        setTimeout(() => setIsAdded(false), 2000);
+      }
     }
   };
 
@@ -139,15 +141,17 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
       ? `${variantName} · ${overrideSize || selectedModalSize}`
       : variantName;
 
-    addItem(product, {
+    const added = addItem(product, {
       name: finalName,
       image: variant.image,
       imageIndex: variant.imageIndex !== undefined ? variant.imageIndex : (product.images?.findIndex((img: string) => img === variant.image) ?? 0),
       stock_status: variant.stock_status,
     });
     setSelectingVariant(false);
-    setIsAdded(true);
-    setTimeout(() => setIsAdded(false), 2000);
+    if (added) {
+      setIsAdded(true);
+      setTimeout(() => setIsAdded(false), 2000);
+    }
   };
 
   return (
@@ -207,7 +211,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             className={cn(
-              "w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl flex items-center justify-center [@media(hover:hover)]:md:opacity-0 [@media(hover:hover)]:md:translate-y-2 [@media(hover:hover)]:md:group-hover:translate-y-0 [@media(hover:hover)]:md:group-hover:opacity-100 transition-all duration-300 shadow-[0_6px_20px_rgba(0,0,0,0.35)] border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e32f8c]",
+              "w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl flex items-center justify-center [@media(hover:hover)]:md:opacity-0 [@media(hover:hover)]:md:translate-y-2 [@media(hover:hover)]:md:group-hover:translate-y-0 [@media(hover:hover)]:md:group-hover:opacity-100 transition-all duration-300 active:scale-[0.98] shadow-[0_6px_20px_rgba(0,0,0,0.35)] border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e32f8c]",
               isAdded
                 ? "bg-emerald-500 border-emerald-500 text-white"
                 : "bg-white hover:bg-[#e32f8c] text-black hover:text-white border-black/15 hover:border-[#e32f8c]"
@@ -271,7 +275,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                   setSelectedModalOptIdx(matchedIdx >= 0 ? matchedIdx : 0);
                   setSelectingVariant(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.07] hover:bg-white/[0.14] border border-white/15 hover:border-[#e32f8c]/50 text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:text-white transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.07] hover:bg-white/[0.14] border border-white/15 hover:border-[#e32f8c]/50 text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:text-white transition-all active:scale-[0.98] cursor-pointer"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-[#e32f8c]" />
                 <span>
@@ -300,7 +304,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                     onMouseEnter={() => {
                       if (opt.image) setCurrentImage(opt.image);
                     }}
-                    className={cn("w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm transition-transform hover:scale-125 focus:outline-none cursor-pointer", dotColor)}
+                    className={cn("w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm transition-all hover:scale-125 active:scale-[0.98] focus:outline-none cursor-pointer", dotColor)}
                     style={opt.color ? { backgroundColor: opt.color } : undefined}
                   />
                 );
@@ -420,12 +424,12 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                             }
                           }}
                           className={cn(
-                            "w-full flex items-center justify-between py-2.5 px-3.5 md:py-3 md:px-4 transition-colors border-b border-black/10 last:border-none group",
+                            "w-full flex items-center justify-between py-2.5 px-3.5 md:py-3 md:px-4 transition-all border-b border-black/10 last:border-none group",
                             isSoldOut
                               ? "opacity-50 cursor-not-allowed bg-gray-50 hover:bg-gray-50"
                               : isOptSelected
-                                ? "bg-zinc-100 cursor-pointer"
-                                : "hover:bg-[#f4f4f4] cursor-pointer"
+                                ? "bg-zinc-100 cursor-pointer active:scale-[0.98]"
+                                : "hover:bg-[#f4f4f4] cursor-pointer active:scale-[0.98]"
                           )}
                         >
                           <div className="flex items-center gap-3 min-w-0">
@@ -485,7 +489,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                             type="button"
                             onClick={() => setSelectedModalSize(sz)}
                             className={cn(
-                              "h-9 rounded-lg text-xs font-black uppercase border transition-all cursor-pointer",
+                              "h-9 rounded-lg text-xs font-black uppercase border transition-all active:scale-[0.98] cursor-pointer",
                               selectedModalSize === sz
                                 ? "bg-[#e32f8c] text-white border-[#e32f8c]"
                                 : "bg-zinc-50 text-black border-zinc-200 hover:border-black"
@@ -499,7 +503,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                         type="button"
                         disabled={!activeOpt || activeOpt.stock_status === 'sold_out'}
                         onClick={() => activeOpt && handleSelectVariant(activeOpt, selectedModalSize)}
-                        className="mt-4 w-full h-11 rounded-xl bg-black hover:bg-[#e32f8c] text-white font-black uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                        className="mt-4 w-full h-11 rounded-xl bg-black hover:bg-[#e32f8c] text-white font-black uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
                       >
                         <ShoppingCart className="w-4 h-4" />
                         <span>{locale === 'ro' ? 'Adaugă în Coș' : 'Add to Cart'}</span>
@@ -509,7 +513,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
                   
                   <button 
                     onClick={() => setSelectingVariant(false)}
-                    className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
+                    className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-red-500 transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {t('cancel', { defaultValue: locale === 'ro' ? 'Renunță' : 'Cancel' })}
                   </button>

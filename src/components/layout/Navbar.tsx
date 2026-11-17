@@ -142,7 +142,8 @@ export function Navbar() {
               {/* Column 1: Hamburger (sm) / Logo (lg) */}
               <div className="flex items-center justify-start lg:order-1">
                 <button
-                  className="lg:hidden flex items-center justify-center w-11 h-11 md:w-12 md:h-12 text-white hover:text-[#e32f8c] active:scale-90 transition-all drop-shadow-md"
+                  type="button"
+                  className="lg:hidden flex items-center justify-center w-11 h-11 md:w-12 md:h-12 text-white hover:text-[#e32f8c] active:scale-[0.98] transition-all drop-shadow-md cursor-pointer"
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                   aria-label={
                     mobileMenuOpen
@@ -153,7 +154,7 @@ export function Navbar() {
                   {mobileMenuOpen ? <X className="w-6 h-6 md:w-7 md:h-7" /> : <Menu className="w-6 h-6 md:w-7 md:h-7" />}
                 </button>
 
-                <Link href="/" className="hidden lg:flex items-center group relative py-1" aria-label="TrenZone Home">
+                <Link href="/" className="hidden lg:flex items-center group relative py-1 active:scale-[0.98] transition-all" aria-label="TrenZone Home">
                   <Image
                     src={getCdnUrl("/images/logos/trenzone_logo.webp")}
                     alt="TrenZone Emblem"
@@ -168,14 +169,14 @@ export function Navbar() {
               {/* Column 2: Logo (sm) / Nav Links (lg) */}
               <div className="flex items-center justify-center lg:order-2">
                 {/* Mobile Logo (Icon only, no text) */}
-                <Link href="/" className="flex lg:hidden items-center justify-center group relative py-1" aria-label="TrenZone Home">
+                <Link href="/" className="flex lg:hidden items-center justify-center group relative py-1 active:scale-[0.98] transition-all" aria-label="TrenZone Home">
                   <Image
                     src={getCdnUrl("/images/logos/trenzone_logo.webp")}
                     alt="TrenZone Emblem"
                     width={38}
                     height={38}
                     priority
-                    className="w-8 h-8 sm:w-9 sm:h-9 object-contain drop-shadow-[0_0_12px_rgba(227,47,140,0.6)] active:scale-95 transition-transform shrink-0"
+                    className="w-8 h-8 sm:w-9 sm:h-9 object-contain drop-shadow-[0_0_12px_rgba(227,47,140,0.6)] transition-transform shrink-0"
                   />
                 </Link>
 
@@ -196,7 +197,7 @@ export function Navbar() {
                         <Link
                           key={item.href}
                           href={item.href as any}
-                          className={`px-4 py-2 rounded-full bg-[#e32f8c] hover:bg-[#ff3b9e] text-white transition-all duration-300 shadow-[0_0_20px_rgba(227,47,140,0.45)] hover:shadow-[0_0_26px_rgba(227,47,140,0.65)] active:scale-95 ${
+                          className={`px-4 py-2 rounded-full bg-[#e32f8c] hover:bg-[#ff3b9e] text-white transition-all duration-300 shadow-[0_0_20px_rgba(227,47,140,0.45)] hover:shadow-[0_0_26px_rgba(227,47,140,0.65)] active:scale-[0.98] ${
                             isActive ? "ring-2 ring-white/90" : ""
                           }`}
                         >
@@ -210,7 +211,7 @@ export function Navbar() {
                         <Link
                           key={item.href}
                           href={item.href as any}
-                          className={`px-3.5 py-2 rounded-full border transition-all duration-300 flex items-center gap-2 active:scale-95 ${
+                          className={`px-3.5 py-2 rounded-full border transition-all duration-300 flex items-center gap-2 active:scale-[0.98] ${
                             isActive
                               ? "bg-white/15 border-[#e32f8c] text-white ring-1 ring-[#e32f8c]/50 shadow-[0_0_16px_rgba(227,47,140,0.28)]"
                               : "bg-white/5 border-white/20 text-white hover:bg-white/10 hover:border-[#e32f8c]/60"
@@ -228,7 +229,7 @@ export function Navbar() {
                       <Link
                         key={item.href}
                         href={item.href as any}
-                        className="group relative py-2 flex items-center gap-1.5"
+                        className="group relative py-2 flex items-center gap-1.5 active:scale-[0.98] transition-all"
                       >
                         <span
                           className={`transition-colors duration-300 ${
@@ -255,8 +256,9 @@ export function Navbar() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => setCartOpen(true)}
-                  className="group flex items-center justify-center w-11 h-11 md:w-14 md:h-14 text-white hover:text-[#e32f8c] active:scale-95 transition-all relative"
+                  className="group flex items-center justify-center w-11 h-11 md:w-14 md:h-14 text-white hover:text-[#e32f8c] active:scale-[0.98] transition-all relative cursor-pointer"
                   aria-label={locale === "ro" ? "Deschide coșul de cumpărături" : "Open shopping cart"}
                 >
                   <ShoppingCart className="w-6 h-6 md:w-7 md:h-7 drop-shadow-xl" />

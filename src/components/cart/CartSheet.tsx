@@ -15,6 +15,7 @@ import {
   Truck,
   ArrowRight,
   Mail,
+  Loader2,
 } from "lucide-react";
 import Image from "next/image";
 import { useCartStore, isPreorder } from "@/store/useCartStore";
@@ -30,7 +31,7 @@ import { getProductPrice } from "@/utils/pricing";
 import { getBundleSummary, getFreeShippingThreshold } from "@/lib/cart-calculations";
 import { useShippingConfig } from "@/lib/use-shipping-config";
 import { CouponInput } from "@/components/cart/CouponInput";
-import { Link, useRouter } from "@/i18n/routing";
+import { Link, useRouter, usePathname } from "@/i18n/routing";
 import { cn, getLocalized, getVariantColorClass } from "@/lib/utils";
 import { isWideProductImage } from "@/lib/product-images";
 import { Product } from "@/lib/api";
@@ -134,7 +135,7 @@ interface CartUpsellCarouselProps {
   currency: string;
   isCartOpen: boolean;
   onSelectProduct: (product: Product) => void;
-  onDirectAdd: (product: Product) => void;
+  onDirectAdd: (product: Product) => boolean;
   onNavigate: (slug: string) => void;
 }
 
@@ -153,6 +154,14 @@ function CartUpsellCarousel({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+    };
+  }, []);
 
   const scrollRafRef = useRef<number | null>(null);
   const checkScroll = () => {
@@ -201,7 +210,7 @@ function CartUpsellCarousel({
               disabled={!canScrollLeft}
               aria-label={isEn ? "Previous items" : "Produse anterioare"}
               className={cn(
-                "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
+                "w-7 h-7 rounded-full border flex items-center justify-center transition-all active:scale-[0.98] bg-white shadow-2xs",
                 canScrollLeft
                   ? "border-zinc-200 text-[#111111] hover:border-[#111111] cursor-pointer"
                   : "border-zinc-200 text-zinc-300 opacity-50 pointer-events-none"
@@ -215,7 +224,7 @@ function CartUpsellCarousel({
               disabled={!canScrollRight}
               aria-label={isEn ? "Next items" : "Produse următoare"}
               className={cn(
-                "w-7 h-7 rounded-full border flex items-center justify-center transition-colors bg-white shadow-2xs",
+                "w-7 h-7 rounded-full border flex items-center justify-center transition-all active:scale-[0.98] bg-white shadow-2xs",
                 canScrollRight
                   ? "border-zinc-200 text-[#111111] hover:border-[#111111] cursor-pointer"
                   : "border-zinc-200 text-zinc-300 opacity-50 pointer-events-none"
@@ -284,13 +293,30 @@ function CartUpsellCarousel({
                     } else if (p.bundleVariants) {
                       onNavigate(p.slug);
                     } else {
-                      onDirectAdd(p);
+                      const added = onDirectAdd(p);
+                      if (added) {
+                        setJustAddedId(p.id);
+                        if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+                        addedTimerRef.current = setTimeout(() => setJustAddedId(null), 1400);
+                      }
                     }
                   }}
                   aria-label={`${isEn ? "Add" : "Adaugă"} ${getLocalized(p.name, locale)} ${isEn ? "to cart" : "în coș"}`}
-                  className="mt-2.5 h-8 w-full rounded-lg bg-[#f4f4f6] hover:bg-[#111111] text-[#111111] hover:text-white border border-zinc-200/90 hover:border-[#111111] active:scale-[0.98] text-[10.5px] font-extrabold uppercase tracking-wider flex items-center justify-center transition-all cursor-pointer whitespace-nowrap"
+                  className={cn(
+                    "mt-2.5 h-8 w-full rounded-lg border active:scale-[0.98] text-[10.5px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap",
+                    justAddedId === p.id
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-[#f4f4f6] hover:bg-[#111111] text-[#111111] hover:text-white border-zinc-200/90 hover:border-[#111111]"
+                  )}
                 >
-                  <span>{isEn ? "Add" : "Adaugă"}</span>
+                  {justAddedId === p.id ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 stroke-[2.75]" />
+                      <span>{isEn ? "Added!" : "Adăugat!"}</span>
+                    </>
+                  ) : (
+                    <span>{isEn ? "Add" : "Adaugă"}</span>
+                  )}
                 </button>
               </div>
             </div>
@@ -349,10 +375,36 @@ export function CartSheet() {
   const [modalModelIdx, setModalModelIdx] = useState(0);
   const [modalSize, setModalSize] = useState("L");
   const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isProceedingToCheckout, setIsProceedingToCheckout] = useState(false);
 
   const locale = useLocale();
   const isEn = locale === "en";
   const router = useRouter();
+  const pathname = usePathname();
+  const checkoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setIsProceedingToCheckout(false);
+    if (pathname === "/checkout") {
+      setCartOpen(false);
+    }
+    if (checkoutTimerRef.current) {
+      clearTimeout(checkoutTimerRef.current);
+      checkoutTimerRef.current = null;
+    }
+  }, [pathname, setCartOpen]);
+
+  useEffect(() => {
+    if (!isCartOpen) {
+      setIsProceedingToCheckout(false);
+    }
+  }, [isCartOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (checkoutTimerRef.current) clearTimeout(checkoutTimerRef.current);
+    };
+  }, []);
 
   const openSelectingModal = (product: Product) => {
     const rawOpts = product.variants?.options || [];
@@ -497,7 +549,7 @@ export function CartSheet() {
             <button
               type="button"
               onClick={() => setCartOpen(false)}
-              className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 hover:text-[#111111] flex items-center justify-center transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 hover:text-[#111111] flex items-center justify-center transition-all active:scale-[0.98] cursor-pointer"
               aria-label={isEn ? "Close cart" : "Închide coșul"}
             >
               <X className="w-4 h-4" strokeWidth={2.25} />
@@ -698,7 +750,7 @@ export function CartSheet() {
                   <button
                     type="button"
                     onClick={closePreorderConflict}
-                    className="text-zinc-400 hover:text-[#111111] p-1 cursor-pointer transition-colors"
+                    className="text-zinc-400 hover:text-[#111111] p-1 cursor-pointer transition-all active:scale-[0.98]"
                     aria-label={isEn ? "Dismiss" : "Închide"}
                   >
                     <X size={14} />
@@ -719,7 +771,7 @@ export function CartSheet() {
                   <button
                     type="button"
                     onClick={resolvePreorderConflictWithReplace}
-                    className="flex-1 py-2 px-3 bg-[#111111] hover:bg-[#e32f8c] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer text-center"
+                    className="flex-1 py-2 px-3 bg-[#111111] hover:bg-[#e32f8c] text-white text-xs font-bold rounded-lg transition-all active:scale-[0.98] cursor-pointer text-center"
                   >
                     {preorderConflict.incomingIsPreorder
                       ? isEn
@@ -732,7 +784,7 @@ export function CartSheet() {
                   <button
                     type="button"
                     onClick={closePreorderConflict}
-                    className="py-2 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition-colors cursor-pointer text-center"
+                    className="py-2 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition-all active:scale-[0.98] cursor-pointer text-center"
                   >
                     {isEn ? "Keep current cart" : "Păstrează coșul"}
                   </button>
@@ -760,7 +812,7 @@ export function CartSheet() {
                         items: items.filter((item) => !isPreorder(item, item.selectedVariant)),
                       });
                     }}
-                    className="flex-1 py-2 bg-[#111111] text-white font-bold text-xs rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
+                    className="flex-1 py-2 bg-[#111111] text-white font-bold text-xs rounded-lg hover:bg-zinc-800 transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {isEn ? "Keep in-stock" : "Doar din stoc"}
                   </button>
@@ -771,7 +823,7 @@ export function CartSheet() {
                         items: items.filter((item) => isDigitalProgramItem(item) || isPreorder(item, item.selectedVariant)),
                       });
                     }}
-                    className="flex-1 py-2 bg-zinc-100 text-[#111111] font-bold text-xs rounded-lg hover:bg-zinc-200 transition-colors cursor-pointer"
+                    className="flex-1 py-2 bg-zinc-100 text-[#111111] font-bold text-xs rounded-lg hover:bg-zinc-200 transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {isEn ? "Keep pre-order" : "Doar precomandă"}
                   </button>
@@ -891,7 +943,7 @@ export function CartSheet() {
                                       )
                                     : removeItem(item.id, item.selectedVariant?.name)
                                 }
-                                className="w-8 h-full flex items-center justify-center text-zinc-600 hover:text-[#111111] transition-colors cursor-pointer"
+                                className="w-8 h-full flex items-center justify-center text-zinc-600 hover:text-[#111111] active:scale-[0.95] transition-all cursor-pointer"
                                 aria-label={isEn ? "Decrease quantity" : "Scade cantitatea"}
                               >
                                 <Minus className="w-3.5 h-3.5" />
@@ -908,7 +960,7 @@ export function CartSheet() {
                                     item.selectedVariant?.name
                                   )
                                 }
-                                className="w-8 h-full flex items-center justify-center text-zinc-600 hover:text-[#111111] transition-colors cursor-pointer"
+                                className="w-8 h-full flex items-center justify-center text-zinc-600 hover:text-[#111111] active:scale-[0.95] transition-all cursor-pointer"
                                 aria-label={isEn ? "Increase quantity" : "Crește cantitatea"}
                               >
                                 <Plus className="w-3.5 h-3.5" />
@@ -918,7 +970,7 @@ export function CartSheet() {
                             <button
                               type="button"
                               onClick={() => removeItem(item.id, item.selectedVariant?.name)}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-400 hover:text-red-500 active:scale-[0.98] transition-all cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                               <span>{isEn ? "Remove" : "Elimină"}</span>
@@ -1060,7 +1112,7 @@ export function CartSheet() {
                               localStorage.removeItem("tz_referral_code");
                             }
                           }}
-                          className="p-1 text-zinc-400 hover:text-[#111111] transition-colors cursor-pointer"
+                          className="p-1 text-zinc-400 hover:text-[#111111] active:scale-[0.98] transition-all cursor-pointer"
                           title={isEn ? "Remove code" : "Elimină cod"}
                         >
                           <X className="w-3.5 h-3.5" />
@@ -1166,24 +1218,42 @@ export function CartSheet() {
 
               <button
                 type="button"
-                disabled={hasMixedOrder}
+                disabled={hasMixedOrder || isProceedingToCheckout}
                 onClick={() => {
-                  if (hasMixedOrder) return;
-                  setCartOpen(false);
+                  if (hasMixedOrder || isProceedingToCheckout) return;
+                  if (pathname === "/checkout") {
+                    setCartOpen(false);
+                    return;
+                  }
+                  setIsProceedingToCheckout(true);
                   router.push("/checkout");
+                  checkoutTimerRef.current = setTimeout(() => {
+                    setIsProceedingToCheckout(false);
+                    setCartOpen(false);
+                  }, 4500);
                 }}
                 className={cn(
-                  "w-full h-12 rounded-xl font-black uppercase tracking-wider text-[13px] flex items-center justify-center gap-2 transition-colors shadow-xs",
+                  "w-full h-12 rounded-xl font-black uppercase tracking-wider text-[13px] flex items-center justify-center gap-2 transition-all shadow-xs",
                   hasMixedOrder
                     ? "bg-zinc-200 text-zinc-500 cursor-not-allowed pointer-events-none"
-                    : "bg-[#111111] hover:bg-[#e32f8c] text-white active:scale-[0.99] cursor-pointer"
+                    : isProceedingToCheckout
+                      ? "bg-[#e32f8c] text-white cursor-wait opacity-95"
+                      : "bg-[#111111] hover:bg-[#e32f8c] text-white active:scale-[0.98] cursor-pointer"
                 )}
               >
-                <Lock className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
                 {hasMixedOrder ? (
-                  <span>{isEn ? "Resolve cart above" : "Alege tipul de comandă"}</span>
+                  <>
+                    <Lock className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
+                    <span>{isEn ? "Resolve cart above" : "Alege tipul de comandă"}</span>
+                  </>
+                ) : isProceedingToCheckout ? (
+                  <>
+                    <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                    <span>{isEn ? "Opening Checkout..." : "Se deschide Checkout..."}</span>
+                  </>
                 ) : (
                   <>
+                    <Lock className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
                     <span>{isEn ? "Checkout securely" : "Finalizare comandă"}</span>
                     <ArrowRight className="w-4 h-4 shrink-0" strokeWidth={2.5} />
                   </>
@@ -1319,12 +1389,12 @@ export function CartSheet() {
                                   }
                                 }}
                                 className={cn(
-                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-colors group",
+                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-all group",
                                   isSoldOut
                                     ? "opacity-40 cursor-not-allowed bg-zinc-50"
                                     : isOptSelected
-                                      ? "bg-zinc-100 cursor-pointer"
-                                      : "hover:bg-zinc-50 cursor-pointer"
+                                      ? "bg-zinc-100 cursor-pointer active:scale-[0.98]"
+                                      : "hover:bg-zinc-50 cursor-pointer active:scale-[0.98]"
                                 )}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
@@ -1399,7 +1469,7 @@ export function CartSheet() {
                                   type="button"
                                   onClick={() => setModalSize(sz)}
                                   className={cn(
-                                    "h-9 rounded-lg text-xs font-black uppercase border transition-all cursor-pointer",
+                                    "h-9 rounded-lg text-xs font-black uppercase border transition-all active:scale-[0.98] cursor-pointer",
                                     modalSize === sz
                                       ? "bg-[#e32f8c] text-white border-[#e32f8c]"
                                       : "bg-white text-[#111111] border-zinc-200 hover:border-[#111111]"
@@ -1428,7 +1498,7 @@ export function CartSheet() {
                                 });
                                 setSelectingProduct(null);
                               }}
-                              className="mt-3.5 w-full h-11 rounded-xl bg-[#111111] hover:bg-[#e32f8c] text-white font-black uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                              className="mt-3.5 w-full h-11 rounded-xl bg-[#111111] hover:bg-[#e32f8c] text-white font-black uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
                             >
                               <span>{isEn ? "Add to Cart" : "Adaugă în coș"}</span>
                             </button>
@@ -1438,7 +1508,7 @@ export function CartSheet() {
                         <button
                           type="button"
                           onClick={() => setSelectingProduct(null)}
-                          className="mt-3.5 py-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400 hover:text-[#111111] transition-colors self-center cursor-pointer"
+                          className="mt-3.5 py-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400 hover:text-[#111111] transition-all active:scale-[0.98] self-center cursor-pointer"
                         >
                           {isEn ? "Cancel" : "Anulează"}
                         </button>

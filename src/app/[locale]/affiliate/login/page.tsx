@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useLocale } from 'next-intl';
-import { ArrowRight, Lock, Mail, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Lock, Mail, CheckCircle2, Loader2 } from 'lucide-react';
 import { affiliateLoginAction } from '@/app/actions/affiliate-auth';
 import { Link } from '@/i18n/routing';
 
@@ -15,11 +15,14 @@ export default function AffiliateLogin() {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const submittingRef = useRef(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || status === 'loading' || status === 'success') return;
     if (!email.trim() || !code.trim()) return;
 
+    submittingRef.current = true;
     setStatus('loading');
     setErrorMessage('');
 
@@ -33,10 +36,12 @@ export default function AffiliateLogin() {
       } else {
         setStatus('error');
         setErrorMessage(res.error || (isRo ? 'A apărut o eroare.' : 'An error occurred.'));
+        submittingRef.current = false;
       }
     } catch (err: any) {
       setStatus('error');
       setErrorMessage(err?.message || (isRo ? 'Eroare de conexiune.' : 'Connection error.'));
+      submittingRef.current = false;
     }
   };
 
@@ -124,10 +129,13 @@ export default function AffiliateLogin() {
             <button
               type="submit"
               disabled={status === 'loading' || status === 'success'}
-              className="w-full bg-[#e32f8c] hover:bg-[#ff3b9e] text-white py-4 rounded-xl font-black uppercase tracking-wider text-xs sm:text-sm transition-all active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 mt-2 shadow-[0_0_25px_rgba(227,47,140,0.35)] hover:shadow-[0_0_32px_rgba(227,47,140,0.55)] cursor-pointer"
+              className="w-full bg-[#e32f8c] hover:bg-[#ff3b9e] text-white py-4 rounded-xl font-black uppercase tracking-wider text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 shadow-[0_0_25px_rgba(227,47,140,0.35)] hover:shadow-[0_0_32px_rgba(227,47,140,0.55)] cursor-pointer"
             >
               {status === 'loading' ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <>
+                  <Loader2 size={16} className="animate-spin shrink-0" />
+                  <span>{isRo ? 'Se conectează...' : 'Signing in...'}</span>
+                </>
               ) : (
                 <>
                   <span>{isRo ? 'Accesează Dashboard' : 'Enter Dashboard'}</span>

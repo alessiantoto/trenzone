@@ -13,11 +13,12 @@ export async function GET(request: Request) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  revalidateTag('influencers', 'max');
-  revalidateTag('reviews', 'max');
-  revalidateTag('products', 'max');
-  revalidateTag('global_settings', 'max');
-  revalidateTag('store_settings', 'max');
+  revalidateTag('influencers', { expire: 0 });
+  revalidateTag('reviews', { expire: 0 });
+  revalidateTag('products', { expire: 0 });
+  revalidateTag('global_settings', { expire: 0 });
+  revalidateTag('store_settings', { expire: 0 });
+  revalidatePath('/[locale]', 'layout');
   revalidatePath('/', 'layout');
   revalidatePath('/api/products');
   revalidatePath('/api/reviews');

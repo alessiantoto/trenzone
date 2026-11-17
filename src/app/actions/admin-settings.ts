@@ -2,11 +2,11 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isAdminAuthorized } from './admin-auth';
-import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
+import { revalidatePath, revalidateTag, updateTag, unstable_cache } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import crypto from 'crypto';
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/ratelimit';
-import { normalizeDropDateToUtcIso } from '@/lib/maintenance-time';
+import { normalizeDropDateToUtcIso, parseUniversalDropEndDateMs } from '@/lib/maintenance-time';
 
 function computeMaintenanceBypassToken(): string {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || 'trenzone-maintenance-secret';
@@ -69,13 +69,37 @@ export async function getMaintenanceEndDate() {
   return settings.maintenance_end_date;
 }
 
+function invalidateGlobalSettingsNow() {
+  updateTag('global_settings');
+  revalidatePath('/[locale]', 'layout');
+  revalidatePath('/', 'layout');
+  revalidatePath('/ro', 'layout');
+  revalidatePath('/en', 'layout');
+  revalidatePath('/ro', 'page');
+  revalidatePath('/en', 'page');
+}
+
 export async function toggleMaintenanceMode(isActive: boolean) {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
+  const updatePayload: { id: number; maintenance_mode: boolean; maintenance_end_date?: null } = {
+    id: 1,
+    maintenance_mode: isActive,
+  };
+
+  // Prevent an old expired countdown date from silently unlocking maintenance right when admin turns it ON
+  if (isActive) {
+    const existing = await getCachedGlobalSettings().catch(() => null);
+    const existingEndMs = parseUniversalDropEndDateMs(existing?.maintenance_end_date);
+    if (existingEndMs !== null && existingEndMs <= Date.now()) {
+      updatePayload.maintenance_end_date = null;
+    }
+  }
+
   const { error } = await supabaseAdmin
     .from('global_settings')
-    .upsert({ id: 1, maintenance_mode: isActive });
+    .upsert(updatePayload);
 
   if (error) {
     console.error('Error toggling maintenance mode:', error);
@@ -88,11 +112,8 @@ export async function toggleMaintenanceMode(isActive: boolean) {
     cookieStore.delete('maintenance_bypass');
   }
 
-  // Invalidate cache immediately so all routes and layout reflect the new setting
-  revalidateTag('global_settings', 'max');
-  revalidatePath('/', 'layout');
-  revalidatePath('/ro', 'layout');
-  revalidatePath('/en', 'layout');
+  // Expire cache immediately (read-your-own-writes) across all localized layouts
+  invalidateGlobalSettingsNow();
 
   return { success: true };
 }
@@ -102,9 +123,7 @@ export async function clearMaintenanceBypass() {
   cookieStore.delete('maintenance_bypass');
   const isAuthorized = await isAdminAuthorized();
   if (isAuthorized) {
-    revalidatePath('/', 'layout');
-    revalidatePath('/ro', 'layout');
-    revalidatePath('/en', 'layout');
+    invalidateGlobalSettingsNow();
   }
   return { success: true };
 }
@@ -124,10 +143,7 @@ export async function setMaintenanceEndDate(endDate: string | null) {
     throw new Error(error.message);
   }
 
-  revalidateTag('global_settings', 'max');
-  revalidatePath('/', 'layout');
-  revalidatePath('/ro', 'layout');
-  revalidatePath('/en', 'layout');
+  invalidateGlobalSettingsNow();
   return { success: true };
 }
 
@@ -144,8 +160,7 @@ export async function setMaintenancePassword(password: string) {
     throw new Error(error.message);
   }
 
-  revalidateTag('global_settings', 'max');
-  revalidatePath('/', 'layout');
+  invalidateGlobalSettingsNow();
   return { success: true };
 }
 
@@ -209,7 +224,7 @@ export async function setExchangeRates(rates: Record<string, number>) {
     throw new Error(error.message);
   }
 
-  revalidateTag('global_settings', 'max');
+  invalidateGlobalSettingsNow();
   return { success: true };
 }
 
@@ -221,14 +236,15 @@ export async function purgeAllSiteCache(): Promise<{ success: boolean; cloudflar
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
 
-  // 1. Purge all Next.js Data Cache tags
-  revalidateTag('products', 'max');
-  revalidateTag('influencers', 'max');
-  revalidateTag('reviews', 'max');
-  revalidateTag('global_settings', 'max');
-  revalidateTag('store_settings', 'max');
+  // 1. Expire all Next.js Data Cache tags immediately
+  updateTag('products');
+  updateTag('influencers');
+  updateTag('reviews');
+  updateTag('global_settings');
+  updateTag('store_settings');
 
   // 2. Purge all Next.js ISR pages and layouts across both locales
+  revalidatePath('/[locale]', 'layout');
   revalidatePath('/', 'layout');
   revalidatePath('/ro', 'layout');
   revalidatePath('/en', 'layout');

@@ -482,6 +482,9 @@ export default function AdminSettingsPage() {
     try {
       await toggleMaintenanceMode(newValue);
       setIsMaintenance(newValue);
+      if (newValue && endDate && new Date(endDate).getTime() <= Date.now()) {
+        setEndDate('');
+      }
       toast.success(newValue ? 'Modul Mentenanță a fost activat!' : 'Modul Mentenanță a fost dezactivat!');
     } catch (e) {
       console.error(e);
@@ -635,6 +638,16 @@ export default function AdminSettingsPage() {
                 onSave={handleSaveEndDate}
                 saving={endDateSaving}
               />
+              {!isMaintenance && endDate && new Date(endDate).getTime() > Date.now() && (
+                <p className="mt-2.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  Timerul este salvat, dar apare pe site doar după ce pornești switch-ul <strong>Mod Mentenanță</strong> de mai sus.
+                </p>
+              )}
+              {isMaintenance && endDate && new Date(endDate).getTime() <= Date.now() && (
+                <p className="mt-2.5 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                  Data timerului a expirat deja — site-ul s-a deblocat automat. Alege o dată viitoare (+1h, +3h, +1 zi) sau șterge data.
+                </p>
+              )}
             </div>
           </div>
 

@@ -229,12 +229,12 @@ export async function removeProgramPdfSlotAction(slot: ProgramFileSlot): Promise
         {
           key: 'digital_programs_files',
           value: next,
-          updated_at: new Date().toISOString(),
         },
         { onConflict: 'key' }
       );
     if (error) return { success: false, error: error.message };
     revalidatePath('/admin/emails');
+    revalidatePath('/admin/products');
     revalidatePath('/admin/programs');
     return { success: true };
   } catch (err: any) {

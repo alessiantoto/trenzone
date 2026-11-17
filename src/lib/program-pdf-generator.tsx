@@ -96,10 +96,12 @@ export async function saveStoredProgramFiles(files: StoredProgramFiles): Promise
         {
           key: STORE_SETTING_KEY,
           value: merged,
-          updated_at: new Date().toISOString(),
         },
         { onConflict: 'key' }
       );
+    if (error) {
+      console.error('[PROGRAM PDF] Failed to save digital_programs_files in store_settings:', error);
+    }
     return !error;
   } catch {
     return false;

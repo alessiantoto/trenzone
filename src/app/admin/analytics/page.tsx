@@ -199,14 +199,6 @@ function formatMoneyInCurrency(
   })} ${symbol}`;
 }
 
-function formatNativeCurrency(amount: number, currencyCode: DisplayCurrency): string {
-  const symbol = AVAILABLE_CURRENCIES.find((c) => c.code === currencyCode)?.symbol || currencyCode;
-  return `${(Number(amount) || 0).toLocaleString('ro-RO', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${symbol}`;
-}
-
 function formatDuration(totalSec: number): string {
   const sec = Math.max(0, Math.round(totalSec || 0));
   const m = Math.floor(sec / 60);
@@ -1166,74 +1158,33 @@ export default function AdminAnalyticsPage() {
             </span>
           </div>
 
-          {/* 4-Currency Mix Breakdown Strip */}
+          {/* Unified Total Strip (all 4 currencies converted cleanly to selected display currency) */}
           {(() => {
             const rawBreakdown = mkt.currencyBreakdown || data?.currencyBreakdown || [];
-            const byCode = new Map(rawBreakdown.map((b) => [b.currency, b]));
+            const activeCurrencies = rawBreakdown.filter((b) => b.orders > 0 || b.revenueNative > 0);
             const totalRon = mkt.revenueInPeriodRon || 0;
             return (
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
+              <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3.5 sm:px-5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
-                      Mix Încasări Multi-Valută (RON · EUR · USD · GBP)
+                      Total Încasări ({selectedCurrency})
                     </h3>
-                    <p className="text-[11px] text-slate-500">
-                      Sume native încasate per monedă și total unificat convertit la cursul live
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                      {mkt.ordersInPeriod} comenzi · RON / EUR / USD / GBP convertite automat
+                    </span>
+                  </div>
+                  {activeCurrencies.length > 1 && (
+                    <p className="text-[11px] text-slate-500 mt-1 tabular-nums">
+                      Mix comenzi:{' '}
+                      {activeCurrencies
+                        .map((b) => `${b.currency} (${b.orders})`)
+                        .join(' · ')}
                     </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Total Unificat ({selectedCurrency})
-                    </div>
-                    <div className="text-base sm:text-lg font-black text-slate-950 tabular-nums">
-                      {formatMoney(totalRon)}
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {AVAILABLE_CURRENCIES.map((curr) => {
-                    const entry = byCode.get(curr.code);
-                    const ordersCount = entry?.orders || 0;
-                    const nativeAmount = entry?.revenueNative || 0;
-                    const ronEquivalent = entry?.revenueRon || 0;
-                    const sharePct =
-                      totalRon > 0 ? Math.round((ronEquivalent / totalRon) * 100) : 0;
-                    const isSelected = selectedCurrency === curr.code;
-
-                    return (
-                      <button
-                        key={curr.code}
-                        type="button"
-                        onClick={() => setSelectedCurrency(curr.code)}
-                        className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#e32f8c]/5 border-[#e32f8c]/45 shadow-2xs'
-                            : 'bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-xs font-black text-slate-900">{curr.code}</span>
-                          <span
-                            className={`text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums ${
-                              ordersCount > 0
-                                ? 'bg-slate-900 text-white'
-                                : 'bg-slate-200/80 text-slate-500'
-                            }`}
-                          >
-                            {ordersCount} com.
-                          </span>
-                        </div>
-                        <div className="text-sm sm:text-base font-black text-slate-950 mt-1 tabular-nums truncate">
-                          {formatNativeCurrency(nativeAmount, curr.code)}
-                        </div>
-                        <div className="text-[10px] font-semibold text-slate-500 mt-0.5 tabular-nums truncate">
-                          {sharePct}% din total · {formatMoney(ronEquivalent)}
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="text-lg sm:text-xl font-black text-slate-950 tabular-nums shrink-0">
+                  {formatMoney(totalRon)}
                 </div>
               </div>
             );
@@ -1504,20 +1455,18 @@ export default function AdminAnalyticsPage() {
                   Metode de Livrare (Comenzi)
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Sameday Easybox vs Curier domiciliu vs Internațional
+                  Curier România vs Internațional vs Digital PDF
                 </p>
               </div>
 
               <div className="space-y-2.5">
                 {mkt.shipping.map((s) => {
                   const barCls =
-                    s.key === 'easybox'
-                      ? 'bg-[#e32f8c]'
-                      : s.key === 'courier_ro'
-                        ? 'bg-blue-600'
-                        : s.key === 'international'
-                          ? 'bg-violet-600'
-                          : 'bg-amber-500';
+                    s.key === 'courier_ro'
+                      ? 'bg-blue-600'
+                      : s.key === 'international'
+                        ? 'bg-violet-600'
+                        : 'bg-amber-500';
                   return (
                     <div key={s.key} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
                       <div className="flex flex-wrap items-center justify-between gap-1 sm:gap-2 text-xs mb-1">

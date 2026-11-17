@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { NextIntlClientProvider } from 'next-intl';
 import { AdminMenuButton } from './components/AdminMenuButton';
-import { ClearCacheButton } from './components/ClearCacheButton';
 import { EliteFrame } from './components/EliteFrame';
 import { AdminShellProvider } from './components/AdminShellContext';
 import { isAdminAuthorized } from '@/app/actions/admin-auth';
@@ -80,10 +79,6 @@ export default async function AdminLayout({
                           {activeNav ? `${activeNav.group.label} · TrenZone` : 'TrenZone Control'}
                         </span>
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                      <ClearCacheButton variant="header" />
                     </div>
                   </header>
 

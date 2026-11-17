@@ -344,25 +344,10 @@ export default function AdminDashboard() {
     }));
   }, [stats?.revenue, stats?.exchangeRates]);
 
-  const currencyBreakdownList = useMemo(() => {
+  const activeCurrencyMix = useMemo(() => {
     const raw: Array<{ currency: string; orders: number; revenueNative: number; revenueRon: number }> =
       stats?.currencyBreakdown || [];
-    const byCode = new Map(raw.map((item) => [item.currency, item]));
-    return AVAILABLE_CURRENCIES.map((c) => {
-      const entry = byCode.get(c.code);
-      const nativeVal = entry?.revenueNative || 0;
-      return {
-        code: c.code,
-        symbol: c.symbol,
-        orders: entry?.orders || 0,
-        revenueNative: nativeVal,
-        revenueRon: entry?.revenueRon || 0,
-        formattedNative: nativeVal.toLocaleString('ro-RO', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }),
-      };
-    });
+    return raw.filter((item) => item.orders > 0 || item.revenueNative > 0);
   }, [stats?.currencyBreakdown]);
 
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
@@ -577,7 +562,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* QUICK 1-TAP PERIOD PILLS */}
-        <div className="relative z-10 flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-3 mb-3 border-b border-white/[0.07]">
+        <div className="relative z-10 flex flex-wrap items-center gap-1.5 pb-3 mb-3 border-b border-white/[0.07]">
           {presets.map((p) => {
             const active = datePreset === p.label;
             return (
@@ -585,7 +570,7 @@ export default function AdminDashboard() {
                 key={p.label}
                 type="button"
                 onClick={() => handlePresetSelect(p)}
-                className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
                   active ? 'bg-white text-black font-black shadow-sm' : 'bg-white/[0.06] text-zinc-300 hover:bg-white/[0.12]'
                 }`}
               >
@@ -613,6 +598,11 @@ export default function AdminDashboard() {
                 <span className="text-[11px] font-bold text-zinc-400">{formatMoney(stats?.revenue || 0).symbol}</span>
               </span>
               <DeltaBadge pct={deltas.revenuePct} dark />
+            </div>
+            <div className="mt-1 text-[10px] font-medium text-zinc-400 truncate">
+              {activeCurrencyMix.length > 1
+                ? `Unificat din ${activeCurrencyMix.map((c) => c.currency).join(' + ')}`
+                : 'Total convertit (RON · EUR · USD · GBP)'}
             </div>
           </button>
 
@@ -653,51 +643,6 @@ export default function AdminDashboard() {
               </span>
               <DeltaBadge pct={deltas.customersPct} dark />
             </div>
-          </div>
-        </div>
-
-        {/* 4-CURRENCY MIX BREAKDOWN PILLS (RON · EUR · USD · GBP) */}
-        <div className="relative z-10 mb-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
-              Încasări native pe monedă
-            </span>
-            <span className="text-[11px] font-bold text-zinc-300 tabular-nums">
-              Total convertit ({selectedCurrency}):{' '}
-              <strong className="text-white">{formatMoney(stats?.revenue || 0).display}</strong>
-            </span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
-            {currencyBreakdownList.map((item) => {
-              const isSelected = selectedCurrency === item.code;
-              const hasOrders = item.orders > 0;
-              return (
-                <button
-                  key={item.code}
-                  type="button"
-                  onClick={() => setSelectedCurrency(item.code)}
-                  className={`flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl border text-left transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-[#e32f8c]/20 border-[#e32f8c]/55 text-white'
-                      : hasOrders
-                        ? 'bg-white/[0.06] border-white/10 text-zinc-200 hover:bg-white/[0.11]'
-                        : 'bg-white/[0.02] border-white/[0.05] text-zinc-500 hover:bg-white/[0.06]'
-                  }`}
-                  title={`Afișează totalurile în ${item.code}`}
-                >
-                  <span className="inline-flex items-center gap-1.5 min-w-0">
-                    <CurrencyFlagIcon code={item.code} />
-                    <span className="text-[11px] font-black tracking-tight">{item.code}</span>
-                    <span className="text-[10px] font-bold text-zinc-400 tabular-nums">
-                      ({item.orders})
-                    </span>
-                  </span>
-                  <span className="text-[11px] font-black tabular-nums truncate">
-                    {item.formattedNative} {item.symbol}
-                  </span>
-                </button>
-              );
-            })}
           </div>
         </div>
 
@@ -1016,7 +961,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Easybox / Locker vs Curier la ușă vs Internațional */}
+        {/* Curier România vs Internațional vs Digital PDF */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between gap-2 mb-4">
             <div>
@@ -1025,7 +970,7 @@ export default function AdminDashboard() {
                 Metode de Livrare
               </h2>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Easybox / Locker vs Curier la ușă vs Internațional
+                Curier România vs Internațional vs Digital PDF
               </p>
             </div>
             <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full shrink-0 tabular-nums">
@@ -1036,13 +981,11 @@ export default function AdminDashboard() {
           <div className="space-y-2.5">
             {shippingBreakdown.filter((b) => b.count > 0 || b.key !== 'digital').map((bucket) => {
               const barColor =
-                bucket.key === 'easybox'
-                  ? 'bg-[#e32f8c]'
-                  : bucket.key === 'courier_ro'
-                    ? 'bg-blue-600'
-                    : bucket.key === 'international'
-                      ? 'bg-violet-600'
-                      : 'bg-amber-500';
+                bucket.key === 'courier_ro'
+                  ? 'bg-blue-600'
+                  : bucket.key === 'international'
+                    ? 'bg-violet-600'
+                    : 'bg-amber-500';
               return (
                 <div key={bucket.key} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
                   <div className="flex flex-wrap items-center justify-between gap-1 sm:gap-2 text-xs mb-1.5">

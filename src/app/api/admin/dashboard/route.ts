@@ -401,10 +401,9 @@ export async function GET(request: Request) {
       returningPct: totalCustomers > 0 ? Math.round((returningCustomers / totalCustomers) * 100) : 0,
     };
 
-    // Shipping breakdown: Easybox / Locker vs Curier la ușă (RO) vs Internațional (+ Digital)
+    // Shipping breakdown: Curier la ușă (RO) vs Internațional (+ Digital)
     const shippingBuckets = {
-      easybox: { key: 'easybox', label: 'Easybox / Locker', count: 0, revenue: 0 },
-      courier_ro: { key: 'courier_ro', label: 'Curier la ușă (RO)', count: 0, revenue: 0 },
+      courier_ro: { key: 'courier_ro', label: 'Curier România (Domiciliu)', count: 0, revenue: 0 },
       international: { key: 'international', label: 'Internațional (EU / Global)', count: 0, revenue: 0 },
       digital: { key: 'digital', label: 'Digital (Programe PDF)', count: 0, revenue: 0 },
     };
@@ -414,18 +413,11 @@ export async function GET(request: Request) {
       const items = parseOrderItems(o.items);
       const isDigitalOnly =
         o.carrier_metadata?.is_digital_only === true || (items.length > 0 && isDigitalOnlyCart(items));
-      const isLocker =
-        String(o.shipping_type || '').toLowerCase() === 'pudo' ||
-        Boolean(o.branch_id) ||
-        Boolean(o.carrier_metadata?.locker_id);
       const countryCode = normalizeCountry(o.addr_country).code;
 
       if (isDigitalOnly) {
         shippingBuckets.digital.count += 1;
         shippingBuckets.digital.revenue = Number((shippingBuckets.digital.revenue + amtRon).toFixed(2));
-      } else if (isLocker) {
-        shippingBuckets.easybox.count += 1;
-        shippingBuckets.easybox.revenue = Number((shippingBuckets.easybox.revenue + amtRon).toFixed(2));
       } else if (countryCode === 'RO') {
         shippingBuckets.courier_ro.count += 1;
         shippingBuckets.courier_ro.revenue = Number((shippingBuckets.courier_ro.revenue + amtRon).toFixed(2));

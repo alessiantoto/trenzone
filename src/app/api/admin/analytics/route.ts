@@ -301,8 +301,7 @@ export async function GET(request: Request) {
     let rambursRevenueRon = 0;
 
     const shippingBuckets = {
-      easybox: { key: 'easybox', label: 'Sameday Easybox / Locker', count: 0, revenueRon: 0 },
-      courier_ro: { key: 'courier_ro', label: 'Curier la domiciliu (RO)', count: 0, revenueRon: 0 },
+      courier_ro: { key: 'courier_ro', label: 'Curier România (Domiciliu)', count: 0, revenueRon: 0 },
       international: { key: 'international', label: 'Internațional (Packeta / TCE / EU)', count: 0, revenueRon: 0 },
       digital: { key: 'digital', label: 'Digital (Programe PDF)', count: 0, revenueRon: 0 },
     };
@@ -381,18 +380,11 @@ export async function GET(request: Request) {
       const items = parseOrderItems(o.items);
       const isDigitalOnly =
         o.carrier_metadata?.is_digital_only === true || (items.length > 0 && isDigitalOnlyCart(items));
-      const isLocker =
-        String(o.shipping_type || '').toLowerCase() === 'pudo' ||
-        Boolean(o.branch_id) ||
-        Boolean(o.carrier_metadata?.locker_id);
       const countryCode = normalizeCountry(o.addr_country).code;
 
       if (isDigitalOnly) {
         shippingBuckets.digital.count += 1;
         shippingBuckets.digital.revenueRon = Number((shippingBuckets.digital.revenueRon + orderAmtRon).toFixed(2));
-      } else if (isLocker) {
-        shippingBuckets.easybox.count += 1;
-        shippingBuckets.easybox.revenueRon = Number((shippingBuckets.easybox.revenueRon + orderAmtRon).toFixed(2));
       } else if (countryCode === 'RO') {
         shippingBuckets.courier_ro.count += 1;
         shippingBuckets.courier_ro.revenueRon = Number((shippingBuckets.courier_ro.revenueRon + orderAmtRon).toFixed(2));

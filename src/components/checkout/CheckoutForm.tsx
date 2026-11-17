@@ -289,8 +289,19 @@ const StripePaymentSection = ({
         
         {mounted && (
           <div className="mb-4">
-            <ExpressCheckoutElement 
-              onReady={() => console.log('Express Checkout ready')} 
+            <ExpressCheckoutElement
+              options={{
+                buttonHeight: 48,
+                buttonTheme: {
+                  applePay: 'black',
+                  googlePay: 'white',
+                },
+                layout: {
+                  maxColumns: 2,
+                  maxRows: 1,
+                },
+              }}
+              onReady={() => setMessage(null)}
               onClick={(e: any) => {
                 if (!agreedToTerms) {
                   triggerTermsError();

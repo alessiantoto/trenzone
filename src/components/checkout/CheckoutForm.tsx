@@ -1932,7 +1932,7 @@ export default function CheckoutForm({
                   }}
                   placeholder={locale === 'en' ? 'alex@example.com' : 'alex@exemplu.ro'}
                   className={cn(
-                    "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300 border-zinc-100 focus:bg-white",
+                    "rounded-2xl h-14 bg-zinc-100/70 text-zinc-900 caret-zinc-900 font-semibold border-2 border-zinc-200/70 focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
                     errors.email && "!border-red-500 !ring-2 !ring-red-100"
                   )}
                 />
@@ -1952,7 +1952,7 @@ export default function CheckoutForm({
                     onChange={(e) => setFirstName(e.target.value)} 
                     placeholder={locale === 'en' ? 'Alex' : 'Eduard'} 
                     className={cn(
-                      "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
+                      "rounded-2xl h-14 bg-zinc-100/70 text-zinc-900 caret-zinc-900 font-semibold border-2 border-zinc-200/70 focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
                       errors.firstName && "!border-red-500 !ring-2 !ring-red-100"
                     )} 
                   />
@@ -1966,7 +1966,7 @@ export default function CheckoutForm({
                     onChange={(e) => setLastName(e.target.value)} 
                     placeholder={locale === 'en' ? 'Smith' : 'Donea'} 
                     className={cn(
-                      "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
+                      "rounded-2xl h-14 bg-zinc-100/70 text-zinc-900 caret-zinc-900 font-semibold border-2 border-zinc-200/70 focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
                       errors.lastName && "!border-red-500 !ring-2 !ring-red-100"
                     )} 
                   />
@@ -2005,7 +2005,7 @@ export default function CheckoutForm({
                   }}
                   placeholder={t('street_placeholder')}
                   className={cn(
-                    "w-full h-14 px-6 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300 rounded-2xl text-xs font-bold outline-none shadow-sm focus:shadow-md",
+                    "w-full h-14 px-6 bg-zinc-100/70 text-zinc-900 caret-zinc-900 placeholder:text-zinc-400 border-2 border-zinc-200/70 focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300 rounded-2xl text-sm font-semibold outline-none shadow-sm focus:shadow-md",
                     errors.address && "!border-red-500 !ring-2 !ring-red-100"
                   )}
                   autoComplete="off"
@@ -2062,7 +2062,7 @@ export default function CheckoutForm({
                     onChange={(e) => setCity(e.target.value)} 
                     placeholder={country === 'RO' ? (locale === 'ro' ? 'București' : 'Bucharest') : (locale === 'ro' ? 'Oraș' : 'City')} 
                     className={cn(
-                      "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
+                      "rounded-2xl h-14 bg-zinc-100/70 text-zinc-900 caret-zinc-900 font-semibold border-2 border-zinc-200/70 focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
                       errors.city && "!border-red-500 !ring-2 !ring-red-100"
                     )} 
                   />
@@ -2084,7 +2084,7 @@ export default function CheckoutForm({
                     inputMode={country === 'RO' ? 'numeric' : 'text'}
                     placeholder={country === 'RO' ? "Ex: 012345" : "Ex: 100000"} 
                     className={cn(
-                      "rounded-2xl h-14 bg-zinc-100/50 border-2 border-transparent focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
+                      "rounded-2xl h-14 bg-zinc-100/70 text-zinc-900 caret-zinc-900 font-semibold border-2 border-zinc-200/70 focus:bg-white focus:border-[#e32f8c] focus:ring-4 focus:ring-[#e32f8c]/10 transition-all duration-300",
                       errors.postalCode && "!border-red-500 !ring-2 !ring-red-100"
                     )} 
                   />
@@ -2096,7 +2096,7 @@ export default function CheckoutForm({
                   {t('phone_label')} <span className="text-red-500 font-black">*</span>
                 </Label>
                 <div className={cn(
-                  "flex h-14 bg-zinc-100/50 border-2 border-transparent focus-within:bg-white focus-within:border-[#e32f8c] focus-within:ring-4 focus-within:ring-[#e32f8c]/10 transition-all duration-300 rounded-2xl relative shadow-sm focus-within:shadow-md",
+                  "flex h-14 bg-zinc-100/70 border-2 border-zinc-200/70 focus-within:bg-white focus-within:border-[#e32f8c] focus-within:ring-4 focus-within:ring-[#e32f8c]/10 transition-all duration-300 rounded-2xl relative shadow-sm focus-within:shadow-md",
                   errors.phone && "!border-red-500 !ring-2 !ring-red-100"
                 )}>
                   <CustomPrefixSelect
@@ -2109,7 +2109,7 @@ export default function CheckoutForm({
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
                     placeholder={COUNTRY_DATA[phoneCountry]?.placeholder || COUNTRY_DATA.RO.placeholder}
-                    className="flex-1 px-4 bg-transparent text-xs font-bold outline-none rounded-r-2xl"
+                    className="flex-1 px-4 bg-transparent text-sm font-semibold text-zinc-900 caret-zinc-900 placeholder:text-zinc-400 outline-none rounded-r-2xl"
                   />
                 </div>
               </div>
@@ -2357,7 +2357,7 @@ export default function CheckoutForm({
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => setGiftMessage(e.target.value)} 
                           placeholder={locale === 'ro' ? 'Scrie un mesaj drăguț...' : 'Write a nice message...'} 
-                          className="mt-2 w-full rounded-2xl min-h-[100px] p-4 bg-white border-2 border-zinc-200 focus:border-[#ff007a] focus:ring-4 focus:ring-[#ff007a]/10 transition-all duration-300 resize-none text-sm relative z-20 cursor-text" 
+                          className="mt-2 w-full rounded-2xl min-h-[100px] p-4 bg-white text-zinc-900 caret-zinc-900 placeholder:text-zinc-400 border-2 border-zinc-200 focus:border-[#ff007a] focus:ring-4 focus:ring-[#ff007a]/10 transition-all duration-300 resize-none text-sm relative z-20 cursor-text" 
                         />
                       </div>
                     )}

@@ -150,7 +150,7 @@ export function CouponInput({ variant = "checkout", onApplied }: CouponInputProp
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           onKeyDown={(e) => e.key === 'Enter' && handleApply()}
           placeholder={t('discount_placeholder')} 
-          className="bg-transparent border-none h-10 text-xs font-black focus-visible:ring-0 placeholder:text-zinc-400 placeholder:uppercase"
+          className="bg-transparent border-none h-10 text-xs font-black text-zinc-900 caret-zinc-900 focus-visible:ring-0 placeholder:text-zinc-400 placeholder:uppercase"
           disabled={loading}
         />
         <Button 

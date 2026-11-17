@@ -258,7 +258,7 @@ export default function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-[#fafafc] flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-[#fafafc] text-zinc-900 [color-scheme:light] flex flex-col items-center justify-center p-6 text-center">
         <motion.div 
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -279,7 +279,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fafafc] pt-8 md:pt-24 pb-12" style={{ '--primary': '#e32f8c' } as React.CSSProperties}>
+    <div className="min-h-screen bg-[#fafafc] text-zinc-900 [color-scheme:light] pt-8 md:pt-24 pb-12" style={{ '--primary': '#e32f8c' } as React.CSSProperties}>
       <div className="container mx-auto px-4 md:px-6">
         <header className="mb-6 md:mb-12 max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
            <Link href="/" className="inline-flex items-center gap-3 text-zinc-400 hover:text-black transition-colors group">

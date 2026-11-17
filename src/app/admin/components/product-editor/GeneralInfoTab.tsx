@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { uploadProductImage } from "@/app/actions/admin-products";
 import { getProgramFilesAction, uploadProgramPdfAction } from "@/app/actions/programs";
+import { LanguageFlagSvg } from "@/components/programs/LanguageFlagSvg";
 import { isDigitalProgramId, PROGRAM_SLUGS, PROGRAM_UUIDS, sanitizeProgramSlug } from "@/lib/programs";
 import {
   getDefaultProductHighlights,
@@ -166,19 +167,19 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
     }
   };
 
-  const pdfSlotsForProduct = (() => {
+  const pdfSlotsForProduct: Array<{ slot: string; label: string; lang: "en" | "ro" }> = (() => {
     const slugOrId = `${product.slug || ""} ${product.id || ""}`.toLowerCase();
     if (
       slugOrId.includes(PROGRAM_SLUGS.BUNDLE) ||
       slugOrId.includes(PROGRAM_UUIDS.BUNDLE)
     ) {
       return [
-        { slot: "food-plan-en", label: "Food Plan — 🇬🇧 English (PDF)" },
-        { slot: "food-plan-ro", label: "Food Plan — 🇷🇴 Română (PDF)" },
-        { slot: "training-program-en", label: "Training Program — 🇬🇧 English (PDF)" },
-        { slot: "training-program-ro", label: "Training Program — 🇷🇴 Română (PDF)" },
-        { slot: "bench-program-en", label: "Bench Program — 🇬🇧 English (PDF)" },
-        { slot: "bench-program-ro", label: "Bench Program — 🇷🇴 Română (PDF)" },
+        { slot: "food-plan-en", label: "Food Plan — English (PDF)", lang: "en" },
+        { slot: "food-plan-ro", label: "Food Plan — Română (PDF)", lang: "ro" },
+        { slot: "training-program-en", label: "Training Program — English (PDF)", lang: "en" },
+        { slot: "training-program-ro", label: "Training Program — Română (PDF)", lang: "ro" },
+        { slot: "bench-program-en", label: "Bench Program — English (PDF)", lang: "en" },
+        { slot: "bench-program-ro", label: "Bench Program — Română (PDF)", lang: "ro" },
       ];
     }
     if (
@@ -186,8 +187,8 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
       slugOrId.includes(PROGRAM_UUIDS.TRAINING_PROGRAM)
     ) {
       return [
-        { slot: "training-program-en", label: "Training Program — 🇬🇧 English (PDF)" },
-        { slot: "training-program-ro", label: "Training Program — 🇷🇴 Română (PDF)" },
+        { slot: "training-program-en", label: "Training Program — English (PDF)", lang: "en" },
+        { slot: "training-program-ro", label: "Training Program — Română (PDF)", lang: "ro" },
       ];
     }
     if (
@@ -195,8 +196,8 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
       slugOrId.includes(PROGRAM_UUIDS.BENCH_PROGRAM)
     ) {
       return [
-        { slot: "bench-program-en", label: "Bench Program — 🇬🇧 English (PDF)" },
-        { slot: "bench-program-ro", label: "Bench Program — 🇷🇴 Română (PDF)" },
+        { slot: "bench-program-en", label: "Bench Program — English (PDF)", lang: "en" },
+        { slot: "bench-program-ro", label: "Bench Program — Română (PDF)", lang: "ro" },
       ];
     }
     if (
@@ -204,8 +205,8 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
       slugOrId.includes(PROGRAM_UUIDS.FOOD_PLAN)
     ) {
       return [
-        { slot: "food-plan-en", label: "Food Plan — 🇬🇧 English (PDF)" },
-        { slot: "food-plan-ro", label: "Food Plan — 🇷🇴 Română (PDF)" },
+        { slot: "food-plan-en", label: "Food Plan — English (PDF)", lang: "en" },
+        { slot: "food-plan-ro", label: "Food Plan — Română (PDF)", lang: "ro" },
       ];
     }
     const customKey = sanitizeProgramSlug(product.slug || product.id || "program");
@@ -214,8 +215,8 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
       product.slug ||
       "Program Digital";
     return [
-      { slot: `${customKey}-en`, label: `${displayTitle} — 🇬🇧 English (PDF)` },
-      { slot: `${customKey}-ro`, label: `${displayTitle} — 🇷🇴 Română (PDF)` },
+      { slot: `${customKey}-en`, label: `${displayTitle} — English (PDF)`, lang: "en" },
+      { slot: `${customKey}-ro`, label: `${displayTitle} — Română (PDF)`, lang: "ro" },
     ];
   })();
 
@@ -396,7 +397,7 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {pdfSlotsForProduct.map(({ slot, label }) => {
+              {pdfSlotsForProduct.map(({ slot, label, lang }) => {
                 const currentUrl = programFiles[slot];
                 const isUploadingThis = uploadingPdfSlot === slot;
                 return (
@@ -405,8 +406,9 @@ export function GeneralInfoTab({ product, onChange }: GeneralInfoTabProps) {
                     className="p-3.5 rounded-xl bg-white border border-purple-200/80 shadow-2xs flex items-center justify-between gap-3"
                   >
                     <div className="min-w-0">
-                      <div className="text-xs font-black text-slate-900 truncate">
-                        {label}
+                      <div className="flex items-center gap-1.5 text-xs font-black text-slate-900 truncate">
+                        <LanguageFlagSvg isEnglish={lang === "en"} className="w-[18px] h-[12px] shrink-0" />
+                        <span className="truncate">{label}</span>
                       </div>
                       <div className="mt-1 flex items-center gap-2">
                         {currentUrl ? (

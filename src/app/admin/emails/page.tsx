@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, Save, RefreshCw, Eye, Code, Languages, ChevronDown, Paperclip, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Mail, Save, RefreshCw, Eye, Code, Languages, ChevronDown, Paperclip, CheckCircle2, ExternalLink, FileText } from 'lucide-react';
+import { LanguageFlagSvg } from '@/components/programs/LanguageFlagSvg';
 import { motion, AnimatePresence } from 'framer-motion';
 import { updateEmailTemplate, EmailTemplate as DBEmailTemplate } from '@/app/actions/email-templates';
 import { getProgramFilesAction, uploadProgramPdfAction, type AdminProgramPdfSlot } from '@/app/actions/programs';
@@ -81,12 +82,12 @@ export default function AdminEmailsPage() {
   const [selectedAbandoned72hCoupon, setSelectedAbandoned72hCoupon] = useState<string>('');
   const [programFiles, setProgramFiles] = useState<StoredProgramFiles>({});
   const [programSlots, setProgramSlots] = useState<AdminProgramPdfSlot[]>([
-    { slot: 'food-plan-en', label: '🥗 Food Plan — 🇬🇧 English (PDF)', programTitle: 'Food Plan', lang: 'en' },
-    { slot: 'food-plan-ro', label: '🥗 Food Plan — 🇷🇴 Română (PDF)', programTitle: 'Food Plan', lang: 'ro' },
-    { slot: 'training-program-en', label: '📘 Training Program — 🇬🇧 English (PDF)', programTitle: 'Training Program', lang: 'en' },
-    { slot: 'training-program-ro', label: '📘 Training Program — 🇷🇴 Română (PDF)', programTitle: 'Training Program', lang: 'ro' },
-    { slot: 'bench-program-en', label: '🏋️ Bench Program — 🇬🇧 English (PDF)', programTitle: 'Bench Program', lang: 'en' },
-    { slot: 'bench-program-ro', label: '🏋️ Bench Program — 🇷🇴 Română (PDF)', programTitle: 'Bench Program', lang: 'ro' },
+    { slot: 'food-plan-en', label: 'Food Plan — English (PDF)', programTitle: 'Food Plan', lang: 'en' },
+    { slot: 'food-plan-ro', label: 'Food Plan — Română (PDF)', programTitle: 'Food Plan', lang: 'ro' },
+    { slot: 'training-program-en', label: 'Training Program — English (PDF)', programTitle: 'Training Program', lang: 'en' },
+    { slot: 'training-program-ro', label: 'Training Program — Română (PDF)', programTitle: 'Training Program', lang: 'ro' },
+    { slot: 'bench-program-en', label: 'Bench Program — English (PDF)', programTitle: 'Bench Program', lang: 'en' },
+    { slot: 'bench-program-ro', label: 'Bench Program — Română (PDF)', programTitle: 'Bench Program', lang: 'ro' },
   ]);
   const [uploadingSlot, setUploadingSlot] = useState<ProgramFileSlot | null>(null);
 
@@ -446,16 +447,23 @@ export default function AdminEmailsPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {programSlots.map(({ slot, label }) => {
+          {programSlots.map(({ slot, programTitle, lang: slotLang }) => {
             const attachedUrl = programFiles[slot];
             const isUploading = uploadingSlot === slot;
+            const isEnglish = slotLang === 'en';
             return (
               <div
                 key={slot}
                 className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3"
               >
                 <div>
-                  <div className="text-xs font-black text-slate-800 mb-1">{label}</div>
+                  <div className="flex items-center gap-1.5 text-xs font-black text-slate-800 mb-1 flex-wrap">
+                    <FileText size={13} className="text-slate-500 shrink-0" />
+                    <span>{programTitle}</span>
+                    <span className="text-slate-300">—</span>
+                    <LanguageFlagSvg isEnglish={isEnglish} className="w-[18px] h-[12px] shrink-0" />
+                    <span>{isEnglish ? 'English (PDF)' : 'Română (PDF)'}</span>
+                  </div>
                   {attachedUrl ? (
                     <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
                       <CheckCircle2 size={13} />

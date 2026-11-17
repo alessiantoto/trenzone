@@ -49,12 +49,12 @@ export async function getProgramFilesAction(): Promise<{
   ]);
 
   const slots: AdminProgramPdfSlot[] = [
-    { slot: 'food-plan-en', label: '🥗 Food Plan — 🇬🇧 English (PDF)', programTitle: 'Food Plan', lang: 'en' },
-    { slot: 'food-plan-ro', label: '🥗 Food Plan — 🇷🇴 Română (PDF)', programTitle: 'Food Plan', lang: 'ro' },
-    { slot: 'training-program-en', label: '📘 Training Program — 🇬🇧 English (PDF)', programTitle: 'Training Program', lang: 'en' },
-    { slot: 'training-program-ro', label: '📘 Training Program — 🇷🇴 Română (PDF)', programTitle: 'Training Program', lang: 'ro' },
-    { slot: 'bench-program-en', label: '🏋️ Bench Program — 🇬🇧 English (PDF)', programTitle: 'Bench Program', lang: 'en' },
-    { slot: 'bench-program-ro', label: '🏋️ Bench Program — 🇷🇴 Română (PDF)', programTitle: 'Bench Program', lang: 'ro' },
+    { slot: 'food-plan-en', label: 'Food Plan — English (PDF)', programTitle: 'Food Plan', lang: 'en' },
+    { slot: 'food-plan-ro', label: 'Food Plan — Română (PDF)', programTitle: 'Food Plan', lang: 'ro' },
+    { slot: 'training-program-en', label: 'Training Program — English (PDF)', programTitle: 'Training Program', lang: 'en' },
+    { slot: 'training-program-ro', label: 'Training Program — Română (PDF)', programTitle: 'Training Program', lang: 'ro' },
+    { slot: 'bench-program-en', label: 'Bench Program — English (PDF)', programTitle: 'Bench Program', lang: 'en' },
+    { slot: 'bench-program-ro', label: 'Bench Program — Română (PDF)', programTitle: 'Bench Program', lang: 'ro' },
   ];
 
   const builtInIds = new Set<string>([
@@ -79,8 +79,8 @@ export async function getProgramFilesAction(): Promise<{
       (typeof prod.name === 'object' ? prod.name.ro || prod.name.en : prod.name) ||
       key;
     slots.push(
-      { slot: `${key}-en`, label: `📄 ${title} — 🇬🇧 English (PDF)`, programTitle: String(title), lang: 'en' },
-      { slot: `${key}-ro`, label: `📄 ${title} — 🇷🇴 Română (PDF)`, programTitle: String(title), lang: 'ro' }
+      { slot: `${key}-en`, label: `${title} — English (PDF)`, programTitle: String(title), lang: 'en' },
+      { slot: `${key}-ro`, label: `${title} — Română (PDF)`, programTitle: String(title), lang: 'ro' }
     );
   }
 

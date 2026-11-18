@@ -308,6 +308,7 @@ export default async function LocaleLayout({
               "contactPoint": {
                 "@type": "ContactPoint",
                 "contactType": "Customer Service",
+                "telephone": "+40 721 969 380",
                 "availableLanguage": ["Romanian", "English"],
                 "email": "trenzone483@gmail.com"
               }

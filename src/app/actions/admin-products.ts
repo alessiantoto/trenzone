@@ -17,6 +17,45 @@ function normalizeProductUuid(id?: string | null): string {
   return trimmed.toLowerCase() === LEGACY_TRAINING_UUID ? PROGRAM_UUIDS.TRAINING_PROGRAM : trimmed;
 }
 
+async function purgeCloudflareProductUrls(slug?: string | null): Promise<void> {
+  const cfZoneId = process.env.CLOUDFLARE_ZONE_ID;
+  const cfApiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (!cfZoneId || !cfApiToken) return;
+
+  const files = [
+    'https://www.trenzone.fit/api/products',
+    'https://trenzone.fit/api/products',
+    'https://www.trenzone.fit/ro',
+    'https://www.trenzone.fit/en',
+    'https://www.trenzone.fit/ro/shop',
+    'https://www.trenzone.fit/en/shop',
+    'https://www.trenzone.fit/ro/programs',
+    'https://www.trenzone.fit/en/programs',
+    'https://www.trenzone.fit/ro/about',
+    'https://www.trenzone.fit/en/about',
+    'https://www.trenzone.fit/api/feeds/google-merchant',
+  ];
+  if (slug) {
+    files.push(
+      `https://www.trenzone.fit/ro/product/${slug}`,
+      `https://www.trenzone.fit/en/product/${slug}`
+    );
+  }
+
+  try {
+    await fetch(`https://api.cloudflare.com/client/v4/zones/${cfZoneId}/purge_cache`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cfApiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ files }),
+    });
+  } catch (err) {
+    console.warn('Cloudflare product cache purge skipped:', err);
+  }
+}
+
 export async function getAdminProductBySlug(slugOrId: string): Promise<any | null> {
   const isAuthorized = await isAdminAuthorized();
   if (!isAuthorized) throw new Error('Neautorizat');
@@ -238,7 +277,10 @@ export async function updateProductAdmin(product: Partial<Product> & { id: strin
   // Revalidate caching
   revalidateTag('products', 'max');
   revalidatePath('/', 'layout');
+  revalidatePath('/ro', 'page');
+  revalidatePath('/en', 'page');
   revalidatePath('/api/products');
+  revalidatePath('/api/feeds/google-merchant');
   revalidatePath('/sitemap.xml');
   revalidatePath('/en/product/[slug]', 'page');
   revalidatePath('/ro/product/[slug]', 'page');
@@ -246,10 +288,16 @@ export async function updateProductAdmin(product: Partial<Product> & { id: strin
   revalidatePath('/ro/programs', 'page');
   revalidatePath('/en/shop', 'page');
   revalidatePath('/ro/shop', 'page');
+  revalidatePath('/en/about', 'page');
+  revalidatePath('/ro/about', 'page');
   revalidatePath('/admin/products');
-  if (product.slug) {
-    revalidatePath(`/admin/products/${product.slug}`);
+  const resolvedSlug = product.slug || data?.slug;
+  if (resolvedSlug) {
+    revalidatePath(`/ro/product/${resolvedSlug}`, 'page');
+    revalidatePath(`/en/product/${resolvedSlug}`, 'page');
+    revalidatePath(`/admin/products/${resolvedSlug}`);
   }
+  await purgeCloudflareProductUrls(resolvedSlug);
 
   return { success: true, data };
 }
@@ -358,9 +406,19 @@ export async function deleteProductAdmin(id: string, imageUrls?: string[]) {
 
   revalidateTag('products', 'max');
   revalidatePath('/', 'layout');
+  revalidatePath('/ro', 'page');
+  revalidatePath('/en', 'page');
   revalidatePath('/api/products');
+  revalidatePath('/api/feeds/google-merchant');
   revalidatePath('/sitemap.xml');
+  revalidatePath('/en/shop', 'page');
+  revalidatePath('/ro/shop', 'page');
+  revalidatePath('/en/programs', 'page');
+  revalidatePath('/ro/programs', 'page');
+  revalidatePath('/en/about', 'page');
+  revalidatePath('/ro/about', 'page');
   revalidatePath('/admin/products');
+  await purgeCloudflareProductUrls();
   return { success: true };
 }
 
@@ -424,13 +482,19 @@ export async function toggleProductStatus(id: string, isActive: boolean) {
 
   revalidateTag('products', 'max');
   revalidatePath('/', 'layout');
+  revalidatePath('/ro', 'page');
+  revalidatePath('/en', 'page');
   revalidatePath('/api/products');
+  revalidatePath('/api/feeds/google-merchant');
   revalidatePath('/sitemap.xml');
   revalidatePath('/admin/products');
   revalidatePath('/en/programs', 'page');
   revalidatePath('/ro/programs', 'page');
   revalidatePath('/en/shop', 'page');
   revalidatePath('/ro/shop', 'page');
+  revalidatePath('/en/about', 'page');
+  revalidatePath('/ro/about', 'page');
+  await purgeCloudflareProductUrls();
 
   return { success: true };
 }

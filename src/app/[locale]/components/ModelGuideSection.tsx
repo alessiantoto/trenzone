@@ -12,9 +12,15 @@ import { getCdnUrl } from "@/lib/utils/cdn";
 
 interface ModelGuideProps {
   onSelectModel?: (model: "x5" | "x10") => void;
+  x5Price?: number | Record<string, number>;
+  x10Price?: number | Record<string, number>;
 }
 
-export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
+export function ModelGuideSection({
+  onSelectModel,
+  x5Price = 329.99,
+  x10Price = 529.99,
+}: ModelGuideProps) {
   const locale = useLocale();
   const isRo = locale === "ro";
   const { currency } = useRegionStore();
@@ -48,7 +54,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
             {isRo ? "SERII DE VOLUM" : "VOLUME SETS"}
           </span>
           <span className="text-xl sm:text-2xl font-black text-white shrink-0 font-[family-name:var(--font-oswald)]">
-            {formatPrice(getProductPrice(329.99, currency), currency)}
+            {formatPrice(getProductPrice(x5Price, currency), currency)}
           </span>
         </div>
 
@@ -162,7 +168,7 @@ export function ModelGuideSection({ onSelectModel }: ModelGuideProps) {
             {isRo ? "SERII GRELE & PR-URI" : "HEAVY SETS & PRS"}
           </span>
           <span className="text-xl sm:text-2xl font-black text-white shrink-0 font-[family-name:var(--font-oswald)]">
-            {formatPrice(getProductPrice(529.99, currency), currency)}
+            {formatPrice(getProductPrice(x10Price, currency), currency)}
           </span>
         </div>
 

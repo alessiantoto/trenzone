@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getProductsServer } from '@/app/actions/products';
 
-// Cache public product catalog for 24h at edge CDN (admin product edits purge immediately)
-export const revalidate = 86400;
+// Cache public product catalog for 60s at edge CDN (fast shield on traffic spikes + auto-fresh within 1 min on price/stock edits)
+export const revalidate = 60;
 
 export async function GET() {
   try {
@@ -11,8 +11,8 @@ export async function GET() {
       { success: true, products },
       {
         headers: {
-          'Cache-Control': 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800',
-          'CDN-Cache-Control': 'public, s-maxage=86400',
+          'Cache-Control': 'public, max-age=15, s-maxage=60, stale-while-revalidate=300',
+          'CDN-Cache-Control': 'public, s-maxage=60',
         },
       }
     );

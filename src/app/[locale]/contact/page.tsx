@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { Mail, MapPin, Send, CheckCircle2, MessageSquare, ChevronRight, Loader2 } from 'lucide-react';
+import { Mail, MapPin, Phone, Send, CheckCircle2, MessageSquare, ChevronRight, Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/routing';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -266,20 +266,40 @@ export default function ContactPage() {
           </div>
 
           {/* ═══ Bottom: Info ═══ */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto w-full">
+              {/* Phone & WhatsApp Card */}
+              <div className="group flex items-start gap-5 p-7 bg-zinc-50 border border-zinc-100 rounded-[28px] hover:border-zinc-200 transition-all duration-500 w-full">
+                <div className="w-12 h-12 rounded-2xl bg-black/5 flex items-center justify-center border border-black/10 group-hover:bg-black transition-all text-zinc-400 group-hover:text-white shrink-0">
+                  <Phone className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">{isRo ? 'Telefon & WhatsApp' : 'Phone & WhatsApp'}</p>
+                  <a href="tel:+40721969380" className="block text-base sm:text-lg font-bold text-black hover:text-[#e32f8c] transition-colors">(0721) 969 380</a>
+                  <a
+                    href="https://wa.me/40721969380"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-1.5 text-[11px] font-black uppercase tracking-wider text-[#188641] hover:text-black transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    {isRo ? 'Scrie pe WhatsApp' : 'Chat on WhatsApp'}
+                  </a>
+                </div>
+              </div>
+
               {/* Email Card */}
               <div className="group flex items-start gap-5 p-7 bg-zinc-50 border border-zinc-100 rounded-[28px] hover:border-zinc-200 transition-all duration-500 w-full">
                 <div className="w-12 h-12 rounded-2xl bg-black/5 flex items-center justify-center border border-black/10 group-hover:bg-black transition-all text-zinc-400 group-hover:text-white shrink-0">
                   <Mail className="w-5 h-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">{t('info_email')}</p>
                   <a href="mailto:trenzone483@gmail.com" className="text-base sm:text-lg font-bold text-black hover:text-[#e32f8c] transition-colors break-all">trenzone483@gmail.com</a>
                 </div>
               </div>
 
               {/* Company Info Card */}
-              <div className="group flex items-start gap-5 p-7 bg-zinc-50 border border-zinc-100 rounded-[28px] hover:border-zinc-200 transition-all duration-500 w-full">
+              <div className="group flex items-start gap-5 p-7 bg-zinc-50 border border-zinc-100 rounded-[28px] hover:border-zinc-200 transition-all duration-500 w-full md:col-span-2 lg:col-span-1">
                 <div className="w-12 h-12 rounded-2xl bg-black/5 flex items-center justify-center border border-black/10 group-hover:bg-black transition-all text-zinc-400 group-hover:text-white shrink-0">
                   <MapPin className="w-5 h-5" />
                 </div>

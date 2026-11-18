@@ -281,6 +281,13 @@ export function Footer() {
                 <h4 className="font-black text-white text-[11px] lg:text-[10px] tracking-[0.3em] uppercase py-5 lg:p-0 border-b lg:border-none border-white/5 mb-6 lg:mb-8">{t('contact')}</h4>
                 <ul className="space-y-4 text-sm font-medium text-zinc-400">
                   <li className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">{locale === 'ro' ? 'Telefon & WhatsApp' : 'Phone & WhatsApp'}</span>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <a href="tel:+40721969380" className="hover:text-primary transition-colors">(0721) 969 380</a>
+                      <a href="https://wa.me/40721969380" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-[#25D366] hover:underline">WhatsApp</a>
+                    </div>
+                  </li>
+                  <li className="flex flex-col gap-1">
                     <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">{locale === 'ro' ? 'Email Suport' : 'Support Email'}</span>
                     <a href="mailto:trenzone483@gmail.com" className="hover:text-primary transition-colors">trenzone483@gmail.com</a>
                   </li>

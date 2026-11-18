@@ -349,6 +349,7 @@ export function CartSheet() {
     addItem,
     removeItem,
     updateQuantity,
+    syncCartWithCatalog,
     getTotals,
     appliedCoupon,
     setCoupon,
@@ -382,6 +383,7 @@ export function CartSheet() {
   const router = useRouter();
   const pathname = usePathname();
   const checkoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastProductsFetchRef = useRef<number>(0);
 
   useEffect(() => {
     setIsProceedingToCheckout(false);
@@ -428,13 +430,19 @@ export function CartSheet() {
   };
 
   useEffect(() => {
-    if (!isCartOpen || allProducts.length > 0) return;
+    if (!isCartOpen) return;
+    const isStale = Date.now() - lastProductsFetchRef.current > 60_000;
+    if (allProducts.length > 0 && !isStale) return;
     let mounted = true;
 
     fetch("/api/products")
       .then((res) => res.json())
       .then((data) => {
-        if (mounted && data.success) setAllProducts(data.products);
+        if (mounted && data.success) {
+          lastProductsFetchRef.current = Date.now();
+          setAllProducts(data.products);
+          syncCartWithCatalog(data.products);
+        }
       })
       .catch((err) => console.error("Failed to fetch products:", err));
 

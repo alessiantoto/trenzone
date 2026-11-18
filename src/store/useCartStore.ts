@@ -38,6 +38,7 @@ interface CartState {
   addItemsBatch: (entries: Array<{ product: Product; variant?: { name: string; image?: string; imageIndex?: number; stock_status?: string }; quantity?: number }>, options?: { openCart?: boolean }) => boolean;
   removeItem: (productId: string, variantName?: string) => void;
   updateQuantity: (productId: string, quantity: number, variantName?: string) => void;
+  syncCartWithCatalog: (catalog: Product[]) => void;
   clearCart: () => void;
   setCoupon: (coupon: Coupon | null) => void;
   isCartOpen: boolean;
@@ -315,6 +316,31 @@ export const useCartStore = create<CartState>()(
               : item
           ),
         }));
+      },
+      syncCartWithCatalog: (catalog) => {
+        if (!Array.isArray(catalog) || catalog.length === 0) return;
+        set((state) => {
+          let changed = false;
+          const nextItems = state.items.map((item) => {
+            if (/-bundle-\d+$/.test(String(item.id || ""))) return item;
+            const match = catalog.find(
+              (p) => p.id === item.id || (item.slug && p.slug === item.slug)
+            );
+            if (!match) return item;
+            const nextPrice = Number(match.price);
+            const nextOrig = match.originalPrice !== undefined ? Number(match.originalPrice) : undefined;
+            if (
+              Number.isFinite(nextPrice) &&
+              nextPrice > 0 &&
+              (Math.abs(Number(item.price) - nextPrice) > 0.001 || item.originalPrice !== nextOrig)
+            ) {
+              changed = true;
+              return { ...item, price: nextPrice, originalPrice: nextOrig };
+            }
+            return item;
+          });
+          return changed ? { items: nextItems } : state;
+        });
       },
       applyCoupon: (coupon: Coupon | null) => set({ appliedCoupon: coupon }),
       setCoupon: (coupon: Coupon | null) => set({ appliedCoupon: coupon }),

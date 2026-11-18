@@ -320,7 +320,7 @@ export function TrenZoneAssistant() {
                           </div>
                           
                           <div className="pt-2">
-                            <a href="https://wa.me/40730214738" target="_blank" rel="noopener noreferrer" className="w-full bg-[#25D366]/10 border border-[#25D366]/20 text-[#25D366] py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-[#25D366] hover:text-black transition-all">
+                            <a href="https://wa.me/40721969380" target="_blank" rel="noopener noreferrer" className="w-full bg-[#25D366]/10 border border-[#25D366]/20 text-[#25D366] py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-[#25D366] hover:text-black transition-all">
                               <MessageSquare className="w-4 h-4" /> {isRo ? "VREAU SĂ PUN O ÎNTREBARE PE WHATSAPP" : "ASK A QUESTION ON WHATSAPP"}
                             </a>
                           </div>

@@ -199,7 +199,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
         {/* 4. DEDICATED MODEL GUIDE: X5 vs. X10 */}
         <div className="relative z-10">
-          <ModelGuideSection />
+          <ModelGuideSection x5Price={x5Product?.price} x10Price={x10Product?.price} />
         </div>
 
         <div className="trenzone-luminous-divider" />

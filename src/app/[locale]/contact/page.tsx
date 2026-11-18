@@ -279,7 +279,7 @@ export default function ContactPage() {
                     href="https://wa.me/40721969380"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 mt-1.5 text-[11px] font-black uppercase tracking-wider text-[#188641] hover:text-black transition-colors"
+                    className="inline-flex items-center gap-1.5 mt-1.5 text-[11px] font-black uppercase tracking-wider text-zinc-500 hover:text-[#e32f8c] transition-colors"
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
                     {isRo ? 'Scrie pe WhatsApp' : 'Chat on WhatsApp'}

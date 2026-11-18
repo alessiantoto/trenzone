@@ -282,9 +282,10 @@ export function Footer() {
                 <ul className="space-y-4 text-sm font-medium text-zinc-400">
                   <li className="flex flex-col gap-1">
                     <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">{locale === 'ro' ? 'Telefon & WhatsApp' : 'Phone & WhatsApp'}</span>
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2.5">
                       <a href="tel:+40721969380" className="hover:text-primary transition-colors">(0721) 969 380</a>
-                      <a href="https://wa.me/40721969380" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-[#25D366] hover:underline">WhatsApp</a>
+                      <span className="text-zinc-600">·</span>
+                      <a href="https://wa.me/40721969380" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-zinc-300 hover:text-primary transition-colors">WhatsApp</a>
                     </div>
                   </li>
                   <li className="flex flex-col gap-1">

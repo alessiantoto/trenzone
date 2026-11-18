@@ -44,8 +44,12 @@ export const useRegionStore = create<RegionState>()(
 
       fetchExchangeRates: async () => {
         try {
-          // Avoid duplicate fetches in the same browser session
-          if (typeof sessionStorage !== "undefined") {
+          // Avoid duplicate fetches across tabs/visits for 6 hours (stored in persisted Zustand store)
+          const RATES_TTL_MS = 6 * 3600 * 1000;
+          if (typeof localStorage !== "undefined") {
+            const lastFetch = Number(localStorage.getItem("tz_rates_ts") || 0);
+            if (Date.now() - lastFetch < RATES_TTL_MS) return;
+          } else if (typeof sessionStorage !== "undefined") {
             const lastFetch = Number(sessionStorage.getItem("tz_rates_ts") || 0);
             if (Date.now() - lastFetch < 3600 * 1000) return;
           }
@@ -55,9 +59,11 @@ export const useRegionStore = create<RegionState>()(
           const json = await res.json();
           if (json?.rates && typeof json.rates === "object") {
             set({ exchangeRates: { ...FALLBACK_RATES, ...json.rates } });
-            if (typeof sessionStorage !== "undefined") {
-              sessionStorage.setItem("tz_rates_ts", String(Date.now()));
-            }
+            const nowStr = String(Date.now());
+            try {
+              if (typeof localStorage !== "undefined") localStorage.setItem("tz_rates_ts", nowStr);
+              if (typeof sessionStorage !== "undefined") sessionStorage.setItem("tz_rates_ts", nowStr);
+            } catch {}
           }
         } catch {
           // Keep FALLBACK_RATES on error

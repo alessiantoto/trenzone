@@ -61,7 +61,25 @@ export function ReferralHandler() {
 
     const applyReferralDiscount = async () => {
       try {
+        const cacheKey = "tz_ref_cache_v1";
+        try {
+          const cachedRaw = sessionStorage.getItem(cacheKey);
+          if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw);
+            if (cached?.key === attemptKey && Date.now() - Number(cached?.ts || 0) < 10 * 60 * 1000) {
+              if (cached.res?.isValid && cached.res?.coupon) {
+                useCartStore.getState().setCoupon(cached.res.coupon);
+                localStorage.setItem("tz_referral_code", targetCode);
+              }
+              return;
+            }
+          }
+        } catch {}
+
         const res = await validateCoupon(targetCode, subtotal, currency || "RON", isRo ? "ro" : "en");
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify({ key: attemptKey, ts: Date.now(), res }));
+        } catch {}
 
         if (res.isValid && res.coupon) {
           useCartStore.getState().setCoupon(res.coupon);

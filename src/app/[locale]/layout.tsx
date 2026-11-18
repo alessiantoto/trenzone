@@ -228,20 +228,20 @@ export default async function LocaleLayout({
     Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
   
   // Check maintenance mode via cached settings
-  // Only invoke dynamic cookies() if maintenance mode is actually turned on.
-  // This allows Vercel Edge CDN to cache all storefront pages when the store is open!
+  // Only invoke dynamic cookies() when a drop countdown is actively blocking access.
+  // Once dropEndMs passes (or maintenance_mode is false), cookies() is never called so Vercel Edge CDN caches 100% of storefront pages!
   const { maintenance_mode: IS_MAINTENANCE_MODE, maintenance_end_date: MAINTENANCE_END_DATE } = await getGlobalSettings();
   const dropEndMs = parseUniversalDropEndDateMs(MAINTENANCE_END_DATE);
   const nowServerMs = Date.now();
+  const isDropPending = Boolean(IS_MAINTENANCE_MODE) && (dropEndMs === null || nowServerMs < dropEndMs);
   let isMaintenanceCurrentlyBlocking = false;
 
-  if (IS_MAINTENANCE_MODE) {
-    // Reading cookies() while maintenance_mode=true keeps SSR dynamic so every timezone unlocks simultaneously at dropEndMs
+  if (isDropPending) {
+    // Reading cookies() while maintenance_mode=true & drop pending keeps SSR dynamic so every timezone unlocks simultaneously at dropEndMs
     const hasBypassCookie = await hasValidMaintenanceBypass();
-    const isDropPending = dropEndMs === null || nowServerMs < dropEndMs;
-    isMaintenanceCurrentlyBlocking = isDropPending;
+    isMaintenanceCurrentlyBlocking = true;
 
-    if (isDropPending && !hasBypassCookie) {
+    if (!hasBypassCookie) {
       return (
         <html lang={locale} className={`${inter.variable} ${oswald.variable} h-full antialiased dark`} data-scroll-behavior="smooth" suppressHydrationWarning>
           <head>

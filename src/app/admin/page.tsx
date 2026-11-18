@@ -316,10 +316,10 @@ export default function AdminDashboard() {
     fetchData();
 
     const interval = setInterval(() => {
-      if (mounted && autoRefresh) {
+      if (mounted && autoRefresh && (typeof document === 'undefined' || !document.hidden)) {
         fetchData(true);
       }
-    }, 10000);
+    }, 60000);
 
     return () => {
       mounted = false;

@@ -10,10 +10,13 @@ const DEFAULT_RATES: Record<string, number> = {
 
 const ALLOWED_CURRENCIES = ['EUR', 'USD', 'GBP'];
 
+// Statically pre-render and revalidate every hour on Vercel Edge (0 dynamic invocations per visitor; purged on Admin settings update)
+export const revalidate = 3600;
+
 /**
  * GET /api/exchange-rates
  * Returns the admin-managed exchange rates (RON base).
- * Cached for 5 minutes on the CDN edge; rates cannot be overridden from the client.
+ * Cached for 1 hour on the CDN edge; rates cannot be overridden from the client.
  */
 export async function GET() {
   try {
@@ -42,7 +45,12 @@ export async function GET() {
     console.error('Failed to fetch exchange rates:', err);
     return NextResponse.json(
       { rates: DEFAULT_RATES, base: 'RON', fallback: true },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'public, max-age=300, s-maxage=300',
+        },
+      }
     );
   }
 }

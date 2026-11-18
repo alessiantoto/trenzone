@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Mail, Search, Calendar, CheckCircle2, XCircle, X, Clock, RefreshCw } from 'lucide-react';
-import { getEmailLogs, EmailLog } from '@/app/actions/email-logs';
+import { useState, useEffect, useMemo } from 'react';
+import { Mail, Search, Calendar, CheckCircle2, XCircle, X, RefreshCw, Send, AlertTriangle, Loader2 } from 'lucide-react';
+import {
+  getEmailLogs,
+  resendSingleEmailLogAction,
+  resendBatchFailedEmailsAction,
+  EmailLog,
+} from '@/app/actions/email-logs';
+import toast from 'react-hot-toast';
 
 import { WelcomeDiscountEmail } from '@/components/email/WelcomeDiscountEmail';
 import { ReviewEmailTemplate } from '@/components/email/ReviewEmailTemplate';
@@ -10,7 +16,17 @@ import { AwbEmailTemplate } from '@/components/email/AwbEmailTemplate';
 import { ReturnConfirmationEmail } from '@/components/email/ReturnConfirmationEmail';
 import { AffiliateApprovalEmail } from '@/components/email/AffiliateApprovalEmail';
 import { BroadcastEmailTemplate } from '@/components/email/BroadcastEmailTemplate';
-import { EmailTemplate } from '@/components/email/EmailTemplate';
+
+const CRITICAL_TYPES = new Set([
+  'order-confirmation',
+  'preorder-confirmation',
+  'program-delivery',
+  'program-pending',
+  'awb-tracking',
+  'return-confirmation',
+  'affiliate-approval',
+  'review-discount',
+]);
 
 export default function EmailHistoryPage() {
   const [logs, setLogs] = useState<EmailLog[]>([]);
@@ -18,6 +34,8 @@ export default function EmailHistoryPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'failed'>('all');
   const [selectedLog, setSelectedLog] = useState<EmailLog | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [batchLoading, setBatchLoading] = useState<'critical' | 'secondary' | null>(null);
 
   useEffect(() => {
     fetchLogs();
@@ -40,6 +58,66 @@ export default function EmailHistoryPage() {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const failedStats = useMemo(() => {
+    const sentKeys = new Set<string>();
+    const critKeys = new Set<string>();
+    const secKeys = new Set<string>();
+    for (const l of logs) {
+      const orderNum = l.metadata?.orderData?.id || l.metadata?.orderId || '';
+      const key = `${String(l.recipient || '').trim().toLowerCase()}|${l.type}|${orderNum}`;
+      if (l.status === 'sent') {
+        sentKeys.add(key);
+      }
+    }
+    for (const l of logs) {
+      if (l.status === 'sent') continue;
+      const orderNum = l.metadata?.orderData?.id || l.metadata?.orderId || '';
+      const key = `${String(l.recipient || '').trim().toLowerCase()}|${l.type}|${orderNum}`;
+      if (sentKeys.has(key)) continue;
+      if (CRITICAL_TYPES.has(l.type)) critKeys.add(key);
+      else if (l.type === 'affiliate-application' || l.type === 'welcome-discount') secKeys.add(key);
+    }
+    return { criticalCount: critKeys.size, secondaryCount: secKeys.size };
+  }, [logs]);
+
+  const handleResendSingle = async (log: EmailLog, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (resendingId || batchLoading) return;
+    setResendingId(log.id);
+    try {
+      const res = await resendSingleEmailLogAction(log.id);
+      if (res.success) {
+        toast.success(res.message || `Retrimis către ${log.recipient}`);
+        if (selectedLog?.id === log.id) setSelectedLog(null);
+        await fetchLogs();
+      } else {
+        toast.error(res.error || 'Eroare la retrimitere.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la retrimitere.');
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const handleBatchResend = async (scope: 'critical' | 'secondary') => {
+    if (batchLoading || resendingId) return;
+    setBatchLoading(scope);
+    try {
+      const res = await resendBatchFailedEmailsAction(scope, scope === 'critical' ? 50 : 40);
+      if (res.sentCount > 0) {
+        toast.success(res.message, { duration: 6000 });
+      } else {
+        toast.error(res.message, { duration: 6000 });
+      }
+      await fetchLogs();
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la retrimiterea în lot.');
+    } finally {
+      setBatchLoading(null);
     }
   };
 
@@ -132,16 +210,64 @@ export default function EmailHistoryPage() {
           <h1 className="text-xl sm:text-2xl tracking-tight font-black text-slate-900">Istoric Email-uri</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">Jurnalul complet al tuturor mesajelor trimise automat de platformă.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => { if (!loading) fetchLogs(); }}
-          disabled={loading}
-          className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
-        >
-          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          <span>{loading ? 'Se actualizează...' : 'Reîmprospătează'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {failedStats.criticalCount > 0 && (
+            <button
+              type="button"
+              onClick={() => handleBatchResend('critical')}
+              disabled={Boolean(batchLoading) || loading}
+              className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-[#e32f8c] hover:bg-[#c9247a] active:scale-[0.98] text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
+            >
+              {batchLoading === 'critical' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+              <span>
+                {batchLoading === 'critical'
+                  ? 'Se retrimit criticele...'
+                  : `Retrimite Critice (${failedStats.criticalCount})`}
+              </span>
+            </button>
+          )}
+          {failedStats.secondaryCount > 0 && (
+            <button
+              type="button"
+              onClick={() => handleBatchResend('secondary')}
+              disabled={Boolean(batchLoading) || loading}
+              className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
+            >
+              {batchLoading === 'secondary' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+              <span>
+                {batchLoading === 'secondary'
+                  ? 'Se retrimit...'
+                  : `Retrimite Secundare (max 40 din ${failedStats.secondaryCount})`}
+              </span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => { if (!loading) fetchLogs(); }}
+            disabled={loading || Boolean(batchLoading)}
+            className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            <span>{loading ? 'Se actualizează...' : 'Reîmprospătează'}</span>
+          </button>
+        </div>
       </div>
+
+      {(failedStats.criticalCount > 0 || failedStats.secondaryCount > 0) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={18} />
+            <div className="text-xs sm:text-sm text-amber-950 leading-relaxed">
+              <p className="font-black">
+                Ai {failedStats.criticalCount} emailuri critice (comenzi, programe PDF, aprobări afiliați, retururi) și {failedStats.secondaryCount} secundare (welcome / cereri afiliați) netrimise.
+              </p>
+              <p className="text-amber-800 mt-0.5">
+                Trimite întâi <strong>Critice</strong> ca să nu consumi limita zilnică Resend (100/zi pe planul gratuit) pe emailurile secundare.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FILTER BAR */}
       <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-3 sm:gap-4">
@@ -218,15 +344,28 @@ export default function EmailHistoryPage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   {getLogTypeBadge(log.type)}
-                  {log.status === 'sent' ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-[11px] font-bold shrink-0">
-                      <CheckCircle2 size={13} /> Trimis
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 rounded-lg text-[11px] font-bold shrink-0">
-                      <XCircle size={13} /> Eroare
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {log.status === 'sent' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-[11px] font-bold shrink-0">
+                        <CheckCircle2 size={13} /> Trimis
+                      </span>
+                    ) : (
+                      <>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 rounded-lg text-[11px] font-bold shrink-0">
+                          <XCircle size={13} /> Eroare
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleResendSingle(log, e)}
+                          disabled={resendingId === log.id || Boolean(batchLoading)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-900 text-white rounded-lg text-[11px] font-bold hover:bg-[#e32f8c] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          {resendingId === log.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                          Retrimite
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <p className="text-sm font-bold text-slate-900 line-clamp-2 leading-snug">
@@ -301,15 +440,28 @@ export default function EmailHistoryPage() {
                       {getLogTypeBadge(log.type)}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {log.status === 'sent' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-600 rounded-lg text-xs font-bold">
-                          <CheckCircle2 size={14} /> Trimis
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-600 rounded-lg text-xs font-bold" title={log.error_message || ''}>
-                          <XCircle size={14} /> Eroare
-                        </span>
-                      )}
+                      <div className="inline-flex items-center justify-end gap-2">
+                        {log.status === 'sent' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-600 rounded-lg text-xs font-bold">
+                            <CheckCircle2 size={14} /> Trimis
+                          </span>
+                        ) : (
+                          <>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-600 rounded-lg text-xs font-bold" title={log.error_message || ''}>
+                              <XCircle size={14} /> Eroare
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleResendSingle(log, e)}
+                              disabled={resendingId === log.id || Boolean(batchLoading)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white hover:bg-[#e32f8c] rounded-lg text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              {resendingId === log.id ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                              Retrimite
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -348,11 +500,22 @@ export default function EmailHistoryPage() {
               </div>
             </div>
             
-            {/* Error Message if failed */}
-            {selectedLog.status === 'failed' && selectedLog.error_message && (
-              <div className="p-4 bg-red-50 border-t border-red-100 text-red-600 text-sm font-medium flex items-center gap-2">
-                <XCircle size={16} />
-                Eroare: {selectedLog.error_message}
+            {/* Error Message + Resend action if failed */}
+            {selectedLog.status !== 'sent' && (
+              <div className="p-4 bg-red-50 border-t border-red-100 text-red-600 text-sm font-medium flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <XCircle size={16} className="shrink-0" />
+                  <span className="break-words">Eroare: {selectedLog.error_message || 'Trimitere eșuată'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleResendSingle(selectedLog)}
+                  disabled={resendingId === selectedLog.id || Boolean(batchLoading)}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#e32f8c] hover:bg-[#c9247a] text-white rounded-xl text-xs font-black transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {resendingId === selectedLog.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  Retrimite Email
+                </button>
               </div>
             )}
           </div>

@@ -31,6 +31,12 @@ function toResendError(err: any): Error {
   return new Error(msg || 'Resend API error');
 }
 
+function throwAlreadyLoggedResendError(err: any): never {
+  const out = toResendError(err);
+  (out as any).__emailLogged = true;
+  throw out;
+}
+
 async function logEmailToDb(
   recipient: string,
   subject: string,
@@ -93,14 +99,16 @@ export async function sendBroadcastBatch(
     if (result.error) {
       console.error('❌ [MAIL SERVICE] Broadcast Batch FAILED:', result.error);
       await logEmailToDb(recipients.join(','), subject, 'broadcast', 'failed', result.error.message, { content });
-      throw toResendError(result.error);
+      throwAlreadyLoggedResendError(result.error);
     }
 
     await logEmailToDb(recipients.join(','), subject, 'broadcast', 'sent', null, { content });
     return result.data;
   } catch (err) {
     console.error('❌ [MAIL SERVICE] Broadcast Error:', err instanceof Error ? err.message : err);
-    await logEmailToDb(recipients.join(','), subject, 'broadcast', 'failed', err instanceof Error ? err.message : String(err), { content });
+    if (!(err as any)?.__emailLogged) {
+      await logEmailToDb(recipients.join(','), subject, 'broadcast', 'failed', err instanceof Error ? err.message : String(err), { content });
+    }
     throw err;
   }
 }
@@ -148,14 +156,16 @@ export async function sendWelcomeEmail(
 
     if (result.error) {
       await logEmailToDb(to, subject, 'welcome-discount', 'failed', result.error.message, { customerName, locale });
-      throw toResendError(result.error);
+      throwAlreadyLoggedResendError(result.error);
     }
     
     await logEmailToDb(to, subject, 'welcome-discount', 'sent', null, { customerName, locale });
     return result.data;
   } catch (err) {
     console.error('❌ [MAIL SERVICE] Welcome Email FAILED:', err instanceof Error ? err.message : err);
-    await logEmailToDb(to, 'Welcome Email', 'welcome-discount', 'failed', err instanceof Error ? err.message : String(err), { customerName, locale });
+    if (!(err as any)?.__emailLogged) {
+      await logEmailToDb(to, 'Welcome Email', 'welcome-discount', 'failed', err instanceof Error ? err.message : String(err), { customerName, locale });
+    }
     throw err;
   }
 }
@@ -196,15 +206,17 @@ export async function sendReviewDiscountEmail(
     });
 
     if (result.error) {
-      await logEmailToDb(to, subject, 'review-discount', 'failed', result.error.message, { customerName, locale });
-      throw toResendError(result.error);
+      await logEmailToDb(to, subject, 'review-discount', 'failed', result.error.message, { customerName, locale, couponCode, couponValue });
+      throwAlreadyLoggedResendError(result.error);
     }
     
-    await logEmailToDb(to, subject, 'review-discount', 'sent', null, { customerName, locale });
+    await logEmailToDb(to, subject, 'review-discount', 'sent', null, { customerName, locale, couponCode, couponValue });
     return result.data;
   } catch (err) {
     console.error('❌ [MAIL SERVICE] Review Discount Email FAILED:', err instanceof Error ? err.message : err);
-    await logEmailToDb(to, 'Review Discount', 'review-discount', 'failed', err instanceof Error ? err.message : String(err), { customerName, locale });
+    if (!(err as any)?.__emailLogged) {
+      await logEmailToDb(to, 'Review Discount', 'review-discount', 'failed', err instanceof Error ? err.message : String(err), { customerName, locale, couponCode, couponValue });
+    }
     throw err;
   }
 }
@@ -424,7 +436,7 @@ export async function sendOrderConfirmationEmail(
         recipient: to
       });
       await logEmailToDb(actualRecipient, payload.subject, emailType, 'failed', result.error.message, { orderData });
-      throw toResendError(result.error);
+      throwAlreadyLoggedResendError(result.error);
     }
 
     console.log('✅ [MAIL SERVICE] Resend ACCEPTED:', {
@@ -440,8 +452,10 @@ export async function sendOrderConfirmationEmail(
       orderId: orderData.id,
       stack: err instanceof Error ? err.stack?.substring(0, 300) : undefined
     });
-    const fallbackType = typeof emailType !== 'undefined' ? emailType : 'order-confirmation';
-    await logEmailToDb(to, 'Order Confirmation', fallbackType, 'failed', err instanceof Error ? err.message : String(err), { orderData });
+    if (!(err as any)?.__emailLogged) {
+      const fallbackType = typeof emailType !== 'undefined' ? emailType : 'order-confirmation';
+      await logEmailToDb(to, 'Order Confirmation', fallbackType, 'failed', err instanceof Error ? err.message : String(err), { orderData });
+    }
     throw err;
   }
 }
@@ -484,14 +498,16 @@ export async function sendReviewEmail(
     if (result.error) {
       console.error('❌ [MAIL SERVICE] Review Resend API Error:', result.error);
       await logEmailToDb(to, subject, 'review-request', 'failed', result.error.message, { orderData });
-      throw toResendError(result.error);
+      throwAlreadyLoggedResendError(result.error);
     }
 
     await logEmailToDb(to, subject, 'review-request', 'sent', null, { orderData });
     return result.data;
   } catch (err) {
     console.error('❌ [MAIL SERVICE] Review Email FAILED:', err instanceof Error ? err.message : err);
-    await logEmailToDb(to, 'Review Request', 'review-request', 'failed', err instanceof Error ? err.message : String(err), { orderData });
+    if (!(err as any)?.__emailLogged) {
+      await logEmailToDb(to, 'Review Request', 'review-request', 'failed', err instanceof Error ? err.message : String(err), { orderData });
+    }
     throw err;
   }
 }
@@ -545,14 +561,16 @@ export async function sendAwbTrackingEmail(
     if (result.error) {
       console.error('❌ [MAIL SERVICE] AWB Tracking Resend API Error:', result.error);
       await logEmailToDb(to, subject, 'awb-tracking', 'failed', result.error.message, { orderData, trackingNumber, courier });
-      throw toResendError(result.error);
+      throwAlreadyLoggedResendError(result.error);
     }
 
     await logEmailToDb(to, subject, 'awb-tracking', 'sent', null, { orderData, trackingNumber, courier });
     return result.data;
   } catch (err) {
     console.error('❌ [MAIL SERVICE] AWB Tracking Email FAILED:', err instanceof Error ? err.message : err);
-    await logEmailToDb(to, 'AWB Tracking', 'awb-tracking', 'failed', err instanceof Error ? err.message : String(err), { orderData, trackingNumber, courier });
+    if (!(err as any)?.__emailLogged) {
+      await logEmailToDb(to, 'AWB Tracking', 'awb-tracking', 'failed', err instanceof Error ? err.message : String(err), { orderData, trackingNumber, courier });
+    }
     throw err;
   }
 }
@@ -601,14 +619,16 @@ export async function sendReturnConfirmationEmail(
     if (result.error) {
       console.error('❌ [MAIL SERVICE] Return Confirmation Resend API Error:', result.error);
       await logEmailToDb(to, subject, 'return-confirmation', 'failed', result.error.message, { orderId, customerName, locale });
-      throw toResendError(result.error);
+      throwAlreadyLoggedResendError(result.error);
     }
 
     await logEmailToDb(to, subject, 'return-confirmation', 'sent', null, { orderId, customerName, locale });
     return result.data;
   } catch (err) {
     console.error('❌ [MAIL SERVICE] Return Confirmation Email FAILED:', err instanceof Error ? err.message : err);
-    await logEmailToDb(to, 'Return Confirmation', 'return-confirmation', 'failed', err instanceof Error ? err.message : String(err), { orderId, customerName, locale });
+    if (!(err as any)?.__emailLogged) {
+      await logEmailToDb(to, 'Return Confirmation', 'return-confirmation', 'failed', err instanceof Error ? err.message : String(err), { orderId, customerName, locale });
+    }
     throw err;
   }
 }
@@ -1121,7 +1141,7 @@ export async function sendProgramDeliveryEmail(
         programs: orderedPrograms,
         trigger,
       });
-      throw toResendError(result.error);
+      throwAlreadyLoggedResendError(result.error);
     }
 
     const deliveryStatus: 'delivered' | 'pending_pdf' | 'partial' =
@@ -1165,14 +1185,16 @@ export async function sendProgramDeliveryEmail(
     };
   } catch (err: any) {
     console.error('❌ [MAIL SERVICE] Program Delivery Email FAILED:', err?.message || err);
-    await logEmailToDb(
-      to,
-      `Program Delivery #${orderId}`,
-      logType,
-      'failed',
-      err?.message || String(err),
-      { orderId, programs: orderedPrograms, trigger }
-    );
+    if (!(err as any)?.__emailLogged) {
+      await logEmailToDb(
+        to,
+        `Program Delivery #${orderId}`,
+        logType,
+        'failed',
+        err?.message || String(err),
+        { orderId, programs: orderedPrograms, trigger }
+      );
+    }
     throw err;
   }
 }

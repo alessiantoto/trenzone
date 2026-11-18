@@ -98,7 +98,11 @@ export async function proxy(request: NextRequest) {
 
   // 5. STOREFRONT LOCALIZATION (Runs only for non-admin routes)
   const intlResponse = intlMiddleware(request);
-  if (country && !request.cookies.get('tz_geo_country')?.value) {
+  const isPrefetch =
+    request.headers.has('rsc') ||
+    request.headers.has('next-router-prefetch') ||
+    request.nextUrl.searchParams.has('_rsc');
+  if (country && !isPrefetch && !request.cookies.get('tz_geo_country')?.value) {
     intlResponse.cookies.set('tz_geo_country', country.toUpperCase(), {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',

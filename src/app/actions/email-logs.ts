@@ -41,7 +41,6 @@ const CRITICAL_EMAIL_TYPES = new Set([
 
 const SECONDARY_EMAIL_TYPES = new Set([
   'affiliate-application',
-  'welcome-discount',
 ]);
 
 function sleep(ms: number) {

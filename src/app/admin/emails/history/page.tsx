@@ -78,7 +78,7 @@ export default function EmailHistoryPage() {
       const key = `${String(l.recipient || '').trim().toLowerCase()}|${l.type}|${orderNum}`;
       if (sentKeys.has(key)) continue;
       if (CRITICAL_TYPES.has(l.type)) critKeys.add(key);
-      else if (l.type === 'affiliate-application' || l.type === 'welcome-discount') secKeys.add(key);
+      else if (l.type === 'affiliate-application') secKeys.add(key);
     }
     return { criticalCount: critKeys.size, secondaryCount: secKeys.size };
   }, [logs]);
@@ -237,7 +237,7 @@ export default function EmailHistoryPage() {
               <span>
                 {batchLoading === 'secondary'
                   ? 'Se retrimit...'
-                  : `Retrimite Secundare (max 40 din ${failedStats.secondaryCount})`}
+                  : `Retrimite Aplicații Afiliat (max 40 din ${failedStats.secondaryCount})`}
               </span>
             </button>
           )}
@@ -259,7 +259,7 @@ export default function EmailHistoryPage() {
             <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={18} />
             <div className="text-xs sm:text-sm text-amber-950 leading-relaxed">
               <p className="font-black">
-                Ai {failedStats.criticalCount} emailuri critice (comenzi, programe PDF, aprobări afiliați, retururi) și {failedStats.secondaryCount} secundare (welcome / cereri afiliați) netrimise.
+                Ai {failedStats.criticalCount} emailuri critice (comenzi, programe PDF, aprobări afiliați, retururi) și {failedStats.secondaryCount} cereri afiliați netrimise (welcome exclus din lot).
               </p>
               <p className="text-amber-800 mt-0.5">
                 Trimite întâi <strong>Critice</strong> ca să nu consumi limita zilnică Resend (100/zi pe planul gratuit) pe emailurile secundare.

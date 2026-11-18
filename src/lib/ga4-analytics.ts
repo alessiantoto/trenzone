@@ -513,19 +513,6 @@ export async function fetchGa4AnalyticsReport(
     ): analyticsdata_v1beta.Schema$RunReportRequest =>
       dimensionFilter ? { ...req, dimensionFilter } : req;
 
-    const runWithQuotaRetry = async <T>(fn: () => Promise<T>, retries = 1): Promise<T> => {
-      try {
-        return await fn();
-      } catch (err: any) {
-        const msg = String(err?.message || '').toLowerCase();
-        if (retries > 0 && (msg.includes('concurrent') || msg.includes('quota') || err?.code === 429)) {
-          await new Promise((r) => setTimeout(r, 500));
-          return runWithQuotaRetry(fn, retries - 1);
-        }
-        throw err;
-      }
-    };
-
     // Wave 1 (max 6 concurrent report executions to respect GA4 10-concurrent-request property quota)
     const [realtimePagesSettled, realtimeGeoDevSettled, batch1Settled] = await Promise.allSettled([
       runWithQuotaRetry(() =>
@@ -1306,5 +1293,238 @@ export async function fetchGa4AnalyticsReport(
       ...emptyBase,
       error: err?.message || 'Eroare la conectarea cu Google Analytics Data API.',
     };
+  }
+}
+
+export interface Ga4AllRefClicksResult {
+  connected: boolean;
+  totalClicks: number;
+  totalUsers: number;
+  byCode: Record<string, { clicks: number; users: number }>;
+}
+
+export interface Ga4AffiliateRefStats {
+  connected: boolean;
+  totalClicks: number;
+  uniqueVisitors: number;
+  dailySeries: Array<{ date: string; clicks: number; visitors: number }>;
+  countries: Array<{ country: string; clicks: number; visitors: number }>;
+}
+
+const refClicksAllCache = new Map<string, { ts: number; data: Ga4AllRefClicksResult }>();
+const refStatsSingleCache = new Map<string, { ts: number; data: Ga4AffiliateRefStats }>();
+const REF_CACHE_TTL_MS = 120_000;
+
+async function runWithQuotaRetry<T>(fn: () => Promise<T>, retries = 1): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    const msg = String(err?.message || '').toLowerCase();
+    if (retries > 0 && (msg.includes('concurrent') || msg.includes('quota') || err?.code === 429)) {
+      await new Promise((r) => setTimeout(r, 500));
+      return runWithQuotaRetry(fn, retries - 1);
+    }
+    throw err;
+  }
+}
+
+function extractRefCodeFromLandingPath(lp: string): string | null {
+  const qIndex = lp.indexOf('?');
+  if (qIndex === -1) return null;
+  const search = lp.slice(qIndex + 1);
+  const params = new URLSearchParams(search);
+  const raw = params.get('ref') || params.get('r') || params.get('coupon');
+  if (!raw) return null;
+  const clean = raw.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  return clean.length >= 2 ? clean : null;
+}
+
+export async function fetchGa4AllRefClicks(
+  startDate: string,
+  endDate: string
+): Promise<Ga4AllRefClicksResult> {
+  const cacheKey = `${startDate}|${endDate}`;
+  const cached = refClicksAllCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < REF_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const creds = getGa4Credentials();
+  if (!creds.configured) {
+    return { connected: false, totalClicks: 0, totalUsers: 0, byCode: {} };
+  }
+
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: creds.clientEmail,
+        private_key: creds.privateKey,
+      },
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+    });
+    const analyticsData = google.analyticsdata({ version: 'v1beta', auth });
+    const property = `properties/${creds.propertyId}`;
+
+    const res = await runWithQuotaRetry(() =>
+      analyticsData.properties.runReport({
+        property,
+        requestBody: {
+          dateRanges: [{ startDate, endDate }],
+          dimensions: [{ name: 'landingPagePlusQueryString' }],
+          metrics: [{ name: 'sessions' }, { name: 'totalUsers' }],
+          dimensionFilter: {
+            filter: {
+              fieldName: 'landingPagePlusQueryString',
+              stringFilter: {
+                matchType: 'PARTIAL_REGEXP',
+                value: '[?&](ref|r|coupon)=',
+                caseSensitive: false,
+              },
+            },
+          },
+          limit: '500',
+        },
+      })
+    );
+
+    const byCode: Record<string, { clicks: number; users: number }> = {};
+    let totalClicks = 0;
+    let totalUsers = 0;
+
+    (res.data.rows || []).forEach((r: analyticsdata_v1beta.Schema$Row) => {
+      const lp = dimVal(r, 0);
+      const code = extractRefCodeFromLandingPath(lp);
+      if (!code) return;
+      const clicks = Math.round(numMetric(r, 0));
+      const users = Math.round(numMetric(r, 1));
+      if (!byCode[code]) byCode[code] = { clicks: 0, users: 0 };
+      byCode[code].clicks += clicks;
+      byCode[code].users += users;
+      totalClicks += clicks;
+      totalUsers += users;
+    });
+
+    const data: Ga4AllRefClicksResult = {
+      connected: true,
+      totalClicks,
+      totalUsers,
+      byCode,
+    };
+    refClicksAllCache.set(cacheKey, { ts: Date.now(), data });
+    return data;
+  } catch (err: any) {
+    console.warn('[GA4 Ref Clicks All] Query warning:', err?.message || err);
+    return { connected: false, totalClicks: 0, totalUsers: 0, byCode: {} };
+  }
+}
+
+export async function fetchGa4AffiliateRefStats(
+  rawCode: string,
+  startDate?: string,
+  endDate?: string
+): Promise<Ga4AffiliateRefStats> {
+  const cleanCode = String(rawCode || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, '');
+
+  if (!cleanCode) {
+    return { connected: false, totalClicks: 0, uniqueVisitors: 0, dailySeries: [], countries: [] };
+  }
+
+  const end = endDate || getBucharestDateStr(0);
+  const start = startDate || getBucharestDateStr(-89);
+  const cacheKey = `${cleanCode}|${start}|${end}`;
+  const cached = refStatsSingleCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < REF_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const creds = getGa4Credentials();
+  if (!creds.configured) {
+    return { connected: false, totalClicks: 0, uniqueVisitors: 0, dailySeries: [], countries: [] };
+  }
+
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: creds.clientEmail,
+        private_key: creds.privateKey,
+      },
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+    });
+    const analyticsData = google.analyticsdata({ version: 'v1beta', auth });
+    const property = `properties/${creds.propertyId}`;
+    const escapedCode = cleanCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regexFilter = {
+      filter: {
+        fieldName: 'landingPagePlusQueryString',
+        stringFilter: {
+          matchType: 'PARTIAL_REGEXP' as const,
+          value: `[?&](ref|r|coupon)=${escapedCode}(&|$)`,
+          caseSensitive: false,
+        },
+      },
+    };
+
+    const res = await runWithQuotaRetry(() =>
+      analyticsData.properties.batchRunReports({
+        property,
+        requestBody: {
+          requests: [
+            {
+              dateRanges: [{ startDate: start, endDate: end }],
+              dimensions: [{ name: 'date' }],
+              metrics: [{ name: 'sessions' }, { name: 'totalUsers' }],
+              dimensionFilter: regexFilter,
+              orderBys: [{ dimension: { dimensionName: 'date' } }],
+              limit: '120',
+            },
+            {
+              dateRanges: [{ startDate: start, endDate: end }],
+              dimensions: [{ name: 'country' }],
+              metrics: [{ name: 'sessions' }, { name: 'totalUsers' }],
+              dimensionFilter: regexFilter,
+              orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+              limit: '30',
+            },
+          ],
+        },
+      })
+    );
+
+    const reports = res.data.reports || [];
+    const dailyRows = reports[0]?.rows || [];
+    const countryRows = reports[1]?.rows || [];
+
+    const dailySeries = dailyRows.map((r: analyticsdata_v1beta.Schema$Row) => ({
+      date: formatGaDateToIso(dimVal(r, 0)),
+      clicks: Math.round(numMetric(r, 0)),
+      visitors: Math.round(numMetric(r, 1)),
+    }));
+
+    const countries = countryRows
+      .map((r: analyticsdata_v1beta.Schema$Row) => ({
+        country: normalizeLabelName(dimVal(r, 0), 'Necunoscut'),
+        clicks: Math.round(numMetric(r, 0)),
+        visitors: Math.round(numMetric(r, 1)),
+      }))
+      .filter((c) => c.clicks > 0);
+
+    const totalClicks = dailySeries.reduce((s, d) => s + d.clicks, 0);
+    const uniqueVisitors = countries.reduce((s, c) => s + c.visitors, 0);
+
+    const data: Ga4AffiliateRefStats = {
+      connected: true,
+      totalClicks,
+      uniqueVisitors,
+      dailySeries,
+      countries,
+    };
+    refStatsSingleCache.set(cacheKey, { ts: Date.now(), data });
+    return data;
+  } catch (err: any) {
+    console.warn(`[GA4 Ref Stats:${cleanCode}] Query warning:`, err?.message || err);
+    return { connected: false, totalClicks: 0, uniqueVisitors: 0, dailySeries: [], countries: [] };
   }
 }

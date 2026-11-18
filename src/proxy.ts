@@ -93,7 +93,7 @@ export async function proxy(request: NextRequest) {
   const country = request.headers.get('x-vercel-ip-country') || request.headers.get('cf-ipcountry');
   
   if (pathname === '/' && country && country !== 'RO') {
-    return NextResponse.redirect(new URL('/en', request.nextUrl.origin));
+    return NextResponse.redirect(new URL(`/en${request.nextUrl.search}`, request.nextUrl.origin));
   }
 
   // 5. STOREFRONT LOCALIZATION (Runs only for non-admin routes)

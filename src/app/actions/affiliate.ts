@@ -6,10 +6,11 @@ import { sendAffiliateApplicationReceivedEmail } from '@/lib/resend-service';
 import { getSiteUrl } from '@/lib/site-config';
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/ratelimit';
 import { headers } from 'next/headers';
-
-function escapeLike(val: string): string {
-  return val.replace(/[\\%_]/g, '\\$&');
-}
+import {
+  approveAffiliateCore,
+  escapeLike,
+  getAffiliateAutoApprovalSettings,
+} from '@/lib/affiliate-auto-approve';
 
 export async function submitAffiliateApplication(data: {
   name: string;
@@ -116,16 +117,24 @@ export async function submitAffiliateApplication(data: {
     }
 
     const appLocale: 'ro' | 'en' = data.preferredLocale === 'en' ? 'en' : 'ro';
+    const autoApprovalSettings = await getAffiliateAutoApprovalSettings();
+    const isInstantAutoApprove =
+      autoApprovalSettings.enabled && autoApprovalSettings.delayMinutes === 0;
+    const scheduledAutoApproveAt =
+      autoApprovalSettings.enabled && autoApprovalSettings.delayMinutes > 0
+        ? new Date(Date.now() + autoApprovalSettings.delayMinutes * 60_000).toISOString()
+        : undefined;
 
     // Prepare JSON for social links and message
-    const socialLinksJson = {
+    const socialLinksJson: Record<string, any> = {
       links: socialLinks,
       motivation: cleanMessage,
-      locale: appLocale
+      locale: appLocale,
+      ...(scheduledAutoApproveAt ? { auto_approve_at: scheduledAutoApproveAt } : {}),
     };
 
     // Insert into DB
-    const { error } = await supabaseAdmin
+    const { data: insertedAffiliate, error } = await supabaseAdmin
       .from('affiliates')
       .insert({
         name: cleanName,
@@ -135,30 +144,56 @@ export async function submitAffiliateApplication(data: {
         commission_percent: 10,
         social_links: socialLinksJson,
         requested_at: new Date().toISOString()
-      });
+      })
+      .select('id')
+      .single();
 
-    if (error) {
+    if (error || !insertedAffiliate) {
       console.error("Failed to insert affiliate:", error);
-      throw error;
+      throw error || new Error('Insert failed');
     }
 
     const baseUrl = getSiteUrl();
     const loginUrl = `${baseUrl}/${appLocale}/affiliate/login`;
 
-    // Send confirmation email to applicant & alert to admin (safe wrapped, non-fatal)
-    await Promise.allSettled([
-      sendAffiliateApplicationReceivedEmail(cleanEmail, cleanName, cleanPreferredCode, appLocale, loginUrl).catch((appEmailErr) => {
-        console.warn("Could not send applicant confirmation email:", appEmailErr);
-      }),
-      sendContactMessage({
-        name: cleanName,
-        email: cleanEmail,
-        subject: "Nouă cerere de afiliere",
-        message: `O nouă cerere de afiliere a fost trimisă.\n\nCod Dorit: ${cleanPreferredCode || 'Niciunul'}\nLimba preferată: ${appLocale === 'en' ? 'Engleză' : 'Română'}\nSocial Media: ${socialLinks.join(', ')}\n\nMesaj / Despre public:\n${cleanMessage}\n\n*Poți vedea și aproba această cerere direct din secțiunea Program Afiliați din panoul de admin.*`
-      }).catch((adminEmailErr) => {
-        console.warn("Could not send admin contact alert for affiliate application:", adminEmailErr);
-      })
-    ]);
+    let handledByInstantAutoApprove = false;
+    if (isInstantAutoApprove) {
+      const autoResult = await approveAffiliateCore({
+        affiliateId: insertedAffiliate.id,
+        requirePending: true,
+      });
+
+      if (autoResult.success && !autoResult.skipped) {
+        handledByInstantAutoApprove = true;
+        // Brief stagger so admin contact alert does not collide with Resend's 2 req/sec limit
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        await sendContactMessage({
+          name: cleanName,
+          email: cleanEmail,
+          subject: "Nouă cerere de afiliere (Aprobată automat)",
+          message: `O nouă cerere de afiliere a fost trimisă și aprobată automat.\n\nCod Activ: ${autoResult.code || cleanPreferredCode || '-'}\nLimba preferată: ${appLocale === 'en' ? 'Engleză' : 'Română'}\nSocial Media: ${socialLinks.join(', ')}\n\nMesaj / Despre public:\n${cleanMessage}`
+        }).catch((adminEmailErr) => {
+          console.warn("Could not send admin contact alert for auto-approved affiliate:", adminEmailErr);
+        });
+      }
+    }
+
+    if (!handledByInstantAutoApprove) {
+      // Send confirmation email to applicant & alert to admin (safe wrapped, non-fatal)
+      await Promise.allSettled([
+        sendAffiliateApplicationReceivedEmail(cleanEmail, cleanName, cleanPreferredCode, appLocale, loginUrl).catch((appEmailErr) => {
+          console.warn("Could not send applicant confirmation email:", appEmailErr);
+        }),
+        sendContactMessage({
+          name: cleanName,
+          email: cleanEmail,
+          subject: "Nouă cerere de afiliere",
+          message: `O nouă cerere de afiliere a fost trimisă.\n\nCod Dorit: ${cleanPreferredCode || 'Niciunul'}\nLimba preferată: ${appLocale === 'en' ? 'Engleză' : 'Română'}\nSocial Media: ${socialLinks.join(', ')}\n\nMesaj / Despre public:\n${cleanMessage}\n\n*Poți vedea și aproba această cerere direct din secțiunea Program Afiliați din panoul de admin.*`
+        }).catch((adminEmailErr) => {
+          console.warn("Could not send admin contact alert for affiliate application:", adminEmailErr);
+        })
+      ]);
+    }
 
     return { success: true };
   } catch (err: any) {

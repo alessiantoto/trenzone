@@ -10,6 +10,7 @@ import { completeCheckoutSession } from "@/lib/checkout-tracking-server";
 import { getSingleFlavorImage } from "@/lib/product-images";
 import { getServerExchangeRates, FALLBACK_RATES } from "@/utils/pricing";
 import { getShippingConfig } from "@/app/actions/shipping";
+import { escapeLike } from "@/lib/affiliate-auto-approve";
 import {
   buildServerCalculationItems,
   fetchServerProductsForItems,
@@ -163,6 +164,34 @@ export async function POST(req: Request) {
       );
     }
 
+    // Anti-abuse: block COD for customers with >= 2 prior returned/refused/unclaimed orders
+    const escapedEmail = escapeLike(emailTrimmed);
+    const phoneSuffix = phoneDigits.length >= 9 ? phoneDigits.slice(-9) : "";
+    const customerOrFilters = [`customer_email.ilike.${escapedEmail}`];
+    if (phoneSuffix.length >= 9) {
+      customerOrFilters.push(`customer_phone.ilike.%${phoneSuffix}`);
+    }
+
+    const { count: priorUnclaimedCount, error: abuseCheckError } = await supabaseAdmin
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["returned", "refused", "neridicat"])
+      .or(customerOrFilters.join(","));
+
+    if (abuseCheckError) {
+      console.warn("⚠️ [COD CHECKOUT] Prior unclaimed orders check warning:", abuseCheckError);
+    } else if ((priorUnclaimedCount ?? 0) >= 2) {
+      return NextResponse.json(
+        {
+          error:
+            safeLocale === "en"
+              ? "Cash on delivery is unavailable due to previous unclaimed orders. Please pay online by card."
+              : "Plata ramburs este indisponibilă pentru acest cont din cauza comenzilor neridicate anterior. Te rugăm să achiți online cu cardul.",
+        },
+        { status: 400 }
+      );
+    }
+
     const cleanLine1 = String(line1 || "").trim().substring(0, 500);
     const cleanLine2 = String(line2 || "").trim().substring(0, 500);
     const cleanCity = String(city || "").trim().substring(0, 500);
@@ -272,7 +301,8 @@ export async function POST(req: Request) {
       "RON",
       100,
       safeLocale,
-      true
+      true,
+      emailTrimmed
     );
     if (!couponResolution.ok) {
       return NextResponse.json({ error: couponResolution.error }, { status: 400 });

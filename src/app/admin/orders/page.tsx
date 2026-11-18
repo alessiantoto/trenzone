@@ -60,6 +60,7 @@ import {
 } from '@/utils/order-search';
 import { convertToRon, FALLBACK_RATES } from '@/utils/pricing';
 import { FulfillmentModal } from './FulfillmentModal';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 function isOrderDigitalOnly(o: any): boolean {
   if (!o) return false;
@@ -402,6 +403,8 @@ function OrdersPageContent() {
   }, []);
   const [statusFilter, setStatusFilter] = useState(initialStatus); // all, pending_awb, generated_awb, returned, delivered, preorder
   const [paymentFilter, setPaymentFilter] = useState('all'); // all, card, cod
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
   const [error, setError] = useState<string | null>(null);
   
   // Tracking & Action loading states
@@ -1197,6 +1200,25 @@ function OrdersPageContent() {
     });
   }, [orders, searchQuery, monthFilter, statusFilter, paymentFilter, trackingStatus, isOrderHeldAsActivePreorder]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, monthFilter, statusFilter, paymentFilter]);
+
+  const safeCurrentPage = Math.min(currentPage, Math.max(1, Math.ceil(filteredOrders.length / itemsPerPage)));
+  const paginatedOrders = useMemo(
+    () => filteredOrders.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage),
+    [filteredOrders, safeCurrentPage, itemsPerPage]
+  );
+
+  const filteredOrderIdSet = useMemo(() => new Set(filteredOrders.map(o => o.id)), [filteredOrders]);
+  const selectedFilteredCount = useMemo(
+    () => selectedOrders.filter(id => filteredOrderIdSet.has(id)).length,
+    [selectedOrders, filteredOrderIdSet]
+  );
+  const allFilteredSelected = filteredOrders.length > 0 && selectedFilteredCount === filteredOrders.length;
+  const paginatedOrderIds = useMemo(() => paginatedOrders.map(o => o.id), [paginatedOrders]);
+  const allPageSelected = paginatedOrderIds.length > 0 && paginatedOrderIds.every(id => selectedOrders.includes(id));
+
   // Status counts for quick filter pills
   const counts = useMemo(() => {
     const isActivePre = (o: any) => isOrderHeldAsActivePreorder(o);
@@ -1821,38 +1843,59 @@ function OrdersPageContent() {
       <div className="space-y-3.5">
         {/* Select All Bar */}
         {!loading && filteredOrders.length > 0 && (
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-xs">
-            <button
-              onClick={() => {
-                if (selectedOrders.length === filteredOrders.length) {
-                  setSelectedOrders([]);
-                } else {
-                  setSelectedOrders(filteredOrders.map(o => o.id));
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-xs">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  if (allFilteredSelected) {
+                    setSelectedOrders(prev => prev.filter(id => !filteredOrderIdSet.has(id)));
+                  } else {
+                    setSelectedOrders(prev => Array.from(new Set([...prev, ...filteredOrders.map(o => o.id)])));
+                  }
+                }}
+                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                  allFilteredSelected
+                    ? 'bg-[#e32f8c] border-[#00b0ce]'
+                    : selectedFilteredCount > 0
+                      ? 'bg-[#e32f8c]/40 border-[#00b0ce]'
+                      : 'border-slate-300 hover:border-slate-400'
+                }`}
+              >
+                {allFilteredSelected && (
+                  <Check size={13} className="text-white stroke-[3]" />
+                )}
+                {selectedFilteredCount > 0 && !allFilteredSelected && (
+                  <div className="w-2.5 h-0.5 bg-white rounded-full" />
+                )}
+              </button>
+              <span className="text-xs font-bold text-slate-600">
+                {allFilteredSelected
+                  ? `Toate ${filteredOrders.length} comenzi selectate`
+                  : selectedFilteredCount > 0
+                    ? `${selectedFilteredCount} din ${filteredOrders.length} selectate`
+                    : `Selectează toate (${filteredOrders.length})`
                 }
-              }}
-              className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer shrink-0 ${
-                selectedOrders.length === filteredOrders.length && filteredOrders.length > 0
-                  ? 'bg-[#e32f8c] border-[#00b0ce]'
-                  : selectedOrders.length > 0
-                    ? 'bg-[#e32f8c]/40 border-[#00b0ce]'
-                    : 'border-slate-300 hover:border-slate-400'
-              }`}
-            >
-              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0 && (
-                <Check size={13} className="text-white stroke-[3]" />
-              )}
-              {selectedOrders.length > 0 && selectedOrders.length < filteredOrders.length && (
-                <div className="w-2.5 h-0.5 bg-white rounded-full" />
-              )}
-            </button>
-            <span className="text-xs font-bold text-slate-600">
-              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0
-                ? `Toate ${filteredOrders.length} comenzi selectate`
-                : selectedOrders.length > 0
-                  ? `${selectedOrders.length} din ${filteredOrders.length} selectate`
-                  : `Selectează toate (${filteredOrders.length})`
-              }
-            </span>
+              </span>
+            </div>
+
+            {filteredOrders.length > itemsPerPage && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (allPageSelected) {
+                    const pageSet = new Set(paginatedOrderIds);
+                    setSelectedOrders(prev => prev.filter(id => !pageSet.has(id)));
+                  } else {
+                    setSelectedOrders(prev => Array.from(new Set([...prev, ...paginatedOrderIds])));
+                  }
+                }}
+                className="text-[11px] font-bold text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                {allPageSelected
+                  ? `Deselectează pagina (${paginatedOrderIds.length})`
+                  : `Selectează pagina (${paginatedOrderIds.length})`}
+              </button>
+            )}
           </div>
         )}
         {loading ? (
@@ -1884,7 +1927,7 @@ function OrdersPageContent() {
             )}
           </div>
         ) : (
-          filteredOrders.map((order) => {
+          paginatedOrders.map((order) => {
             const isSelected = selectedOrders.includes(order.id);
             const isExpanded = expandedOrders.has(order.id);
             const trackInfo = trackingStatus[order.id] || (order.supabaseId ? trackingStatus[order.supabaseId] : null);
@@ -2814,6 +2857,19 @@ function OrdersPageContent() {
               </div>
             );
           })
+        )}
+
+        {!loading && !error && (
+          <AdminPagination
+            currentPage={safeCurrentPage}
+            totalItems={filteredOrders.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(p) => {
+              setCurrentPage(p);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            label="comenzi"
+          />
         )}
       </div>
 

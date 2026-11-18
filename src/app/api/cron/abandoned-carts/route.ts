@@ -10,6 +10,16 @@ import { getServerExchangeRates, normalizeCartItemsCurrency } from '@/utils/pric
 // For Vercel Cron
 export const maxDuration = 60; // seconds
 
+async function runAffiliateAutoApprovalsSafe() {
+  try {
+    const { processDueAffiliateAutoApprovals } = await import('@/lib/affiliate-auto-approve');
+    return await processDueAffiliateAutoApprovals({ maxBatch: 25 });
+  } catch (autoErr: any) {
+    console.error('[CRON ABANDONED-CARTS] Affiliate auto-approvals error:', autoErr);
+    return { error: autoErr?.message || String(autoErr) };
+  }
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
@@ -38,7 +48,14 @@ export async function GET(request: Request) {
 
     if (error) throw error;
     if (!sessions || sessions.length === 0) {
-      return NextResponse.json({ success: true, message: "No abandoned carts found in target window.", processed: 0, emailsSent: 0 });
+      const affiliateAutoApprovals = await runAffiliateAutoApprovalsSafe();
+      return NextResponse.json({
+        success: true,
+        message: "No abandoned carts found in target window.",
+        processed: 0,
+        emailsSent: 0,
+        affiliateAutoApprovals,
+      });
     }
 
     let emailsSent = 0;
@@ -192,12 +209,15 @@ export async function GET(request: Request) {
       }
     }
 
+    const affiliateAutoApprovals = await runAffiliateAutoApprovalsSafe();
+
     return NextResponse.json({ 
       success: true, 
       processed: sessions.length, 
       emailsSent,
       emailsSent24h,
       emailsSent72h,
+      affiliateAutoApprovals,
       message: `Procesat cu succes: ${emailsSent} emailuri trimise (${emailsSent24h} de 24h, ${emailsSent72h} de 72h).`
     });
   } catch (err: any) {

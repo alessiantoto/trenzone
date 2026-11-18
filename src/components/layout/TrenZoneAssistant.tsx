@@ -168,8 +168,21 @@ export function TrenZoneAssistant() {
     setActiveFaq(null);
   };
 
+  const isBundlePage = Boolean(pathname?.includes("bundle"));
+  const isHiddenOnAffiliatePortal = Boolean(
+    pathname && /\/affiliate\/(?:login|dashboard)(?:\/|$)/.test(pathname)
+  );
+  const isHidden = isBundlePage || isHiddenOnAffiliatePortal;
+
   useEffect(() => {
-    if (isOpen) {
+    if (isHidden && isOpen) {
+      const timer = setTimeout(() => setIsOpen(false), 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isHidden, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && !isHidden) {
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       const onKey = (e: KeyboardEvent) => {
@@ -186,7 +199,7 @@ export function TrenZoneAssistant() {
       setActiveFaq(null);
     }, 500);
     return () => clearTimeout(timer);
-  }, [isOpen]);
+  }, [isOpen, isHidden]);
 
   const [showTrigger, setShowTrigger] = useState(false);
   const [pastHero, setPastHero] = useState(false);
@@ -227,14 +240,12 @@ export function TrenZoneAssistant() {
     };
   }, []);
 
-  const isBundlePage = pathname?.includes("bundle");
-
-  if (isBundlePage) return null;
+  if (isHidden) return null;
   
   return (
     <>
       <AnimatePresence>
-        {showTrigger && pastHero && !footerVisible && !isOpen && !isBundlePage && (
+        {showTrigger && pastHero && !footerVisible && !isOpen && !isHidden && (
           <motion.button
             key="chat-trigger"
             initial={{ opacity: 0, scale: 0.6, y: 16 }}

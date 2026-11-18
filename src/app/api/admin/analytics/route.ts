@@ -2,15 +2,21 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isAdminAuthorized } from '@/app/actions/admin-auth';
 import {
+  fetchGa4AllRefClicks,
   fetchGa4AnalyticsReport,
   resolveAnalyticsDateRange,
   type AnalyticsRangeKey,
   type Ga4DeviceFilter,
   type Ga4GranularityOption,
 } from '@/lib/ga4-analytics';
-import { getServerExchangeRates, FALLBACK_RATES } from '@/utils/pricing';
+import { convertToRon, getServerExchangeRates } from '@/utils/pricing';
 import { getBucharestIsoBounds, normalizeCountry } from '@/utils/admin-helpers';
 import { isDigitalOnlyCart } from '@/lib/programs';
+import {
+  classifyOrderNonCountable,
+  computeAffiliateOrderMetrics,
+  roundCurrency,
+} from '@/lib/affiliate-stats';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -18,14 +24,6 @@ export const revalidate = 0;
 const VALID_RANGES = new Set<AnalyticsRangeKey>(['today', 'yesterday', '7d', '30d', '90d']);
 const VALID_DEVICES = new Set<Ga4DeviceFilter>(['all', 'mobile', 'desktop', 'tablet']);
 const VALID_GRANULARITIES = new Set<Ga4GranularityOption>(['auto', 'hourly', 'daily']);
-const NON_COUNTABLE_STATUSES = new Set([
-  'cancelled',
-  'refunded',
-  'failed',
-  'returned',
-  'refused',
-  'neridicat',
-]);
 
 const SUPPORTED_CURRENCIES = ['RON', 'EUR', 'USD', 'GBP'] as const;
 type SupportedCurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
@@ -56,18 +54,6 @@ function computeCurrencyBreakdown(
   });
 
   return SUPPORTED_CURRENCIES.map((code) => buckets[code]);
-}
-
-function convertToRon(amount: number, currency: string, rates: Record<string, number>): number {
-  const curr = (currency || 'RON').toUpperCase().trim();
-  const numericAmount = Number(amount) || 0;
-  if (curr === 'RON' || numericAmount === 0) return numericAmount;
-  const rawRate = rates[curr] || FALLBACK_RATES[curr];
-  if (!rawRate || rawRate <= 0) return numericAmount;
-
-  const isRonPerUnit = rawRate > 1.5 || (curr === 'HUF' && rawRate < 0.1);
-  const foreignPerRon = isRonPerUnit ? 1 / rawRate : rawRate;
-  return Number((numericAmount / foreignPerRon).toFixed(2));
 }
 
 function parseOrderItems(rawItems: unknown): any[] {
@@ -143,6 +129,74 @@ async function fetchAllRows(table: string, selectCols: string, orderCol = 'creat
   return rows;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function fetchPeriodOrders(startIso?: string, endIso?: string) {
+  const rows: any[] = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    let q = supabaseAdmin
+      .from('orders')
+      .select(
+        'id, total_amount, subtotal, discount_total, shipping_amount, currency, status, payment_method, shipping_type, carrier_id, branch_id, branch_name, addr_country, items, created_at, coupon_id, carrier_metadata'
+      )
+      .order('created_at', { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (startIso) q = q.gte('created_at', startIso);
+    if (endIso) q = q.lte('created_at', endIso);
+
+    const { data, error } = await q;
+    if (error || !data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return rows;
+}
+
+interface AffiliateRecord {
+  id: string;
+  name: string;
+  code: string;
+  commissionPercent: number;
+  status: string;
+}
+
+function resolveOrderAffiliate(
+  order: any,
+  couponIdToInfo: Map<string, { code: string; type?: string; value?: number }>,
+  affiliateByCode: Map<string, AffiliateRecord>
+): AffiliateRecord | null {
+  const orderCouponIdRaw = String(order.coupon_id || '').trim();
+  const orderCouponIdLower = orderCouponIdRaw.toLowerCase();
+  const mappedCouponCode = orderCouponIdLower
+    ? (couponIdToInfo.get(orderCouponIdLower)?.code || '').toLowerCase().trim()
+    : '';
+  const carrierCoupon = String(
+    order.carrier_metadata?.coupon_code || order.carrier_metadata?.coupon || ''
+  )
+    .toLowerCase()
+    .trim();
+  const carrierRef = String(
+    order.carrier_metadata?.referral_code || order.carrier_metadata?.ref || ''
+  )
+    .toLowerCase()
+    .trim();
+
+  const candidates = [mappedCouponCode, orderCouponIdLower, carrierCoupon, carrierRef].filter(
+    Boolean
+  );
+  for (const cand of candidates) {
+    const aff = affiliateByCode.get(cand);
+    if (aff) return aff;
+  }
+  return null;
+}
+
 export async function GET(request: Request) {
   try {
     const isAuthorized = await isAdminAuthorized();
@@ -166,16 +220,14 @@ export async function GET(request: Request) {
     const rawCountry = (url.searchParams.get('country') || 'all').trim();
     const country = rawCountry && rawCountry.toLowerCase() !== 'all' ? rawCountry.slice(0, 80) : 'all';
 
+    const rawSalesCountry = (url.searchParams.get('salesCountry') || 'all').trim();
+    const salesCountry =
+      rawSalesCountry && rawSalesCountry.toLowerCase() !== 'all'
+        ? normalizeCountry(rawSalesCountry).code
+        : 'all';
+
     const dates = resolveAnalyticsDateRange(range, granularity);
     const { startIso, endIso } = getBucharestIsoBounds(dates.startDate, dates.endDate);
-
-    let periodOrdersQuery = supabaseAdmin
-      .from('orders')
-      .select(
-        'id, total_amount, subtotal, discount_total, shipping_amount, currency, status, payment_method, shipping_type, carrier_id, branch_id, branch_name, addr_country, items, created_at, coupon_id, carrier_metadata'
-      );
-    if (startIso) periodOrdersQuery = periodOrdersQuery.gte('created_at', startIso);
-    if (endIso) periodOrdersQuery = periodOrdersQuery.lte('created_at', endIso);
 
     let scratchInPeriodQuery = supabaseAdmin
       .from('coupons')
@@ -198,8 +250,9 @@ export async function GET(request: Request) {
 
     const [
       ga4,
+      refClicks,
       rates,
-      { data: periodOrdersRaw },
+      periodOrdersRaw,
       { data: nonScratchCoupons },
       { data: affiliates },
       allSubscribers,
@@ -212,8 +265,14 @@ export async function GET(request: Request) {
       { data: checkoutsInPeriod },
     ] = await Promise.all([
       fetchGa4AnalyticsReport({ range, device, channel, country, granularity }),
+      fetchGa4AllRefClicks(dates.startDate, dates.endDate).catch(() => ({
+        connected: false,
+        totalClicks: 0,
+        totalUsers: 0,
+        byCode: {} as Record<string, { clicks: number; users: number }>,
+      })),
       getServerExchangeRates(),
-      periodOrdersQuery,
+      fetchPeriodOrders(startIso, endIso),
       supabaseAdmin
         .from('coupons')
         .select('id, code, type, value, used_count, is_active, created_at')
@@ -237,14 +296,14 @@ export async function GET(request: Request) {
     ]);
 
     const periodOrders = (periodOrdersRaw || []).filter(
-      (o: any) => !NON_COUNTABLE_STATUSES.has(String(o.status || '').toLowerCase())
+      (o: any) => classifyOrderNonCountable(o.status).isCountable
     );
 
     // Resolve coupon_ids referenced in periodOrders (including SCRATCH-* coupons)
     const couponIdToInfo = new Map<string, { code: string; type?: string; value?: number }>();
     (nonScratchCoupons || []).forEach((c: any) => {
       if (c.id && c.code) {
-        couponIdToInfo.set(String(c.id), {
+        couponIdToInfo.set(String(c.id).toLowerCase().trim(), {
           code: String(c.code).toUpperCase().trim(),
           type: c.type,
           value: Number(c.value) || 0,
@@ -255,8 +314,8 @@ export async function GET(request: Request) {
     const missingCouponIds = Array.from(
       new Set(
         periodOrders
-          .map((o: any) => (o.coupon_id ? String(o.coupon_id) : ''))
-          .filter((id) => id && !couponIdToInfo.has(id))
+          .map((o: any) => (o.coupon_id ? String(o.coupon_id).toLowerCase().trim() : ''))
+          .filter((id) => id && UUID_RE.test(id) && !couponIdToInfo.has(id))
       )
     );
 
@@ -267,7 +326,7 @@ export async function GET(request: Request) {
         .in('id', missingCouponIds);
       (matchedCoupons || []).forEach((c: any) => {
         if (c.id && c.code) {
-          couponIdToInfo.set(String(c.id), {
+          couponIdToInfo.set(String(c.id).toLowerCase().trim(), {
             code: String(c.code).toUpperCase().trim(),
             type: c.type,
             value: Number(c.value) || 0,
@@ -277,9 +336,23 @@ export async function GET(request: Request) {
     }
 
     const affiliateCodeMap = new Map<string, string>();
+    const affiliateByCode = new Map<string, AffiliateRecord>();
     (affiliates || []).forEach((a: any) => {
-      if (a.code) {
-        affiliateCodeMap.set(String(a.code).toUpperCase().trim(), String(a.name || a.code));
+      if (!a.code) return;
+      const upperCode = String(a.code).toUpperCase().trim();
+      const lowerCode = upperCode.toLowerCase();
+      affiliateCodeMap.set(upperCode, String(a.name || a.code));
+
+      const existing = affiliateByCode.get(lowerCode);
+      const record: AffiliateRecord = {
+        id: String(a.id),
+        name: String(a.name || a.code),
+        code: upperCode,
+        commissionPercent: Number(a.commission_percent) || 10,
+        status: String(a.status || 'pending'),
+      };
+      if (!existing || (existing.status !== 'active' && record.status === 'active')) {
+        affiliateByCode.set(lowerCode, record);
       }
     });
 
@@ -336,19 +409,57 @@ export async function GET(request: Request) {
       keyToCatalog.set(normalizeProductKey(nameStr), { name: nameStr, slug: slugStr });
     });
 
+    // Country sales & Top affiliates aggregation (Supabase)
+    const countrySalesMap = new Map<
+      string,
+      { countryCode: string; countryName: string; flag: string; orders: number; revenueRon: number }
+    >();
+    const affiliateStatsMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        code: string;
+        commissionPercent: number;
+        orders: number;
+        revenueRon: number;
+        commissionRon: number;
+        countries: Map<
+          string,
+          { countryCode: string; countryName: string; flag: string; orders: number; revenueRon: number }
+        >;
+      }
+    >();
+    const toRon = (amount: number, currency: string) => convertToRon(amount, currency, rates);
+
     periodOrders.forEach((o: any) => {
       totalOrdersCount += 1;
       const curr = (o.currency || 'RON').toUpperCase();
       const orderAmtRon = convertToRon(Number(o.total_amount) || 0, curr, rates);
       const orderDiscountRon = convertToRon(Number(o.discount_total) || 0, curr, rates);
-      totalRevenueRon = Number((totalRevenueRon + orderAmtRon).toFixed(2));
-      totalDiscountGrantedRon = Number((totalDiscountGrantedRon + orderDiscountRon).toFixed(2));
+      totalRevenueRon = roundCurrency(totalRevenueRon + orderAmtRon);
+      totalDiscountGrantedRon = roundCurrency(totalDiscountGrantedRon + orderDiscountRon);
+
+      // Country breakdown across ALL countable orders in period
+      const countryInfo = normalizeCountry(o.addr_country);
+      const existingCountry = countrySalesMap.get(countryInfo.code) || {
+        countryCode: countryInfo.code,
+        countryName: countryInfo.name,
+        flag: countryInfo.flag,
+        orders: 0,
+        revenueRon: 0,
+      };
+      existingCountry.orders += 1;
+      existingCountry.revenueRon = roundCurrency(existingCountry.revenueRon + orderAmtRon);
+      countrySalesMap.set(countryInfo.code, existingCountry);
 
       // Coupon attribution
       const metaCode = String(o.carrier_metadata?.coupon_code || o.carrier_metadata?.coupon || '')
         .trim()
         .toUpperCase();
-      const idCode = o.coupon_id ? couponIdToInfo.get(String(o.coupon_id))?.code || '' : '';
+      const idCode = o.coupon_id
+        ? couponIdToInfo.get(String(o.coupon_id).toLowerCase().trim())?.code || ''
+        : '';
       const resolvedCode = metaCode || idCode;
 
       if (resolvedCode) {
@@ -359,8 +470,8 @@ export async function GET(request: Request) {
         else if (affiliateCodeMap.has(resolvedCode)) cat = 'affiliate';
 
         categoryTotals[cat].orders += 1;
-        categoryTotals[cat].revenueRon = Number((categoryTotals[cat].revenueRon + orderAmtRon).toFixed(2));
-        categoryTotals[cat].discountRon = Number((categoryTotals[cat].discountRon + orderDiscountRon).toFixed(2));
+        categoryTotals[cat].revenueRon = roundCurrency(categoryTotals[cat].revenueRon + orderAmtRon);
+        categoryTotals[cat].discountRon = roundCurrency(categoryTotals[cat].discountRon + orderDiscountRon);
 
         const existing = couponCodeBreakdown.get(resolvedCode) || {
           code: resolvedCode,
@@ -371,9 +482,51 @@ export async function GET(request: Request) {
           discountRon: 0,
         };
         existing.orders += 1;
-        existing.revenueRon = Number((existing.revenueRon + orderAmtRon).toFixed(2));
-        existing.discountRon = Number((existing.discountRon + orderDiscountRon).toFixed(2));
+        existing.revenueRon = roundCurrency(existing.revenueRon + orderAmtRon);
+        existing.discountRon = roundCurrency(existing.discountRon + orderDiscountRon);
         couponCodeBreakdown.set(resolvedCode, existing);
+      }
+
+      // Affiliate attribution (100% parity with /admin/affiliates via computeAffiliateOrderMetrics)
+      const matchedAffiliate = resolveOrderAffiliate(o, couponIdToInfo, affiliateByCode);
+      if (
+        matchedAffiliate &&
+        (salesCountry === 'all' || countryInfo.code === salesCountry)
+      ) {
+        const affMetrics = computeAffiliateOrderMetrics(
+          o,
+          matchedAffiliate.commissionPercent,
+          toRon
+        );
+        if (affMetrics.isCountable) {
+          const affEntry = affiliateStatsMap.get(matchedAffiliate.id) || {
+            id: matchedAffiliate.id,
+            name: matchedAffiliate.name,
+            code: matchedAffiliate.code,
+            commissionPercent: matchedAffiliate.commissionPercent,
+            orders: 0,
+            revenueRon: 0,
+            commissionRon: 0,
+            countries: new Map(),
+          };
+          affEntry.orders += 1;
+          affEntry.revenueRon = roundCurrency(affEntry.revenueRon + affMetrics.totalAmount);
+          affEntry.commissionRon = roundCurrency(
+            affEntry.commissionRon + affMetrics.commissionAmount
+          );
+
+          const affCountry = affEntry.countries.get(countryInfo.code) || {
+            countryCode: countryInfo.code,
+            countryName: countryInfo.name,
+            flag: countryInfo.flag,
+            orders: 0,
+            revenueRon: 0,
+          };
+          affCountry.orders += 1;
+          affCountry.revenueRon = roundCurrency(affCountry.revenueRon + affMetrics.totalAmount);
+          affEntry.countries.set(countryInfo.code, affCountry);
+          affiliateStatsMap.set(matchedAffiliate.id, affEntry);
+        }
       }
 
       // Payment method & wallet detection
@@ -451,7 +604,7 @@ export async function GET(request: Request) {
 
     const topCoupons = Array.from(couponCodeBreakdown.values())
       .sort((a, b) => b.orders - a.orders || b.revenueRon - a.revenueRon)
-      .slice(0, 12);
+      .slice(0, 100);
 
     // 2. Subscribers & Leads by Source (Supabase)
     const startMs = startIso ? new Date(startIso).getTime() : 0;
@@ -579,12 +732,130 @@ export async function GET(request: Request) {
         viewToBuyPct:
           row.views > 0 ? Number(((row.soldQty / row.views) * 100).toFixed(2)) : null,
       }))
-      .sort((a, b) => b.views - a.views || b.soldQty - a.soldQty)
-      .slice(0, 15);
+      .sort((a, b) => b.views - a.views || b.soldQty - a.soldQty);
 
     const shippingDenominator = Math.max(1, totalOrdersCount);
     const paymentDenominator = Math.max(1, cardCount + rambursCount);
     const currencyBreakdown = computeCurrencyBreakdown(periodOrders, rates);
+
+    const countrySalesBreakdown = Array.from(countrySalesMap.values())
+      .map((c) => ({
+        countryCode: c.countryCode,
+        countryName: c.countryName,
+        flag: c.flag,
+        orders: c.orders,
+        revenueRon: c.revenueRon,
+        sharePct:
+          totalOrdersCount > 0
+            ? Number(((c.orders / totalOrdersCount) * 100).toFixed(1))
+            : 0,
+      }))
+      .sort((a, b) => b.orders - a.orders || b.revenueRon - a.revenueRon);
+
+    if (salesCountry === 'all') {
+      affiliateByCode.forEach((aff) => {
+        const refStat = refClicks.byCode[aff.code];
+        if (!affiliateStatsMap.has(aff.id) && (aff.status === 'active' || (refStat?.clicks || 0) > 0)) {
+          affiliateStatsMap.set(aff.id, {
+            id: aff.id,
+            name: aff.name,
+            code: aff.code,
+            commissionPercent: aff.commissionPercent,
+            orders: 0,
+            revenueRon: 0,
+            commissionRon: 0,
+            countries: new Map(),
+          });
+        }
+      });
+    }
+
+    const affiliateEntries = Array.from(affiliateStatsMap.values());
+    const totalAffiliateRevenueRon = affiliateEntries.reduce(
+      (sum, a) => sum + a.revenueRon,
+      0
+    );
+    const totalAffiliateOrdersCount = affiliateEntries.reduce(
+      (sum, a) => sum + a.orders,
+      0
+    );
+
+    const ordersByAffCode = new Map<string, number>();
+    affiliateEntries.forEach((a) => {
+      const upperCode = String(a.code || '').toUpperCase().trim();
+      if (upperCode) {
+        ordersByAffCode.set(upperCode, (ordersByAffCode.get(upperCode) || 0) + a.orders);
+      }
+    });
+
+    const topAffiliates = affiliateEntries
+      .map((a) => {
+        const upperCode = String(a.code || '').toUpperCase().trim();
+        const refStat = refClicks.byCode[upperCode];
+        const clicks = refStat?.clicks || 0;
+        const uniqueVisitors = refStat?.users || 0;
+        const clickConversionPct =
+          clicks > 0 ? Number(((a.orders / clicks) * 100).toFixed(1)) : null;
+
+        return {
+          id: a.id,
+          name: a.name,
+          code: a.code,
+          commissionPercent: a.commissionPercent,
+          orders: a.orders,
+          revenueRon: a.revenueRon,
+          commissionRon: a.commissionRon,
+          clicks,
+          uniqueVisitors,
+          clickConversionPct,
+          sharePct:
+            totalAffiliateRevenueRon > 0
+              ? Number(((a.revenueRon / totalAffiliateRevenueRon) * 100).toFixed(1))
+              : totalAffiliateOrdersCount > 0
+                ? Number(((a.orders / totalAffiliateOrdersCount) * 100).toFixed(1))
+                : 0,
+          topCountries: Array.from(a.countries.values())
+            .sort((x, y) => y.orders - x.orders || y.revenueRon - x.revenueRon)
+            .slice(0, 6)
+            .map((c) => ({
+              countryCode: c.countryCode,
+              countryName: c.countryName,
+              flag: c.flag,
+              orders: c.orders,
+              revenueRon: c.revenueRon,
+            })),
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.revenueRon - a.revenueRon ||
+          b.orders - a.orders ||
+          b.clicks - a.clicks ||
+          a.name.localeCompare(b.name, 'ro')
+      );
+
+    const topByClicks = Object.entries(refClicks.byCode || {})
+      .map(([rawCode, stats]) => {
+        const code = rawCode.toUpperCase().trim();
+        const matchedAff = affiliateByCode.get(code.toLowerCase());
+        const clicks = Number(stats?.clicks) || 0;
+        const uniqueVisitors = Number(stats?.users) || 0;
+        const orders = ordersByAffCode.get(code) || 0;
+        const clickConversionPct =
+          clicks > 0 ? Number(((orders / clicks) * 100).toFixed(1)) : null;
+
+        return {
+          code,
+          affiliateName: matchedAff ? matchedAff.name : null,
+          clicks,
+          uniqueVisitors,
+          orders,
+          clickConversionPct,
+        };
+      })
+      .filter((entry) => entry.clicks > 0)
+      .sort((a, b) => b.clicks - a.clicks || b.uniqueVisitors - a.uniqueVisitors)
+      .slice(0, 100);
 
     return NextResponse.json({
       success: true,
@@ -594,6 +865,7 @@ export async function GET(request: Request) {
         channel,
         country,
         granularity,
+        salesCountry,
       },
       period: {
         startDate: dates.startDate,
@@ -604,6 +876,14 @@ export async function GET(request: Request) {
       },
       exchangeRates: rates,
       currencyBreakdown,
+      countrySalesBreakdown,
+      topAffiliates,
+      referralSummary: {
+        connected: refClicks.connected,
+        totalClicks: refClicks.totalClicks,
+        totalUsers: refClicks.totalUsers,
+        topByClicks,
+      },
       ga4,
       funnel,
       productComparison,

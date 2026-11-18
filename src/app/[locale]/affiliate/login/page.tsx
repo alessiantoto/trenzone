@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useLocale } from 'next-intl';
 import {
@@ -20,7 +19,6 @@ import {
 } from 'lucide-react';
 import { affiliateLoginAction } from '@/app/actions/affiliate-auth';
 import { Link } from '@/i18n/routing';
-import { getCdnUrl } from '@/lib/utils/cdn';
 
 const EMAIL_PATTERN = /^[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
 const CODE_PATTERN = /^[A-Z0-9_-]{2,30}$/;
@@ -93,7 +91,7 @@ export default function AffiliateLogin() {
 
       if (res.success) {
         setStatus('success');
-        const targetLocale = currentLocale || res.locale || 'ro';
+        const targetLocale = res.locale === 'en' ? 'en' : res.locale === 'ro' ? 'ro' : currentLocale || 'ro';
         window.location.href = `/${targetLocale}/affiliate/dashboard`;
       } else {
         setStatus('error');
@@ -145,21 +143,33 @@ export default function AffiliateLogin() {
       ];
 
   return (
-    <div className="relative w-full min-h-[calc(100dvh-92px)] bg-[#030305] text-white overflow-x-hidden flex flex-col px-4 sm:px-6 pt-4 pb-14 sm:py-10 lg:py-12 selection:bg-[#e32f8c] selection:text-white">
+    <div className="relative w-full min-h-[calc(100dvh-92px)] bg-black text-white overflow-x-hidden flex flex-col px-4 sm:px-6 pt-5 pb-12 sm:py-10 lg:py-12 selection:bg-[#e32f8c] selection:text-white">
       <div className="trenzone-ambient-canvas" aria-hidden="true" />
       <div className="trenzone-ambient-texture" aria-hidden="true" />
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-[380px] z-[2]"
+        style={{
+          background:
+            'radial-gradient(68% 75% at 50% 0%, rgba(227,47,140,0.09) 0%, rgba(227,47,140,0.03) 45%, transparent 78%)',
+        }}
+        aria-hidden="true"
+      />
 
       <div className="my-auto mx-auto w-full max-w-5xl relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
-          {/* Desktop Brand & Partner Value Panel */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
+          {/* Desktop Partner Value Panel */}
           <motion.aside
             initial={{ opacity: 0, x: -16 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="hidden lg:flex lg:col-span-6 flex-col justify-between rounded-3xl bg-zinc-950/80 backdrop-blur-xl border border-white/10 p-9 xl:p-10 relative overflow-hidden min-h-[540px] shadow-2xl"
+            className="hidden lg:flex lg:col-span-6 flex-col justify-between rounded-3xl bg-[#0a0a0e]/85 backdrop-blur-xl border border-white/10 p-9 xl:p-10 relative overflow-hidden min-h-[520px] shadow-[0_24px_80px_-20px_rgba(0,0,0,0.9)]"
           >
             <div
-              className="absolute -top-28 -left-28 w-72 h-72 bg-[#e32f8c]/15 rounded-full blur-3xl pointer-events-none"
+              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#e32f8c]/45 to-transparent pointer-events-none"
+              aria-hidden="true"
+            />
+            <div
+              className="absolute -top-28 -left-28 w-72 h-72 bg-[#e32f8c]/14 rounded-full blur-3xl pointer-events-none"
               aria-hidden="true"
             />
             <div
@@ -168,22 +178,16 @@ export default function AffiliateLogin() {
             />
 
             <div className="relative z-10">
-              <div className="flex items-center justify-between gap-4 mb-10">
-                <Link href="/" className="inline-flex items-center gap-3 group">
-                  <Image
-                    src={getCdnUrl('/images/logos/trenzone_logo.webp')}
-                    alt="TrenZone"
-                    width={36}
-                    height={36}
-                    priority
-                    className="w-9 h-9 object-contain drop-shadow-[0_0_12px_rgba(227,47,140,0.55)] group-hover:scale-105 transition-transform"
+              <div className="flex items-center justify-between gap-4 mb-9">
+                <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#e32f8c]/12 border border-[#e32f8c]/35 text-[#ff66b2] text-[10px] font-black uppercase tracking-[0.2em]">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-[#e32f8c] shadow-[0_0_8px_#e32f8c]"
+                    aria-hidden="true"
                   />
-                  <span className="text-xl font-black italic tracking-tighter text-white">
-                    TREN<span className="text-[#e32f8c]">ZONE</span>
-                  </span>
-                </Link>
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#e32f8c]/15 border border-[#e32f8c]/35 text-[#e32f8c] text-[10px] font-black uppercase tracking-[0.2em]">
-                  {isRo ? 'Parteneri' : 'Partners'}
+                  {isRo ? 'Portal Parteneri' : 'Partner Portal'}
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+                  {isRo ? 'Comision 10%–20%' : '10%–20% Commission'}
                 </span>
               </div>
 
@@ -202,8 +206,8 @@ export default function AffiliateLogin() {
               </h2>
               <p className="text-sm text-zinc-400 font-medium leading-relaxed mb-8 max-w-md">
                 {isRo
-                  ? 'Intră în contul tău de afiliat TrenZone pentru a urmări vânzările, conversiile și evoluția comisioanelor.'
-                  : 'Access your TrenZone partner portal to track referred sales, conversions, and commission growth.'}
+                  ? 'Intră în contul tău de afiliat TrenZone pentru a urmări vânzările, click-urile și comisioanele.'
+                  : 'Access your TrenZone partner portal to track referred sales, link clicks, and payouts.'}
               </p>
 
               <div className="space-y-4">
@@ -211,7 +215,7 @@ export default function AffiliateLogin() {
                   const Icon = item.icon;
                   return (
                     <div key={item.title} className="flex items-start gap-3.5">
-                      <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 text-[#e32f8c]">
+                      <div className="w-10 h-10 rounded-xl bg-[#e32f8c]/10 border border-[#e32f8c]/25 flex items-center justify-center shrink-0 text-[#ff66b2]">
                         <Icon className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
@@ -243,50 +247,37 @@ export default function AffiliateLogin() {
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="lg:col-span-6 w-full max-w-md mx-auto lg:max-w-none rounded-3xl bg-zinc-900/80 backdrop-blur-xl border border-white/10 p-5 sm:p-8 xl:p-10 shadow-2xl relative overflow-hidden"
+            className="lg:col-span-6 w-full max-w-md mx-auto lg:max-w-none rounded-3xl bg-[#0a0a0e]/85 backdrop-blur-xl border border-white/10 p-6 sm:p-8 xl:p-10 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.9)] relative overflow-hidden"
           >
             <div
-              className="absolute -top-24 -right-24 w-56 h-56 bg-[#e32f8c]/15 rounded-full blur-3xl pointer-events-none"
+              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#e32f8c]/45 to-transparent pointer-events-none"
+              aria-hidden="true"
+            />
+            <div
+              className="absolute -top-24 -right-24 w-56 h-56 bg-[#e32f8c]/14 rounded-full blur-3xl pointer-events-none"
               aria-hidden="true"
             />
 
             <div className="relative z-10">
-              {/* Compact Mobile Brand Strip */}
-              <div className="flex lg:hidden items-center justify-between gap-3 pb-4 mb-5 border-b border-white/10">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Image
-                    src={getCdnUrl('/images/logos/trenzone_logo.webp')}
-                    alt="TrenZone"
-                    width={28}
-                    height={28}
-                    priority
-                    className="w-7 h-7 object-contain drop-shadow-[0_0_10px_rgba(227,47,140,0.5)] shrink-0"
-                  />
-                  <span className="text-base font-black italic tracking-tighter text-white truncate">
-                    TREN<span className="text-[#e32f8c]">ZONE</span>
+              {/* Card Header: Pill Badge */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between gap-3 pb-4 mb-5 border-b border-white/10">
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#e32f8c]/12 border border-[#e32f8c]/35 text-[#ff66b2] text-[10px] font-black uppercase tracking-[0.2em]">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full bg-[#e32f8c] shadow-[0_0_8px_#e32f8c]"
+                      aria-hidden="true"
+                    />
+                    {isRo ? 'Portal Parteneri' : 'Partner Portal'}
                   </span>
                 </div>
-                <Link
-                  href="/shop"
-                  className="inline-flex items-center gap-1.5 min-h-11 px-2.5 -mr-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors shrink-0"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>{isRo ? 'Magazin' : 'Shop'}</span>
-                </Link>
-              </div>
 
-              {/* Card Header */}
-              <div className="text-center lg:text-left mb-6">
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#e32f8c]/15 border border-[#e32f8c]/35 text-[#e32f8c] text-[10px] font-black uppercase tracking-[0.2em] mb-3">
-                  {isRo ? 'Portal Parteneri' : 'Partner Portal'}
-                </span>
                 <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white mb-1.5 font-[family-name:var(--font-oswald)]">
                   {isRo ? 'Autentificare Afiliat' : 'Affiliate Sign In'}
                 </h1>
-                <p className="text-sm text-zinc-400 font-medium leading-relaxed">
+                <p className="text-xs sm:text-sm text-zinc-400 font-medium leading-relaxed">
                   {isRo
-                    ? 'Conectează-te pentru a-ți urmări vânzările și comisioanele.'
-                    : 'Sign in to access your sales tracking and payouts.'}
+                    ? 'Intră cu emailul și codul tău activ de afiliat.'
+                    : 'Sign in with your email and active affiliate code.'}
                 </p>
               </div>
 
@@ -298,7 +289,11 @@ export default function AffiliateLogin() {
                   >
                     {isRo ? 'Adresă de Email' : 'Email Address'}
                   </label>
-                  <div className="relative">
+                  <div className="group relative flex items-center bg-black/60 border border-white/15 rounded-xl focus-within:border-[#e32f8c] focus-within:ring-2 focus-within:ring-[#e32f8c]/20 transition-all">
+                    <Mail
+                      className="w-4 h-4 text-zinc-500 group-focus-within:text-[#ff66b2] absolute left-4 pointer-events-none transition-colors"
+                      aria-hidden="true"
+                    />
                     <input
                       id="affiliate-email"
                       name="email"
@@ -315,11 +310,7 @@ export default function AffiliateLogin() {
                         clearError();
                       }}
                       placeholder={isRo ? 'nume@exemplu.ro' : 'name@example.com'}
-                      className="w-full h-12 bg-black/60 border border-white/15 rounded-xl pl-11 pr-4 text-base font-medium text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/25 transition-all"
-                    />
-                    <Mail
-                      className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
-                      aria-hidden="true"
+                      className="w-full h-12 bg-transparent rounded-xl pl-11 pr-4 text-base font-medium text-white placeholder:text-zinc-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -336,7 +327,11 @@ export default function AffiliateLogin() {
                       {isRo ? 'Codul tău de reducere' : 'Your promo code'}
                     </span>
                   </div>
-                  <div className="relative">
+                  <div className="group relative flex items-center bg-black/60 border border-white/15 rounded-xl focus-within:border-[#e32f8c] focus-within:ring-2 focus-within:ring-[#e32f8c]/20 transition-all">
+                    <Lock
+                      className="w-4 h-4 text-zinc-500 group-focus-within:text-[#ff66b2] absolute left-4 pointer-events-none transition-colors"
+                      aria-hidden="true"
+                    />
                     <input
                       id="affiliate-code"
                       name="password"
@@ -351,14 +346,10 @@ export default function AffiliateLogin() {
                         setCode(e.target.value.toUpperCase());
                         clearError();
                       }}
-                      placeholder={isRo ? 'Ex: ALE10' : 'e.g. ALE10'}
-                      className={`w-full h-12 bg-black/60 border border-white/15 rounded-xl pl-11 pr-12 text-base font-mono font-bold tracking-wider text-white placeholder:text-zinc-500 placeholder:font-sans placeholder:font-medium placeholder:tracking-normal focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/25 transition-all ${
+                      placeholder={isRo ? 'Ex: CODULTAU' : 'e.g. YOURCODE'}
+                      className={`w-full h-12 bg-transparent rounded-xl pl-11 pr-12 text-base font-mono font-bold tracking-wider text-white placeholder:text-zinc-500 placeholder:font-sans placeholder:font-medium placeholder:tracking-normal focus:outline-none ${
                         showCode ? 'uppercase' : ''
                       }`}
-                    />
-                    <Lock
-                      className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
-                      aria-hidden="true"
                     />
                     <button
                       type="button"
@@ -373,7 +364,7 @@ export default function AffiliateLogin() {
                             : 'Show affiliate code'
                       }
                       aria-pressed={showCode}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                      className="absolute right-1 w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                     >
                       {showCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -383,10 +374,17 @@ export default function AffiliateLogin() {
                 {status === 'error' && errorMessage && (
                   <div
                     role="alert"
-                    className="bg-red-500/10 text-red-200 text-xs sm:text-sm font-semibold px-3.5 py-3 rounded-xl border border-red-500/35 flex items-start gap-2.5 leading-relaxed"
+                    className="bg-red-500/10 text-red-200 text-xs sm:text-sm font-semibold px-3.5 py-3 rounded-xl border border-red-500/35 space-y-1.5 leading-relaxed"
                   >
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
-                    <span>{errorMessage}</span>
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
+                      <span>{errorMessage}</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 pl-6.5 font-medium">
+                      {isRo
+                        ? 'Conturile noi devin active după aprobare — verifică emailul pentru codul tău confirmat.'
+                        : 'New partner accounts activate after review — check your email for your confirmed code.'}
+                    </p>
                   </div>
                 )}
 
@@ -405,7 +403,7 @@ export default function AffiliateLogin() {
                 <button
                   type="submit"
                   disabled={status === 'loading' || status === 'success'}
-                  className="w-full h-12 sm:h-[52px] bg-[#e32f8c] hover:bg-[#ff3b9e] text-white rounded-xl font-black uppercase tracking-wider text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 shadow-[0_0_24px_rgba(227,47,140,0.35)] hover:shadow-[0_0_32px_rgba(227,47,140,0.55)] cursor-pointer"
+                  className="w-full h-12 sm:h-[52px] bg-[#e32f8c] hover:bg-[#ff3b9e] text-white rounded-xl font-black uppercase tracking-wider text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 shadow-[0_0_24px_rgba(227,47,140,0.38)] hover:shadow-[0_0_32px_rgba(227,47,140,0.58)] cursor-pointer"
                 >
                   {status === 'loading' ? (
                     <>
@@ -426,7 +424,7 @@ export default function AffiliateLogin() {
                   {isRo ? 'Încă nu ești afiliat?' : 'Not an affiliate yet?'}{' '}
                   <Link
                     href="/affiliate"
-                    className="font-bold text-[#e32f8c] hover:text-white transition-colors inline-flex items-center gap-1 py-1.5 px-1"
+                    className="font-bold text-[#ff66b2] hover:text-white transition-colors inline-flex items-center gap-1 py-1.5 px-1"
                   >
                     <span>{isRo ? 'Aplică aici' : 'Apply here'}</span>
                     <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />

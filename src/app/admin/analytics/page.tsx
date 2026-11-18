@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity,
   AlertTriangle,
   ArrowLeft,
   ArrowUpRight,
+  Award,
   BarChart3,
   CheckCircle2,
   Clock,
@@ -57,12 +58,62 @@ import type {
   Ga4DeviceFilter,
   Ga4GranularityOption,
 } from '@/lib/ga4-analytics';
+import { ModernSelect, type ModernSelectOption } from '@/components/admin/ModernSelect';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 interface CurrencyBreakdownEntry {
   currency: 'RON' | 'EUR' | 'USD' | 'GBP';
   orders: number;
   revenueNative: number;
   revenueRon: number;
+}
+
+interface CountrySalesEntry {
+  countryCode: string;
+  countryName: string;
+  flag?: string;
+  orders: number;
+  revenueRon: number;
+  sharePct: number;
+}
+
+interface TopAffiliateCountryEntry {
+  countryCode: string;
+  countryName: string;
+  flag?: string;
+  orders: number;
+  revenueRon: number;
+}
+
+interface TopAffiliateEntry {
+  id: string;
+  name: string;
+  code: string;
+  commissionPercent: number;
+  orders: number;
+  revenueRon: number;
+  commissionRon: number;
+  clicks: number;
+  uniqueVisitors: number;
+  clickConversionPct: number | null;
+  sharePct: number;
+  topCountries: TopAffiliateCountryEntry[];
+}
+
+interface ReferralTopCodeEntry {
+  code: string;
+  affiliateName: string | null;
+  clicks: number;
+  uniqueVisitors: number;
+  orders: number;
+  clickConversionPct: number | null;
+}
+
+interface ReferralSummary {
+  connected: boolean;
+  totalClicks: number;
+  totalUsers: number;
+  topByClicks: ReferralTopCodeEntry[];
 }
 
 interface AnalyticsApiResponse {
@@ -73,6 +124,7 @@ interface AnalyticsApiResponse {
     channel: string;
     country: string;
     granularity: Ga4GranularityOption;
+    salesCountry?: string;
   };
   period: {
     startDate: string;
@@ -83,6 +135,9 @@ interface AnalyticsApiResponse {
   };
   exchangeRates?: Record<string, number>;
   currencyBreakdown?: CurrencyBreakdownEntry[];
+  countrySalesBreakdown?: CountrySalesEntry[];
+  topAffiliates?: TopAffiliateEntry[];
+  referralSummary?: ReferralSummary;
   ga4: Ga4AnalyticsReport;
   funnel: {
     ga4Connected: boolean;
@@ -254,6 +309,18 @@ function formatDuration(totalSec: number): string {
   return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
+function formatRealtimePageTitle(rawTitle: string): string {
+  const trimmed = String(rawTitle || '').trim();
+  if (!trimmed) return 'Pagină';
+  const stripped = trimmed
+    .replace(/^TREN\s*WRAPS\s*(?:by\s*Vlad\s*Tren)?\s*[|–—-]\s*/i, '')
+    .replace(/^TrenZone\s*[|–—-]\s*/i, '')
+    .replace(/\s*[|–—-]\s*TREN\s*WRAPS\s*(?:by\s*Vlad\s*Tren)?$/i, '')
+    .replace(/\s*[|–—-]\s*TrenZone$/i, '')
+    .trim();
+  return stripped || 'Acasă (TREN WRAPS)';
+}
+
 function DeltaPill({
   pct,
   dark = false,
@@ -302,12 +369,20 @@ function ChannelBarColor(channelGroup: string): string {
   return '#475569';
 }
 
+function paginateSlice<T>(items: T[], page: number, pageSize: number): T[] {
+  const totalPages = Math.max(1, Math.ceil(items.length / Math.max(1, pageSize)));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * pageSize;
+  return items.slice(start, start + pageSize);
+}
+
 export default function AdminAnalyticsPage() {
   const [range, setRange] = useState<AnalyticsRangeKey>('30d');
   const [deviceFilter, setDeviceFilter] = useState<Ga4DeviceFilter>('all');
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [countryFilter, setCountryFilter] = useState<string>('all');
   const [granularityFilter, setGranularityFilter] = useState<Ga4GranularityOption>('auto');
+  const [salesCountryFilter, setSalesCountryFilter] = useState<string>('all');
 
   const [knownChannels, setKnownChannels] = useState<string[]>([]);
   const [knownCountries, setKnownCountries] = useState<string[]>([]);
@@ -318,10 +393,24 @@ export default function AdminAnalyticsPage() {
   const [pagesTab, setPagesTab] = useState<PagesTab>('landing');
   const [pageSearch, setPageSearch] = useState('');
 
+  const [affiliateSearch, setAffiliateSearch] = useState('');
+  const [affiliateActivityOnly, setAffiliateActivityOnly] = useState(true);
+  const [affiliatesPage, setAffiliatesPage] = useState(1);
+  const [refLinksPage, setRefLinksPage] = useState(1);
+  const [pagesPage, setPagesPage] = useState(1);
+  const [couponsPage, setCouponsPage] = useState(1);
+  const [sourcesPage, setSourcesPage] = useState(1);
+  const [campaignsPage, setCampaignsPage] = useState(1);
+  const [eventsPage, setEventsPage] = useState(1);
+  const [countriesPage, setCountriesPage] = useState(1);
+  const [citiesPage, setCitiesPage] = useState(1);
+  const [productsPage, setProductsPage] = useState(1);
+
   const [data, setData] = useState<AnalyticsApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   const formatMoney = useCallback(
     (ronAmount: number) => formatMoneyInCurrency(ronAmount, selectedCurrency, data?.exchangeRates),
@@ -336,6 +425,7 @@ export default function AdminAnalyticsPage() {
         channel: string;
         country: string;
         granularity: Ga4GranularityOption;
+        salesCountry: string;
       },
       isRefresh = false
     ) => {
@@ -350,6 +440,7 @@ export default function AdminAnalyticsPage() {
           channel: params.channel,
           country: params.country,
           granularity: params.granularity,
+          salesCountry: params.salesCountry,
         });
         const res = await fetch(`/api/admin/analytics?${qs.toString()}`, {
           cache: 'no-store',
@@ -359,6 +450,7 @@ export default function AdminAnalyticsPage() {
           throw new Error(json.error || 'Nu s-au putut încărca datele de analytics.');
         }
         setData(json);
+        hasLoadedOnceRef.current = true;
 
         // Preserve selectable filter options even when a specific channel/country filter is active
         const fetchedChannels = (json.ga4?.channels || []).map((c) => c.channelGroup).filter(Boolean);
@@ -382,14 +474,36 @@ export default function AdminAnalyticsPage() {
   );
 
   useEffect(() => {
-    loadAnalytics({
-      range,
-      device: deviceFilter,
-      channel: channelFilter,
-      country: countryFilter,
-      granularity: granularityFilter,
-    });
-  }, [range, deviceFilter, channelFilter, countryFilter, granularityFilter, loadAnalytics]);
+    setAffiliatesPage(1);
+    setRefLinksPage(1);
+    setPagesPage(1);
+    setCouponsPage(1);
+    setSourcesPage(1);
+    setCampaignsPage(1);
+    setEventsPage(1);
+    setCountriesPage(1);
+    setCitiesPage(1);
+    setProductsPage(1);
+    loadAnalytics(
+      {
+        range,
+        device: deviceFilter,
+        channel: channelFilter,
+        country: countryFilter,
+        granularity: granularityFilter,
+        salesCountry: salesCountryFilter,
+      },
+      hasLoadedOnceRef.current
+    );
+  }, [
+    range,
+    deviceFilter,
+    channelFilter,
+    countryFilter,
+    granularityFilter,
+    salesCountryFilter,
+    loadAnalytics,
+  ]);
 
   const handleRangeChange = (nextRange: AnalyticsRangeKey) => {
     setRange(nextRange);
@@ -408,6 +522,49 @@ export default function AdminAnalyticsPage() {
     channelFilter !== 'all' ||
     countryFilter !== 'all' ||
     granularityFilter !== 'auto';
+
+  const channelSelectOptions = useMemo<ModernSelectOption[]>(
+    () => [
+      { value: 'all', label: 'Toate canalele' },
+      ...knownChannels.map((ch) => ({
+        value: ch,
+        label: ch,
+      })),
+    ],
+    [knownChannels]
+  );
+
+  const countrySelectOptions = useMemo<ModernSelectOption[]>(
+    () => [
+      { value: 'all', label: 'Toate țările' },
+      ...knownCountries.map((co) => ({
+        value: co,
+        label: co,
+      })),
+    ],
+    [knownCountries]
+  );
+
+  const salesCountryOptions = useMemo<ModernSelectOption[]>(() => {
+    const breakdown = data?.countrySalesBreakdown || [];
+    const totalOrders = data?.supabaseMarketing?.ordersInPeriod || 0;
+    return [
+      {
+        value: 'all',
+        label: 'Toate țările',
+        badge: totalOrders > 0 ? `${totalOrders}` : undefined,
+        icon: <Globe size={13} className="text-[#e32f8c]" />,
+      },
+      ...breakdown.map((c) => ({
+        value: c.countryCode,
+        label: c.countryName,
+        sublabel: `${c.sharePct}% din comenzi`,
+        flag: c.flag || '🌐',
+        badge: `${c.orders}`,
+        keywords: `${c.countryCode} ${c.countryName}`,
+      })),
+    ];
+  }, [data?.countrySalesBreakdown, data?.supabaseMarketing?.ordersInPeriod]);
 
   const chartSeries = useMemo(() => {
     const raw = data?.ga4?.timeseries || [];
@@ -464,6 +621,31 @@ export default function AdminAnalyticsPage() {
     if (!q) return list;
     return list.filter((p) => p.path.toLowerCase().includes(q));
   }, [data?.ga4?.landingPages, pageSearch]);
+
+  const rankedAffiliates = useMemo(
+    () =>
+      (data?.topAffiliates || []).map((aff, index) => ({
+        ...aff,
+        rank: index + 1,
+      })),
+    [data?.topAffiliates]
+  );
+
+  const activeAffiliatesCount = useMemo(
+    () => rankedAffiliates.filter((aff) => aff.orders > 0 || aff.clicks > 0).length,
+    [rankedAffiliates]
+  );
+
+  const filteredAffiliates = useMemo(() => {
+    const q = affiliateSearch.trim().toLowerCase();
+    return rankedAffiliates.filter((aff) => {
+      if (affiliateActivityOnly && aff.orders === 0 && aff.clicks === 0) {
+        return false;
+      }
+      if (!q) return true;
+      return aff.name.toLowerCase().includes(q) || aff.code.toLowerCase().includes(q);
+    });
+  }, [rankedAffiliates, affiliateActivityOnly, affiliateSearch]);
 
   if (loading && !data) {
     return (
@@ -548,12 +730,12 @@ export default function AdminAnalyticsPage() {
       {/* ========================================================================= */}
       {/* TOP HEADER & RANGE CONTROLS                                               */}
       {/* ========================================================================= */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-3.5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <Activity size={20} className="text-[#e32f8c] shrink-0" />
-              <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900">
+              <h1 className="text-base sm:text-xl font-black tracking-tight text-slate-900 leading-tight">
                 Web Analytics & Statistici Marketing
               </h1>
               {ga4Ready ? (
@@ -566,101 +748,118 @@ export default function AdminAnalyticsPage() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1 leading-relaxed">
               {data?.period
                 ? `Interval: ${data.period.startDate} – ${data.period.endDate} (comparat cu ${data.period.prevStartDate} – ${data.period.prevEndDate})`
                 : 'Google Analytics 4 Data API + Supabase Marketing'}
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:flex-wrap">
+            {/* Range Segmented Control */}
+            <div className="grid grid-cols-5 sm:inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
               {RANGE_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
                   type="button"
                   onClick={() => handleRangeChange(opt.key)}
-                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-[0.98] shrink-0 cursor-pointer inline-flex items-center gap-1.5 ${
+                  className={`px-1.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-1 whitespace-nowrap ${
                     range === opt.key
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
                   }`}
                 >
-                  {loading && range === opt.key && <Loader2 size={11} className="animate-spin" />}
+                  {loading && range === opt.key && <Loader2 size={11} className="animate-spin shrink-0" />}
                   <span>{opt.label}</span>
                 </button>
               ))}
             </div>
 
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-              {AVAILABLE_CURRENCIES.map((c) => (
+            {/* Currency & Action Row (Balanced on Mobile) */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              <div className="grid grid-cols-4 sm:inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+                {AVAILABLE_CURRENCIES.map((c) => (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => setSelectedCurrency(c.code)}
+                    className={`px-2 py-1.5 rounded-lg text-[11px] font-black transition-all active:scale-[0.98] cursor-pointer text-center ${
+                      selectedCurrency === c.code
+                        ? 'bg-[#e32f8c] text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+                    }`}
+                  >
+                    {c.code}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
                 <button
-                  key={c.code}
                   type="button"
-                  onClick={() => setSelectedCurrency(c.code)}
-                  className={`px-2 py-1.5 rounded-lg text-[11px] font-black transition-all active:scale-[0.98] cursor-pointer ${
-                    selectedCurrency === c.code
-                      ? 'bg-[#e32f8c] text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-                  }`}
+                  onClick={() =>
+                    loadAnalytics(
+                      {
+                        range,
+                        device: deviceFilter,
+                        channel: channelFilter,
+                        country: countryFilter,
+                        granularity: granularityFilter,
+                        salesCountry: salesCountryFilter,
+                      },
+                      true
+                    )
+                  }
+                  disabled={refreshing || loading}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
                 >
-                  {c.code}
+                  {refreshing || loading ? (
+                    <Loader2 size={13} className="animate-spin text-[#e32f8c]" />
+                  ) : (
+                    <RefreshCw size={13} />
+                  )}
+                  <span>{refreshing || loading ? 'Actualizare...' : 'Actualizează'}</span>
                 </button>
-              ))}
+
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all active:scale-[0.98]"
+                >
+                  <ArrowLeft size={13} />
+                  <span>Dashboard</span>
+                </Link>
+              </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                loadAnalytics(
-                  {
-                    range,
-                    device: deviceFilter,
-                    channel: channelFilter,
-                    country: countryFilter,
-                    granularity: granularityFilter,
-                  },
-                  true
-                )
-              }
-              disabled={refreshing || loading}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
-            >
-              {refreshing || loading ? (
-                <Loader2 size={13} className="animate-spin text-[#e32f8c]" />
-              ) : (
-                <RefreshCw size={13} />
-              )}
-              <span className="hidden sm:inline">
-                {refreshing || loading ? 'Se actualizează...' : 'Actualizează'}
-              </span>
-            </button>
-
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all active:scale-[0.98]"
-            >
-              <ArrowLeft size={13} />
-              <span>Dashboard</span>
-            </Link>
           </div>
         </div>
 
         {/* Interactive GA4 Filters Bar */}
-        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-slate-400 mr-1">
-              <Filter size={12} className="text-[#e32f8c]" /> Filtre GA4:
-            </span>
+        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center justify-between sm:justify-start gap-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                <Filter size={12} className="text-[#e32f8c]" /> Filtre GA4:
+              </span>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="sm:hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-black text-[#e32f8c] bg-pink-50 hover:bg-pink-100 border border-pink-200 transition-colors cursor-pointer"
+                >
+                  <RotateCcw size={11} />
+                  Reset filtre
+                </button>
+              )}
+            </div>
 
             {/* Device Segmented Pills */}
-            <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-xl">
+            <div className="grid grid-cols-4 sm:inline-flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-xl w-full sm:w-auto">
               {DEVICE_OPTIONS.map((dev) => (
                 <button
                   key={dev.key}
                   type="button"
                   onClick={() => setDeviceFilter(dev.key)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  className={`px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer text-center ${
                     deviceFilter === dev.key
                       ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-500 hover:text-slate-900'
@@ -671,39 +870,36 @@ export default function AdminAnalyticsPage() {
               ))}
             </div>
 
-            {/* Channel Filter Select */}
-            <select
-              aria-label="Filtru canal GA4"
-              value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value)}
-              className="h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/30 cursor-pointer"
-            >
-              <option value="all">Toate canalele</option>
-              {knownChannels.map((ch) => (
-                <option key={ch} value={ch}>
-                  Canal: {ch}
-                </option>
-              ))}
-            </select>
+            {/* Channel & Country ModernSelect Dropdowns */}
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+              <ModernSelect
+                ariaLabel="Filtru canal GA4"
+                value={channelFilter}
+                onChange={setChannelFilter}
+                options={channelSelectOptions}
+                leadingIcon={<Share2 size={13} />}
+                prefixLabel="Canal:"
+                searchable={knownChannels.length >= 8}
+                searchPlaceholder="Caută canal..."
+                className="w-full sm:w-44"
+              />
 
-            {/* Country Filter Select */}
-            <select
-              aria-label="Filtru țară GA4"
-              value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
-              className="h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/30 cursor-pointer"
-            >
-              <option value="all">Toate țările</option>
-              {knownCountries.map((co) => (
-                <option key={co} value={co}>
-                  Țară: {co}
-                </option>
-              ))}
-            </select>
+              <ModernSelect
+                ariaLabel="Filtru țară GA4"
+                value={countryFilter}
+                onChange={setCountryFilter}
+                options={countrySelectOptions}
+                leadingIcon={<Globe size={13} />}
+                prefixLabel="Țară:"
+                searchable
+                searchPlaceholder="Caută țară..."
+                className="w-full sm:w-44"
+              />
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {hasActiveFilters && (
+          {hasActiveFilters && (
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={resetFilters}
@@ -712,8 +908,8 @@ export default function AdminAnalyticsPage() {
                 <RotateCcw size={11} />
                 Reset filtre
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -847,17 +1043,23 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {realtime?.topPages && realtime.topPages.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-zinc-300">
-                <span className="text-zinc-500 font-bold">Pagini active:</span>
-                {realtime.topPages.slice(0, 3).map((p) => (
-                  <span
-                    key={p.title}
-                    className="bg-white/[0.06] border border-white/10 px-2 py-0.5 rounded-lg truncate max-w-[190px]"
-                    title={`${p.title} (${p.activeUsers} activi, ${p.screenPageViews} afișări)`}
-                  >
-                    {p.title} ({p.activeUsers})
-                  </span>
-                ))}
+              <div className="flex items-start sm:items-center gap-1.5 flex-wrap text-[11px] text-zinc-300">
+                <span className="text-zinc-400 font-bold py-0.5">Pagini active:</span>
+                {realtime.topPages.slice(0, 3).map((p) => {
+                  const cleanTitle = formatRealtimePageTitle(p.title);
+                  return (
+                    <span
+                      key={p.title}
+                      className="bg-white/[0.07] border border-white/10 px-2.5 py-0.5 rounded-lg leading-snug break-words max-w-full sm:max-w-[260px]"
+                      title={`${p.title} (${p.activeUsers} activi, ${p.screenPageViews} afișări)`}
+                    >
+                      {cleanTitle}{' '}
+                      <span className="text-emerald-300 font-black tabular-nums">
+                        ({p.activeUsers})
+                      </span>
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1371,10 +1573,10 @@ export default function AdminAnalyticsPage() {
                     {ga4.channels.map((ch) => (
                       <div
                         key={ch.channelGroup}
-                        className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2 text-xs"
+                        className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 text-xs"
                       >
-                        <div className="min-w-0">
-                          <div className="font-black text-slate-900 truncate">{ch.channelGroup}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-black text-slate-900 break-words leading-snug">{ch.channelGroup}</div>
                           <div className="text-[10px] font-semibold text-slate-500 tabular-nums">
                             {ch.engagedSessions.toLocaleString('ro-RO')} engaged ({ch.engagementRatePct}%)
                           </div>
@@ -1421,21 +1623,23 @@ export default function AdminAnalyticsPage() {
                 </span>
               </div>
 
-              <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-2.5 flex-1">
                 {ga4?.sources && ga4.sources.length > 0 ? (
-                  ga4.sources.map((src) => (
+                  paginateSlice(ga4.sources, sourcesPage, 8).map((src) => (
                     <div
                       key={`${src.sourceMedium}-${src.channelGroup}`}
-                      className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70"
+                      className="p-2.5 sm:p-3 rounded-xl border border-slate-100 bg-slate-50/70"
                     >
-                      <div className="flex items-center justify-between gap-2 text-xs mb-1.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 text-xs mb-1.5">
                         <div className="min-w-0">
-                          <span className="font-black text-slate-800 truncate block">{src.sourceMedium}</span>
-                          <span className="text-[10px] font-semibold text-slate-400">
+                          <span className="font-black text-slate-800 break-words leading-snug block">
+                            {src.sourceMedium}
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-500">
                             {src.channelGroup} · Engaged {src.engagedSessions} ({src.engagementRatePct}%)
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center justify-between sm:justify-end gap-1.5 shrink-0">
                           {src.purchases > 0 && (
                             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 tabular-nums">
                               <ShoppingBag size={10} />
@@ -1459,6 +1663,15 @@ export default function AdminAnalyticsPage() {
                   <p className="text-xs text-slate-400 py-8 text-center">Nicio sursă de trafic în acest interval.</p>
                 )}
               </div>
+
+              <AdminPagination
+                currentPage={sourcesPage}
+                totalItems={ga4?.sources?.length || 0}
+                itemsPerPage={8}
+                onPageChange={setSourcesPage}
+                compact
+                label="surse"
+              />
             </div>
 
             {/* Campanii UTM */}
@@ -1476,20 +1689,22 @@ export default function AdminAnalyticsPage() {
                 </span>
               </div>
 
-              <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-2 flex-1">
                 {ga4?.campaigns && ga4.campaigns.length > 0 ? (
-                  ga4.campaigns.map((camp) => (
+                  paginateSlice(ga4.campaigns, campaignsPage, 8).map((camp) => (
                     <div
                       key={`${camp.campaign}-${camp.sourceMedium}`}
-                      className="p-3 rounded-xl border border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3"
+                      className="p-3 rounded-xl border border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3"
                     >
                       <div className="min-w-0">
-                        <div className="text-xs font-black text-slate-900 truncate">{camp.campaign}</div>
-                        <div className="text-[10px] font-semibold text-slate-500 truncate">
+                        <div className="text-xs font-black text-slate-900 break-words leading-snug">
+                          {camp.campaign}
+                        </div>
+                        <div className="text-[10px] font-semibold text-slate-500 break-words">
                           {camp.sourceMedium} · Engagement {camp.engagementRatePct}%
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
+                      <div className="flex sm:block items-center justify-between sm:text-right shrink-0 gap-3">
                         <div className="text-xs font-black text-slate-900 tabular-nums">
                           {camp.sessions.toLocaleString('ro-RO')} ses.
                         </div>
@@ -1505,6 +1720,15 @@ export default function AdminAnalyticsPage() {
                   </p>
                 )}
               </div>
+
+              <AdminPagination
+                currentPage={campaignsPage}
+                totalItems={ga4?.campaigns?.length || 0}
+                itemsPerPage={8}
+                onPageChange={setCampaignsPage}
+                compact
+                label="campanii"
+              />
             </div>
           </div>
 
@@ -1523,23 +1747,29 @@ export default function AdminAnalyticsPage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-52">
                   <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={pageSearch}
-                    onChange={(e) => setPageSearch(e.target.value)}
+                    onChange={(e) => {
+                      setPageSearch(e.target.value);
+                      setPagesPage(1);
+                    }}
                     placeholder="Caută rută..."
-                    className="h-8 pl-8 pr-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#e32f8c]/25 w-44 sm:w-52"
+                    className="h-9 sm:h-8 pl-8 pr-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#e32f8c]/25 w-full"
                   />
                 </div>
 
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                <div className="grid grid-cols-2 sm:inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
                   <button
                     type="button"
-                    onClick={() => setPagesTab('landing')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    onClick={() => {
+                      setPagesTab('landing');
+                      setPagesPage(1);
+                    }}
+                    className={`px-2.5 py-1.5 sm:py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer text-center ${
                       pagesTab === 'landing'
                         ? 'bg-slate-900 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
@@ -1549,8 +1779,11 @@ export default function AdminAnalyticsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPagesTab('all')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    onClick={() => {
+                      setPagesTab('all');
+                      setPagesPage(1);
+                    }}
+                    className={`px-2.5 py-1.5 sm:py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer text-center ${
                       pagesTab === 'all'
                         ? 'bg-slate-900 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
@@ -1562,7 +1795,93 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Stacked Cards (< sm) */}
+            <div className="sm:hidden space-y-2.5">
+              {pagesTab === 'landing' ? (
+                filteredLandingPages.length > 0 ? (
+                  paginateSlice(filteredLandingPages, pagesPage, 10).map((lp) => (
+                    <div
+                      key={lp.path}
+                      className="p-3 rounded-xl border border-slate-100 bg-slate-50/70 space-y-2"
+                    >
+                      <div className="font-mono text-xs font-bold text-slate-800 break-all leading-snug">
+                        {lp.path}
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-200/70 text-[11px]">
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold">Sesiuni</div>
+                          <div className="font-black text-slate-900 tabular-nums">
+                            {lp.sessions.toLocaleString('ro-RO')}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold">Engaged</div>
+                          <div className="font-bold text-emerald-700 tabular-nums">
+                            {lp.engagedSessions.toLocaleString('ro-RO')}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold">Durată</div>
+                          <div className="font-semibold text-slate-700 tabular-nums">
+                            {formatDuration(lp.avgDurationSec)}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] text-slate-400 font-semibold">Bounce</div>
+                          <div className="font-semibold text-slate-700 tabular-nums">
+                            {lp.bounceRatePct}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="py-8 text-center text-xs text-slate-400">Nicio pagină landing găsită.</p>
+                )
+              ) : filteredTopPages.length > 0 ? (
+                paginateSlice(filteredTopPages, pagesPage, 10).map((pg) => (
+                  <div
+                    key={pg.path}
+                    className="p-3 rounded-xl border border-slate-100 bg-slate-50/70 space-y-2"
+                  >
+                    <div className="font-mono text-xs font-bold text-slate-800 break-all leading-snug">
+                      {pg.path}
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-200/70 text-[11px]">
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-semibold">Afișări</div>
+                        <div className="font-black text-slate-900 tabular-nums">
+                          {pg.views.toLocaleString('ro-RO')}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-semibold">Unici</div>
+                        <div className="font-bold text-slate-700 tabular-nums">
+                          {pg.users.toLocaleString('ro-RO')}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-semibold">Timp</div>
+                        <div className="font-semibold text-slate-700 tabular-nums">
+                          {formatDuration(pg.avgDurationSec)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] text-slate-400 font-semibold">Bounce</div>
+                        <div className="font-semibold text-slate-700 tabular-nums">
+                          {pg.bounceRatePct}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="py-8 text-center text-xs text-slate-400">Nicio pagină găsită.</p>
+              )}
+            </div>
+
+            {/* Desktop Table (sm+) */}
+            <div className="hidden sm:block overflow-x-auto">
               {pagesTab === 'landing' ? (
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
@@ -1570,16 +1889,16 @@ export default function AdminAnalyticsPage() {
                       <th className="py-2.5 pr-3 font-black">Landing Page (Intrare)</th>
                       <th className="py-2.5 px-2 font-black text-right">Sesiuni</th>
                       <th className="py-2.5 px-2 font-black text-right">Engaged</th>
-                      <th className="py-2.5 px-2 font-black text-right hidden sm:table-cell">Durată Medie</th>
+                      <th className="py-2.5 px-2 font-black text-right">Durată Medie</th>
                       <th className="py-2.5 pl-2 font-black text-right">Bounce</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredLandingPages.length > 0 ? (
-                      filteredLandingPages.slice(0, 15).map((lp) => (
+                      paginateSlice(filteredLandingPages, pagesPage, 10).map((lp) => (
                         <tr key={lp.path} className="hover:bg-slate-50/70">
                           <td
-                            className="py-2.5 pr-3 font-mono font-bold text-slate-800 max-w-[220px] sm:max-w-[460px] truncate"
+                            className="py-2.5 pr-3 font-mono font-bold text-slate-800 max-w-[460px] break-all leading-snug"
                             title={lp.path}
                           >
                             {lp.path}
@@ -1590,7 +1909,7 @@ export default function AdminAnalyticsPage() {
                           <td className="py-2.5 px-2 text-right font-semibold text-emerald-700 tabular-nums">
                             {lp.engagedSessions.toLocaleString('ro-RO')}
                           </td>
-                          <td className="py-2.5 px-2 text-right font-semibold text-slate-600 hidden sm:table-cell tabular-nums">
+                          <td className="py-2.5 px-2 text-right font-semibold text-slate-600 tabular-nums">
                             {formatDuration(lp.avgDurationSec)}
                           </td>
                           <td className="py-2.5 pl-2 text-right font-semibold text-slate-600 tabular-nums">
@@ -1614,16 +1933,16 @@ export default function AdminAnalyticsPage() {
                       <th className="py-2.5 pr-3 font-black">Rută Pagină</th>
                       <th className="py-2.5 px-2 font-black text-right">Afișări</th>
                       <th className="py-2.5 px-2 font-black text-right">Unici</th>
-                      <th className="py-2.5 px-2 font-black text-right hidden sm:table-cell">Timp Mediu</th>
-                      <th className="py-2.5 pl-2 font-black text-right hidden sm:table-cell">Bounce</th>
+                      <th className="py-2.5 px-2 font-black text-right">Timp Mediu</th>
+                      <th className="py-2.5 pl-2 font-black text-right">Bounce</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredTopPages.length > 0 ? (
-                      filteredTopPages.slice(0, 15).map((pg) => (
+                      paginateSlice(filteredTopPages, pagesPage, 10).map((pg) => (
                         <tr key={pg.path} className="hover:bg-slate-50/70">
                           <td
-                            className="py-2.5 pr-3 font-mono font-bold text-slate-800 max-w-[240px] sm:max-w-[460px] truncate"
+                            className="py-2.5 pr-3 font-mono font-bold text-slate-800 max-w-[460px] break-all leading-snug"
                             title={pg.path}
                           >
                             {pg.path}
@@ -1634,10 +1953,10 @@ export default function AdminAnalyticsPage() {
                           <td className="py-2.5 px-2 text-right font-semibold text-slate-600 tabular-nums">
                             {pg.users.toLocaleString('ro-RO')}
                           </td>
-                          <td className="py-2.5 px-2 text-right font-semibold text-slate-600 hidden sm:table-cell tabular-nums">
+                          <td className="py-2.5 px-2 text-right font-semibold text-slate-600 tabular-nums">
                             {formatDuration(pg.avgDurationSec)}
                           </td>
-                          <td className="py-2.5 pl-2 text-right font-semibold text-slate-600 hidden sm:table-cell tabular-nums">
+                          <td className="py-2.5 pl-2 text-right font-semibold text-slate-600 tabular-nums">
                             {pg.bounceRatePct}%
                           </td>
                         </tr>
@@ -1653,6 +1972,14 @@ export default function AdminAnalyticsPage() {
                 </table>
               )}
             </div>
+
+            <AdminPagination
+              currentPage={pagesPage}
+              totalItems={pagesTab === 'landing' ? filteredLandingPages.length : filteredTopPages.length}
+              itemsPerPage={10}
+              onPageChange={setPagesPage}
+              label="pagini"
+            />
           </div>
 
           {/* ========================================================================= */}
@@ -1677,45 +2004,55 @@ export default function AdminAnalyticsPage() {
               </div>
 
               {ga4?.allEvents && ga4.allEvents.length > 0 ? (
-                <div className="overflow-x-auto max-h-[300px] overflow-y-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
-                        <th className="py-2 pr-3 font-black">Eveniment</th>
-                        <th className="py-2 px-2 font-black text-right">Declanșări</th>
-                        <th className="py-2 px-2 font-black text-right">Utilizatori</th>
-                        <th className="py-2 pl-2 font-black text-right">% Audiență</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {ga4.allEvents.map((ev) => (
-                        <tr key={ev.eventName} className="hover:bg-slate-50/70">
-                          <td className="py-2 pr-3">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[11px] font-bold">
-                                {ev.eventName}
-                              </code>
-                              {EVENT_LABELS[ev.eventName] && (
-                                <span className="text-[11px] text-slate-500 font-medium">
-                                  {EVENT_LABELS[ev.eventName]}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-2 px-2 text-right font-black text-slate-900 tabular-nums">
-                            {ev.eventCount.toLocaleString('ro-RO')}
-                          </td>
-                          <td className="py-2 px-2 text-right font-semibold text-slate-600 tabular-nums">
-                            {ev.totalUsers.toLocaleString('ro-RO')}
-                          </td>
-                          <td className="py-2 pl-2 text-right font-bold text-[#e32f8c] tabular-nums">
-                            {ev.userPct}%
-                          </td>
+                <>
+                  <div className="overflow-x-auto flex-1">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+                          <th className="py-2 pr-3 font-black">Eveniment</th>
+                          <th className="py-2 px-2 font-black text-right">Declanșări</th>
+                          <th className="py-2 px-2 font-black text-right">Utilizatori</th>
+                          <th className="py-2 pl-2 font-black text-right">% Audiență</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginateSlice(ga4.allEvents, eventsPage, 8).map((ev) => (
+                          <tr key={ev.eventName} className="hover:bg-slate-50/70">
+                            <td className="py-2 pr-3">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[11px] font-bold">
+                                  {ev.eventName}
+                                </code>
+                                {EVENT_LABELS[ev.eventName] && (
+                                  <span className="text-[11px] text-slate-500 font-medium">
+                                    {EVENT_LABELS[ev.eventName]}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2 px-2 text-right font-black text-slate-900 tabular-nums">
+                              {ev.eventCount.toLocaleString('ro-RO')}
+                            </td>
+                            <td className="py-2 px-2 text-right font-semibold text-slate-600 tabular-nums">
+                              {ev.totalUsers.toLocaleString('ro-RO')}
+                            </td>
+                            <td className="py-2 pl-2 text-right font-bold text-[#e32f8c] tabular-nums">
+                              {ev.userPct}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <AdminPagination
+                    currentPage={eventsPage}
+                    totalItems={ga4.allEvents.length}
+                    itemsPerPage={8}
+                    onPageChange={setEventsPage}
+                    compact
+                    label="evenimente"
+                  />
+                </>
               ) : (
                 <p className="text-xs text-slate-400 py-8 text-center">Fără evenimente înregistrate.</p>
               )}
@@ -1896,16 +2233,16 @@ export default function AdminAnalyticsPage() {
           {/* Geo (Țări & Orașe cu engagement) + Rezoluții Ecran */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Top Țări */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-3">
                 <Globe size={14} className="text-sky-600" /> Top Țări (Sesiuni & Engagement)
               </h3>
-              <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-2 flex-1">
                 {ga4?.countries.length ? (
-                  ga4.countries.slice(0, 10).map((c) => (
+                  paginateSlice(ga4.countries, countriesPage, 8).map((c) => (
                     <div key={c.name} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 last:border-0 gap-2">
                       <div className="min-w-0">
-                        <span className="font-bold text-slate-800 truncate block">{c.name}</span>
+                        <span className="font-bold text-slate-800 break-words leading-snug block">{c.name}</span>
                         <span className="text-[10px] text-slate-400 font-semibold">
                           Engagement {c.engagementRatePct}%
                         </span>
@@ -1919,22 +2256,30 @@ export default function AdminAnalyticsPage() {
                   <p className="text-xs text-slate-400 py-4 text-center">Fără date</p>
                 )}
               </div>
+              <AdminPagination
+                currentPage={countriesPage}
+                totalItems={ga4?.countries?.length || 0}
+                itemsPerPage={8}
+                onPageChange={setCountriesPage}
+                compact
+                label="țări"
+              />
             </div>
 
             {/* Top Orașe */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-3">
                 <MapPin size={14} className="text-[#e32f8c]" /> Top Orașe (cu Țară & Engagement)
               </h3>
-              <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-2 flex-1">
                 {ga4?.cities.length ? (
-                  ga4.cities.slice(0, 10).map((ci) => (
+                  paginateSlice(ga4.cities, citiesPage, 8).map((ci) => (
                     <div
                       key={`${ci.name}-${ci.country}`}
                       className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 last:border-0 gap-2"
                     >
                       <div className="min-w-0">
-                        <span className="font-bold text-slate-800 truncate block">{ci.name}</span>
+                        <span className="font-bold text-slate-800 break-words leading-snug block">{ci.name}</span>
                         <span className="text-[10px] text-slate-400 font-semibold">
                           {ci.country} · Engagement {ci.engagementRatePct}%
                         </span>
@@ -1946,6 +2291,14 @@ export default function AdminAnalyticsPage() {
                   <p className="text-xs text-slate-400 py-4 text-center">Fără date</p>
                 )}
               </div>
+              <AdminPagination
+                currentPage={citiesPage}
+                totalItems={ga4?.cities?.length || 0}
+                itemsPerPage={8}
+                onPageChange={setCitiesPage}
+                compact
+                label="orașe"
+              />
             </div>
 
             {/* Rezoluții Ecran */}
@@ -1998,26 +2351,90 @@ export default function AdminAnalyticsPage() {
             </Link>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Stacked Cards (< sm) — Zero title truncation */}
+          <div className="sm:hidden space-y-2.5">
+            {paginateSlice(data.productComparison, productsPage, 10).map((row) => {
+              const lowConvAlert =
+                row.views >= 20 && row.viewToBuyPct !== null && row.viewToBuyPct < 1.5;
+              return (
+                <div
+                  key={row.name}
+                  className="p-3.5 rounded-2xl border border-slate-100 bg-slate-50/70 space-y-2.5"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <Package size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                      <span className="font-bold text-slate-900 text-xs leading-snug break-words">
+                        {row.name}
+                      </span>
+                    </div>
+                    {lowConvAlert && (
+                      <div className="pl-5">
+                        <span className="inline-flex items-center text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                          Conversie slabă
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 pt-2.5 border-t border-slate-200/70 text-[11px]">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-semibold">Vizualizări</div>
+                      <div className="font-bold text-slate-800 tabular-nums mt-0.5">
+                        {ga4Ready ? row.views.toLocaleString('ro-RO') : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-semibold">Vândute</div>
+                      <div className="font-black text-slate-900 tabular-nums mt-0.5">
+                        {row.soldQty} buc
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-semibold">Venit</div>
+                      <div className="font-bold text-slate-800 tabular-nums mt-0.5">
+                        {formatMoney(row.revenueRon)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] text-slate-400 font-semibold">Conversie</div>
+                      <div className="font-black tabular-nums mt-0.5">
+                        {row.viewToBuyPct !== null ? (
+                          <span className={row.viewToBuyPct >= 2 ? 'text-emerald-600' : 'text-slate-700'}>
+                            {row.viewToBuyPct}%
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table (sm+) */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
-                  <th className="py-2.5 pr-3 font-black">Produs</th>
-                  <th className="py-2.5 px-2 font-black text-right">Vizualizări (GA4)</th>
-                  <th className="py-2.5 px-2 font-black text-right">Vândute (Supabase)</th>
-                  <th className="py-2.5 px-2 font-black text-right">Venit</th>
-                  <th className="py-2.5 pl-2 font-black text-right">Conversie</th>
+                  <th className="py-2.5 pr-4 font-black min-w-[260px]">Produs</th>
+                  <th className="py-2.5 px-2.5 font-black text-right whitespace-nowrap">Vizualizări (GA4)</th>
+                  <th className="py-2.5 px-2.5 font-black text-right whitespace-nowrap">Vândute (Supabase)</th>
+                  <th className="py-2.5 px-2.5 font-black text-right whitespace-nowrap">Venit</th>
+                  <th className="py-2.5 pl-2.5 font-black text-right whitespace-nowrap">Conversie</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.productComparison.map((row) => {
+                {paginateSlice(data.productComparison, productsPage, 10).map((row) => {
                   const lowConvAlert = row.views >= 20 && row.viewToBuyPct !== null && row.viewToBuyPct < 1.5;
                   return (
                     <tr key={row.name} className="hover:bg-slate-50/70">
-                      <td className="py-2.5 pr-3 font-bold text-slate-900">
-                        <div className="flex items-center gap-2">
+                      <td className="py-2.5 pr-4 font-bold text-slate-900">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Package size={13} className="text-slate-400 shrink-0" />
-                          <span className="line-clamp-1">{row.name}</span>
+                          <span className="leading-snug">{row.name}</span>
                           {lowConvAlert && (
                             <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
                               Conversie slabă
@@ -2025,16 +2442,16 @@ export default function AdminAnalyticsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="py-2.5 px-2 text-right font-bold text-slate-700 tabular-nums">
+                      <td className="py-2.5 px-2.5 text-right font-bold text-slate-700 tabular-nums whitespace-nowrap">
                         {ga4Ready ? row.views.toLocaleString('ro-RO') : '—'}
                       </td>
-                      <td className="py-2.5 px-2 text-right font-black text-slate-900 tabular-nums">
+                      <td className="py-2.5 px-2.5 text-right font-black text-slate-900 tabular-nums whitespace-nowrap">
                         {row.soldQty} buc
                       </td>
-                      <td className="py-2.5 px-2 text-right font-bold text-slate-800 tabular-nums">
+                      <td className="py-2.5 px-2.5 text-right font-bold text-slate-800 tabular-nums whitespace-nowrap">
                         {formatMoney(row.revenueRon)}
                       </td>
-                      <td className="py-2.5 pl-2 text-right font-black tabular-nums">
+                      <td className="py-2.5 pl-2.5 text-right font-black tabular-nums whitespace-nowrap">
                         {row.viewToBuyPct !== null ? (
                           <span className={row.viewToBuyPct >= 2 ? 'text-emerald-600' : 'text-slate-700'}>
                             {row.viewToBuyPct}%
@@ -2049,6 +2466,14 @@ export default function AdminAnalyticsPage() {
               </tbody>
             </table>
           </div>
+
+          <AdminPagination
+            currentPage={productsPage}
+            totalItems={data.productComparison.length}
+            itemsPerPage={10}
+            onPageChange={setProductsPage}
+            label="produse"
+          />
         </div>
       )}
 
@@ -2098,6 +2523,478 @@ export default function AdminAnalyticsPage() {
                 <div className="text-lg sm:text-xl font-black text-slate-950 tabular-nums shrink-0">
                   {formatMoney(totalRon)}
                 </div>
+              </div>
+            );
+          })()}
+
+          {/* Top Afiliați & Vânzări pe Țări (Supabase) */}
+          {(() => {
+            const countrySales = data?.countrySalesBreakdown || [];
+            const affiliates = data?.topAffiliates || [];
+            const referralSummary = data?.referralSummary;
+            const activeCountryObj =
+              salesCountryFilter !== 'all'
+                ? countrySales.find((c) => c.countryCode === salesCountryFilter) || null
+                : null;
+            const totalAffOrders = affiliates.reduce((s, a) => s + a.orders, 0);
+            const totalAffRevenueRon = affiliates.reduce((s, a) => s + a.revenueRon, 0);
+            const totalAffCommissionRon = affiliates.reduce((s, a) => s + a.commissionRon, 0);
+
+            return (
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-5">
+                {/* Section Header + Country Filter Dropdown */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Award size={18} className="text-[#e32f8c] shrink-0" />
+                      <h3 className="text-sm sm:text-base font-black tracking-tight text-slate-900">
+                        Top Afiliați & Vânzări pe Țări (Supabase)
+                      </h3>
+                      {activeCountryObj && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-pink-50 text-[#c92077] border border-pink-200">
+                          <span>{activeCountryObj.flag || '🌐'}</span>
+                          <span>{activeCountryObj.countryName}</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Atribuire comenzi & comisioane sincronizată 100% cu{' '}
+                      <Link href="/admin/affiliates" className="text-[#e32f8c] font-bold hover:underline">
+                        /admin/affiliates
+                      </Link>
+                      {' · '}Click pe o țară pentru filtrare instant
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <ModernSelect
+                      ariaLabel="Filtru țară vânzări și afiliați"
+                      value={salesCountryFilter}
+                      onChange={setSalesCountryFilter}
+                      options={salesCountryOptions}
+                      leadingIcon={<Globe size={13} />}
+                      searchable
+                      searchPlaceholder="Caută țară..."
+                      className="w-full sm:w-60"
+                    />
+                    {salesCountryFilter !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => setSalesCountryFilter('all')}
+                        className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-[11px] font-black text-[#e32f8c] bg-pink-50 hover:bg-pink-100 border border-pink-200 transition-colors cursor-pointer shrink-0"
+                        title="Resetează filtrul de țară"
+                      >
+                        <RotateCcw size={12} />
+                        <span className="hidden sm:inline">Reset</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Clickable Country Sales Grid */}
+                {countrySales.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400">
+                      <span>Vânzări pe Țări ({countrySales.length} {countrySales.length === 1 ? 'țară' : 'țări'})</span>
+                      {salesCountryFilter !== 'all' && (
+                        <button
+                          type="button"
+                          onClick={() => setSalesCountryFilter('all')}
+                          className="text-[#e32f8c] hover:underline normal-case font-bold cursor-pointer"
+                        >
+                          Arată toate țările
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                      {countrySales.map((c) => {
+                        const isSelected = salesCountryFilter === c.countryCode;
+                        return (
+                          <button
+                            key={c.countryCode}
+                            type="button"
+                            onClick={() =>
+                              setSalesCountryFilter((prev) =>
+                                prev === c.countryCode ? 'all' : c.countryCode
+                              )
+                            }
+                            className={`text-left p-2.5 sm:p-3 rounded-xl border transition-all active:scale-[0.99] cursor-pointer space-y-1.5 ${
+                              isSelected
+                                ? 'border-[#e32f8c] bg-pink-50/70 ring-2 ring-[#e32f8c]/20 shadow-xs'
+                                : 'border-slate-200/80 bg-slate-50/60 hover:bg-white hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="inline-flex items-center gap-1.5 min-w-0">
+                                <span className="text-base leading-none shrink-0" aria-hidden="true">
+                                  {c.flag || '🌐'}
+                                </span>
+                                <span className="text-xs font-black text-slate-900 break-words leading-tight">
+                                  {c.countryName}
+                                </span>
+                              </span>
+                              <span
+                                className={`text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums shrink-0 ${
+                                  isSelected
+                                    ? 'bg-[#e32f8c] text-white'
+                                    : 'bg-white border border-slate-200 text-slate-700'
+                                }`}
+                              >
+                                {c.sharePct}%
+                              </span>
+                            </div>
+
+                            <div className="flex items-baseline justify-between gap-1.5 text-[11px] tabular-nums">
+                              <span className="font-bold text-slate-600">
+                                {c.orders} {c.orders === 1 ? 'com.' : 'com.'}
+                              </span>
+                              <span className="font-black text-slate-900">
+                                {formatMoney(c.revenueRon)}
+                              </span>
+                            </div>
+
+                            <div className="w-full h-1.5 rounded-full bg-slate-200/80 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  isSelected ? 'bg-[#e32f8c]' : 'bg-slate-800'
+                                }`}
+                                style={{ width: `${Math.max(4, c.sharePct)}%` }}
+                              />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Affiliate Summary Strip */}
+                {(affiliates.length > 0 || (referralSummary && referralSummary.totalClicks > 0)) && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-slate-900 text-white">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-400">
+                        Total Click-uri Link (?ref=)
+                      </div>
+                      <div className="text-sm sm:text-base font-black tabular-nums mt-0.5 text-sky-300">
+                        {referralSummary?.connected
+                          ? referralSummary.totalClicks.toLocaleString('ro-RO')
+                          : '—'}
+                      </div>
+                      {referralSummary?.connected && (
+                        <div className="text-[10px] font-semibold text-zinc-400 tabular-nums">
+                          {referralSummary.totalUsers.toLocaleString('ro-RO')} vizitatori unici
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-400">
+                        Comenzi Afiliați
+                      </div>
+                      <div className="text-sm sm:text-base font-black tabular-nums mt-0.5">
+                        {totalAffOrders.toLocaleString('ro-RO')}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-400">
+                        Venit Afiliați
+                      </div>
+                      <div className="text-sm sm:text-base font-black tabular-nums mt-0.5 text-emerald-300">
+                        {formatMoney(totalAffRevenueRon)}
+                      </div>
+                    </div>
+                    <div className="sm:text-right">
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-400">
+                        Comisioane
+                      </div>
+                      <div className="text-sm sm:text-base font-black tabular-nums mt-0.5 text-[#ff6eb6]">
+                        {formatMoney(totalAffCommissionRon)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Compact Top Traffic by Link (?ref=) Strip */}
+                {referralSummary && referralSummary.topByClicks.length > 0 && (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-slate-600">
+                        <Share2 size={12} className="text-[#e32f8c]" />
+                        <span>Top trafic pe link (?ref=)</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 tabular-nums">
+                        {referralSummary.totalClicks.toLocaleString('ro-RO')} click-uri ·{' '}
+                        {referralSummary.totalUsers.toLocaleString('ro-RO')} vizitatori unici
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {paginateSlice(referralSummary.topByClicks, refLinksPage, 8).map((ref) => (
+                        <span
+                          key={ref.code}
+                          className="inline-flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200/90 text-[11px] shadow-2xs"
+                        >
+                          <span className="font-mono font-black text-slate-900">{ref.code}</span>
+                          {ref.affiliateName && (
+                            <span className="text-slate-500 font-semibold">{ref.affiliateName}</span>
+                          )}
+                          <span className="text-slate-300">·</span>
+                          <span className="font-black text-[#e32f8c] tabular-nums">
+                            {ref.clicks.toLocaleString('ro-RO')} {ref.clicks === 1 ? 'click' : 'click-uri'}
+                          </span>
+                          {ref.orders > 0 && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded-md tabular-nums">
+                              {ref.orders} com.
+                              {ref.clickConversionPct !== null ? ` (${ref.clickConversionPct}%)` : ''}
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                    <AdminPagination
+                      currentPage={refLinksPage}
+                      totalItems={referralSummary.topByClicks.length}
+                      itemsPerPage={8}
+                      onPageChange={setRefLinksPage}
+                      compact
+                      label="coduri ?ref="
+                    />
+                  </div>
+                )}
+
+                {/* Ranked Top Affiliates Leaderboard (Search + Activity Toggle + Pagination) */}
+                {rankedAffiliates.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                          Leaderboard Afiliați
+                        </span>
+                        <span className="text-[11px] font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">
+                          {filteredAffiliates.length} afișați
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
+                        <div className="relative w-full sm:w-56">
+                          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={affiliateSearch}
+                            onChange={(e) => {
+                              setAffiliateSearch(e.target.value);
+                              setAffiliatesPage(1);
+                            }}
+                            placeholder="Caută afiliat sau cod..."
+                            className="h-9 sm:h-8 pl-8 pr-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#e32f8c]/25 w-full"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAffiliateActivityOnly(true);
+                              setAffiliatesPage(1);
+                            }}
+                            className={`px-2.5 py-1.5 sm:py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer text-center whitespace-nowrap ${
+                              affiliateActivityOnly
+                                ? 'bg-slate-900 text-white shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Doar cu activitate ({activeAffiliatesCount})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAffiliateActivityOnly(false);
+                              setAffiliatesPage(1);
+                            }}
+                            className={`px-2.5 py-1.5 sm:py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer text-center whitespace-nowrap ${
+                              !affiliateActivityOnly
+                                ? 'bg-slate-900 text-white shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Toți afiliații ({rankedAffiliates.length})
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {filteredAffiliates.length > 0 ? (
+                      <>
+                        <div className="space-y-2.5">
+                          {paginateSlice(filteredAffiliates, affiliatesPage, 10).map((aff) => {
+                            const rank = aff.rank;
+                            const rankBadgeCls =
+                              rank === 1
+                                ? 'bg-gradient-to-br from-amber-300 to-amber-500 text-amber-950 shadow-xs'
+                                : rank === 2
+                                  ? 'bg-gradient-to-br from-slate-200 to-slate-400 text-slate-900'
+                                  : rank === 3
+                                    ? 'bg-gradient-to-br from-orange-200 to-orange-400 text-orange-950'
+                                    : 'bg-slate-100 text-slate-600 border border-slate-200';
+
+                            return (
+                              <div
+                                key={aff.id}
+                                className="p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 hover:bg-white transition-colors space-y-2.5"
+                              >
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                                  {/* Left: Global Rank + Name + Code + Flags */}
+                                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                    <span
+                                      className={`w-7 h-7 rounded-xl inline-flex items-center justify-center text-[11px] font-black shrink-0 tabular-nums ${rankBadgeCls}`}
+                                    >
+                                      #{rank}
+                                    </span>
+
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-xs sm:text-sm font-black text-slate-900 break-words leading-snug">
+                                          {aff.name}
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[11px] font-black text-slate-800">
+                                          {aff.code}
+                                        </span>
+                                        <span className="px-1.5 py-0.5 rounded-md bg-pink-50 border border-pink-200/80 text-[10px] font-black text-[#c92077] tabular-nums">
+                                          {aff.commissionPercent}% comision
+                                        </span>
+                                      </div>
+
+                                      {aff.topCountries.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-1">
+                                          {aff.topCountries.map((tc) => (
+                                            <span
+                                              key={tc.countryCode}
+                                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white border border-slate-200/80 text-[10px] font-bold text-slate-700 tabular-nums"
+                                              title={`${tc.countryName}: ${tc.orders} comenzi (${formatMoney(tc.revenueRon)})`}
+                                            >
+                                              <span aria-hidden="true">{tc.flag || '🌐'}</span>
+                                              <span>{tc.countryCode}</span>
+                                              <span className="text-slate-400">·</span>
+                                              <span>{tc.orders}</span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Right: Metrics Grid (Zero truncation on mobile & desktop) */}
+                                  <div className="grid grid-cols-3 sm:grid-cols-5 md:flex md:items-center gap-2.5 md:gap-5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-200/70 shrink-0">
+                                    <div>
+                                      <div className="text-[10px] text-slate-400 font-semibold">Click-uri (?ref=)</div>
+                                      <div className="text-xs sm:text-sm font-black text-indigo-700 tabular-nums">
+                                        {aff.clicks.toLocaleString('ro-RO')} {aff.clicks === 1 ? 'click' : 'click-uri'}
+                                      </div>
+                                      <div className="text-[10px] font-bold text-slate-500 tabular-nums">
+                                        {aff.clickConversionPct !== null ? `${aff.clickConversionPct}% conv.` : '—'}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] text-slate-400 font-semibold">Comenzi</div>
+                                      <div className="text-xs sm:text-sm font-black text-slate-900 tabular-nums">
+                                        {aff.orders}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] text-slate-400 font-semibold">Venit</div>
+                                      <div className="text-xs sm:text-sm font-black text-slate-900 tabular-nums">
+                                        {formatMoney(aff.revenueRon)}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] text-slate-400 font-semibold">Comision</div>
+                                      <div className="text-xs sm:text-sm font-black text-emerald-700 tabular-nums">
+                                        {formatMoney(aff.commissionRon)}
+                                      </div>
+                                    </div>
+                                    <div className="sm:text-right">
+                                      <div className="text-[10px] text-slate-400 font-semibold">Cotă</div>
+                                      <div className="text-xs sm:text-sm font-black text-[#e32f8c] tabular-nums">
+                                        {aff.sharePct}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="w-full h-1.5 rounded-full bg-slate-200/80 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-gradient-to-r from-[#e32f8c] to-violet-600"
+                                    style={{ width: `${aff.sharePct > 0 ? Math.max(3, aff.sharePct) : 0}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <AdminPagination
+                          currentPage={affiliatesPage}
+                          totalItems={filteredAffiliates.length}
+                          itemsPerPage={10}
+                          onPageChange={setAffiliatesPage}
+                          label="afiliați"
+                        />
+                      </>
+                    ) : (
+                      <div className="py-8 px-4 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 space-y-2.5">
+                        <p className="text-xs font-bold text-slate-500">
+                          {affiliateSearch.trim()
+                            ? `Niciun afiliat găsit pentru „${affiliateSearch.trim()}”.`
+                            : 'Niciun afiliat cu activitate în perioada selectată.'}
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                          {affiliateSearch.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAffiliateSearch('');
+                                setAffiliatesPage(1);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+                            >
+                              <RotateCcw size={12} />
+                              Șterge căutarea
+                            </button>
+                          )}
+                          {affiliateActivityOnly && rankedAffiliates.length > activeAffiliatesCount && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAffiliateActivityOnly(false);
+                                setAffiliatesPage(1);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black text-[#e32f8c] bg-pink-50 hover:bg-pink-100 border border-pink-200 transition-colors cursor-pointer"
+                            >
+                              Arată toți afiliații ({rankedAffiliates.length})
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-8 px-4 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 space-y-2">
+                    <p className="text-xs font-bold text-slate-500">
+                      {activeCountryObj
+                        ? `Nicio comandă de afiliat înregistrată în ${activeCountryObj.countryName} pentru perioada selectată.`
+                        : 'Nicio comandă atribuită afiliaților în perioada selectată.'}
+                    </p>
+                    {salesCountryFilter !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => setSalesCountryFilter('all')}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black text-[#e32f8c] bg-pink-50 hover:bg-pink-100 border border-pink-200 transition-colors cursor-pointer"
+                      >
+                        <RotateCcw size={12} />
+                        Arată toate țările
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -2204,41 +3101,51 @@ export default function AdminAnalyticsPage() {
               </div>
 
               {mkt.coupons.topCoupons.length > 0 && (
-                <div className="overflow-x-auto pt-1">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
-                        <th className="py-2 pr-2 font-black">Cod Cupon</th>
-                        <th className="py-2 px-2 font-black">Tip</th>
-                        <th className="py-2 px-2 font-black text-right">Comenzi</th>
-                        <th className="py-2 px-2 font-black text-right">Venit</th>
-                        <th className="py-2 pl-2 font-black text-right">Discount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {mkt.coupons.topCoupons.slice(0, 6).map((c) => (
-                        <tr key={c.code} className="hover:bg-slate-50/70">
-                          <td className="py-2 pr-2 font-mono font-black text-slate-900">{c.code}</td>
-                          <td className="py-2 px-2 text-[11px] font-semibold text-slate-600">
-                            {c.affiliateName
-                              ? `Afiliat (${c.affiliateName})`
-                              : c.category === 'scratch'
-                                ? 'ScratchCard'
-                                : c.category === 'tren5'
-                                  ? 'Welcome'
-                                  : 'Promo'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-black tabular-nums">{c.orders}</td>
-                          <td className="py-2 px-2 text-right font-bold text-slate-800 tabular-nums">
-                            {formatMoney(c.revenueRon)}
-                          </td>
-                          <td className="py-2 pl-2 text-right font-bold text-rose-600 tabular-nums">
-                            -{formatMoney(c.discountRon)}
-                          </td>
+                <div>
+                  <div className="overflow-x-auto pt-1">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+                          <th className="py-2 pr-2 font-black">Cod Cupon</th>
+                          <th className="py-2 px-2 font-black">Tip</th>
+                          <th className="py-2 px-2 font-black text-right">Comenzi</th>
+                          <th className="py-2 px-2 font-black text-right">Venit</th>
+                          <th className="py-2 pl-2 font-black text-right">Discount</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginateSlice(mkt.coupons.topCoupons, couponsPage, 6).map((c) => (
+                          <tr key={c.code} className="hover:bg-slate-50/70">
+                            <td className="py-2 pr-2 font-mono font-black text-slate-900">{c.code}</td>
+                            <td className="py-2 px-2 text-[11px] font-semibold text-slate-600">
+                              {c.affiliateName
+                                ? `Afiliat (${c.affiliateName})`
+                                : c.category === 'scratch'
+                                  ? 'ScratchCard'
+                                  : c.category === 'tren5'
+                                    ? 'Welcome'
+                                    : 'Promo'}
+                            </td>
+                            <td className="py-2 px-2 text-right font-black tabular-nums">{c.orders}</td>
+                            <td className="py-2 px-2 text-right font-bold text-slate-800 tabular-nums">
+                              {formatMoney(c.revenueRon)}
+                            </td>
+                            <td className="py-2 pl-2 text-right font-bold text-rose-600 tabular-nums">
+                              -{formatMoney(c.discountRon)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <AdminPagination
+                    currentPage={couponsPage}
+                    totalItems={mkt.coupons.topCoupons.length}
+                    itemsPerPage={6}
+                    onPageChange={setCouponsPage}
+                    compact
+                    label="cupoane"
+                  />
                 </div>
               )}
             </div>
@@ -2385,7 +3292,7 @@ export default function AdminAnalyticsPage() {
                   return (
                     <div key={s.key} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
                       <div className="flex flex-wrap items-center justify-between gap-1 sm:gap-2 text-xs mb-1">
-                        <span className="font-bold text-slate-800 truncate">{s.label}</span>
+                        <span className="font-bold text-slate-800 break-words leading-snug">{s.label}</span>
                         <span className="font-black text-slate-900 shrink-0 tabular-nums">
                           {s.count} ({s.percentage}%)
                         </span>

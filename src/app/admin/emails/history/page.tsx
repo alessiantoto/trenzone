@@ -16,6 +16,7 @@ import { AwbEmailTemplate } from '@/components/email/AwbEmailTemplate';
 import { ReturnConfirmationEmail } from '@/components/email/ReturnConfirmationEmail';
 import { AffiliateApprovalEmail } from '@/components/email/AffiliateApprovalEmail';
 import { BroadcastEmailTemplate } from '@/components/email/BroadcastEmailTemplate';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 const CRITICAL_TYPES = new Set([
   'order-confirmation',
@@ -33,6 +34,8 @@ export default function EmailHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'failed'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
   const [selectedLog, setSelectedLog] = useState<EmailLog | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [batchLoading, setBatchLoading] = useState<'critical' | 'secondary' | null>(null);
@@ -132,6 +135,16 @@ export default function EmailHistoryPage() {
     if (statusFilter === 'failed') return log.status !== 'sent';
     return true;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  const safeCurrentPage = Math.min(currentPage, Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage)));
+  const paginatedLogs = useMemo(
+    () => filteredLogs.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage),
+    [filteredLogs, safeCurrentPage, itemsPerPage]
+  );
 
   const getLogTypeBadge = (type: string) => {
     switch (type) {
@@ -336,7 +349,7 @@ export default function EmailHistoryPage() {
               Nu am găsit niciun email în istoric.
             </div>
           ) : (
-            filteredLogs.map(log => (
+            paginatedLogs.map(log => (
               <div
                 key={log.id}
                 onClick={() => setSelectedLog(log)}
@@ -415,7 +428,7 @@ export default function EmailHistoryPage() {
                   <td colSpan={5} className="p-8 text-center text-slate-500 font-medium">Nu am găsit niciun email în istoric.</td>
                 </tr>
               ) : (
-                filteredLogs.map(log => (
+                paginatedLogs.map(log => (
                   <tr 
                     key={log.id} 
                     onClick={() => setSelectedLog(log)}
@@ -469,6 +482,21 @@ export default function EmailHistoryPage() {
             </tbody>
           </table>
         </div>
+
+        {!loading && filteredLogs.length > itemsPerPage && (
+          <div className="px-4 sm:px-6 pb-4">
+            <AdminPagination
+              currentPage={safeCurrentPage}
+              totalItems={filteredLogs.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={(p) => {
+                setCurrentPage(p);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              label="emailuri"
+            />
+          </div>
+        )}
       </div>
 
       {/* PREVIEW MODAL */}

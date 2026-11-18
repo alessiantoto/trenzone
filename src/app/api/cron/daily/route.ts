@@ -99,6 +99,15 @@ export async function GET(request: Request) {
     results.waitingProgramDeliveries = { error: err.message };
   }
 
+  // 8. Auto-approve due pending affiliates (if enabled)
+  try {
+    const { processDueAffiliateAutoApprovals } = await import('@/lib/affiliate-auto-approve');
+    results.affiliateAutoApprovals = await processDueAffiliateAutoApprovals({ maxBatch: 25 });
+  } catch (err: any) {
+    console.error('[CRON DAILY] Affiliate auto-approvals error:', err);
+    results.affiliateAutoApprovals = { error: err.message };
+  }
+
   return NextResponse.json({ success: true, results });
 }
 

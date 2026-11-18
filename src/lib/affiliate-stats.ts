@@ -12,6 +12,141 @@ export const AFFILIATE_PAYOUT_ELIGIBLE_STATUSES = new Set([
   'ridicata',
 ]);
 
+export const AFFILIATE_MIN_WITHDRAWAL_RON = 200;
+export const AFFILIATE_MIN_WITHDRAWAL_EUR = 40;
+
+export const AFFILIATE_BONUS_TIERS = [
+  {
+    id: 'tier_5k',
+    salesTargetRon: 5000,
+    voucherRon: 200,
+    salesTargetEur: 1000,
+    voucherEur: 40,
+    pctLabel: '4%',
+    shortTag: '5K',
+  },
+  {
+    id: 'tier_7_5k',
+    salesTargetRon: 7500,
+    voucherRon: 300,
+    salesTargetEur: 1500,
+    voucherEur: 60,
+    pctLabel: '4%',
+    shortTag: '75K',
+  },
+  {
+    id: 'tier_10k',
+    salesTargetRon: 10000,
+    voucherRon: 500,
+    salesTargetEur: 2000,
+    voucherEur: 100,
+    pctLabel: '5%',
+    shortTag: '10K',
+  },
+  {
+    id: 'tier_15k',
+    salesTargetRon: 15000,
+    voucherRon: 750,
+    salesTargetEur: 3000,
+    voucherEur: 150,
+    pctLabel: '5%',
+    shortTag: '15K',
+  },
+] as const;
+
+export type AffiliateBonusTier = (typeof AFFILIATE_BONUS_TIERS)[number];
+export type AffiliateBonusTierId = AffiliateBonusTier['id'];
+
+export interface AffiliateBonusVoucherRecord {
+  tierId: string;
+  code: string;
+  valueRon: number;
+  valueEur?: number;
+  issuedCurrency?: 'RON' | 'EUR';
+  createdAt: string;
+  isActive: boolean;
+  isUsed: boolean;
+  expiresAt: string | null;
+}
+
+export interface LiveCouponSnapshot {
+  code?: string | null;
+  value?: number | null;
+  is_active?: boolean | null;
+  used_count?: number | null;
+  usage_limit?: number | null;
+  expires_at?: string | null;
+}
+
+export function extractStoredBonusVouchers(paymentDetails: unknown): Array<Record<string, unknown>> {
+  const details = paymentDetails as Record<string, unknown> | null | undefined;
+  return Array.isArray(details?.bonus_vouchers)
+    ? details.bonus_vouchers.filter(
+        (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === 'object')
+      )
+    : [];
+}
+
+export function resolveLiveBonusVoucherState(
+  stored: Record<string, unknown>,
+  coupon: LiveCouponSnapshot | null | undefined
+): AffiliateBonusVoucherRecord | null {
+  const tierId = typeof stored.tierId === 'string' ? stored.tierId.trim() : '';
+  const code = typeof stored.code === 'string' ? stored.code.trim().toUpperCase() : '';
+  if (!tierId || !code) return null;
+
+  const fallbackValue = roundCurrency(stored.valueRon);
+  const storedValueEur = Number(stored.valueEur);
+  const valueEur = Number.isFinite(storedValueEur) && storedValueEur > 0 ? roundCurrency(storedValueEur) : undefined;
+  const issuedCurrency =
+    stored.issuedCurrency === 'EUR' ? 'EUR' : stored.issuedCurrency === 'RON' ? 'RON' : undefined;
+  const createdAt = typeof stored.createdAt === 'string' ? stored.createdAt : '';
+
+  if (!coupon) {
+    const expiresAt = typeof stored.expiresAt === 'string' ? stored.expiresAt : null;
+    const isUsed = Boolean(stored.isUsed);
+    return {
+      tierId,
+      code,
+      valueRon: fallbackValue,
+      ...(valueEur ? { valueEur } : {}),
+      ...(issuedCurrency ? { issuedCurrency } : {}),
+      createdAt,
+      isActive: false,
+      isUsed,
+      expiresAt,
+    };
+  }
+
+  const usedCount = Number(coupon.used_count) || 0;
+  const usageLimit = coupon.usage_limit != null ? Number(coupon.usage_limit) : null;
+  const isUsed =
+    usageLimit !== null && Number.isFinite(usageLimit) && usageLimit > 0
+      ? usedCount >= usageLimit
+      : usedCount > 0;
+  const expiresAt =
+    typeof coupon.expires_at === 'string'
+      ? coupon.expires_at
+      : typeof stored.expiresAt === 'string'
+        ? stored.expiresAt
+        : null;
+  const isExpired = Boolean(expiresAt && Date.parse(expiresAt) <= Date.now());
+  const isActive = Boolean(coupon.is_active) && !isUsed && !isExpired;
+  const valueRon = Number(coupon.value) > 0 ? roundCurrency(coupon.value) : fallbackValue;
+
+  return {
+    tierId,
+    code: String(coupon.code || code).trim().toUpperCase(),
+    valueRon,
+    ...(valueEur ? { valueEur } : {}),
+    ...(issuedCurrency ? { issuedCurrency } : {}),
+    createdAt,
+    isActive,
+    isUsed,
+    expiresAt,
+  };
+}
+
 export interface AffiliateOrderPayoutOptions {
   isDigitalOnly?: boolean;
   programDeliveryStatus?: string | null;
@@ -58,6 +193,7 @@ export interface AffiliateOrderMetrics {
 export interface AffiliateFinancialSummary {
   totalSales: number;
   totalNetSales: number;
+  eligibleSales: number;
   eligibleCommissions: number;
   pendingPickupCommissions: number;
   totalCommissions: number;
@@ -164,12 +300,13 @@ export function classifyOrderNonCountable(status?: string | null): {
 }
 
 /**
- * Classifies whether an order's affiliate commission is payable ("De încasat")
- * based on strict parcel pickup/delivery confirmation.
+ * Classifies whether an order's affiliate commission is payable ("De încasat").
+ * Every countable order (all non-cancelled, non-returned, non-refunded, non-failed orders)
+ * is immediately eligible for payout.
  */
 export function classifyAffiliateOrderPayoutStatus(
   status?: string | null,
-  options?: AffiliateOrderPayoutOptions
+  _options?: AffiliateOrderPayoutOptions
 ): AffiliateOrderPayoutClassification {
   const nonCountable = classifyOrderNonCountable(status);
   if (!nonCountable.isCountable) {
@@ -193,28 +330,179 @@ export function classifyAffiliateOrderPayoutStatus(
 
   const normalized = String(status || '').toLowerCase().trim();
   const isDeliveredParcel = AFFILIATE_PAYOUT_ELIGIBLE_STATUSES.has(normalized);
-  const isDigitalDelivered =
-    Boolean(options?.isDigitalOnly) &&
-    String(options?.programDeliveryStatus || '').toLowerCase().trim() === 'delivered';
 
-  if (isDeliveredParcel || isDigitalDelivered) {
+  return {
+    payoutStatus: 'eligible',
+    isPayoutEligible: true,
+    isPendingPickup: false,
+    isVoided: false,
+    labelRo: isDeliveredParcel ? 'Livrată · Eligibilă' : 'Confirmată · Eligibilă',
+    labelEn: isDeliveredParcel ? 'Delivered · Eligible' : 'Confirmed · Eligible',
+  };
+}
+
+const INTL_PER_EUR_DEFAULTS: Record<string, number> = {
+  CZK: 25.0,
+  HUF: 405,
+  BGN: 1.95583,
+  SEK: 11.4,
+  DKK: 7.46,
+  NOK: 11.7,
+  CAD: 1.5,
+  AUD: 1.65,
+};
+
+/**
+ * Resolves the RON per 1 EUR rate safely (e.g. 5.30).
+ */
+export function resolveEurToRonRate(
+  liveRates: Record<string, number> | null | undefined,
+  baseConvertToRon: (amount: number, currency: string, rates?: Record<string, number>) => number
+): number {
+  const eurRonRaw = baseConvertToRon(1, 'EUR', liveRates || undefined);
+  return Number.isFinite(eurRonRaw) && eurRonRaw > 1 ? eurRonRaw : 5.3;
+}
+
+/**
+ * Builds a RON converter that accurately handles all supported store currencies
+ * (EUR, USD, GBP, PLN, CHF, CZK, HUF, BGN, SEK, DKK, NOK, CAD, AUD),
+ * including currencies absent from admin exchange_rates or stored in inverse
+ * (foreign-per-RON) convention.
+ */
+export function createAffiliateRonConverter(
+  liveRates: Record<string, number> | null | undefined,
+  baseConvertToRon: (amount: number, currency: string, rates?: Record<string, number>) => number
+): (amount: number, currency: string) => number {
+  const rates = liveRates || undefined;
+  const eurRon = resolveEurToRonRate(rates, baseConvertToRon);
+
+  return (amount: number, currency: string): number => {
+    const numeric = Number(amount) || 0;
+    const curr = (currency || 'RON').toUpperCase().trim();
+    if (curr === 'RON' || numeric === 0) return roundCurrency(numeric);
+
+    if (curr === 'HUF') {
+      const explicit = Number(rates?.HUF);
+      if (Number.isFinite(explicit) && explicit > 0) {
+        const ronPerHuf = explicit > 10 ? 1 / explicit : explicit;
+        return roundCurrency(numeric * ronPerHuf);
+      }
+      return roundCurrency(numeric * (eurRon / INTL_PER_EUR_DEFAULTS.HUF));
+    }
+
+    if (curr === 'CZK') {
+      const explicit = Number(rates?.CZK);
+      if (Number.isFinite(explicit) && explicit > 0) {
+        const ronPerCzk = explicit > 1.05 ? 1 / explicit : explicit;
+        return roundCurrency(numeric * ronPerCzk);
+      }
+      return roundCurrency(numeric * (eurRon / INTL_PER_EUR_DEFAULTS.CZK));
+    }
+
+    if (curr === 'BGN') {
+      const explicit = Number(rates?.BGN);
+      if (Number.isFinite(explicit) && explicit > 0) {
+        return roundCurrency(baseConvertToRon(numeric, 'BGN', rates));
+      }
+      return roundCurrency(numeric * (eurRon / INTL_PER_EUR_DEFAULTS.BGN));
+    }
+
+    if (curr in INTL_PER_EUR_DEFAULTS) {
+      const explicit = Number(rates?.[curr]);
+      if (Number.isFinite(explicit) && explicit > 0) {
+        return roundCurrency(baseConvertToRon(numeric, curr, rates));
+      }
+      return roundCurrency(numeric * (eurRon / INTL_PER_EUR_DEFAULTS[curr]));
+    }
+
+    return roundCurrency(baseConvertToRon(numeric, curr, rates));
+  };
+}
+
+/**
+ * Computes consistent RON & EUR sales totals across mixed-currency orders.
+ * Native EUR orders preserve exact EUR amounts without RON->EUR round-trip drift;
+ * RON/USD/GBP/other orders convert via the live EUR/RON rate before final rounding.
+ */
+export function computeAffiliateMultiCurrencySales(
+  orders: Array<{
+    originalCurrency?: string | null;
+    originalTotalAmount?: number;
+    totalAmount: number;
+    isCountable: boolean;
+    isPayoutEligible?: boolean;
+    status?: string | null;
+  }>,
+  eurRon: number,
+  fallbackEligibleRon = 0,
+  fallbackTotalRon = 0
+): {
+  eurRate: number;
+  eligibleSalesRon: number;
+  eligibleSalesEur: number;
+  inTransitSalesRon: number;
+  inTransitSalesEur: number;
+  totalSalesRon: number;
+  totalSalesEur: number;
+} {
+  const safeEurRon = Number.isFinite(eurRon) && eurRon > 1 ? eurRon : 5.3;
+
+  if (orders.length === 0) {
+    const eligibleRon = roundCurrency(fallbackEligibleRon);
+    const totalRon = roundCurrency(Math.max(fallbackTotalRon, fallbackEligibleRon));
+    const inTransitRon = Math.max(0, roundCurrency(totalRon - eligibleRon));
     return {
-      payoutStatus: 'eligible',
-      isPayoutEligible: true,
-      isPendingPickup: false,
-      isVoided: false,
-      labelRo: isDeliveredParcel ? 'Colet ridicat · Eligibil' : 'Livrat digital · Eligibil',
-      labelEn: isDeliveredParcel ? 'Picked up · Eligible' : 'Delivered digitally · Eligible',
+      eurRate: safeEurRon,
+      eligibleSalesRon: eligibleRon,
+      eligibleSalesEur: roundCurrency(eligibleRon / safeEurRon),
+      inTransitSalesRon: inTransitRon,
+      inTransitSalesEur: roundCurrency(inTransitRon / safeEurRon),
+      totalSalesRon: totalRon,
+      totalSalesEur: roundCurrency(totalRon / safeEurRon),
     };
   }
 
+  let eligibleRon = 0;
+  let eligibleEur = 0;
+  let inTransitRon = 0;
+  let inTransitEur = 0;
+  let totalRon = 0;
+  let totalEur = 0;
+
+  for (const o of orders) {
+    if (!o.isCountable) continue;
+    const origCur = (o.originalCurrency || 'RON').toUpperCase().trim();
+    const orderRon = Number(o.totalAmount) || 0;
+    const orderEur =
+      origCur === 'EUR' && Number.isFinite(Number(o.originalTotalAmount))
+        ? Number(o.originalTotalAmount)
+        : orderRon / safeEurRon;
+
+    const eligible =
+      typeof o.isPayoutEligible === 'boolean'
+        ? o.isPayoutEligible
+        : classifyAffiliateOrderPayoutStatus(o.status).isPayoutEligible;
+
+    totalRon += orderRon;
+    totalEur += orderEur;
+
+    if (eligible) {
+      eligibleRon += orderRon;
+      eligibleEur += orderEur;
+    } else {
+      inTransitRon += orderRon;
+      inTransitEur += orderEur;
+    }
+  }
+
   return {
-    payoutStatus: 'pending_pickup',
-    isPayoutEligible: false,
-    isPendingPickup: true,
-    isVoided: false,
-    labelRo: 'În livrare · Așteaptă ridicarea',
-    labelEn: 'In transit · Awaiting pickup',
+    eurRate: safeEurRon,
+    eligibleSalesRon: roundCurrency(eligibleRon),
+    eligibleSalesEur: roundCurrency(eligibleEur),
+    inTransitSalesRon: roundCurrency(inTransitRon),
+    inTransitSalesEur: roundCurrency(inTransitEur),
+    totalSalesRon: roundCurrency(totalRon),
+    totalSalesEur: roundCurrency(totalEur),
   };
 }
 
@@ -233,16 +521,24 @@ export function computeAffiliateOrderMetrics(
   toRon: (amount: number, currency: string) => number
 ): AffiliateOrderMetrics {
   const rawOrderTotal = Number(order.total_amount) || 0;
-  const rawDiscount = Number(order.discount_total) || 0;
-  const rawShipping = Number(order.shipping_amount) || 0;
+  const rawDiscount = Math.max(0, Number(order.discount_total) || 0);
+  const rawShipping = Math.max(0, Number(order.shipping_amount) || 0);
   const rawSubtotalField = Number(order.subtotal);
-  const rawBaseSubtotal =
-    Number.isFinite(rawSubtotalField) && rawSubtotalField > 0
-      ? rawSubtotalField
-      : Math.max(0, rawOrderTotal - rawShipping);
-  const rawNetSubtotal = Math.max(0, rawBaseSubtotal - rawDiscount);
+  const hasExplicitSubtotal = Number.isFinite(rawSubtotalField) && rawSubtotalField > 0;
+  // Legacy/fallback syncs sometimes persisted `subtotal = total_amount` when metadata lacked subtotal.
+  // Avoid double-subtracting discounts or counting shipping inside the commissionable net subtotal.
+  const subtotalCopiedFromTotal =
+    hasExplicitSubtotal &&
+    Math.abs(rawSubtotalField - rawOrderTotal) < 0.01 &&
+    (rawShipping > 0 || rawDiscount > 0) &&
+    Math.abs((rawSubtotalField - rawDiscount + rawShipping) - rawOrderTotal) > 0.01;
 
-  const originalCurrency = (order.currency || 'RON').toUpperCase();
+  const rawNetSubtotal =
+    !hasExplicitSubtotal || subtotalCopiedFromTotal
+      ? Math.max(0, rawOrderTotal - rawShipping)
+      : Math.max(0, rawSubtotalField - rawDiscount);
+
+  const originalCurrency = (order.currency || 'RON').toUpperCase().trim() || 'RON';
   const totalAmount = roundCurrency(toRon(rawOrderTotal, originalCurrency));
   const subtotal = roundCurrency(toRon(rawNetSubtotal, originalCurrency));
   const shippingAmount = roundCurrency(toRon(rawShipping, originalCurrency));
@@ -400,6 +696,7 @@ export function computeAffiliateFinancialSummary(
 ): AffiliateFinancialSummary {
   let calculatedSales = 0;
   let calculatedNetSales = 0;
+  let calculatedEligibleSales = 0;
   let calculatedEligibleCommissions = 0;
   let calculatedPendingPickupCommissions = 0;
   let validOrdersCount = 0;
@@ -420,6 +717,7 @@ export function computeAffiliateFinancialSummary(
 
       if (eligible) {
         deliveredOrdersCount += 1;
+        calculatedEligibleSales += Number(o.totalAmount) || 0;
         calculatedEligibleCommissions +=
           typeof o.eligibleCommissionAmount === 'number'
             ? o.eligibleCommissionAmount
@@ -443,6 +741,9 @@ export function computeAffiliateFinancialSummary(
   const totalNetSales = hasOrderRecords
     ? roundCurrency(calculatedNetSales)
     : roundCurrency(fallbackLegacySales);
+  const eligibleSales = hasOrderRecords
+    ? roundCurrency(calculatedEligibleSales)
+    : roundCurrency(fallbackLegacySales);
 
   const eligibleCommissions = hasOrderRecords
     ? roundCurrency(calculatedEligibleCommissions)
@@ -456,7 +757,7 @@ export function computeAffiliateFinancialSummary(
   const effectiveDeliveredCount = hasOrderRecords ? deliveredOrdersCount : effectiveOrdersCount;
   const { payouts, paidAmount, lastPayoutAt } = normalizeAffiliatePayouts(paymentDetails);
 
-  // Strictly only commissions from picked-up/delivered orders are payable ("De încasat")
+  // Every countable (non-cancelled/non-returned/non-refunded/non-failed) commission is payable ("De încasat")
   const pendingPayout = Math.max(0, roundCurrency(eligibleCommissions - paidAmount));
   const overpaidAmount = Math.max(0, roundCurrency(paidAmount - eligibleCommissions));
   const payoutProgressPercent =
@@ -470,6 +771,7 @@ export function computeAffiliateFinancialSummary(
   return {
     totalSales,
     totalNetSales,
+    eligibleSales,
     eligibleCommissions,
     pendingPickupCommissions,
     totalCommissions,

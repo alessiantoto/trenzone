@@ -3,6 +3,8 @@ import { getProducts } from "@/lib/api";
 import { calculateOrderTotal, CartItem } from "@/lib/cart-calculations";
 import { ALLOWED_SHIPPING_COUNTRIES, COUNTRY_SERVICES } from "@/lib/shipping-config";
 import { validateCoupon } from "@/app/actions/coupons";
+import { getAffiliateSession } from "@/app/actions/affiliate-auth";
+import { escapeLike } from "@/lib/affiliate-auto-approve";
 import { isDigitalProgramItem } from "@/lib/programs";
 
 export const BUNDLE_REGEX = /^(.+)-bundle-(\d+)$/;
@@ -393,13 +395,15 @@ export async function resolveServerCoupon(
   currency: string,
   multiplier: number,
   locale: "ro" | "en",
-  strict = false
+  strict = false,
+  buyerEmail?: string | null
 ): Promise<{
   ok: true;
   couponData: any | null;
 } | {
   ok: false;
   error: string;
+  selfUseBlocked?: boolean;
 }> {
   const clean = typeof couponCode === "string" ? couponCode.trim() : "";
   if (!clean) return { ok: true, couponData: null };
@@ -410,6 +414,41 @@ export async function resolveServerCoupon(
   try {
     const couponResult = await validateCoupon(clean, subtotalMajor, currency, locale);
     if (couponResult?.isValid && couponResult?.coupon) {
+      if (!/^(BONUS|SCRATCH)-/i.test(clean)) {
+        const couponCodeStr = String(couponResult.coupon.code || clean).trim();
+        const escapedCode = escapeLike(couponCodeStr);
+        const [affiliate, session] = await Promise.all([
+          supabaseAdmin
+            .from("affiliates")
+            .select("id, email, code")
+            .ilike("code", escapedCode)
+            .limit(1)
+            .maybeSingle()
+            .then((res) => res.data, () => null),
+          getAffiliateSession().catch(() => null),
+        ]);
+
+        const cleanBuyerEmail = String(buyerEmail || "").trim().toLowerCase();
+        const isSelfUse =
+          Boolean(affiliate) &&
+          ((Boolean(cleanBuyerEmail) &&
+            affiliate!.email?.trim().toLowerCase() === cleanBuyerEmail) ||
+            (Boolean(session?.id) && session!.id === affiliate!.id) ||
+            (Boolean(session?.code) &&
+              session!.code.trim().toUpperCase() === clean.toUpperCase()));
+
+        if (isSelfUse) {
+          return {
+            ok: false,
+            selfUseBlocked: true,
+            error:
+              locale === "en"
+                ? "You cannot apply your own affiliate code to your personal order."
+                : "Nu poți folosi propriul cod de afiliat pe comanda ta personală.",
+          };
+        }
+      }
+
       return { ok: true, couponData: couponResult.coupon };
     }
     if (strict) {

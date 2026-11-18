@@ -3,6 +3,7 @@
 import { cookies, headers } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/ratelimit';
+import { tryAutoApprovePendingAffiliateOnLogin } from '@/lib/affiliate-auto-approve';
 import crypto from 'crypto';
 
 const AFFILIATE_COOKIE_NAME = 'affiliate_session';
@@ -117,9 +118,9 @@ export async function affiliateLoginAction(email: string, code: string, locale: 
     }
 
     // 3. Safe Database Lookup (wildcards escaped above)
-    const { data: affiliate, error } = await supabaseAdmin
+    let { data: affiliate, error } = await supabaseAdmin
       .from('affiliates')
-      .select('id, name, email, code, status, social_links')
+      .select('id, name, email, code, status, social_links, requested_at')
       .ilike('email', escapedEmail)
       .ilike('code', escapedCode)
       .limit(1)
@@ -127,6 +128,38 @@ export async function affiliateLoginAction(email: string, code: string, locale: 
 
     if (error || !affiliate) {
       return { success: false, error: isEn ? 'Incorrect email or code.' : 'Email sau cod incorect.' };
+    }
+
+    if (affiliate.status === 'pending') {
+      const autoResult = await tryAutoApprovePendingAffiliateOnLogin(affiliate).catch((autoErr) => {
+        console.warn('[AFFILIATE AUTH] Auto-approval check on login failed:', autoErr);
+        return { approved: false as const };
+      });
+
+      if (autoResult.approved) {
+        if (autoResult.code && autoResult.code.toUpperCase() !== cleanedCode) {
+          return {
+            success: false,
+            error: isEn
+              ? 'Your affiliate account has been approved! Please check your email for your assigned active affiliate code.'
+              : 'Contul tău de afiliat a fost aprobat! Verifică emailul pentru codul tău activ atribuit.',
+          };
+        }
+        affiliate = {
+          ...affiliate,
+          status: 'active',
+          code: autoResult.code || affiliate.code,
+        };
+      } else if ('alreadyClaimed' in autoResult && autoResult.alreadyClaimed) {
+        const { data: refreshed } = await supabaseAdmin
+          .from('affiliates')
+          .select('id, name, email, code, status, social_links, requested_at')
+          .eq('id', affiliate.id)
+          .maybeSingle();
+        if (refreshed && refreshed.status === 'active' && String(refreshed.code || '').toUpperCase() === cleanedCode) {
+          affiliate = refreshed;
+        }
+      }
     }
 
     if (affiliate.status === 'pending') {
@@ -148,13 +181,14 @@ export async function affiliateLoginAction(email: string, code: string, locale: 
     }
 
     // 🛡️ 4. Set Secure Session Cookie
+    const savedLocale: 'ro' | 'en' = affiliate.social_links?.locale === 'en' ? 'en' : 'ro';
     const cookieStore = await cookies();
     const sessionData = JSON.stringify({
       id: affiliate.id,
       name: affiliate.name,
       email: affiliate.email,
       code: affiliate.code,
-      locale: affiliate.social_links?.locale || 'ro'
+      locale: savedLocale
     });
 
     const encodedSession = signAffiliatePayload(Buffer.from(sessionData).toString('base64'));
@@ -167,7 +201,7 @@ export async function affiliateLoginAction(email: string, code: string, locale: 
       path: '/'
     });
 
-    return { success: true, locale: affiliate.social_links?.locale || 'ro' };
+    return { success: true, locale: savedLocale };
   } catch (err: any) {
     console.error('Affiliate login error:', err);
     return { success: false, error: isEn ? 'An error occurred while signing in.' : 'A apărut o eroare la conectare.' };
@@ -201,12 +235,12 @@ export async function getAffiliateSession() {
     ) {
       return null;
     }
-    return parsed as {
-      id: string;
-      name: string;
-      email: string;
-      code: string;
-      locale: string;
+    return {
+      id: parsed.id,
+      name: typeof parsed.name === 'string' ? parsed.name : '',
+      email: parsed.email,
+      code: parsed.code,
+      locale: parsed.locale === 'en' ? ('en' as const) : ('ro' as const),
     };
   } catch (e) {
     return null;

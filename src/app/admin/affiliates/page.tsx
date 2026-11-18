@@ -34,11 +34,14 @@ import {
   Eye,
   Phone,
   MapPin,
-  User
+  User,
+  Zap,
+  Play,
+  Pause,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-
   approveAffiliate, 
   rejectAffiliate, 
   suspendAffiliate, 
@@ -46,57 +49,106 @@ import {
   deleteAffiliate, 
   createAdminAffiliate,
   recordAffiliatePayoutAction,
-  deleteAffiliatePayoutAction
+  deleteAffiliatePayoutAction,
+  updateAffiliateAutoApprovalSettingsAction,
+  runAffiliateAutoApprovalsNowAction
 } from '@/app/actions/admin-affiliates';
 import {
+  AFFILIATE_MIN_WITHDRAWAL_RON,
+  AFFILIATE_MIN_WITHDRAWAL_EUR,
+  AFFILIATE_BONUS_TIERS,
   formatRon,
   formatOriginalAmount,
   classifyOrderNonCountable,
   classifyAffiliateOrderPayoutStatus,
 } from '@/lib/affiliate-stats';
 import toast from 'react-hot-toast';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 import Link from 'next/link';
 
+const AUTO_APPROVAL_DELAY_OPTIONS = [
+  { minutes: 0, label: 'Instant' },
+  { minutes: 60, label: '1 oră' },
+  { minutes: 120, label: '2 ore', recommended: true },
+  { minutes: 240, label: '4 ore' },
+  { minutes: 360, label: '6 ore' },
+  { minutes: 720, label: '12 ore' },
+  { minutes: 1440, label: '24 ore' },
+] as const;
+
+function formatScheduledTimeRo(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return '';
+  if (ts <= Date.now()) return 'Scadent acum';
+  return new Date(ts).toLocaleString('ro-RO', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 const CommissionDropdown = ({ value, onChange }: { value: number, onChange: (v: number) => void }) => {
-  const [isOpen, setIsOpen] = useState(false);
   return (
-    <div className="relative">
-      <button 
-        type="button" 
-        onClick={() => setIsOpen(!isOpen)} 
-        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#e32f8c] shadow-sm flex items-center justify-between"
-      >
-        <span>{value}%</span>
-        <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              exit={{ opacity: 0, y: -10 }} 
-              className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden"
-            >
-              {[10, 15, 20].map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => { onChange(v); setIsOpen(false); }}
-                  className={`w-full px-4 py-3 text-left text-sm font-bold transition-colors ${value === v ? 'bg-[#e32f8c]/10 text-[#e32f8c]' : 'text-slate-700 hover:bg-slate-50'}`}
-                >
-                  {v}%
-                </button>
-              ))}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+    <div className="grid grid-cols-3 gap-2">
+      {[10, 15, 20].map((v) => {
+        const isActive = value === v;
+        return (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onChange(v)}
+            className={`min-h-[44px] rounded-xl text-sm font-black border transition-all cursor-pointer active:scale-[0.98] ${
+              isActive
+                ? 'bg-[#e32f8c] text-black border-[#e32f8c] shadow-sm'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            {v}%
+          </button>
+        );
+      })}
     </div>
   );
 };
+
+function AffiliateRiskBadges({
+  returnedOrdersCount,
+  unverifiedCodOrdersCount,
+}: {
+  returnedOrdersCount?: number;
+  unverifiedCodOrdersCount?: number;
+}) {
+  const returnsCount = Number(returnedOrdersCount) || 0;
+  const unverifiedCodCount = Number(unverifiedCodOrdersCount) || 0;
+  if (returnsCount <= 0 && unverifiedCodCount <= 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {returnsCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-[11px] font-black">
+          <AlertTriangle size={12} className="shrink-0" />
+          <span>
+            {returnsCount} {returnsCount === 1 ? 'retur' : 'retururi'}
+          </span>
+        </span>
+      )}
+      {unverifiedCodCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-black">
+          <AlertTriangle size={12} className="shrink-0" />
+          <span>
+            {unverifiedCodCount}{' '}
+            {unverifiedCodCount === 1
+              ? 'ramburs neconfirmat (14z)'
+              : 'rambursuri neconfirmate (14z)'}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
 
 // Detailed Affiliate Portal View
 function AffiliatePortalView({
@@ -331,7 +383,7 @@ function AffiliatePortalView({
           </div>
           <p className="text-base sm:text-lg font-black text-slate-900">{affiliate.usages}</p>
           <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-            {affiliate.deliveredOrdersCount ?? 0} ridicate • {affiliate.inTransitOrdersCount ?? 0} în livrare
+            {affiliate.deliveredOrdersCount ?? 0} comenzi valide
             {(affiliate.cancelledOrdersCount || 0) > 0 ? ` • ${affiliate.cancelledOrdersCount} excluse` : ''}
           </p>
         </div>
@@ -371,6 +423,30 @@ function AffiliatePortalView({
               </span>
             )}
 
+            {/* Minimum withdrawal threshold status pill */}
+            {(() => {
+              const pendingVal = Number(affiliate.pendingPayoutRaw) || 0;
+              const meetsMin = typeof affiliate.meetsMinWithdrawal === 'boolean'
+                ? affiliate.meetsMinWithdrawal
+                : pendingVal >= AFFILIATE_MIN_WITHDRAWAL_RON;
+              return (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold text-slate-500">
+                    Prag minim retragere: {AFFILIATE_MIN_WITHDRAWAL_RON} RON ({AFFILIATE_MIN_WITHDRAWAL_EUR} EUR)
+                  </span>
+                  {meetsMin ? (
+                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <CheckCircle2 size={11} /> Eligibil (&gt;= {AFFILIATE_MIN_WITHDRAWAL_RON} RON)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                      Sub prag ({pendingVal.toFixed(2)} / {AFFILIATE_MIN_WITHDRAWAL_RON} RON)
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Admin action: Record payout */}
             <button
               type="button"
@@ -403,6 +479,12 @@ function AffiliatePortalView({
             </div>
           </div>
         )}
+
+        {/* Anti-abuse risk flags before wiring payout */}
+        <AffiliateRiskBadges
+          returnedOrdersCount={affiliate.returnedOrdersCount}
+          unverifiedCodOrdersCount={affiliate.unverifiedCodOrdersCount}
+        />
 
         {(affiliate.pendingPickupCommissionsRaw || 0) > 0 && (
           <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-xl text-xs text-amber-900 font-medium">
@@ -527,6 +609,93 @@ function AffiliatePortalView({
           </div>
         )}
       </div>
+
+      {/* VOUCHERE BONUS REVENDICATE (Dacă există) */}
+      {Array.isArray(affiliate.bonusVouchers) && affiliate.bonusVouchers.length > 0 && (
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-3">
+          <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#e32f8c]/10 text-[#e32f8c] flex items-center justify-center shrink-0">
+                <Ticket size={16} />
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                  Vouchere Bonus Revendicate ({affiliate.bonusVouchers.length})
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Cupoane cadou generate automat din pragurile de vânzări eligibile
+                </p>
+              </div>
+            </div>
+            {typeof affiliate.eligibleSalesRaw === 'number' && (
+              <span className="text-[10px] font-black text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full">
+                Vânzări eligibile: {formatRon(affiliate.eligibleSalesRaw)}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {affiliate.bonusVouchers.map((voucher: any) => {
+              const tierMeta = AFFILIATE_BONUS_TIERS.find((t) => t.id === voucher.tierId);
+              const isExpired = Boolean(voucher.expiresAt && Date.parse(voucher.expiresAt) <= Date.now());
+              const statusBadge = voucher.isUsed
+                ? { label: 'Utilizat', cls: 'bg-slate-100 text-slate-700 border-slate-200' }
+                : isExpired
+                  ? { label: 'Expirat', cls: 'bg-red-50 text-red-700 border-red-200' }
+                  : voucher.isActive
+                    ? { label: 'Activ', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+                    : { label: 'Inactiv', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+
+              return (
+                <div
+                  key={`${voucher.tierId}-${voucher.code}`}
+                  className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2.5 text-xs"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono font-black text-slate-900 text-xs">{voucher.code}</span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${statusBadge.cls}`}>
+                        {statusBadge.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 font-bold">
+                      <span className="text-emerald-700 font-black">
+                        {voucher.issuedCurrency === 'EUR' && voucher.valueEur
+                          ? `€${voucher.valueEur} (${formatRon(voucher.valueRon)})`
+                          : formatRon(voucher.valueRon)}
+                      </span>
+                      {tierMeta && (
+                        <>
+                          <span className="text-slate-300">•</span>
+                          <span>
+                            {voucher.issuedCurrency === 'EUR'
+                              ? `Prag €${tierMeta.salesTargetEur.toLocaleString('ro-RO')} (${tierMeta.pctLabel})`
+                              : `Prag ${tierMeta.salesTargetRon.toLocaleString('ro-RO')} RON (${tierMeta.pctLabel})`}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-medium">
+                      {voucher.createdAt ? `Emis: ${new Date(voucher.createdAt).toLocaleDateString('ro-RO')}` : ''}
+                      {voucher.expiresAt ? ` • Expiră: ${new Date(voucher.expiresAt).toLocaleDateString('ro-RO')}` : ''}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onCopy(voucher.code, `voucher-${voucher.code}`, 'Cod voucher')}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shadow-2xs shrink-0 cursor-pointer"
+                    title="Copiază codul voucherului"
+                  >
+                    {copiedKey === `voucher-${voucher.code}` ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                    <span>{copiedKey === `voucher-${voucher.code}` ? 'Copiat' : 'Copiază'}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* SOCIAL MEDIA & MOTIVATION (Dacă există) */}
       {(affiliate.socialLinks?.links?.length > 0 || affiliate.socialLinks?.motivation) && (
@@ -751,84 +920,93 @@ function AffiliatePortalView({
       </div>
 
       {/* ADMINISTRATIVE ACTION BUTTONS */}
-      <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          {affiliate.status === 'pending' ? (
-            <>
-              <button
-                type="button"
-                onClick={() => onOpenApprove(affiliate)}
-                disabled={processingId === affiliate.id}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-black rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                <CheckCircle2 size={14} />
-                <span>{processingId === affiliate.id ? 'Se procesează...' : 'Aprobă Afiliat & Activează Cod'}</span>
-              </button>
+      <div className="p-3.5 sm:p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        {affiliate.status === 'pending' ? (
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => onOpenApprove(affiliate)}
+              disabled={processingId === affiliate.id}
+              className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] px-4 py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-black rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <CheckCircle2 size={15} />
+              <span>{processingId === affiliate.id ? 'Se procesează...' : 'Aprobă Afiliat & Activează Cod'}</span>
+            </button>
+            <div className="grid grid-cols-2 sm:flex gap-2">
               <button
                 type="button"
                 onClick={() => onReject(affiliate.id)}
                 disabled={processingId === affiliate.id}
-                className="px-4 py-2 bg-white hover:bg-red-50 active:scale-[0.98] text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                className="min-h-[40px] px-4 py-2 bg-white hover:bg-red-50 active:scale-[0.98] text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
               >
                 {processingId === affiliate.id ? 'Se respinge...' : 'Respinge'}
               </button>
-            </>
-          ) : (
-            <>
               <button
                 type="button"
                 onClick={() => onOpenEdit(affiliate)}
                 disabled={processingId === affiliate.id}
-                className="px-4 py-2 bg-[#e32f8c] hover:bg-[#00bad9] active:scale-[0.98] text-slate-950 text-xs font-black rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="min-h-[40px] px-4 py-2 bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-700 border border-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <Pencil size={13} />
-                <span>Editează Cod & Comision</span>
+                <span>Editează</span>
               </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => onOpenEdit(affiliate)}
+              disabled={processingId === affiliate.id}
+              className="min-h-[40px] px-3.5 py-2 bg-[#e32f8c] hover:bg-[#00bad9] active:scale-[0.98] text-slate-950 text-xs font-black rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Pencil size={13} />
+              <span>Editează Cod</span>
+            </button>
 
-              {affiliate.status === 'active' ? (
-                <button
-                  type="button"
-                  onClick={() => onSuspend(affiliate.id)}
-                  disabled={processingId === affiliate.id}
-                  className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 active:scale-[0.98] text-amber-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {processingId === affiliate.id ? 'Se dezactivează...' : 'Dezactivează Cod'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onActivate(affiliate.id)}
-                  disabled={processingId === affiliate.id}
-                  className="px-3.5 py-2 bg-emerald-100 hover:bg-emerald-200 active:scale-[0.98] text-emerald-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {processingId === affiliate.id ? 'Se reactivează...' : 'Reactivează Cod'}
-                </button>
-              )}
-            </>
-          )}
-        </div>
+            {affiliate.status === 'active' ? (
+              <button
+                type="button"
+                onClick={() => onSuspend(affiliate.id)}
+                disabled={processingId === affiliate.id}
+                className="min-h-[40px] px-3.5 py-2 bg-amber-100 hover:bg-amber-200 active:scale-[0.98] text-amber-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {processingId === affiliate.id ? 'Se dezactivează...' : 'Dezactivează Cod'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onActivate(affiliate.id)}
+                disabled={processingId === affiliate.id}
+                className="min-h-[40px] px-3.5 py-2 bg-emerald-100 hover:bg-emerald-200 active:scale-[0.98] text-emerald-800 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {processingId === affiliate.id ? 'Se reactivează...' : 'Reactivează Cod'}
+              </button>
+            )}
+          </div>
+        )}
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+          <button
+            type="button"
+            onClick={() => onDelete(affiliate.id)}
+            disabled={processingId === affiliate.id}
+            className="min-h-[40px] px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            <Trash2 size={13} />
+            <span>Șterge Afiliat</span>
+          </button>
+
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-800 text-xs font-black rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              className="min-h-[40px] px-4 py-2 bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-800 text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
             >
               <X size={14} />
               <span>Închide</span>
             </button>
           )}
-
-          <button
-            type="button"
-            onClick={() => onDelete(affiliate.id)}
-            disabled={processingId === affiliate.id}
-            className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-          >
-            <Trash2 size={13} />
-            <span>Șterge Afiliat</span>
-          </button>
         </div>
       </div>
 
@@ -840,9 +1018,22 @@ export default function AffiliatesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPortalAffiliateId, setSelectedPortalAffiliateId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState('all');
-  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [confirmDeleteCardId, setConfirmDeleteCardId] = useState<string | null>(null);
 
   const [affiliates, setAffiliates] = useState<any[]>([]);
+  const [autoApprovalSettings, setAutoApprovalSettings] = useState<{
+    enabled: boolean;
+    delayMinutes: number;
+    updatedAt?: string;
+  }>({ enabled: false, delayMinutes: 120 });
+  const [autoApprovalSummary, setAutoApprovalSummary] = useState<{
+    pendingCount: number;
+    scheduledCount: number;
+    dueCount: number;
+    nextDueAt: string | null;
+  }>({ pendingCount: 0, scheduledCount: 0, dueCount: 0, nextDueAt: null });
+  const [isSavingAutoApproval, setIsSavingAutoApproval] = useState(false);
+  const [isRunningAutoApproval, setIsRunningAutoApproval] = useState(false);
   const [stats, setStats] = useState({
     totalSales: 0,
     totalNetSales: 0,
@@ -946,7 +1137,7 @@ export default function AffiliatesPage() {
     if (!payoutAffiliate || isRecordingPayout) return;
     const eligiblePending = Number(payoutAffiliate.pendingPayoutRaw) || 0;
     if (eligiblePending <= 0) {
-      toast.error('Nu există sold eligibil („De încasat”). Comisioanele devin eligibile doar după ridicarea coletului.');
+      toast.error('Nu există sold eligibil („De încasat”).');
       return;
     }
     const amount = Number(payoutAmount);
@@ -992,8 +1183,12 @@ export default function AffiliatesPage() {
       const res = await fetch('/api/admin/data?action=affiliates');
       const json = await res.json();
       const data = json.data;
-      setAffiliates(data.affiliates);
+      setAffiliates(data.affiliates || []);
       setStats(data.stats);
+      if (data.autoApproval) {
+        setAutoApprovalSettings(data.autoApproval.settings);
+        setAutoApprovalSummary(data.autoApproval.summary);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -1004,6 +1199,80 @@ export default function AffiliatesPage() {
   useEffect(() => {
     fetchAffiliates();
   }, []);
+
+  const handleToggleAutoApproval = async () => {
+    if (isSavingAutoApproval) return;
+    const nextEnabled = !autoApprovalSettings.enabled;
+    setIsSavingAutoApproval(true);
+    try {
+      const res = await updateAffiliateAutoApprovalSettingsAction({
+        enabled: nextEnabled,
+        delayMinutes: autoApprovalSettings.delayMinutes,
+      });
+      if (res.success) {
+        setAutoApprovalSettings(res.settings);
+        setAutoApprovalSummary(res.summary);
+        toast.success(
+          nextEnabled
+            ? 'Aprobarea automată a fost activată!'
+            : 'Aprobarea automată a fost oprită.'
+        );
+        await fetchAffiliates();
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la salvarea setării.');
+    } finally {
+      setIsSavingAutoApproval(false);
+    }
+  };
+
+  const handleSelectAutoApprovalDelay = async (minutes: number) => {
+    if (isSavingAutoApproval || autoApprovalSettings.delayMinutes === minutes) return;
+    setIsSavingAutoApproval(true);
+    try {
+      const res = await updateAffiliateAutoApprovalSettingsAction({
+        enabled: autoApprovalSettings.enabled,
+        delayMinutes: minutes,
+      });
+      if (res.success) {
+        setAutoApprovalSettings(res.settings);
+        setAutoApprovalSummary(res.summary);
+        const label = AUTO_APPROVAL_DELAY_OPTIONS.find((o) => o.minutes === minutes)?.label || `${minutes} min`;
+        toast.success(`Delay-ul de auto-aprobare a fost setat la: ${label}`);
+        await fetchAffiliates();
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la actualizarea delay-ului.');
+    } finally {
+      setIsSavingAutoApproval(false);
+    }
+  };
+
+  const handleRunAutoApprovalsNow = async () => {
+    if (isRunningAutoApproval) return;
+    setIsRunningAutoApproval(true);
+    try {
+      const res = await runAffiliateAutoApprovalsNowAction();
+      setAutoApprovalSettings(res.settings);
+      setAutoApprovalSummary(res.summary);
+      if (!res.enabled) {
+        toast.error('Activează mai întâi aprobarea automată.');
+      } else if (res.approved > 0) {
+        if (res.emailFailures > 0) {
+          toast.error(`${res.approved} afiliat(i) aprobat(i), dar ${res.emailFailures} email(uri) nu s-au putut trimite.`);
+        } else {
+          toast.success(`${res.approved} afiliat(i) scadent(i) aprobat(i) automat!`);
+        }
+      } else {
+        toast.success('Nicio cerere scadentă de aprobat în acest moment.');
+      }
+      await fetchAffiliates();
+    } catch (err: any) {
+      toast.error(err?.message || 'Eroare la procesarea auto-aprobărilor.');
+    } finally {
+      setIsRunningAutoApproval(false);
+    }
+  };
 
   const openApproveModal = (affiliate: any) => {
     const cleanFirstName = (affiliate.name.split(' ')[0] || 'AFI')
@@ -1156,27 +1425,49 @@ export default function AffiliatesPage() {
     setProcessingId(null);
   };
 
-  const filteredAffiliates = affiliates.filter(a => {
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch = !q ||
-                          a.name.toLowerCase().includes(q) || 
-                          a.code.toLowerCase().includes(q) ||
-                          (a.email || '').toLowerCase().includes(q);
-                          
-    let matchesFilter = true;
-    if (filterType === 'active') matchesFilter = a.status === 'active';
-    if (filterType === 'pending') matchesFilter = a.status === 'pending';
-    if (filterType === 'suspended') matchesFilter = a.status === 'suspended';
-    if (filterType === 'rejected') matchesFilter = a.status === 'rejected';
-    
-    return matchesSearch && matchesFilter;
+  const normalizeForSearch = (val: unknown) =>
+    String(val || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  const searchNeedle = normalizeForSearch(searchQuery);
+  const searchMatchesAllStatuses = affiliates.filter((a) => {
+    if (!searchNeedle) return true;
+    return (
+      normalizeForSearch(a.name).includes(searchNeedle) ||
+      normalizeForSearch(a.code).includes(searchNeedle) ||
+      normalizeForSearch(a.email).includes(searchNeedle)
+    );
   });
 
-  const totalPages = Math.ceil(filteredAffiliates.length / itemsPerPage);
-  const paginatedAffiliates = filteredAffiliates.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const filteredAffiliates = searchMatchesAllStatuses.filter((a) => {
+    if (filterType === 'active') return a.status === 'active';
+    if (filterType === 'pending') return a.status === 'pending';
+    if (filterType === 'suspended') return a.status === 'suspended';
+    if (filterType === 'rejected') return a.status === 'rejected';
+    return true;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredAffiliates.length / itemsPerPage));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const paginatedAffiliates = filteredAffiliates.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage);
+
+  const filterCounts = useMemo(() => ({
+    all: affiliates.length,
+    active: affiliates.filter((a) => a.status === 'active').length,
+    pending: affiliates.filter((a) => a.status === 'pending').length,
+    suspended: affiliates.filter((a) => a.status === 'suspended').length,
+    rejected: affiliates.filter((a) => a.status === 'rejected').length,
+  }), [affiliates]);
+
+  const activeDelayOption = AUTO_APPROVAL_DELAY_OPTIONS.find(
+    (o) => o.minutes === autoApprovalSettings.delayMinutes
+  ) || AUTO_APPROVAL_DELAY_OPTIONS[2];
 
   return (
-    <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-6xl mx-auto space-y-8">
+    <div className="animate-in fade-in zoom-in-95 duration-700 pb-12 text-slate-900 max-w-6xl mx-auto space-y-6 sm:space-y-8">
       
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1188,10 +1479,157 @@ export default function AffiliatesPage() {
           id="btn-add-affiliate"
           type="button"
           onClick={() => setIsAddModalOpen(true)} 
-          className="h-10 px-4 bg-[#e32f8c] text-black rounded-lg text-[13px] font-bold hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
+          className="h-11 sm:h-10 px-4 bg-[#e32f8c] text-black rounded-xl sm:rounded-lg text-[13px] font-bold hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer w-full sm:w-auto shrink-0"
         >
           <Plus size={16} /> Adaugă Afiliat
         </button>
+      </div>
+
+      {/* AUTO-APPROVAL CONTROL CARD */}
+      <div className={`rounded-2xl sm:rounded-3xl border p-4 sm:p-5 shadow-sm transition-colors ${
+        autoApprovalSettings.enabled
+          ? 'bg-gradient-to-br from-emerald-50/70 via-white to-white border-emerald-200'
+          : 'bg-white border-slate-200'
+      }`}>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3 min-w-0">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                autoApprovalSettings.enabled
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 text-slate-500'
+              }`}>
+                <Zap size={18} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm sm:text-base font-black text-slate-900">
+                    Aprobare Automată Afiliați
+                  </h2>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                    autoApprovalSettings.enabled
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {autoApprovalSettings.enabled ? 'Activă' : 'Dezactivată'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 leading-snug">
+                  Aprobă automat cererile noi, activează cuponul unic și trimite emailul de bun venit după delay-ul ales.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoApprovalSettings.enabled}
+              aria-label="Comută aprobarea automată"
+              disabled={isSavingAutoApproval}
+              onClick={handleToggleAutoApproval}
+              className={`relative w-12 h-7 rounded-full transition-colors duration-200 shrink-0 cursor-pointer disabled:opacity-60 ${
+                autoApprovalSettings.enabled ? 'bg-emerald-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-200 flex items-center justify-center ${
+                  autoApprovalSettings.enabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              >
+                {isSavingAutoApproval ? (
+                  <Loader2 size={12} className="animate-spin text-slate-500" />
+                ) : autoApprovalSettings.enabled ? (
+                  <Check size={12} className="text-emerald-600 stroke-[3]" />
+                ) : (
+                  <Pause size={11} className="text-slate-400" />
+                )}
+              </span>
+            </button>
+          </div>
+
+          {/* Delay Selector Pills */}
+          <div className="space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+              Delay Natural Înainte de Aprobare
+            </span>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {AUTO_APPROVAL_DELAY_OPTIONS.map((opt) => {
+                const isSelected = autoApprovalSettings.delayMinutes === opt.minutes;
+                return (
+                  <button
+                    key={opt.minutes}
+                    type="button"
+                    disabled={isSavingAutoApproval}
+                    onClick={() => handleSelectAutoApprovalDelay(opt.minutes)}
+                    className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer active:scale-[0.98] disabled:opacity-60 flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    {'recommended' in opt && opt.recommended && (
+                      <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                        isSelected
+                          ? 'bg-[#e32f8c] text-black'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}>
+                        Recomandat
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Status Summary + Run Now */}
+          <div className="pt-3 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs font-medium text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {!autoApprovalSettings.enabled ? (
+                <span>
+                  Auto-aprobarea este oprită •{' '}
+                  <strong className="text-slate-800">{autoApprovalSummary.pendingCount}</strong> cereri în așteptare manuală
+                </span>
+              ) : autoApprovalSummary.pendingCount === 0 ? (
+                <span>
+                  Activă ({activeDelayOption.label}) • Nicio cerere în așteptare momentan
+                </span>
+              ) : (
+                <>
+                  <span>
+                    <strong className="text-slate-900">{autoApprovalSummary.pendingCount}</strong> în așteptare
+                  </span>
+                  <span className="text-slate-300">•</span>
+                  <span className={autoApprovalSummary.dueCount > 0 ? 'text-emerald-700 font-bold' : ''}>
+                    <strong>{autoApprovalSummary.dueCount}</strong> scadente acum
+                  </span>
+                  {autoApprovalSummary.nextDueAt && (
+                    <>
+                      <span className="text-slate-300">•</span>
+                      <span>
+                        următoarea: <strong className="text-slate-900">{formatScheduledTimeRo(autoApprovalSummary.nextDueAt)}</strong>
+                      </span>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRunAutoApprovalsNow}
+              disabled={!autoApprovalSettings.enabled || isRunningAutoApproval}
+              className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shrink-0 shadow-2xs"
+            >
+              {isRunningAutoApproval ? (
+                <><Loader2 size={14} className="animate-spin" /> Se procesează...</>
+              ) : (
+                <><Play size={13} /> Procesează scadentele acum</>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
       {loading ? (
@@ -1309,101 +1747,120 @@ export default function AffiliatesPage() {
 
       {/* AFFILIATES TABLE */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-        <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4">
-          <div className="relative w-full md:flex-1 md:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+        <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col gap-3">
+          <div className="relative w-full md:max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
             <input 
               type="text" 
-              placeholder="Caută afiliat sau cod..." 
+              placeholder="Caută după nume, email sau cod..." 
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] transition-colors"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-10 text-base sm:text-sm focus:outline-none focus:border-[#e32f8c] transition-colors"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setCurrentPage(1);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 flex items-center justify-center transition-colors cursor-pointer"
+                aria-label="Șterge căutarea"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-          <div className="relative w-full md:w-auto z-20">
-            <button 
-              onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-              className={`w-full md:w-auto h-9 px-4 border rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${filterType !== 'all' ? "border-[#e32f8c] text-[#e32f8c] bg-[#e32f8c]/10" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
-            >
-              <Filter size={14} /> Filtrează
-            </button>
 
-            <AnimatePresence>
-              {isFilterDropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 5, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute top-full right-0 mt-2 w-full sm:w-56 bg-white border border-slate-100 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] p-2 z-50 flex flex-col gap-1"
+          {/* Responsive Filter Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1">
+            {[
+              { id: 'all', label: 'Toți', count: filterCounts.all },
+              { id: 'active', label: 'Activi', count: filterCounts.active, dot: 'bg-green-500' },
+              { id: 'pending', label: 'În așteptare', count: filterCounts.pending, dot: 'bg-orange-500' },
+              { id: 'suspended', label: 'Suspendați', count: filterCounts.suspended, dot: 'bg-red-500' },
+              { id: 'rejected', label: 'Respinși', count: filterCounts.rejected, dot: 'bg-slate-400' },
+            ].map((tab) => {
+              const isActive = filterType === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setFilterType(tab.id);
+                    setCurrentPage(1);
+                  }}
+                  className={`shrink-0 min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                    isActive
+                      ? 'bg-[#e32f8c]/12 border-[#e32f8c] text-slate-900 shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
                 >
-                  <button 
-                    onClick={() => { setFilterType('all'); setIsFilterDropdownOpen(false); }}
-                    className={`text-left px-3 py-2 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${filterType === 'all' ? 'bg-[#e32f8c]/10 text-[#e32f8c]' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    Toți afiliații
-                  </button>
-                  <button 
-                    onClick={() => { setFilterType('active'); setIsFilterDropdownOpen(false); }}
-                    className={`text-left px-3 py-2 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${filterType === 'active' ? 'bg-[#e32f8c]/10 text-[#e32f8c]' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    Activi
-                  </button>
-                  <button 
-                    onClick={() => { setFilterType('pending'); setIsFilterDropdownOpen(false); }}
-                    className={`text-left px-3 py-2 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${filterType === 'pending' ? 'bg-[#e32f8c]/10 text-[#e32f8c]' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                    În așteptare
-                  </button>
-                  <button 
-                    onClick={() => { setFilterType('suspended'); setIsFilterDropdownOpen(false); }}
-                    className={`text-left px-3 py-2 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${filterType === 'suspended' ? 'bg-[#e32f8c]/10 text-[#e32f8c]' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                    Suspendați
-                  </button>
-                  <button 
-                    onClick={() => { setFilterType('rejected'); setIsFilterDropdownOpen(false); }}
-                    className={`text-left px-3 py-2 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${filterType === 'rejected' ? 'bg-[#e32f8c]/10 text-[#e32f8c]' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <div className="w-2 h-2 rounded-full bg-slate-400"></div>
-                    Respinși
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  {tab.dot && <span className={`w-2 h-2 rounded-full ${tab.dot}`} />}
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                    isActive ? 'bg-[#e32f8c] text-black' : 'bg-white text-slate-500 border border-slate-200'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <div className="md:hidden flex flex-col">
           {paginatedAffiliates.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-sm font-bold">Nu a fost găsit niciun afiliat.</div>
+            <div className="p-8 text-center text-slate-500 text-sm font-bold space-y-2.5">
+              <p>Nu a fost găsit niciun afiliat.</p>
+              {filterType !== 'all' && searchNeedle && searchMatchesAllStatuses.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterType('all');
+                    setCurrentPage(1);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#e32f8c]/10 border border-[#e32f8c]/40 text-[#b81b6c] text-xs font-black cursor-pointer"
+                >
+                  Vezi {searchMatchesAllStatuses.length} rezultate în „Toți”
+                </button>
+              )}
+            </div>
           ) : (
             paginatedAffiliates.map((affiliate) => (
               <div 
                 key={affiliate.id} 
                 onClick={() => setSelectedPortalAffiliateId(affiliate.id)}
-                className="p-4 sm:p-5 flex flex-col gap-3.5 bg-white border-b-[8px] border-slate-50 last:border-0 cursor-pointer active:bg-slate-50 transition-colors"
+                className="p-4 flex flex-col gap-3 bg-white border-b-[8px] border-slate-50 last:border-0 cursor-pointer active:bg-slate-50/70 transition-colors"
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-start justify-between gap-2">
                   <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-bold text-slate-900 truncate">{affiliate.name}</span>
-                    <span className="text-[11px] font-bold text-slate-500">{affiliate.commission} Comision</span>
+                    <span className="text-sm font-black text-slate-900 break-words">{affiliate.name}</span>
+                    <span className="text-[11px] font-medium text-slate-500 truncate">{affiliate.email}</span>
+                    <span className="text-[11px] font-bold text-slate-600 mt-0.5">{affiliate.commission} Comision</span>
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    {affiliate.status === 'pending' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-orange-100 text-orange-600">În așteptare</span>}
-                    {affiliate.status === 'active' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-green-100 text-green-600">Activ</span>}
-                    {affiliate.status === 'suspended' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-red-100 text-red-600">Suspendat</span>}
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {affiliate.status === 'pending' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-orange-100 text-orange-700">În așteptare</span>}
+                    {affiliate.status === 'active' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-green-100 text-green-700">Activ</span>}
+                    {affiliate.status === 'suspended' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-red-100 text-red-700">Suspendat</span>}
                     {affiliate.status === 'rejected' && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-slate-100 text-slate-500">Respins</span>}
                   </div>
                 </div>
+
+                {affiliate.status === 'pending' && autoApprovalSettings.enabled && affiliate.autoApproveAtIso && (
+                  <div className="px-2.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-[11px] font-bold text-emerald-800 flex items-center gap-1.5">
+                    <Clock size={12} className="text-emerald-600 shrink-0" />
+                    <span>Auto-aprobare: {formatScheduledTimeRo(affiliate.autoApproveAtIso)}</span>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cod Reducere</span>
-                    <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded text-xs font-mono font-bold text-slate-700 w-fit">
+                    <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-700 w-fit">
                       {affiliate.code}
                     </span>
                   </div>
@@ -1432,9 +1889,131 @@ export default function AffiliatesPage() {
                     <span className="font-bold text-slate-700">{affiliate.paidPayout}</span>
                   </div>
                 </div>
+
+                {/* MOBILE DIRECT ACTION BUTTONS */}
+                <div
+                  className="pt-2 space-y-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {affiliate.status === 'pending' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openApproveModal(affiliate)}
+                        disabled={processingId === affiliate.id}
+                        className="w-full min-h-[44px] px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-black rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={15} />
+                        <span>{processingId === affiliate.id ? 'Se procesează...' : 'Aprobă Afiliat'}</span>
+                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleReject(affiliate.id)}
+                          disabled={processingId === affiliate.id}
+                          className="min-h-[40px] px-3 py-2 bg-white hover:bg-red-50 active:scale-[0.98] text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                        >
+                          Respinge
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(affiliate)}
+                          disabled={processingId === affiliate.id}
+                          className="min-h-[40px] px-3 py-2 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-800 border border-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <Pencil size={13} />
+                          <span>Editează</span>
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {(affiliate.pendingPayoutRaw || 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => openPayoutModal(affiliate)}
+                          className="w-full min-h-[42px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-black rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Banknote size={15} />
+                          <span>Înregistrează Plată ({affiliate.pendingPayout})</span>
+                        </button>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(affiliate)}
+                          disabled={processingId === affiliate.id}
+                          className="min-h-[40px] px-3 py-2 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-800 border border-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <Pencil size={13} />
+                          <span>Editează</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(affiliate.referralLink, `card-link-${affiliate.id}`, 'Link de afiliere')}
+                          className="min-h-[40px] px-3 py-2 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-800 border border-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          {copiedKey === `card-link-${affiliate.id}` ? (
+                            <><Check size={13} className="text-emerald-600" /> <span>Copiat</span></>
+                          ) : (
+                            <><Copy size={13} /> <span>Copiază Link</span></>
+                          )}
+                        </button>
+                        {affiliate.status === 'active' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSuspend(affiliate.id)}
+                            disabled={processingId === affiliate.id}
+                            className="min-h-[40px] px-3 py-2 bg-amber-50 hover:bg-amber-100 active:scale-[0.98] text-amber-800 border border-amber-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                          >
+                            Suspendă
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleActivate(affiliate.id)}
+                            disabled={processingId === affiliate.id}
+                            className="min-h-[40px] px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:scale-[0.98] text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                          >
+                            Activează
+                          </button>
+                        )}
+                        {confirmDeleteCardId === affiliate.id ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfirmDeleteCardId(null);
+                              handleDelete(affiliate.id);
+                            }}
+                            disabled={processingId === affiliate.id}
+                            className="min-h-[40px] px-3 py-2 bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            <Trash2 size={13} />
+                            <span>Confirmă</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfirmDeleteCardId(affiliate.id);
+                              setTimeout(() => {
+                                setConfirmDeleteCardId((curr) => (curr === affiliate.id ? null : curr));
+                              }, 4000);
+                            }}
+                            disabled={processingId === affiliate.id}
+                            className="min-h-[40px] px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-[0.98] text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <Trash2 size={13} />
+                            <span>Șterge</span>
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
                 
                 <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs font-bold text-[#008ba3]">
-                  <span className="flex items-center gap-1.5"><Eye size={14} /> Vezi Statistici & Portal</span>
+                  <span className="flex items-center gap-1.5"><Eye size={14} /> Detalii & Statistici Portal</span>
                   <ArrowUpRight size={14} />
                 </div>
               </div>
@@ -1459,7 +2038,21 @@ export default function AffiliatesPage() {
             <tbody className="divide-y divide-slate-100">
               {paginatedAffiliates.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500 text-sm">Nu au fost găsiți afiliați.</td>
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500 text-sm space-y-2">
+                    <p className="font-semibold">Nu au fost găsiți afiliați.</p>
+                    {filterType !== 'all' && searchNeedle && searchMatchesAllStatuses.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilterType('all');
+                          setCurrentPage(1);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#e32f8c]/10 border border-[#e32f8c]/40 text-[#b81b6c] text-xs font-black cursor-pointer"
+                      >
+                        Vezi {searchMatchesAllStatuses.length} rezultate în „Toți”
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ) : (
                 paginatedAffiliates.map((affiliate) => (
@@ -1525,8 +2118,13 @@ export default function AffiliatesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex gap-1">
+                      <div className="flex flex-col gap-1 items-start">
                         {affiliate.status === 'pending' && <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-orange-100 text-orange-600">În așteptare</span>}
+                        {affiliate.status === 'pending' && autoApprovalSettings.enabled && affiliate.autoApproveAtIso && (
+                          <span className="text-[10px] font-bold text-emerald-700 whitespace-nowrap">
+                            Auto: {formatScheduledTimeRo(affiliate.autoApproveAtIso)}
+                          </span>
+                        )}
                         {affiliate.status === 'active' && <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-green-100 text-green-600">Activ</span>}
                         {affiliate.status === 'suspended' && <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-red-100 text-red-600">Suspendat</span>}
                         {affiliate.status === 'rejected' && <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-slate-100 text-slate-500">Respins</span>}
@@ -1553,27 +2151,18 @@ export default function AffiliatesPage() {
         </div>
 
         {/* Paginare */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-sm text-slate-500">
-              Pagina <span className="font-bold text-slate-900">{currentPage}</span> din <span className="font-bold text-slate-900">{totalPages}</span>
-            </span>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-              >
-                Înapoi
-              </button>
-              <button 
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-              >
-                Înainte
-              </button>
-            </div>
+        {filteredAffiliates.length > itemsPerPage && (
+          <div className="px-4 sm:px-6 pb-4">
+            <AdminPagination
+              currentPage={safeCurrentPage}
+              totalItems={filteredAffiliates.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={(p) => {
+                setCurrentPage(p);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              label="afiliați"
+            />
           </div>
         )}
       </div>
@@ -1582,7 +2171,7 @@ export default function AffiliatesPage() {
 
       {/* AFFILIATE PORTAL MODAL */}
       {selectedPortalAffiliate && (
-        <div className="fixed inset-0 z-[99999] flex items-start sm:items-center justify-center p-0 sm:p-6 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] animate-in fade-in duration-200 overflow-y-auto">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-0 sm:p-6 animate-in fade-in duration-200 overflow-y-auto">
           <div 
             className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity -z-10"
             onClick={() => setSelectedPortalAffiliateId(null)} 
@@ -1753,11 +2342,11 @@ export default function AffiliatesPage() {
                 </div>
               </div>
 
-              <div className="p-5 md:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl">
+              <div className="p-4 sm:p-5 md:p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl shrink-0">
                 <button 
                   type="submit" 
                   disabled={isCreating}
-                  className="w-full h-12 bg-[#e32f8c] text-black rounded-xl font-bold hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
+                  className="w-full min-h-[48px] bg-[#e32f8c] text-black rounded-xl font-bold hover:bg-[#c41a72] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
                 >
                   {isCreating ? (
                     <><Loader2 size={18} className="animate-spin" /> Se salvează...</>
@@ -1964,6 +2553,11 @@ export default function AffiliatesPage() {
                 <p><span className="font-bold text-slate-500">În așteptare (În livrare / Neridicat încă):</span> <span className="font-bold text-amber-700">{payoutAffiliate.pendingPickupCommissions || formatRon(0)}</span></p>
                 <p><span className="font-bold text-slate-500">Încasat până acum:</span> <span className="font-bold text-slate-800">{payoutAffiliate.paidPayout}</span></p>
               </div>
+
+              <AffiliateRiskBadges
+                returnedOrdersCount={payoutAffiliate.returnedOrdersCount}
+                unverifiedCodOrdersCount={payoutAffiliate.unverifiedCodOrdersCount}
+              />
 
               {(payoutAffiliate.pendingPayoutRaw || 0) <= 0 ? (
                 <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-900 leading-relaxed">

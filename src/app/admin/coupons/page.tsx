@@ -56,6 +56,7 @@ import {
 } from '@/app/actions/coupons';
 import { linkAffiliateCoupon } from '@/app/actions/admin-affiliates';
 import toast from 'react-hot-toast';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 // MODERN COUPON DATE & TIME PICKER COMPONENT
 function ModernCouponDatePicker({
@@ -471,6 +472,8 @@ export default function CouponsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'all' | 'manual' | 'auto'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
   const [selectedAffiliateId, setSelectedAffiliateId] = useState<string>('');
   const [couponToDelete, setCouponToDelete] = useState<{ id: string; code: string } | null>(null);
@@ -697,6 +700,16 @@ export default function CouponsPage() {
     });
   }, [coupons, searchQuery, activeTab, statusFilter, affiliates]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeTab, statusFilter]);
+
+  const safeCurrentPage = Math.min(currentPage, Math.max(1, Math.ceil(filteredCoupons.length / itemsPerPage)));
+  const paginatedCoupons = useMemo(
+    () => filteredCoupons.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage),
+    [filteredCoupons, safeCurrentPage, itemsPerPage]
+  );
+
   const getDiscountLabel = (coupon: any) => {
     switch(coupon.type) {
       case 'percentage': return `${coupon.value}% Reducere`;
@@ -907,7 +920,7 @@ export default function CouponsPage() {
               <p className="text-xs text-slate-400 mt-1">Apasă pe „Adaugă Cupon Nou” pentru a începe.</p>
             </div>
           ) : (
-            filteredCoupons.map((coupon) => {
+            paginatedCoupons.map((coupon) => {
               const aff = getAffiliateInfo(coupon.code);
               const expiry = coupon.expiry_date || coupon.expires_at;
               const hasExpiry = Boolean(expiry);
@@ -1084,7 +1097,7 @@ export default function CouponsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredCoupons.map((coupon) => {
+                paginatedCoupons.map((coupon) => {
                   const aff = getAffiliateInfo(coupon.code);
                   const expiry = coupon.expiry_date || coupon.expires_at;
                   const hasExpiry = Boolean(expiry);
@@ -1218,6 +1231,21 @@ export default function CouponsPage() {
             </tbody>
           </table>
         </div>
+
+        {!loading && filteredCoupons.length > itemsPerPage && (
+          <div className="px-4 sm:px-6 pb-4">
+            <AdminPagination
+              currentPage={safeCurrentPage}
+              totalItems={filteredCoupons.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={(p) => {
+                setCurrentPage(p);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              label="cupoane"
+            />
+          </div>
+        )}
       </div>
 
       {/* CREATE / EDIT COUPON MODAL */}

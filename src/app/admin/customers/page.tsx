@@ -31,12 +31,15 @@ import {
   createAdminCustomer 
 } from '@/app/actions/admin-data';
 import toast from 'react-hot-toast';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<'all' | 'buyers' | 'vip' | 'leads'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
 
   // Edit State
@@ -208,6 +211,16 @@ export default function CustomersPage() {
       return matchesSearch && matchesFilter;
     });
   }, [customers, searchQuery, filterType]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType]);
+
+  const safeCurrentPage = Math.min(currentPage, Math.max(1, Math.ceil(filteredCustomers.length / itemsPerPage)));
+  const paginatedCustomers = useMemo(
+    () => filteredCustomers.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage),
+    [filteredCustomers, safeCurrentPage, itemsPerPage]
+  );
 
   // Key KPI Metrics (all totals normalized to RON server-side)
   const metrics = useMemo(() => {
@@ -440,7 +453,7 @@ export default function CustomersPage() {
           {filteredCustomers.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-sm font-bold">Nu au fost găsiți clienți conform filtrelor.</div>
           ) : (
-            filteredCustomers.map((customer) => (
+            paginatedCustomers.map((customer) => (
               <div key={customer.id} className="p-4 flex flex-col gap-3 bg-white hover:bg-slate-50 transition-colors">
                 <div className="flex items-start justify-between gap-2.5">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -560,7 +573,7 @@ export default function CustomersPage() {
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.map((customer) => (
+                paginatedCustomers.map((customer) => (
                   <tr key={customer.id} className="hover:bg-slate-50/90 transition-colors">
                     {/* Client Name & Tier */}
                     <td className="px-6 py-4">
@@ -684,6 +697,21 @@ export default function CustomersPage() {
             </tbody>
           </table>
         </div>
+
+        {filteredCustomers.length > itemsPerPage && (
+          <div className="px-4 sm:px-6 pb-4">
+            <AdminPagination
+              currentPage={safeCurrentPage}
+              totalItems={filteredCustomers.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={(p) => {
+                setCurrentPage(p);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              label="clienți"
+            />
+          </div>
+        )}
       </div>
 
       {/* EDIT MODAL */}

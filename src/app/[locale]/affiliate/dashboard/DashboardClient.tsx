@@ -1,46 +1,64 @@
 'use client';
 
-import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
-import { 
-  LogOut, 
-  Copy, 
-  Check, 
-  TrendingUp, 
-  ShoppingBag, 
-  Users, 
-  Award, 
-  Calendar, 
-  ChevronDown, 
-  ChevronRight, 
-  ChevronLeft, 
-  Search, 
-  CreditCard, 
-  ExternalLink, 
-  ShieldCheck,
-  CheckCircle2,
-  Clock,
+import {
+  LogOut,
+  Copy,
+  Check,
+  TrendingUp,
+  ShoppingBag,
+  Award,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  Search,
+  CreditCard,
   Layers,
   Pencil,
   Trash2,
-  Loader2
+  Loader2,
+  Globe2,
+  MousePointerClick,
+  Link2,
+  Info,
+  X,
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  Gift,
+  Lock,
+  ExternalLink,
+  Coins,
 } from 'lucide-react';
+import {
+  Area,
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Link } from '@/i18n/routing';
 import { affiliateLogoutAction } from '@/app/actions/affiliate-auth';
-import { 
-  AffiliateDashboardResponse, 
-  AffiliateOrderHistory, 
+import {
+  AffiliateBonusTierStatus,
+  AffiliateDashboardResponse,
+  AffiliateOrderHistory,
+  claimAffiliateBonusVoucherAction,
   updateAffiliatePaymentDetailsAction,
-  deleteAffiliatePaymentDetailsAction
+  deleteAffiliatePaymentDetailsAction,
 } from '@/app/actions/affiliate-dashboard';
 import {
+  AFFILIATE_DISPLAY_CURRENCIES,
   classifyOrderNonCountable,
   classifyAffiliateOrderPayoutStatus,
   formatMoneyInCurrency,
-  formatOriginalAmount,
   normalizeDisplayCurrency,
   roundCurrency,
+  type AffiliateDisplayCurrency,
 } from '@/lib/affiliate-stats';
 import { useRegionStore } from '@/store/useRegionStore';
 import { convertFromRon, FALLBACK_RATES } from '@/utils/pricing';
@@ -52,13 +70,481 @@ interface DashboardClientProps {
 }
 
 type PeriodFilter = 'all' | 'today' | '7d' | '30d' | 'this_month' | 'last_month';
+type ChartMetric = 'clicks_orders' | 'commission' | 'sales';
 
-export default function DashboardClient({ data, locale, exchangeRates: serverRates }: DashboardClientProps) {
+const GA4_COUNTRY_TO_ISO: Record<string, { code: string; nameRo: string; nameEn: string }> = {
+  romania: { code: 'RO', nameRo: 'România', nameEn: 'Romania' },
+  moldova: { code: 'MD', nameRo: 'Moldova', nameEn: 'Moldova' },
+  germany: { code: 'DE', nameRo: 'Germania', nameEn: 'Germany' },
+  'united kingdom': { code: 'GB', nameRo: 'Marea Britanie', nameEn: 'United Kingdom' },
+  uk: { code: 'GB', nameRo: 'Marea Britanie', nameEn: 'United Kingdom' },
+  france: { code: 'FR', nameRo: 'Franța', nameEn: 'France' },
+  italy: { code: 'IT', nameRo: 'Italia', nameEn: 'Italy' },
+  spain: { code: 'ES', nameRo: 'Spania', nameEn: 'Spain' },
+  netherlands: { code: 'NL', nameRo: 'Olanda', nameEn: 'Netherlands' },
+  belgium: { code: 'BE', nameRo: 'Belgia', nameEn: 'Belgium' },
+  austria: { code: 'AT', nameRo: 'Austria', nameEn: 'Austria' },
+  hungary: { code: 'HU', nameRo: 'Ungaria', nameEn: 'Hungary' },
+  bulgaria: { code: 'BG', nameRo: 'Bulgaria', nameEn: 'Bulgaria' },
+  poland: { code: 'PL', nameRo: 'Polonia', nameEn: 'Poland' },
+  ireland: { code: 'IE', nameRo: 'Irlanda', nameEn: 'Ireland' },
+  czechia: { code: 'CZ', nameRo: 'Cehia', nameEn: 'Czechia' },
+  'czech republic': { code: 'CZ', nameRo: 'Cehia', nameEn: 'Czechia' },
+  slovakia: { code: 'SK', nameRo: 'Slovacia', nameEn: 'Slovakia' },
+  sweden: { code: 'SE', nameRo: 'Suedia', nameEn: 'Sweden' },
+  denmark: { code: 'DK', nameRo: 'Danemarca', nameEn: 'Denmark' },
+  finland: { code: 'FI', nameRo: 'Finlanda', nameEn: 'Finland' },
+  norway: { code: 'NO', nameRo: 'Norvegia', nameEn: 'Norway' },
+  switzerland: { code: 'CH', nameRo: 'Elveția', nameEn: 'Switzerland' },
+  greece: { code: 'GR', nameRo: 'Grecia', nameEn: 'Greece' },
+  portugal: { code: 'PT', nameRo: 'Portugalia', nameEn: 'Portugal' },
+  'united states': { code: 'US', nameRo: 'SUA', nameEn: 'United States' },
+  usa: { code: 'US', nameRo: 'SUA', nameEn: 'United States' },
+  ukraine: { code: 'UA', nameRo: 'Ucraina', nameEn: 'Ukraine' },
+  croatia: { code: 'HR', nameRo: 'Croația', nameEn: 'Croatia' },
+  slovenia: { code: 'SI', nameRo: 'Slovenia', nameEn: 'Slovenia' },
+  canada: { code: 'CA', nameRo: 'Canada', nameEn: 'Canada' },
+  australia: { code: 'AU', nameRo: 'Australia', nameEn: 'Australia' },
+};
+
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  'BIF',
+  'CLP',
+  'DJF',
+  'GNF',
+  'HUF',
+  'JPY',
+  'KMF',
+  'KRW',
+  'MGA',
+  'PYG',
+  'RWF',
+  'UGX',
+  'VND',
+  'VUV',
+  'XAF',
+  'XOF',
+  'XPF',
+]);
+
+function formatNativeAmount(value: unknown, currency: string, locale: 'ro' | 'en'): string {
+  const code = (currency || 'RON').toUpperCase();
+  const num = roundCurrency(value);
+  const numberLocale = locale === 'ro' ? 'ro-RO' : 'en-US';
+  if (ZERO_DECIMAL_CURRENCIES.has(code)) {
+    return `${Math.round(num).toLocaleString(numberLocale)} ${code}`;
+  }
+  return `${num.toLocaleString(numberLocale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${code}`;
+}
+
+function localizeNonCountableReason(reason: string | null | undefined, isRo: boolean): string {
+  if (reason === 'cancelled') return isRo ? 'Anulată' : 'Cancelled';
+  if (reason === 'returned') return isRo ? 'Returnată / Neridicată' : 'Returned / Unclaimed';
+  if (reason === 'refunded') return isRo ? 'Rambursată' : 'Refunded';
+  if (reason === 'failed') return isRo ? 'Eșuată' : 'Failed';
+  return isRo ? 'Neeligibilă' : 'Voided';
+}
+
+function localizePayoutNote(note: string, isRo: boolean): string {
+  if (isRo) return note;
+  const trimmed = note.trim();
+  const map: Record<string, string> = {
+    'Plată înregistrată anterior': 'Previously recorded payout',
+    'Sold plătit anterior': 'Previously settled balance',
+    'Plată comisioane afiliat': 'Affiliate commission payout',
+    'Plată efectuată': 'Payout completed',
+    'Virament bancar': 'Bank transfer',
+  };
+  return map[trimmed] || trimmed;
+}
+
+function localizeIbanServerError(
+  rawError: string | undefined,
+  isRo: boolean,
+  fallbackRo: string,
+  fallbackEn: string
+): string {
+  if (!rawError) return isRo ? fallbackRo : fallbackEn;
+  if (isRo) return rawError;
+  const trimmed = rawError.trim();
+  const map: Record<string, string> = {
+    Neautorizat: 'Unauthorized. Please sign in again.',
+    'Date invalide.': 'Invalid input data.',
+    'Caractere nepermise detectate.': 'Disallowed characters detected.',
+    'Codul IBAN introdus nu are un format valid (ex: RO49AAAA...).':
+      'The entered IBAN does not have a valid format (e.g. GB29NWBK...).',
+    'Eroare la actualizarea datelor de plată.': 'Failed to update payout details.',
+    'Salvarea a eșuat. Încearcă din nou.': 'Save failed. Please try again.',
+    'Eroare la ștergerea datelor de plată.': 'Failed to delete payout details.',
+    'Ștergerea a eșuat. Încearcă din nou.': 'Delete failed. Please try again.',
+  };
+  return map[trimmed] || fallbackEn;
+}
+
+function localizeBonusClaimError(errorCode: string | undefined, isRo: boolean): string {
+  switch (errorCode) {
+    case 'UNAUTHORIZED':
+      return isRo
+        ? 'Sesiunea a expirat. Te rugăm să te reconectezi.'
+        : 'Session expired. Please sign in again.';
+    case 'INVALID_TIER':
+      return isRo ? 'Prag de bonus invalid.' : 'Invalid bonus tier.';
+    case 'INACTIVE_AFFILIATE':
+      return isRo
+        ? 'Contul tău de afiliat nu este activ.'
+        : 'Your affiliate account is not active.';
+    case 'THRESHOLD_NOT_REACHED':
+      return isRo
+        ? 'Nu ai atins încă pragul de vânzări eligibile pentru acest bonus.'
+        : 'You have not reached the eligible sales threshold for this bonus yet.';
+    case 'COUPON_CREATE_FAILED':
+    case 'SAVE_FAILED':
+    default:
+      return isRo
+        ? 'Nu s-a putut crea voucherul acum. Încearcă din nou.'
+        : 'Could not create voucher right now. Please try again.';
+  }
+}
+
+function getBucharestIsoDate(dateInput: Date | string): string {
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' });
+}
+
+function getDateRangeBounds(period: PeriodFilter): { startIso: string | null; endIso: string } {
+  const now = new Date();
+  const todayIso = getBucharestIsoDate(now);
+  const [y, m, day] = todayIso.split('-').map(Number);
+
+  const shiftDays = (baseY: number, baseM: number, baseD: number, delta: number) => {
+    const dt = new Date(Date.UTC(baseY, baseM - 1, baseD + delta, 12, 0, 0));
+    return dt.toISOString().split('T')[0];
+  };
+
+  if (period === 'today') {
+    return { startIso: todayIso, endIso: todayIso };
+  }
+  if (period === '7d') {
+    return { startIso: shiftDays(y, m, day, -6), endIso: todayIso };
+  }
+  if (period === '30d') {
+    return { startIso: shiftDays(y, m, day, -29), endIso: todayIso };
+  }
+  if (period === 'this_month') {
+    const startIso = `${y}-${String(m).padStart(2, '0')}-01`;
+    return { startIso, endIso: todayIso };
+  }
+  if (period === 'last_month') {
+    const firstPrev = new Date(Date.UTC(y, m - 2, 1, 12, 0, 0));
+    const lastPrev = new Date(Date.UTC(y, m - 1, 0, 12, 0, 0));
+    return {
+      startIso: firstPrev.toISOString().split('T')[0],
+      endIso: lastPrev.toISOString().split('T')[0],
+    };
+  }
+  return { startIso: null, endIso: todayIso };
+}
+
+function enumerateIsoDays(startIso: string, endIso: string, maxDays = 120): string[] {
+  const start = new Date(`${startIso}T12:00:00Z`);
+  const end = new Date(`${endIso}T12:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return [];
+  }
+  const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  const effectiveStart =
+    diffDays > maxDays ? new Date(end.getTime() - (maxDays - 1) * 86400000) : start;
+
+  const days: string[] = [];
+  const cur = new Date(effectiveStart.getTime());
+  while (cur <= end) {
+    days.push(cur.toISOString().split('T')[0]);
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return days;
+}
+
+/**
+ * Crisp inline SVG flags for primary shipping markets + FlagCDN/ISO fallback
+ * so flags never render as broken regional letters on Windows or older browsers.
+ */
+function CountryFlag({ code, name }: { code: string; name: string }) {
+  const cc = (code || 'RO').toUpperCase().slice(0, 2);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const svgFlag = renderInlineFlagSvg(cc);
+  if (svgFlag) {
+    return (
+      <span
+        className="inline-flex w-5 h-3.5 rounded-[3px] overflow-hidden border border-white/15 shadow-xs shrink-0 bg-zinc-900"
+        title={name}
+        aria-label={name}
+      >
+        {svgFlag}
+      </span>
+    );
+  }
+
+  if (!imgFailed && /^[A-Z]{2}$/.test(cc)) {
+    return (
+      <span
+        className="inline-flex w-5 h-3.5 rounded-[3px] overflow-hidden border border-white/15 shadow-xs shrink-0 bg-zinc-900"
+        title={name}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`https://flagcdn.com/w40/${cc.toLowerCase()}.png`}
+          alt={name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex items-center justify-center w-5 h-3.5 rounded-[3px] border border-white/20 bg-white/10 text-[8px] font-black tracking-tight text-white shrink-0"
+      title={name}
+    >
+      {cc}
+    </span>
+  );
+}
+
+function renderInlineFlagSvg(cc: string) {
+  switch (cc) {
+    case 'RO':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="8" height="16" x="0" fill="#002B7F" />
+          <rect width="8" height="16" x="8" fill="#FCD116" />
+          <rect width="8" height="16" x="16" fill="#CE1126" />
+        </svg>
+      );
+    case 'MD':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="8" height="16" x="0" fill="#0046AE" />
+          <rect width="8" height="16" x="8" fill="#FFD200" />
+          <rect width="8" height="16" x="16" fill="#CC092F" />
+          <rect width="3.2" height="4.4" x="10.4" y="5.8" rx="0.5" fill="#7A4B1E" />
+        </svg>
+      );
+    case 'DE':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="5.34" y="0" fill="#000000" />
+          <rect width="24" height="5.34" y="5.33" fill="#DD0000" />
+          <rect width="24" height="5.34" y="10.66" fill="#FFCE00" />
+        </svg>
+      );
+    case 'GB':
+      return (
+        <svg viewBox="0 0 60 40" className="w-full h-full" aria-hidden="true">
+          <rect width="60" height="40" fill="#012169" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#FFFFFF" strokeWidth="7" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="3.5" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#FFFFFF" strokeWidth="11" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6.5" />
+        </svg>
+      );
+    case 'FR':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="8" height="16" x="0" fill="#002395" />
+          <rect width="8" height="16" x="8" fill="#FFFFFF" />
+          <rect width="8" height="16" x="16" fill="#ED2939" />
+        </svg>
+      );
+    case 'IT':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="8" height="16" x="0" fill="#009246" />
+          <rect width="8" height="16" x="8" fill="#FFFFFF" />
+          <rect width="8" height="16" x="16" fill="#CE2B37" />
+        </svg>
+      );
+    case 'ES':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="4" y="0" fill="#AA151B" />
+          <rect width="24" height="8" y="4" fill="#F1BF00" />
+          <rect width="24" height="4" y="12" fill="#AA151B" />
+        </svg>
+      );
+    case 'NL':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="5.34" y="0" fill="#AE1C28" />
+          <rect width="24" height="5.34" y="5.33" fill="#FFFFFF" />
+          <rect width="24" height="5.34" y="10.66" fill="#21468B" />
+        </svg>
+      );
+    case 'BE':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="8" height="16" x="0" fill="#000000" />
+          <rect width="8" height="16" x="8" fill="#FDDA24" />
+          <rect width="8" height="16" x="16" fill="#EF3340" />
+        </svg>
+      );
+    case 'AT':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="5.34" y="0" fill="#ED2939" />
+          <rect width="24" height="5.34" y="5.33" fill="#FFFFFF" />
+          <rect width="24" height="5.34" y="10.66" fill="#ED2939" />
+        </svg>
+      );
+    case 'HU':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="5.34" y="0" fill="#CD2A3E" />
+          <rect width="24" height="5.34" y="5.33" fill="#FFFFFF" />
+          <rect width="24" height="5.34" y="10.66" fill="#436F4D" />
+        </svg>
+      );
+    case 'BG':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="5.34" y="0" fill="#FFFFFF" />
+          <rect width="24" height="5.34" y="5.33" fill="#00966E" />
+          <rect width="24" height="5.34" y="10.66" fill="#D62612" />
+        </svg>
+      );
+    case 'PL':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="8" y="0" fill="#FFFFFF" />
+          <rect width="24" height="8" y="8" fill="#DC143C" />
+        </svg>
+      );
+    case 'IE':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="8" height="16" x="0" fill="#169B62" />
+          <rect width="8" height="16" x="8" fill="#FFFFFF" />
+          <rect width="8" height="16" x="16" fill="#FF883E" />
+        </svg>
+      );
+    case 'CZ':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="8" y="0" fill="#FFFFFF" />
+          <rect width="24" height="8" y="8" fill="#D7141A" />
+          <polygon points="0,0 12,8 0,16" fill="#11457E" />
+        </svg>
+      );
+    case 'SK':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="5.34" y="0" fill="#FFFFFF" />
+          <rect width="24" height="5.34" y="5.33" fill="#0B4EA2" />
+          <rect width="24" height="5.34" y="10.66" fill="#EE1C25" />
+        </svg>
+      );
+    case 'SE':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="16" fill="#006AA7" />
+          <rect width="3.2" height="16" x="7" fill="#FECC00" />
+          <rect width="24" height="3.2" y="6.4" fill="#FECC00" />
+        </svg>
+      );
+    case 'DK':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="16" fill="#C60C30" />
+          <rect width="3" height="16" x="7" fill="#FFFFFF" />
+          <rect width="24" height="3" y="6.5" fill="#FFFFFF" />
+        </svg>
+      );
+    case 'FI':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="16" fill="#FFFFFF" />
+          <rect width="3.5" height="16" x="6.5" fill="#003580" />
+          <rect width="24" height="3.5" y="6.25" fill="#003580" />
+        </svg>
+      );
+    case 'NO':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="16" fill="#BA0C2F" />
+          <rect width="4" height="16" x="6.5" fill="#FFFFFF" />
+          <rect width="24" height="4" y="6" fill="#FFFFFF" />
+          <rect width="2" height="16" x="7.5" fill="#00205B" />
+          <rect width="24" height="2" y="7" fill="#00205B" />
+        </svg>
+      );
+    case 'CH':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="16" fill="#D52B1E" />
+          <rect width="3" height="9" x="10.5" y="3.5" fill="#FFFFFF" />
+          <rect width="9" height="3" x="7.5" y="6.5" fill="#FFFFFF" />
+        </svg>
+      );
+    case 'GR':
+      return (
+        <svg viewBox="0 0 27 18" className="w-full h-full" aria-hidden="true">
+          <rect width="27" height="18" fill="#0D5EAF" />
+          <rect width="27" height="2" y="2" fill="#FFFFFF" />
+          <rect width="27" height="2" y="6" fill="#FFFFFF" />
+          <rect width="27" height="2" y="10" fill="#FFFFFF" />
+          <rect width="27" height="2" y="14" fill="#FFFFFF" />
+          <rect width="10" height="10" fill="#0D5EAF" />
+          <rect width="2" height="10" x="4" fill="#FFFFFF" />
+          <rect width="10" height="2" y="4" fill="#FFFFFF" />
+        </svg>
+      );
+    case 'PT':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="9.6" height="16" x="0" fill="#006600" />
+          <rect width="14.4" height="16" x="9.6" fill="#FF0000" />
+          <circle cx="9.6" cy="8" r="3" fill="#FFCC00" />
+        </svg>
+      );
+    case 'US':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="16" fill="#B22234" />
+          <rect width="24" height="2.2" y="2.2" fill="#FFFFFF" />
+          <rect width="24" height="2.2" y="6.6" fill="#FFFFFF" />
+          <rect width="24" height="2.2" y="11" fill="#FFFFFF" />
+          <rect width="11" height="8.8" fill="#3C3B6E" />
+        </svg>
+      );
+    case 'UA':
+      return (
+        <svg viewBox="0 0 24 16" className="w-full h-full" aria-hidden="true">
+          <rect width="24" height="8" y="0" fill="#005BBB" />
+          <rect width="24" height="8" y="8" fill="#FFD500" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+export default function DashboardClient({
+  data,
+  locale,
+  exchangeRates: serverRates,
+}: DashboardClientProps) {
   const isRo = locale === 'ro';
   const uiLocale: 'ro' | 'en' = isRo ? 'ro' : 'en';
 
   const {
     currency: storeCurrency,
+    setCurrency: setStoreCurrency,
     exchangeRates: storeRates,
     fetchExchangeRates,
     hasDetectedIP,
@@ -75,7 +561,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
   }, [detectInitialRegion, fetchExchangeRates, hasDetectedIP, locale]);
 
   const displayCurrency = normalizeDisplayCurrency(
-    mounted ? storeCurrency : (isRo ? 'RON' : 'EUR'),
+    mounted ? storeCurrency : isRo ? 'RON' : 'EUR',
     isRo ? 'RON' : 'EUR'
   );
 
@@ -90,26 +576,75 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
     return convertFromRon(safeRon, displayCurrency, effectiveRates);
   };
 
-  const formatMoney = (amountRon: number) =>
-    formatMoneyInCurrency(toDisplayAmount(amountRon), displayCurrency, uiLocale, 2);
+  const formatMoney = (amountRon: number, decimals = 2) =>
+    formatMoneyInCurrency(toDisplayAmount(amountRon), displayCurrency, uiLocale, decimals);
 
-  // State
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
+  // Dynamic customer discount label (never hardcoded -10%)
+  const discountValue = Number(data.discountValue) > 0 ? Number(data.discountValue) : 10;
+  const discountType = data.discountType === 'fixed' ? 'fixed' : 'percentage';
+  const discountDisplay =
+    discountType === 'fixed'
+      ? formatMoney(discountValue, Number.isInteger(discountValue) ? 0 : 2)
+      : `${Number.isInteger(discountValue) ? discountValue : Number(discountValue.toFixed(1))}%`;
+
+  // Copy states
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerCopy = (id: string, value: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(value).catch(() => {});
+    }
+    setCopiedId(id);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Filters & UI state
   const [loggingOut, setLoggingOut] = useState(false);
-  const [period, setPeriod] = useState<PeriodFilter>('all');
-  const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = useState(false);
+  const [period, setPeriod] = useState<PeriodFilter>('30d');
+  const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
+  const [chartMetric, setChartMetric] = useState<ChartMetric>('clicks_orders');
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showProductLinkPicker, setShowProductLinkPicker] = useState(false);
+  const [selectedProductPath, setSelectedProductPath] = useState('/shop');
   const itemsPerPage = 8;
 
-  // Refs for double-click guards & timers
+  useEffect(() => {
+    if (!isCountryDropdownOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsCountryDropdownOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCountryDropdownOpen]);
+
+  // Double-click guards
   const logoutRef = useRef(false);
   const ibanSavingRef = useRef(false);
   const ibanDeletingRef = useRef(false);
-  const copyCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copyLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const claimingTierRef = useRef<string | null>(null);
+
+  // Bonus goals & instant voucher claim state
+  const [bonusTiers, setBonusTiers] = useState<AffiliateBonusTierStatus[]>(() =>
+    Array.isArray(data.bonusTiers) ? data.bonusTiers : []
+  );
+  const [claimingTierId, setClaimingTierId] = useState<string | null>(null);
+  const [claimFeedback, setClaimFeedback] = useState<{
+    tierId: string;
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (Array.isArray(data.bonusTiers)) {
+      setBonusTiers(data.bonusTiers);
+    }
+  }, [data.bonusTiers]);
 
   // Payout / IBAN state
   const [paymentDetails, setPaymentDetails] = useState(data.paymentDetails || {});
@@ -138,26 +673,78 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
     setIsIbanModalOpen(true);
   };
 
-  // Referral URL
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.trenzone.fit';
-  const referralLink = `${baseUrl}/${locale}?ref=${encodeURIComponent(data.code)}`;
+  // Smart Root Referral Link (auto-detects country & RO/EN, zero /ro or /en prefix)
+  const refParam = encodeURIComponent(data.code);
+  const smartRootLink = `https://www.trenzone.fit?ref=${refParam}`;
+  const selectedDirectUrl = `https://www.trenzone.fit${selectedProductPath}?ref=${refParam}`;
 
-  const handleCopyCode = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(data.code).catch(() => {});
-    }
-    setCopiedCode(true);
-    if (copyCodeTimerRef.current) clearTimeout(copyCodeTimerRef.current);
-    copyCodeTimerRef.current = setTimeout(() => setCopiedCode(false), 2200);
-  };
+  const directProductOptions = useMemo(
+    () => [
+      { path: '/shop', label: isRo ? 'Magazin Complet (/shop)' : 'Full Shop (/shop)' },
+      { path: '/product/x10-elbow-wraps', label: 'X10 Elbow Wraps' },
+      { path: '/product/x5-elbow-wraps', label: 'X5 Elbow Wraps' },
+      { path: '/product/x10-wrist-wraps', label: 'X10 Wrist Wraps' },
+      {
+        path: '/product/centura-powerlifting',
+        label: isRo ? 'Centură Powerlifting 13mm' : 'Heavy Lifting Belt 13mm',
+      },
+      { path: '/programs', label: isRo ? 'Programe PDF (/programs)' : 'PDF Programs (/programs)' },
+    ],
+    [isRo]
+  );
 
-  const handleCopyLink = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(referralLink).catch(() => {});
+  const handleClaimBonusVoucher = async (tierId: string) => {
+    if (claimingTierRef.current || claimingTierId) return;
+    claimingTierRef.current = tierId;
+    setClaimingTierId(tierId);
+    setClaimFeedback(null);
+
+    try {
+      const res = await claimAffiliateBonusVoucherAction(tierId, displayCurrency);
+      if (res.success && res.voucher) {
+        const voucher = res.voucher;
+        setBonusTiers((prev) =>
+          prev.map((tier) =>
+            tier.id === tierId
+              ? {
+                  ...tier,
+                  ...(displayCurrency === 'RON'
+                    ? { unlocked: true, progressPct: 100, remainingRon: 0 }
+                    : { unlockedEur: true, progressPctEur: 100, remainingEur: 0 }),
+                  claimedVoucher: voucher,
+                }
+              : tier
+          )
+        );
+        triggerCopy(`bonus-voucher-${tierId}`, voucher.code);
+        setClaimFeedback({
+          tierId,
+          type: 'success',
+          message: res.alreadyClaimed
+            ? isRo
+              ? `Voucherul ${voucher.code} este activ și a fost copiat.`
+              : `Voucher ${voucher.code} is active and copied.`
+            : isRo
+              ? `Voucher creat și copiat: ${voucher.code}`
+              : `Voucher created & copied: ${voucher.code}`,
+        });
+      } else {
+        setClaimFeedback({
+          tierId,
+          type: 'error',
+          message: localizeBonusClaimError(res.errorCode, isRo),
+        });
+      }
+    } catch {
+      setClaimFeedback({
+        tierId,
+        type: 'error',
+        message: localizeBonusClaimError(undefined, isRo),
+      });
+    } finally {
+      claimingTierRef.current = null;
+      setClaimingTierId(null);
     }
-    setCopiedLink(true);
-    if (copyLinkTimerRef.current) clearTimeout(copyLinkTimerRef.current);
-    copyLinkTimerRef.current = setTimeout(() => setCopiedLink(false), 2200);
   };
 
   const handleLogout = async () => {
@@ -173,52 +760,134 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
     }
   };
 
-  // Period labels
   const periodOptions: { id: PeriodFilter; labelRo: string; labelEn: string }[] = [
-    { id: 'all', labelRo: 'Toate perioadele', labelEn: 'All Time' },
+    { id: 'all', labelRo: 'Tot timpul', labelEn: 'All time' },
     { id: 'today', labelRo: 'Astăzi', labelEn: 'Today' },
-    { id: '7d', labelRo: 'Ultimele 7 zile', labelEn: 'Last 7 days' },
-    { id: '30d', labelRo: 'Ultimele 30 zile', labelEn: 'Last 30 days' },
-    { id: 'this_month', labelRo: 'Luna aceasta', labelEn: 'This month' },
+    { id: '7d', labelRo: '7 zile', labelEn: '7 days' },
+    { id: '30d', labelRo: '30 zile', labelEn: '30 days' },
+    { id: 'this_month', labelRo: 'Luna asta', labelEn: 'This month' },
     { id: 'last_month', labelRo: 'Luna trecută', labelEn: 'Last month' },
   ];
 
-  const currentPeriodLabel = periodOptions.find(p => p.id === period)?.[isRo ? 'labelRo' : 'labelEn'] || '';
+  const periodBounds = useMemo(() => getDateRangeBounds(period), [period]);
 
-  // Filter orders by period & search query
-  const filteredOrders = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+  // Orders filtered by period + search (strict zero PII)
+  const periodAndSearchOrders = useMemo(() => {
+    return data.orders.filter((order) => {
+      const orderDay = getBucharestIsoDate(order.createdAt);
+      if (periodBounds.startIso && orderDay < periodBounds.startIso) return false;
+      if (period !== 'all' && orderDay > periodBounds.endIso) return false;
 
-    return data.orders.filter(order => {
-      const orderDate = new Date(order.createdAt);
-
-      // Period filter
-      if (period === 'today' && orderDate < startOfToday) return false;
-      if (period === '7d' && orderDate < sevenDaysAgo) return false;
-      if (period === '30d' && orderDate < thirtyDaysAgo) return false;
-      if (period === 'this_month' && orderDate < startOfThisMonth) return false;
-      if (period === 'last_month' && (orderDate < startOfLastMonth || orderDate > endOfLastMonth)) return false;
-
-      // Search query (order number, product name, variant)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchOrder = order.orderNumber.toLowerCase().includes(q);
-        const matchItem = order.items.some(it => it.name.toLowerCase().includes(q) || (it.variant && it.variant.toLowerCase().includes(q)));
-        const matchCustomer = order.customerName ? order.customerName.toLowerCase().includes(q) : false;
-        if (!matchOrder && !matchItem && !matchCustomer) return false;
+        const matchCountry =
+          order.countryCode.toLowerCase().includes(q) ||
+          order.countryNameRo.toLowerCase().includes(q) ||
+          order.countryNameEn.toLowerCase().includes(q);
+        const matchCategory = order.categories.some(
+          (c) => c.labelRo.toLowerCase().includes(q) || c.labelEn.toLowerCase().includes(q)
+        );
+        const matchStatus =
+          order.statusLabelRo.toLowerCase().includes(q) ||
+          order.statusLabelEn.toLowerCase().includes(q);
+        if (!matchCountry && !matchCategory && !matchStatus) return false;
       }
 
       return true;
     });
-  }, [data.orders, period, searchQuery]);
+  }, [data.orders, period, periodBounds, searchQuery]);
 
-  // Aggregated dynamic stats for the active filter
+  // Map GA4 countries to ISO-2 codes so clicks + sales share a unified country breakdown
+  const ga4CountryByIso = useMemo(() => {
+    const map = new Map<string, { clicks: number; visitors: number; nameRo: string; nameEn: string }>();
+    const rawCountries = data.referralTracking?.countries || [];
+    for (const c of rawCountries) {
+      const key = (c.country || '').trim().toLowerCase();
+      if (!key || key === 'necunoscut') continue;
+      const mapped = GA4_COUNTRY_TO_ISO[key];
+      const code = mapped?.code || key.slice(0, 2).toUpperCase();
+      const existing = map.get(code) || {
+        clicks: 0,
+        visitors: 0,
+        nameRo: mapped?.nameRo || c.country,
+        nameEn: mapped?.nameEn || c.country,
+      };
+      existing.clicks += Number(c.clicks) || 0;
+      existing.visitors += Number(c.visitors) || 0;
+      map.set(code, existing);
+    }
+    return map;
+  }, [data.referralTracking?.countries]);
+
+  // "Vânzări pe Țări" summary strip (merges Supabase orders + GA4 clicks)
+  const countryBreakdown = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        code: string;
+        nameRo: string;
+        nameEn: string;
+        totalOrders: number;
+        validOrders: number;
+        totalSalesRon: number;
+        totalCommissionRon: number;
+        ga4Clicks: number;
+      }
+    >();
+
+    for (const o of periodAndSearchOrders) {
+      const cc = (o.countryCode || 'RO').toUpperCase();
+      const existing = map.get(cc) || {
+        code: cc,
+        nameRo: o.countryNameRo,
+        nameEn: o.countryNameEn,
+        totalOrders: 0,
+        validOrders: 0,
+        totalSalesRon: 0,
+        totalCommissionRon: 0,
+        ga4Clicks: ga4CountryByIso.get(cc)?.clicks || 0,
+      };
+      existing.totalOrders += 1;
+      if (o.isCountable) {
+        existing.validOrders += 1;
+        existing.totalSalesRon += Number(o.totalAmount) || 0;
+        existing.totalCommissionRon += Number(o.commissionAmount) || 0;
+      }
+      map.set(cc, existing);
+    }
+
+    // Include GA4 click countries even before their first order arrives
+    for (const [cc, info] of ga4CountryByIso.entries()) {
+      if (!map.has(cc) && !searchQuery.trim()) {
+        map.set(cc, {
+          code: cc,
+          nameRo: info.nameRo,
+          nameEn: info.nameEn,
+          totalOrders: 0,
+          validOrders: 0,
+          totalSalesRon: 0,
+          totalCommissionRon: 0,
+          ga4Clicks: info.clicks,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        b.validOrders - a.validOrders ||
+        b.totalOrders - a.totalOrders ||
+        b.ga4Clicks - a.ga4Clicks ||
+        b.totalSalesRon - a.totalSalesRon
+    );
+  }, [ga4CountryByIso, periodAndSearchOrders, searchQuery]);
+
+  // Final filtered orders including optional country filter
+  const filteredOrders = useMemo(() => {
+    if (selectedCountry === 'ALL') return periodAndSearchOrders;
+    return periodAndSearchOrders.filter((o) => o.countryCode === selectedCountry);
+  }, [periodAndSearchOrders, selectedCountry]);
+
+  // Aggregated dynamic stats for the active period + country filter
   const activeStats = useMemo(() => {
     const isOrderCountable = (o: AffiliateOrderHistory) => {
       if (typeof o.isCountable === 'boolean') return o.isCountable;
@@ -232,40 +901,153 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
 
     const countableOrders = filteredOrders.filter(isOrderCountable);
     const eligibleOrders = countableOrders.filter(isOrderEligible);
-    const inTransitOrders = countableOrders.filter(o => !isOrderEligible(o));
+    const inTransitOrders = countableOrders.filter((o) => !isOrderEligible(o));
 
     const totalSales = countableOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    const totalNetSales = countableOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0);
     const totalCommissions = countableOrders.reduce((sum, o) => sum + (o.commissionAmount || 0), 0);
     const eligibleCommissions = eligibleOrders.reduce(
-      (sum, o) => sum + (typeof o.eligibleCommissionAmount === 'number' ? o.eligibleCommissionAmount : (o.commissionAmount || 0)),
+      (sum, o) =>
+        sum +
+        (typeof o.eligibleCommissionAmount === 'number'
+          ? o.eligibleCommissionAmount
+          : o.commissionAmount || 0),
       0
     );
     const pendingPickupCommissions = inTransitOrders.reduce(
-      (sum, o) => sum + (typeof o.pendingPickupCommissionAmount === 'number' ? o.pendingPickupCommissionAmount : (o.commissionAmount || 0)),
+      (sum, o) =>
+        sum +
+        (typeof o.pendingPickupCommissionAmount === 'number'
+          ? o.pendingPickupCommissionAmount
+          : o.commissionAmount || 0),
       0
     );
     const usagesCount = countableOrders.length;
     const deliveredCount = eligibleOrders.length;
     const inTransitCount = inTransitOrders.length;
-    const cancelledCount = filteredOrders.length - usagesCount;
     const aov = usagesCount > 0 ? totalSales / usagesCount : 0;
 
     return {
       totalSales: roundCurrency(totalSales),
-      totalNetSales: roundCurrency(totalNetSales),
       totalCommissions: roundCurrency(totalCommissions),
       eligibleCommissions: roundCurrency(eligibleCommissions),
       pendingPickupCommissions: roundCurrency(pendingPickupCommissions),
       usagesCount,
       deliveredCount,
       inTransitCount,
-      cancelledCount,
       aov: roundCurrency(aov),
     };
   }, [filteredOrders]);
 
-  // Pagination calculation
+  // GA4 Referral Clicks & Conversion Calculation synced with period/country
+  const clickStats = useMemo(() => {
+    const tracking = data.referralTracking;
+    if (!tracking || !tracking.connected) {
+      return { connected: false, clicks: 0, visitors: 0, conversionPct: 0 };
+    }
+
+    let clicks = 0;
+    let visitors = 0;
+
+    if (selectedCountry !== 'ALL') {
+      const countryEntry = ga4CountryByIso.get(selectedCountry);
+      clicks = countryEntry?.clicks || 0;
+      visitors = countryEntry?.visitors || 0;
+    } else if (period === 'all') {
+      clicks = tracking.totalClicks;
+      visitors = tracking.uniqueVisitors;
+    } else {
+      for (const d of tracking.dailySeries) {
+        if (periodBounds.startIso && d.date < periodBounds.startIso) continue;
+        if (d.date > periodBounds.endIso) continue;
+        clicks += d.clicks;
+        visitors += d.visitors;
+      }
+    }
+
+    const ordersCount =
+      period === 'all' && selectedCountry === 'ALL' ? data.usagesCount : activeStats.usagesCount;
+    const conversionPct = clicks > 0 ? Number(((ordersCount / clicks) * 100).toFixed(1)) : 0;
+
+    return {
+      connected: true,
+      clicks,
+      visitors,
+      conversionPct,
+    };
+  }, [
+    activeStats.usagesCount,
+    data.referralTracking,
+    data.usagesCount,
+    ga4CountryByIso,
+    period,
+    periodBounds,
+    selectedCountry,
+  ]);
+
+  // Merged daily series for Recharts ComposedChart (GA4 clicks + Supabase orders/sales/commission)
+  const chartSeries = useMemo(() => {
+    const clicksByDate = new Map<string, { clicks: number; visitors: number }>();
+    for (const d of data.referralTracking?.dailySeries || []) {
+      clicksByDate.set(d.date, { clicks: d.clicks, visitors: d.visitors });
+    }
+
+    const ordersByDate = new Map<
+      string,
+      { orders: number; salesRon: number; commissionRon: number }
+    >();
+    for (const o of filteredOrders) {
+      if (!o.isCountable) continue;
+      const dayIso = getBucharestIsoDate(o.createdAt);
+      if (!dayIso) continue;
+      const cur = ordersByDate.get(dayIso) || { orders: 0, salesRon: 0, commissionRon: 0 };
+      cur.orders += 1;
+      cur.salesRon += Number(o.totalAmount) || 0;
+      cur.commissionRon += Number(o.commissionAmount) || 0;
+      ordersByDate.set(dayIso, cur);
+    }
+
+    let startIso = periodBounds.startIso;
+    const endIso = periodBounds.endIso;
+
+    if (!startIso) {
+      const allDates = [...clicksByDate.keys(), ...ordersByDate.keys()].sort();
+      if (allDates.length > 0) {
+        startIso = allDates[0];
+      } else {
+        // Default last 14 days empty baseline
+        const fallback = getDateRangeBounds('30d');
+        startIso = fallback.startIso || endIso;
+      }
+    }
+
+    const days = enumerateIsoDays(startIso, endIso, 120);
+    return days.map((iso) => {
+      const gaDay = clicksByDate.get(iso);
+      const ordDay = ordersByDate.get(iso);
+      const dt = new Date(`${iso}T12:00:00Z`);
+      const label = dt.toLocaleDateString(isRo ? 'ro-RO' : 'en-US', {
+        day: '2-digit',
+        month: 'short',
+        timeZone: 'UTC',
+      });
+
+      const salesDisplay = toDisplayAmount(ordDay?.salesRon || 0);
+      const commissionDisplay = toDisplayAmount(ordDay?.commissionRon || 0);
+
+      return {
+        date: iso,
+        label,
+        clicks: gaDay?.clicks || 0,
+        visitors: gaDay?.visitors || 0,
+        orders: ordDay?.orders || 0,
+        sales: salesDisplay,
+        commission: commissionDisplay,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.referralTracking?.dailySeries, filteredOrders, periodBounds, isRo, displayCurrency, effectiveRates]);
+
+  // Pagination
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
   const paginatedOrders = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -274,7 +1056,6 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    // Smooth scroll to orders section
     const el = document.getElementById('affiliate-orders-section');
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -295,22 +1076,29 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
       const res = await updateAffiliatePaymentDetailsAction({
         iban: cleanIban,
         bankName: bankNameInput,
-        accountHolder: holderInput
+        accountHolder: holderInput,
       });
 
       if (res.success) {
         setPaymentDetails({
           iban: cleanIban,
           bankName: bankNameInput.trim(),
-          accountHolder: holderInput.trim()
+          accountHolder: holderInput.trim(),
         });
         setIbanSuccess(true);
         setTimeout(() => {
           setIsIbanModalOpen(false);
           setIbanSuccess(false);
-        }, 1000);
+        }, 900);
       } else {
-        setIbanError(res.error || (isRo ? 'A apărut o eroare.' : 'An error occurred.'));
+        setIbanError(
+          localizeIbanServerError(
+            res.error,
+            isRo,
+            'A apărut o eroare.',
+            'An error occurred.'
+          )
+        );
       }
     } catch {
       setIbanError(isRo ? 'A apărut o eroare.' : 'An error occurred.');
@@ -336,7 +1124,14 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
         setShowDeleteConfirm(false);
         setIsIbanModalOpen(false);
       } else {
-        setIbanError(res.error || (isRo ? 'Eroare la ștergerea contului.' : 'Failed to delete account.'));
+        setIbanError(
+          localizeIbanServerError(
+            res.error,
+            isRo,
+            'Eroare la ștergerea contului.',
+            'Failed to delete account.'
+          )
+        );
       }
     } catch {
       setIbanError(isRo ? 'Eroare la ștergerea contului.' : 'Failed to delete account.');
@@ -346,598 +1141,1535 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
     }
   };
 
-  const toggleExpandOrder = (id: string) => {
-    setExpandedOrderId(prev => (prev === id ? null : id));
+  // Natural creator guide & product hashtag packs (zero emojis, zero slop)
+  const clipGuideCards = useMemo(
+    () => [
+      {
+        id: 'three-to-one',
+        title: isRo
+          ? 'Regula 3:1 (Nu posta 100% reclame)'
+          : '3:1 Rule (Do not post 100% ads)',
+        desc: isRo
+          ? '3 clipuri organice de sală sau lifestyle (set greu, încălzire, pregătirea genții, mirror pump) în care doar porți echipamentul, apoi 1 clip dedicat produsului. Algoritmul împinge mult mai departe conturile care nu par reclame nonstop.'
+          : '3 organic gym or lifestyle videos (heavy set, warm-up, gym-bag routine, mirror pump) where you simply wear the gear, then 1 direct product spotlight clip. Feeds push organic clips much further.',
+      },
+      {
+        id: 'natural-fit',
+        title: isRo
+          ? 'Integrare în antrenament și lifestyle'
+          : 'Natural Training & Lifestyle Fit',
+        desc: isRo
+          ? `Filmează seturi grele la bench, OHP sau deadlift purtând benzile X5/X10, centura de 13mm sau tricoul oversized, fără să vinzi pe cameră. Lasă codul discret în comentariul fixat sau într-un tag de colț (@trenzone.fit · ${data.code} (-${discountDisplay})).`
+          : `Film heavy bench, OHP, or deadlift sets wearing X5/X10 wraps, the 13mm belt, or the oversized tee without pitching on camera. Drop your code subtly in the pinned comment or corner tag (@trenzone.fit · ${data.code} (-${discountDisplay})).`,
+      },
+      {
+        id: 'quality-proof',
+        title: isRo
+          ? 'Dovezi reale de calitate (macro)'
+          : 'Real Quality Proof Shots',
+        desc: isRo
+          ? 'Cadre scurte de 1-2s de aproape: când tragi și lipești ariciul strâns, când închizi catarama de oțel de 13mm sau cum pică bumbacul de 240 GSM pe umeri înainte de un set greu.'
+          : 'Short 1-2s close-ups wrapping the Velcro tight, snapping the steel 13mm lever buckle, or showing the 240 GSM drop-shoulder fabric drape before lifting heavy.',
+      },
+      {
+        id: 'pr-spotlight',
+        title: isRo
+          ? 'Clipuri directe când ai un PR sau restock'
+          : 'Direct Spotlight on PRs & Restocks',
+        desc: isRo
+          ? `Începe direct cu un hook clar (ex. "Strongest elbow wraps in the world" la bench), lasă trenzone.fit pe ecran 2s ca să rețină lumea site-ul și închide cu "Cod ${data.code} (-${discountDisplay})".`
+          : `Start straight with a hook ("Strongest elbow wraps in the world" on bench), flash trenzone.fit on screen for 2s so viewers remember the site, and end with "Code ${data.code} (-${discountDisplay})".`,
+      },
+    ],
+    [data.code, discountDisplay, isRo]
+  );
+
+  const productMiniCards = useMemo(
+    () => [
+      {
+        id: 'elbow',
+        title: 'Bench · X5 / X10 Elbow Wraps',
+        wear: isRo
+          ? '2-3 cm sub cot, strânse în X peste articulație, nu sus pe biceps.'
+          : 'Start 2-3 cm below the elbow and wrap tight in an X across the joint, not high on the bicep.',
+        film: isRo
+          ? 'Organic: set greu la bench sau OHP cu coatele în cadru. Spotlight: macro când strângi ariciul înainte de PR.'
+          : 'Organic: heavy bench or OHP set with elbows in frame. Spotlight: close-up locking the Velcro before a PR.',
+      },
+      {
+        id: 'belt',
+        title: isRo
+          ? 'Deadlift & Squat · Centură Powerlifting 13mm'
+          : 'Deadlift & Squat · Heavy Lifting Belt 13mm',
+        wear: isRo
+          ? 'Deasupra șoldului (puțin mai sus la deadlift), cu catarama de oțel închisă ferm.'
+          : 'Above your hip bone (slightly higher on deadlifts), with the steel lever snapped shut tight.',
+        film: isRo
+          ? 'Organic: unghi lateral la squat/deadlift să se vadă grosimea de 13mm. Spotlight: sunetul când închizi catarama.'
+          : 'Organic: side angle on squat/deadlift so the 13mm thickness shows naturally. Spotlight: the steel lever snap.',
+      },
+      {
+        id: 'wrist',
+        title: isRo
+          ? 'Împins & Umeri · X10 Wrist Wraps'
+          : 'Press & Shoulders · X10 Wrist Wraps',
+        wear: isRo
+          ? 'Jumătate pe baza palmei, jumătate pe articulație ca încheietura să stea dreaptă.'
+          : 'Half on the base of your palm, half on the wrist joint so your wrist stays straight.',
+        film: isRo
+          ? 'Organic: împins cu gantere sau bară din unghiul mâinii. Spotlight: cum ține încheietura blocată sub greutate.'
+          : 'Organic: dumbbell or barbell press from hand angle. Spotlight: show locked wrist stability under heavy weight.',
+      },
+      {
+        id: 'tee',
+        title: 'Gym Lifestyle · TREN Oversized Tee',
+        wear: isRo
+          ? 'Mărimea ta normală pentru fit-ul boxy drop-shoulder din bumbac de 240 GSM.'
+          : 'Go with your normal size for the boxy drop-shoulder fit in 240 GSM cotton.',
+        film: isRo
+          ? 'Organic: drumul spre sală, pump cover sau mirror check. Spotlight: lumină bună pe material și print.'
+          : 'Organic: everyday gym commute, pump cover, or mirror check. Spotlight: clean lighting on fabric drape and print.',
+      },
+    ],
+    [isRo]
+  );
+
+  const productHashtagPacks = useMemo(
+    () => [
+      {
+        id: 'hashtags-elbow',
+        tag: 'Bench · X10 / X5 Elbow Wraps',
+        angle: isRo
+          ? 'Set greu la bench / warm-up natural cu coatele strânse în X.'
+          : 'Heavy bench set or natural warm-up wearing X-wrapped sleeves.',
+        hashtags: isRo
+          ? '#trenzone #trenzonefit #benchpress #elbowwraps #sala'
+          : '#trenzone #trenzonefit #benchpress #elbowwraps #powerlifting',
+      },
+      {
+        id: 'hashtags-belt',
+        tag: isRo ? 'Deadlift & Squat · 13mm Belt' : 'Deadlift & Squat · 13mm Belt',
+        angle: isRo
+          ? 'Top set la deadlift sau squat filmat din lateral cu centura de 13mm.'
+          : 'Side-angle heavy squat or deadlift top set in the 13mm lever belt.',
+        hashtags: isRo
+          ? '#trenzone #trenzonefit #deadlift #squat #powerliftingromania'
+          : '#trenzone #trenzonefit #deadlift #squat #strengthtraining',
+      },
+      {
+        id: 'hashtags-wrist',
+        tag: isRo
+          ? 'Push & Shoulders · X10 Wrist Wraps'
+          : 'Push & Shoulders · X10 Wrist Wraps',
+        angle: isRo
+          ? 'Împins la piept sau umeri cu gantere, focus pe încheietura blocată drept.'
+          : 'Heavy incline press or shoulder work with locked-in wrist alignment.',
+        hashtags: isRo
+          ? '#trenzone #trenzonefit #wristwraps #antrenament #fitnessromania'
+          : '#trenzone #trenzonefit #wristwraps #pushday #gymgear',
+      },
+      {
+        id: 'hashtags-tee',
+        tag: 'Gym Fit & Lifestyle · TREN Tee 240 GSM',
+        angle: isRo
+          ? 'Pump cover la început de antrenament, mirror check sau lifestyle zilnic.'
+          : 'Early-session pump cover, mirror check, or everyday gym-bag lifestyle reel.',
+        hashtags: '#trenzone #trenzonefit #gymwear #oversizedtee #fitcheck',
+      },
+    ],
+    [isRo]
+  );
+
+  const selectedCountryMeta = useMemo(() => {
+    if (selectedCountry === 'ALL') return null;
+    return countryBreakdown.find((c) => c.code === selectedCountry) || null;
+  }, [countryBreakdown, selectedCountry]);
+
+  const firstName = useMemo(() => {
+    const clean = (data.name || '').trim();
+    return clean.split(/\s+/)[0] || clean;
+  }, [data.name]);
+
+  const activeOrdersCount =
+    period === 'all' && selectedCountry === 'ALL' ? data.usagesCount : activeStats.usagesCount;
+  const activePendingPickup =
+    period === 'all' && selectedCountry === 'ALL'
+      ? data.pendingPickupCommissions
+      : activeStats.pendingPickupCommissions;
+
+  const eurRate =
+    Number(data.eurRate) > 1
+      ? Number(data.eurRate)
+      : Number(effectiveRates.EUR) > 1
+        ? Number(effectiveRates.EUR)
+        : 5.3;
+
+  const eurToDisplayAmount = (amountEur: number) => {
+    const safeEur = Number(amountEur) || 0;
+    if (displayCurrency === 'EUR') return roundCurrency(safeEur);
+    if (displayCurrency === 'RON') return roundCurrency(safeEur * eurRate);
+    return convertFromRon(safeEur * eurRate, displayCurrency, effectiveRates);
   };
 
+  const minWithdrawalRon =
+    Number(data.minWithdrawalRon) > 0 ? Number(data.minWithdrawalRon) : 200;
+  const minWithdrawalEur =
+    Number(data.minWithdrawalEur) > 0 ? Number(data.minWithdrawalEur) : 40;
+  const pendingPayoutEur =
+    typeof data.pendingPayoutEur === 'number'
+      ? data.pendingPayoutEur
+      : roundCurrency((data.pendingPayout || 0) / eurRate);
+
+  const minWithdrawalDisplayValue =
+    displayCurrency === 'RON'
+      ? minWithdrawalRon
+      : displayCurrency === 'EUR'
+        ? minWithdrawalEur
+        : Math.round(eurToDisplayAmount(minWithdrawalEur));
+  const pendingInMinCurrency =
+    displayCurrency === 'RON'
+      ? data.pendingPayout
+      : displayCurrency === 'EUR'
+        ? pendingPayoutEur
+        : toDisplayAmount(data.pendingPayout);
+  const minWithdrawalLabel = formatMoneyInCurrency(
+    minWithdrawalDisplayValue,
+    displayCurrency,
+    uiLocale,
+    0
+  );
+
+  const canWithdraw =
+    displayCurrency === 'RON'
+      ? data.pendingPayout >= minWithdrawalRon
+      : displayCurrency === 'EUR'
+        ? pendingPayoutEur >= minWithdrawalEur
+        : pendingInMinCurrency >= minWithdrawalDisplayValue;
+  const withdrawalProgressPct = Math.min(
+    100,
+    Math.max(0, Math.round((pendingInMinCurrency / minWithdrawalDisplayValue) * 100))
+  );
+
+  const inTransitSalesRon = Math.max(
+    0,
+    roundCurrency((data.totalSales || 0) - (data.eligibleSales || 0))
+  );
+  const eligibleSalesEurTotal =
+    typeof data.eligibleSalesEur === 'number'
+      ? data.eligibleSalesEur
+      : roundCurrency((data.eligibleSales || 0) / eurRate);
+  const inTransitSalesEurTotal =
+    typeof data.inTransitSalesEur === 'number'
+      ? data.inTransitSalesEur
+      : Math.max(0, roundCurrency(((data.totalSales || 0) - (data.eligibleSales || 0)) / eurRate));
+
+  // For KPI 1 / KPI 2 / KPI 3, when viewing EUR with native EUR orders use consistent rate conversions
+  const deliveredSalesForGoalsDisplay =
+    displayCurrency === 'RON'
+      ? formatMoneyInCurrency(data.eligibleSales || 0, 'RON', uiLocale, 2)
+      : formatMoneyInCurrency(eurToDisplayAmount(eligibleSalesEurTotal), displayCurrency, uiLocale, 2);
+  const inTransitSalesForGoalsDisplay =
+    displayCurrency === 'RON'
+      ? formatMoneyInCurrency(inTransitSalesRon, 'RON', uiLocale, 2)
+      : formatMoneyInCurrency(
+          eurToDisplayAmount(inTransitSalesEurTotal),
+          displayCurrency,
+          uiLocale,
+          2
+        );
+  const hasInTransitForGoals =
+    displayCurrency === 'RON' ? inTransitSalesRon > 0 : inTransitSalesEurTotal > 0;
+  const hasMultipleCurrencies =
+    Array.isArray(data.currencyBreakdown) && data.currencyBreakdown.length > 1;
+
   return (
-    <div className="min-h-screen bg-white text-slate-900 selection:bg-[#e32f8c] selection:text-white pb-24 font-sans relative overflow-hidden pt-24 sm:pt-28">
-      
-      {/* GREEK GOD PATTERN BACKGROUND (matching storefront) */}
+    <div className="min-h-screen bg-black text-white selection:bg-[#e32f8c] selection:text-white pb-20 font-sans relative overflow-x-clip pt-4 sm:pt-6">
+      {/* Subtle pink ambient wash blending seamlessly into black canvas */}
       <div
-        className="absolute inset-0 pointer-events-none z-0 mix-blend-multiply opacity-50"
+        className="pointer-events-none fixed inset-0 z-0 opacity-40"
         style={{
-          backgroundImage: "url('/images/ui/greek-pattern.jpg')",
-          backgroundSize: '400px',
-          backgroundRepeat: 'repeat',
+          backgroundImage:
+            'radial-gradient(circle at 85% 14%, rgba(227,47,140,0.12), transparent 38%), radial-gradient(circle at 10% 48%, rgba(227,47,140,0.06), transparent 42%)',
         }}
+        aria-hidden="true"
       />
 
-      {/* AMBIENT GLOWS */}
-      <div className="absolute top-24 right-1/4 w-[600px] h-[350px] bg-[#e32f8c]/10 blur-[150px] rounded-full pointer-events-none z-0" />
-      <div className="absolute bottom-10 left-1/4 w-[500px] h-[350px] bg-blue-500/10 blur-[150px] rounded-full pointer-events-none z-0" />
+      <main className="container mx-auto px-3.5 sm:px-6 max-w-6xl space-y-5 sm:space-y-6 relative z-10">
+        {/* 1. SINGLE COMPACT TOP HEADER BAR */}
+        <header className="bg-[#09090d]/95 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-white truncate">
+                {isRo ? `Salut, ${firstName}` : `Hey, ${firstName}`}
+              </h1>
+              <span className="inline-flex items-center gap-1 text-[11px] font-mono font-black bg-[#e32f8c]/15 text-[#ff66b2] border border-[#e32f8c]/35 px-2.5 py-0.5 rounded-full">
+                {isRo ? 'Cod:' : 'Code:'} {data.code}
+              </span>
+            </div>
 
-      {/* MAIN CONTAINER */}
-      <main className="container mx-auto px-4 sm:px-6 max-w-6xl space-y-8 relative z-10">
-
-        {/* IN-PAGE HEADER BAR */}
-        <div className="bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl px-5 sm:px-6 py-4 shadow-sm flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="bg-[#e32f8c]/15 text-[#008ba3] border border-[#e32f8c]/30 text-xs sm:text-sm font-black uppercase tracking-wider px-3.5 sm:px-4 py-1.5 rounded-full whitespace-nowrap shadow-sm">
-              {isRo ? 'Panou Afiliat & Vânzări' : 'Affiliate Sales Dashboard'}
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+              <span className="inline-flex items-center gap-1.5 bg-white/[0.05] text-zinc-200 border border-white/10 px-2.5 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                {data.commissionPercent}% {isRo ? 'comision' : 'commission'}
+              </span>
+              <span className="inline-flex items-center bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
+                -{discountDisplay} {isRo ? 'reducere client' : 'customer off'}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t border-white/5 sm:border-t-0">
+            {/* Compact Currency Switcher */}
+            <div
+              className="inline-flex items-center bg-black/60 border border-white/10 rounded-xl p-0.5"
+              role="group"
+              aria-label={isRo ? 'Monedă afișată' : 'Display currency'}
+            >
+              {AFFILIATE_DISPLAY_CURRENCIES.map((cur: AffiliateDisplayCurrency) => {
+                const active = displayCurrency === cur;
+                return (
+                  <button
+                    key={cur}
+                    type="button"
+                    onClick={() => setStoreCurrency(cur)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-black tracking-wider transition-all cursor-pointer ${
+                      active
+                        ? 'bg-[#e32f8c] text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {cur}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Compact Logout */}
             <button
               type="button"
               onClick={handleLogout}
               disabled={loggingOut}
-              className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 px-3.5 py-2 rounded-xl text-xs font-bold border border-red-200 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-              title={isRo ? 'Deconectare' : 'Logout'}
+              className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-red-500/15 text-zinc-300 hover:text-red-300 px-3 py-1.5 rounded-xl text-xs font-bold border border-white/10 hover:border-red-500/35 transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+              title={isRo ? 'Deconectare' : 'Sign out'}
             >
               {loggingOut ? (
-                <>
-                  <Loader2 size={14} className="animate-spin shrink-0" />
-                  <span className="hidden sm:inline">{isRo ? 'Se deconectează...' : 'Signing out...'}</span>
-                </>
+                <Loader2 size={13} className="animate-spin shrink-0" />
               ) : (
-                <>
-                  <span className="hidden sm:inline">{isRo ? 'Ieșire' : 'Logout'}</span>
-                  <LogOut size={14} />
-                </>
+                <LogOut size={13} className="shrink-0" />
               )}
+              <span>{isRo ? 'Ieși' : 'Sign out'}</span>
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* HERO CARD: AFFILIATE IDENTITY & QUICK SHARE */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative rounded-3xl p-6 sm:p-8 md:p-10 overflow-hidden border border-slate-200/90 bg-white/95 backdrop-blur-md shadow-md"
-        >
-          <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div>
-              <div className="flex items-center gap-2 text-[#008ba3] text-xs font-black uppercase tracking-widest mb-2">
-                <ShieldCheck size={14} className="text-[#e32f8c]" />
-                <span>{isRo ? 'Partener Oficial TrenZone' : 'Official TrenZone Partner'}</span>
-              </div>
-              <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-slate-900 mb-2 font-heading">
-                {data.name}
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-500 max-w-xl leading-relaxed">
-                {isRo 
-                  ? 'Fiecare comandă plasată cu codul tău îți aduce un comision garantat. Distribuie codul sau link-ul tău urmăritorilor tăi.'
-                  : 'Every order placed with your code earns you guaranteed commission. Share your code or referral link with your community.'}
-              </p>
-            </div>
-
-            {/* ACTION PILLS: CODE + LINK */}
-            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-              {/* CODE PILL */}
-              <button
-                type="button"
-                onClick={handleCopyCode}
-                className="group relative bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-[#e32f8c]/60 p-3.5 rounded-2xl flex items-center justify-between gap-4 cursor-pointer transition-all shadow-2xs active:scale-[0.98] text-left"
-              >
-                <div>
-                  <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-                    {isRo ? 'Codul tău de reducere' : 'Your discount code'}
-                  </p>
-                  <p className="text-xl sm:text-2xl font-black font-mono tracking-wider text-slate-900">
-                    {data.code}
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-[#e32f8c]/15 flex items-center justify-center text-[#008ba3] group-hover:scale-110 transition-transform">
-                  {copiedCode ? <Check size={18} className="text-emerald-500" /> : <Copy size={18} />}
-                </div>
-                {copiedCode && (
-                  <span className="absolute -top-2.5 right-3 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-md">
-                    {isRo ? 'Copiat!' : 'Copied!'}
-                  </span>
-                )}
-              </button>
-
-              {/* LINK PILL */}
-              <button
-                type="button"
-                onClick={handleCopyLink}
-                className="group relative bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 p-3.5 rounded-2xl flex items-center justify-between gap-4 cursor-pointer transition-all shadow-2xs active:scale-[0.98] text-left"
-              >
-                <div>
-                  <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-                    {isRo ? 'Link de recomandare' : 'Referral Link'}
-                  </p>
-                  <p className="text-xs sm:text-sm font-bold font-mono text-slate-700 truncate max-w-[160px] sm:max-w-[200px]">
-                    {typeof window !== 'undefined' ? window.location.host : 'trenzone.fit'}/{isRo ? 'ro' : 'en'}?ref={data.code}
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-slate-200/80 flex items-center justify-center text-slate-600 group-hover:scale-110 transition-transform">
-                  {copiedLink ? <Check size={18} className="text-emerald-500" /> : <ExternalLink size={18} />}
-                </div>
-                {copiedLink && (
-                  <span className="absolute -top-2.5 right-3 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-md">
-                    {isRo ? 'Link Copiat!' : 'Link Copied!'}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* PRIMARY FINANCIAL OVERVIEW: 4 KEY KPI CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          
-          {/* CARD 1: DE INCASAT (COLET RIDICAT) */}
+        {/* 2. 4 CRISP KPI CARDS */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {/* KPI 1: DE INCASAT ACUM */}
           <motion.div
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="relative rounded-3xl p-6 border border-[#e32f8c]/40 bg-gradient-to-br from-[#e32f8c]/10 via-white to-white shadow-sm overflow-hidden flex flex-col justify-between"
+            transition={{ duration: 0.25 }}
+            className="rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-[#e32f8c]/45 bg-gradient-to-br from-[#e32f8c]/15 via-[#09090d] to-[#09090d] shadow-xl flex flex-col justify-between gap-3"
           >
             <div>
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <span className="text-[11px] font-black uppercase tracking-widest text-[#008ba3]">
-                  {isRo ? 'De Încasat (Colet ridicat)' : 'Ready to Cash Out (Picked up)'}
+              <div className="flex items-center justify-between gap-1.5 mb-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#ff66b2]">
+                  {isRo ? 'De Încasat Acum' : 'Ready to Cash Out'}
                 </span>
-                <div className="w-8 h-8 rounded-lg bg-[#e32f8c]/15 flex items-center justify-center text-[#008ba3] shrink-0">
-                  <CheckCircle2 size={16} />
-                </div>
+                <CheckCircle2 size={15} className="text-[#ff66b2] shrink-0" />
               </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                  {formatMoney(data.pendingPayout)}
+              <div className="text-xl sm:text-3xl font-black tracking-tight text-white tabular-nums">
+                {formatMoney(data.pendingPayout)}
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-1 truncate">
+                {isRo ? 'Eligibil:' : 'Eligible:'}{' '}
+                <span className="text-zinc-200 font-bold">
+                  {formatMoney(data.eligibleCommissions)}
                 </span>
-              </div>
-              <p className="text-[10px] font-bold text-slate-500 mt-1">
-                {isRo ? 'Eligibil din colete ridicate: ' : 'Eligible from picked-up parcels: '}
-                {formatMoney(data.eligibleCommissions)}
               </p>
-              {displayCurrency !== 'RON' && data.pendingPayout > 0 && (
-                <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                  ≈ {formatMoneyInCurrency(data.pendingPayout, 'RON', uiLocale, 2)} {isRo ? 'bază contabilă' : 'base settlement'}
-                </p>
-              )}
-              {(data.eligibleCommissions > 0 || data.paidPayout > 0) && (
-                <div className="mt-3">
-                  <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#008ba3] to-emerald-500 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(100, data.payoutProgressPercent ?? 0)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-500">{isRo ? 'Rată comision:' : 'Commission rate:'}</span>
-              <span className="font-bold text-emerald-700">
-                {data.commissionPercent}% {isRo ? 'din net' : 'of net'}
-              </span>
-            </div>
-          </motion.div>
 
-          {/* CARD 2: IN ASTEPTARE (IN LIVRARE / NERIDICAT INCA) */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="rounded-3xl p-6 border border-amber-200/90 bg-gradient-to-br from-amber-50/70 via-white to-white shadow-sm flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <span className="text-[11px] font-black uppercase tracking-widest text-amber-800">
-                  {isRo ? 'În Așteptare (În livrare)' : 'Pending (In transit)'}
-                </span>
-                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                  <Clock size={16} />
-                </div>
-              </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl sm:text-4xl font-black tracking-tight text-amber-950">
-                  {formatMoney(period === 'all' ? data.pendingPickupCommissions : activeStats.pendingPickupCommissions)}
-                </span>
-              </div>
-              <p className="text-[11px] font-semibold text-amber-900/80 mt-1.5 leading-snug">
-                {isRo
-                  ? 'Neridicat încă. Se mută automat în De încasat după ce clientul ridică coletul.'
-                  : 'Awaiting pickup. Automatically moves to Ready to Cash Out once the parcel is picked up.'}
-              </p>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-amber-100 flex items-center justify-between text-[11px]">
-              <span className="text-amber-800/80">{isRo ? 'Comenzi în livrare:' : 'Orders in transit:'}</span>
-              <span className="font-bold text-amber-900">
-                {period === 'all' ? data.inTransitOrdersCount : activeStats.inTransitCount}{' '}
-                {isRo ? 'comenzi' : 'orders'}
-              </span>
-            </div>
-          </motion.div>
-
-          {/* CARD 3: INCASAT PANA ACUM */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="rounded-3xl p-6 border border-emerald-200/90 bg-white/95 backdrop-blur-sm shadow-sm flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <span className="text-[11px] font-black uppercase tracking-widest text-emerald-700">
-                  {isRo ? 'Încasat Până Acum' : 'Paid So Far'}
-                </span>
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Award size={16} />
-                </div>
-              </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                  {formatMoney(data.paidPayout)}
-                </span>
-              </div>
-              <p className="text-[10px] font-bold text-slate-400 mt-1">
-                {data.payoutProgressPercent ?? 0}% {isRo ? 'din comisionul eligibil achitat' : 'of eligible commission paid'}
-              </p>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-500">{isRo ? 'Status cont:' : 'Payout status:'}</span>
-              <span className="font-bold text-emerald-600 flex items-center gap-1.5 text-[11px]">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                {isRo ? 'Comision Activ' : 'Active'}
-              </span>
-            </div>
-          </motion.div>
-
-          {/* CARD 4: VANZARI & COMENZI */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="rounded-3xl p-6 border border-slate-200/90 bg-white/95 backdrop-blur-sm shadow-sm flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                  {isRo ? 'Vânzări & Comenzi' : 'Sales & Orders'}
-                </span>
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                  <TrendingUp size={16} />
-                </div>
-              </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-                  {formatMoney(period === 'all' ? data.totalSales : activeStats.totalSales)}
-                </span>
-              </div>
-              <p className="text-[10px] font-bold text-slate-500 mt-1">
-                {period === 'all' ? data.usagesCount : activeStats.usagesCount} {isRo ? 'comenzi valide' : 'valid orders'} •{' '}
-                {period === 'all' ? data.deliveredOrdersCount : activeStats.deliveredCount} {isRo ? 'ridicate' : 'picked up'}
-                {(period === 'all' ? (data.cancelledOrdersCount ?? 0) : activeStats.cancelledCount) > 0 && (
-                  <> • {period === 'all' ? data.cancelledOrdersCount : activeStats.cancelledCount} {isRo ? 'anulate' : 'voided'}</>
-                )}
-              </p>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-500">{isRo ? 'Valoare medie coș:' : 'Average order:'}</span>
-              <span className="font-bold text-slate-700">
-                {formatMoney(activeStats.aov)}
-              </span>
-            </div>
-          </motion.div>
-
-        </div>
-
-        {/* BANK DETAILS SECTION (Single place for IBAN: display, edit, delete) */}
-        {paymentDetails?.iban ? (
-          <div className="bg-white/95 backdrop-blur-md border border-emerald-200/90 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5 transition-all">
-            <div className="flex items-start sm:items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0 shadow-2xs">
-                <CreditCard size={24} />
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] uppercase font-black tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                    <CheckCircle2 size={11} className="text-emerald-600" />
-                    <span>{isRo ? 'Cont IBAN Activ pentru Încasare' : 'Active Payout IBAN'}</span>
-                  </span>
-                  {paymentDetails.bankName && (
-                    <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md">
-                      {paymentDetails.bankName}
+              {/* Minimum Withdrawal Threshold Status */}
+              <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1.5">
+                {canWithdraw ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full leading-tight">
+                      {isRo
+                        ? 'Prag atins · Eligibil pentru plată'
+                        : 'Threshold reached · Ready for payout'}
                     </span>
-                  )}
-                </div>
-
-                <p className="text-base sm:text-lg font-mono font-black text-slate-900 tracking-wider">
-                  {formatIban(paymentDetails.iban)}
-                </p>
-
-                {paymentDetails.accountHolder && (
-                  <p className="text-xs text-slate-500 font-medium">
-                    <span className="text-slate-400">{isRo ? 'Titular cont: ' : 'Account holder: '}</span>
-                    <strong className="text-slate-700">{paymentDetails.accountHolder}</strong>
-                  </p>
+                    <p className="text-[10px] text-zinc-400">
+                      {isRo
+                        ? `Prag minim retragere: ${minWithdrawalLabel}`
+                        : `Min withdrawal: ${minWithdrawalLabel}`}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-1 text-[10px]">
+                      <span className="text-zinc-400 truncate">
+                        {isRo
+                          ? `Prag minim: ${minWithdrawalLabel}`
+                          : `Min withdrawal: ${minWithdrawalLabel}`}
+                      </span>
+                      <span className="font-black text-[#ff66b2] tabular-nums shrink-0">
+                        {withdrawalProgressPct}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#e32f8c] to-[#ff66b2] transition-all duration-300"
+                        style={{ width: `${withdrawalProgressPct}%` }}
+                      />
+                    </div>
+                  </>
                 )}
               </div>
             </div>
 
-            {/* ACTION BUTTONS: EDIT & DELETE */}
-            <div className="flex items-center gap-2.5 self-end md:self-center w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={handleOpenEditIban}
-                className="flex-1 sm:flex-initial bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 transition-all shadow-2xs active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Pencil size={14} className="text-slate-600" />
-                <span>{isRo ? 'Editează' : 'Edit'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="flex-1 sm:flex-initial bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-4 py-2.5 rounded-xl border border-red-200 transition-all shadow-2xs active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-                title={isRo ? 'Șterge contul IBAN' : 'Delete IBAN'}
-              >
-                <Trash2 size={14} />
-                <span>{isRo ? 'Șterge' : 'Delete'}</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white border border-amber-200 flex items-center justify-center text-amber-600 shrink-0 shadow-2xs">
-                <CreditCard size={20} />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-amber-900">
-                  {isRo ? 'Nu ai completat încă un cont IBAN pentru încasarea comisioanelor.' : 'No payout IBAN configured yet.'}
-                </p>
-                <p className="text-[11px] text-amber-700/80 mt-0.5">
-                  {isRo ? 'Comisioanele se transferă periodic direct în contul bancar.' : 'Commissions are transferred periodically to your bank account.'}
-                </p>
-              </div>
-            </div>
             <button
               type="button"
               onClick={handleOpenEditIban}
-              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all shadow-md shadow-amber-600/20 active:scale-[0.98] flex items-center gap-1.5 cursor-pointer"
+              className={`w-full text-left px-2.5 py-1.5 rounded-xl border text-[10px] sm:text-[11px] font-bold flex items-center justify-between gap-1.5 transition-colors cursor-pointer ${
+                paymentDetails?.iban
+                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/15'
+                  : 'bg-amber-500/15 border-amber-500/35 text-amber-200 hover:bg-amber-500/25'
+              }`}
             >
-              <span>{isRo ? '+ Adaugă IBAN' : '+ Add IBAN'}</span>
+              <span className="truncate font-mono">
+                {paymentDetails?.iban
+                  ? `IBAN ••••${paymentDetails.iban.slice(-4)}`
+                  : isRo
+                    ? '+ Adaugă IBAN'
+                    : '+ Add IBAN'}
+              </span>
+              <Pencil size={11} className="shrink-0 opacity-80" />
             </button>
-          </div>
-        )}
+          </motion.div>
 
-        {/* PAYOUT HISTORY SECTION (Visible when affiliate has received payouts) */}
-        {Array.isArray(data.payoutHistory) && data.payoutHistory.length > 0 && (
-          <div className="rounded-3xl p-5 sm:p-6 bg-white/95 border border-emerald-200/80 shadow-sm space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
-                  <CheckCircle2 size={18} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
-                    {isRo ? 'Istoric Plăți Primite' : 'Payouts Received History'}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    {isRo
-                      ? `${data.payoutHistory.length} transferuri înregistrate • Total achitat: ${formatMoney(data.paidPayout)}`
-                      : `${data.payoutHistory.length} transfers recorded • Total paid: ${formatMoney(data.paidPayout)}`}
-                  </p>
-                </div>
+          {/* KPI 2: TOTAL CASTIGAT */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.04 }}
+            className="rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-[#09090d] to-[#09090d] shadow-xl flex flex-col justify-between gap-3"
+          >
+            <div>
+              <div className="flex items-center justify-between gap-1.5 mb-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                  {isRo ? 'Total Câștigat' : 'Total Earned'}
+                </span>
+                <Award size={15} className="text-emerald-300 shrink-0" />
               </div>
-              <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-                {data.payoutProgressPercent ?? 0}% {isRo ? 'achitat' : 'settled'}
+              <div className="text-xl sm:text-3xl font-black tracking-tight text-white tabular-nums">
+                {formatMoney(
+                  period === 'all' && selectedCountry === 'ALL'
+                    ? data.totalCommissions
+                    : activeStats.totalCommissions
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-1 truncate">
+                {activePendingPickup > 0 ? (
+                  <span className="text-amber-300 font-semibold">
+                    +{formatMoney(activePendingPickup)} {isRo ? 'în curs' : 'pending'}
+                  </span>
+                ) : (
+                  <span>
+                    {isRo ? 'Comisioane valide' : 'Valid commissions'}
+                  </span>
+                )}
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[10px] sm:text-[11px]">
+              <span className="text-zinc-400">
+                {isRo ? 'Total plătit' : 'Settled'}
+              </span>
+              <span className="font-black text-emerald-400 tabular-nums">
+                {formatMoney(data.paidPayout)}
               </span>
             </div>
+          </motion.div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {data.payoutHistory.map((payout) => (
-                <div
-                  key={payout.id}
-                  className="p-3 rounded-2xl bg-emerald-50/40 border border-emerald-200/70 flex flex-col justify-between gap-1"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-black text-emerald-700">
-                      +{formatMoney(payout.amount)}
-                    </span>
-                    {payout.paidAt && (
-                      <span className="text-[11px] font-bold text-slate-500">
-                        {new Date(payout.paidAt).toLocaleDateString(isRo ? 'ro-RO' : 'en-US', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    )}
-                  </div>
-                  {payout.note && (
-                    <p className="text-[11px] font-medium text-slate-600 truncate">{payout.note}</p>
-                  )}
-                  {payout.ibanSnapshot && (
-                    <p className="text-[10px] font-mono text-slate-400 truncate">IBAN: {payout.ibanSnapshot}</p>
-                  )}
+          {/* KPI 3: COMENZI & VOLUM */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.08 }}
+            className="rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-white/10 bg-[#09090d]/95 shadow-xl flex flex-col justify-between gap-3"
+          >
+            <div>
+              <div className="flex items-center justify-between gap-1.5 mb-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                  {isRo ? 'Comenzi & Volum' : 'Orders & Volume'}
+                </span>
+                <TrendingUp size={15} className="text-zinc-300 shrink-0" />
+              </div>
+              <div className="text-xl sm:text-3xl font-black tracking-tight text-white tabular-nums">
+                {formatMoney(
+                  period === 'all' && selectedCountry === 'ALL'
+                    ? data.totalSales
+                    : activeStats.totalSales
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-1 truncate">
+                <strong className="text-zinc-200">{activeOrdersCount}</strong>{' '}
+                {isRo ? 'comenzi' : 'orders'} ·{' '}
+                <span className="text-emerald-400 font-semibold">
+                  {isRo ? 'comenzi valide' : 'valid orders'}
+                </span>
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[10px] sm:text-[11px]">
+              <span className="text-zinc-400">{isRo ? 'Coș mediu:' : 'Avg order:'}</span>
+              <span className="font-bold text-white tabular-nums">{formatMoney(activeStats.aov)}</span>
+            </div>
+          </motion.div>
+
+          {/* KPI 4: CLICK-URI LINK (?ref=) + CONVERSIE % */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.12 }}
+            className="rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-white/10 bg-[#09090d]/95 shadow-xl flex flex-col justify-between gap-3"
+          >
+            <div>
+              <div className="flex items-center justify-between gap-1.5 mb-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                  {isRo ? 'Click-uri Link (?ref=)' : 'Link Clicks (?ref=)'}
+                </span>
+                <MousePointerClick size={15} className="text-[#ff66b2] shrink-0" />
+              </div>
+              <div className="text-xl sm:text-3xl font-black tracking-tight text-white tabular-nums">
+                {clickStats.connected ? clickStats.clicks.toLocaleString(isRo ? 'ro-RO' : 'en-US') : '—'}
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-1 truncate">
+                {clickStats.connected ? (
+                  <>
+                    <strong className="text-zinc-200">
+                      {clickStats.visitors.toLocaleString(isRo ? 'ro-RO' : 'en-US')}
+                    </strong>{' '}
+                    {isRo ? 'vizitatori unici' : 'unique visitors'}
+                  </>
+                ) : (
+                  <span className="text-zinc-500">
+                    {isRo ? 'Sincronizare GA4...' : 'GA4 syncing...'}
+                  </span>
+                )}
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[10px] sm:text-[11px]">
+              <span className="text-zinc-400">{isRo ? 'Conversie:' : 'Conversion:'}</span>
+              <span className="font-black text-[#ff66b2] tabular-nums">
+                {clickStats.connected && clickStats.clicks > 0 ? `${clickStats.conversionPct}%` : '—'}
+              </span>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* 3. SMART ROOT LINK & PROMO CODE CARD (CLEAN 2-TILE SHARE HUB) */}
+        <section className="rounded-2xl sm:rounded-3xl border border-white/10 bg-[#09090d]/95 p-4 sm:p-5 shadow-xl space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Tile 1: Smart Root Link */}
+            <div className="rounded-2xl bg-white/[0.03] border border-white/15 p-3.5 sm:p-4 flex flex-col justify-between gap-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                    {isRo ? 'Link-ul Tău Inteligent' : 'Your Smart Referral Link'}
+                  </span>
+                  <p className="text-xs sm:text-sm font-mono font-bold text-white truncate mt-0.5">
+                    trenzone.fit?ref={data.code}
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => triggerCopy('smart-root-link', smartRootLink)}
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer active:scale-[0.98] ${
+                    copiedId === 'smart-root-link'
+                      ? 'bg-emerald-500 text-black'
+                      : 'bg-white/10 hover:bg-[#e32f8c] text-white'
+                  }`}
+                >
+                  {copiedId === 'smart-root-link' ? <Check size={14} /> : <Copy size={14} />}
+                  <span>
+                    {copiedId === 'smart-root-link'
+                      ? isRo
+                        ? 'Copiat!'
+                        : 'Copied!'
+                      : isRo
+                        ? 'Copiază'
+                        : 'Copy'}
+                  </span>
+                </button>
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-snug">
+                {isRo
+                  ? 'Detectează automat țara & limba (RO/EN) și aplică reducerea.'
+                  : 'Auto-detects country & language (RO/EN) and applies your discount.'}
+              </p>
+            </div>
+
+            {/* Tile 2: Promo Code */}
+            <div className="rounded-2xl bg-gradient-to-br from-[#e32f8c]/15 via-[#0e0e14] to-[#09090d] border border-[#e32f8c]/45 p-3.5 sm:p-4 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#ff66b2]">
+                    {isRo ? 'Codul Tău Promo' : 'Your Promo Code'}
+                  </span>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    -{discountDisplay} {isRo ? 'client' : 'off'}
+                  </span>
+                </div>
+                <p className="text-xl sm:text-2xl font-mono font-black tracking-wider text-white truncate mt-1">
+                  {data.code}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => triggerCopy('main-promo-code', data.code)}
+                className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer active:scale-[0.98] shadow-md ${
+                  copiedId === 'main-promo-code'
+                    ? 'bg-emerald-500 text-black shadow-emerald-500/20'
+                    : 'bg-[#e32f8c] hover:bg-[#ff3b9e] text-white shadow-[#e32f8c]/30'
+                }`}
+              >
+                {copiedId === 'main-promo-code' ? <Check size={14} /> : <Copy size={14} />}
+                <span>
+                  {copiedId === 'main-promo-code'
+                    ? isRo
+                      ? 'Copiat!'
+                      : 'Copied!'
+                    : isRo
+                      ? 'Copiază'
+                      : 'Copy'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Optional Collapsed Direct Product Link Selector */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowProductLinkPicker((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 hover:text-[#ff66b2] transition-colors cursor-pointer"
+            >
+              <Link2 size={13} />
+              <span>
+                {isRo ? 'Vrei link direct către un produs?' : 'Want a direct link to a product?'}
+              </span>
+              <ChevronDown
+                size={13}
+                className={`transition-transform duration-200 ${
+                  showProductLinkPicker ? 'rotate-180 text-[#ff66b2]' : ''
+                }`}
+              />
+            </button>
+
+            <AnimatePresence initial={false}>
+              {showProductLinkPicker && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-2.5 pt-2.5 border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    <select
+                      value={selectedProductPath}
+                      onChange={(e) => setSelectedProductPath(e.target.value)}
+                      className="bg-black/60 border border-white/15 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-[#e32f8c]"
+                    >
+                      {directProductOptions.map((opt) => (
+                        <option key={opt.path} value={opt.path} className="bg-[#09090d] text-white">
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px] font-mono text-zinc-300 truncate">
+                      {selectedDirectUrl}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => triggerCopy('direct-product-link', selectedDirectUrl)}
+                      className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        copiedId === 'direct-product-link'
+                          ? 'bg-emerald-500 text-black'
+                          : 'bg-white/10 hover:bg-[#e32f8c] text-white'
+                      }`}
+                    >
+                      {copiedId === 'direct-product-link' ? <Check size={13} /> : <Copy size={13} />}
+                      <span>
+                        {copiedId === 'direct-product-link'
+                          ? isRo
+                            ? 'Copiat!'
+                            : 'Copied!'
+                          : isRo
+                            ? 'Copiază'
+                            : 'Copy'}
+                      </span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </section>
+
+        {/* 4. PERFORMANCE ANALYTICS CHART (RECHARTS COMPOSED CHART) + PRO FILTERS */}
+        <section className="rounded-2xl sm:rounded-3xl border border-white/10 bg-[#09090d]/95 p-4 sm:p-6 shadow-2xl space-y-4 relative">
+          <div
+            className="absolute inset-0 overflow-hidden rounded-2xl sm:rounded-3xl pointer-events-none"
+            aria-hidden="true"
+          >
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#e32f8c]/12 rounded-full blur-[90px]" />
+          </div>
+
+          <div className="relative z-30 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base sm:text-lg font-black uppercase tracking-tight text-white flex items-center gap-2 font-heading">
+                <BarChart3 size={18} className="text-[#ff66b2]" />
+                <span>{isRo ? 'Grafic Performanță' : 'Performance Analytics'}</span>
+              </h2>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                {isRo
+                  ? 'Evoluția zilnică a click-urilor pe link (?ref=), comenzilor și comisioanelor.'
+                  : 'Daily trend for referral link clicks (?ref=), attributed orders, and commissions.'}
+              </p>
+            </div>
+
+            {/* Filters Row: Period Pills + Country Dropdown */}
+            <div className="relative z-30 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 bg-black/50 border border-white/10 rounded-xl p-1 overflow-x-auto max-w-full">
+                {periodOptions.map((opt) => {
+                  const active = period === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        setPeriod(opt.id);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+                        active
+                          ? 'bg-[#e32f8c] text-white shadow-sm'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {isRo ? opt.labelRo : opt.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Country Dropdown Filter with Flags */}
+              {countryBreakdown.length > 0 && (
+                <div className="relative z-30">
+                  <button
+                    type="button"
+                    aria-expanded={isCountryDropdownOpen}
+                    aria-haspopup="listbox"
+                    onClick={() => setIsCountryDropdownOpen((prev) => !prev)}
+                    className="bg-black/50 hover:bg-white/[0.06] border border-white/10 rounded-xl px-3 py-1.5 text-[11px] font-bold text-zinc-200 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    {selectedCountryMeta ? (
+                      <>
+                        <CountryFlag
+                          code={selectedCountryMeta.code}
+                          name={isRo ? selectedCountryMeta.nameRo : selectedCountryMeta.nameEn}
+                        />
+                        <span>{isRo ? selectedCountryMeta.nameRo : selectedCountryMeta.nameEn}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Globe2 size={13} className="text-[#ff66b2]" />
+                        <span>{isRo ? 'Toate țările' : 'All countries'}</span>
+                      </>
+                    )}
+                    <ChevronDown
+                      size={13}
+                      className={`text-zinc-400 transition-transform ${
+                        isCountryDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {isCountryDropdownOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-[80]"
+                          onClick={() => setIsCountryDropdownOpen(false)}
+                          aria-hidden="true"
+                        />
+                        <motion.div
+                          initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                          transition={{ duration: 0.14 }}
+                          role="listbox"
+                          className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-60 max-w-[calc(100vw-2.5rem)] max-h-64 overflow-y-auto overscroll-contain bg-[#0e0e14] border border-white/15 rounded-2xl shadow-2xl p-1.5 z-[80] [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.2)_transparent]"
+                        >
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={selectedCountry === 'ALL'}
+                            onClick={() => {
+                              setSelectedCountry('ALL');
+                              setIsCountryDropdownOpen(false);
+                              setCurrentPage(1);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer ${
+                              selectedCountry === 'ALL'
+                                ? 'bg-[#e32f8c]/20 text-[#ff66b2]'
+                                : 'text-zinc-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <Globe2 size={13} />
+                              {isRo ? 'Toate țările' : 'All countries'}
+                            </span>
+                            {selectedCountry === 'ALL' && <Check size={13} />}
+                          </button>
+                          {countryBreakdown.map((c) => {
+                            const cName = isRo ? c.nameRo : c.nameEn;
+                            const active = selectedCountry === c.code;
+                            return (
+                              <button
+                                key={c.code}
+                                type="button"
+                                role="option"
+                                aria-selected={active}
+                                onClick={() => {
+                                  setSelectedCountry(c.code);
+                                  setIsCountryDropdownOpen(false);
+                                  setCurrentPage(1);
+                                }}
+                                className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between gap-2 cursor-pointer ${
+                                  active
+                                    ? 'bg-[#e32f8c]/20 text-[#ff66b2]'
+                                    : 'text-zinc-300 hover:bg-white/5'
+                                }`}
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <CountryFlag code={c.code} name={cName} />
+                                  <span className="truncate">{cName}</span>
+                                </span>
+                                <span className="text-[10px] text-zinc-400 shrink-0">
+                                  {c.totalOrders > 0
+                                    ? `${c.totalOrders} ${isRo ? 'cmd' : 'ord'}`
+                                    : `${c.ga4Clicks} cl`}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Chart Metric Tabs */}
+          <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex items-center gap-1 bg-white/[0.05] p-1 rounded-xl border border-white/10">
+              {(
+                [
+                  {
+                    key: 'clicks_orders' as ChartMetric,
+                    label: isRo ? 'Click-uri & Comenzi' : 'Clicks & Orders',
+                  },
+                  { key: 'commission' as ChartMetric, label: isRo ? 'Comision' : 'Commission' },
+                  { key: 'sales' as ChartMetric, label: isRo ? 'Vânzări' : 'Sales' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setChartMetric(tab.key)}
+                  className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    chartMetric === tab.key
+                      ? 'bg-white text-slate-900'
+                      : 'text-zinc-300 hover:text-white hover:bg-white/[0.06]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
               ))}
             </div>
-          </div>
-        )}
 
-        {/* ORDER HISTORY SECTION */}
-        <div id="affiliate-orders-section" className="space-y-6 pt-4">
-          
-          {/* SECTION CONTROLS: TITLE + MODERN PERIOD DROPDOWN + SEARCH INPUT */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-slate-900 flex items-center gap-2.5 font-heading">
-                <Layers size={22} className="text-[#008ba3]" />
-                <span>{isRo ? 'Istoric Vânzări & Comenzi' : 'Orders & Sales History'}</span>
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                {isRo 
-                  ? 'Vezi comenzile plasate cu codul tău, data și ora achiziției, produsele cumpărate și comisionul generat.'
-                  : 'View orders placed with your coupon, order date and time, items purchased, and commission earned.'}
-              </p>
+            <div className="flex items-center gap-3 text-[11px] font-semibold text-zinc-400">
+              {chartMetric === 'clicks_orders' && (
+                <>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#e32f8c]" />
+                    {isRo ? 'Click-uri (?ref=)' : 'Clicks (?ref=)'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" />
+                    {isRo ? 'Comenzi' : 'Orders'}
+                  </span>
+                </>
+              )}
+              {chartMetric === 'commission' && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                  {isRo ? `Comision (${displayCurrency})` : `Commission (${displayCurrency})`}
+                </span>
+              )}
+              {chartMetric === 'sales' && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#e32f8c]" />
+                  {isRo ? `Vânzări (${displayCurrency})` : `Sales (${displayCurrency})`}
+                </span>
+              )}
             </div>
+          </div>
 
-            {/* FILTERS & DROPDOWNS */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              
-              {/* SEARCH INPUT */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  placeholder={isRo ? 'Caută după produs, număr comandă...' : 'Search by product, order reference...'}
-                  className="w-full sm:w-64 bg-white border border-slate-200 rounded-2xl pl-9 pr-3 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#e32f8c] focus:ring-1 focus:ring-[#e32f8c] shadow-2xs transition-colors"
-                />
-                <Search size={14} className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-
-              {/* MODERN PERIOD SELECTOR DROPDOWN */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsPeriodDropdownOpen(!isPeriodDropdownOpen)}
-                  className="w-full sm:w-auto bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-between sm:justify-start gap-2.5 transition-all active:scale-[0.98] shadow-2xs cursor-pointer"
-                >
-                  <Calendar size={14} className="text-[#008ba3]" />
-                  <span>{currentPeriodLabel}</span>
-                  <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${isPeriodDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                <AnimatePresence>
-                  {isPeriodDropdownOpen && (
+          {/* Recharts ComposedChart */}
+          <div className="relative z-0 h-[220px] sm:h-[260px] w-full">
+            {mounted && chartSeries.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartSeries} margin={{ top: 8, right: 6, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="affPinkGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#e32f8c" stopOpacity={0.38} />
+                      <stop offset="95%" stopColor="#e32f8c" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="affEmeraldGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="rgba(255,255,255,0.08)"
+                  />
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    minTickGap={22}
+                    tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 600 }}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    axisLine={false}
+                    tickLine={false}
+                    width={44}
+                    allowDecimals={chartMetric !== 'clicks_orders'}
+                    tick={{ fontSize: 10, fill: '#a1a1aa' }}
+                  />
+                  {chartMetric === 'clicks_orders' && (
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      axisLine={false}
+                      tickLine={false}
+                      width={28}
+                      allowDecimals={false}
+                      tick={{ fontSize: 10, fill: '#34d399' }}
+                    />
+                  )}
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#111118',
+                      borderRadius: '14px',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      fontSize: '12px',
+                      color: '#fff',
+                    }}
+                    formatter={(value: unknown, name: unknown) => {
+                      const num = Number(value) || 0;
+                      const key = String(name);
+                      if (key === 'clicks') {
+                        return [num.toLocaleString(isRo ? 'ro-RO' : 'en-US'), isRo ? 'Click-uri' : 'Clicks'];
+                      }
+                      if (key === 'orders') {
+                        return [num.toLocaleString(isRo ? 'ro-RO' : 'en-US'), isRo ? 'Comenzi' : 'Orders'];
+                      }
+                      const formatted = formatMoneyInCurrency(num, displayCurrency, uiLocale, 2);
+                      return [
+                        formatted,
+                        key === 'commission'
+                          ? isRo
+                            ? 'Comision'
+                            : 'Commission'
+                          : isRo
+                            ? 'Vânzări'
+                            : 'Sales',
+                      ];
+                    }}
+                  />
+                  {chartMetric === 'clicks_orders' && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={() => setIsPeriodDropdownOpen(false)} />
-                      <motion.div
-                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute right-0 top-full mt-2 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 z-50 overflow-hidden"
-                      >
-                        {periodOptions.map(opt => {
-                          const isSelected = period === opt.id;
-                          return (
-                            <button
-                              key={opt.id}
-                              type="button"
-                              onClick={() => {
-                                setPeriod(opt.id);
-                                setIsPeriodDropdownOpen(false);
-                                setCurrentPage(1);
-                              }}
-                              className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors ${
-                                isSelected 
-                                  ? 'bg-[#e32f8c]/15 text-[#008ba3]' 
-                                  : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
-                              }`}
-                            >
-                              <span>{isRo ? opt.labelRo : opt.labelEn}</span>
-                              {isSelected && <Check size={14} className="text-[#008ba3]" />}
-                            </button>
-                          );
-                        })}
-                      </motion.div>
+                      <Area
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="clicks"
+                        stroke="#e32f8c"
+                        strokeWidth={2.4}
+                        fillOpacity={1}
+                        fill="url(#affPinkGrad)"
+                      />
+                      <Bar
+                        yAxisId="right"
+                        dataKey="orders"
+                        fill="#10b981"
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={18}
+                      />
                     </>
                   )}
-                </AnimatePresence>
+                  {chartMetric === 'commission' && (
+                    <Area
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="commission"
+                      stroke="#10b981"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#affEmeraldGrad)"
+                    />
+                  )}
+                  {chartMetric === 'sales' && (
+                    <Area
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="sales"
+                      stroke="#e32f8c"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#affPinkGrad)"
+                    />
+                  )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-zinc-500 text-xs">
+                {isRo
+                  ? 'Nicio activitate înregistrată în intervalul selectat.'
+                  : 'No activity recorded in the selected range.'}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 5. BONUS GOAL SYSTEM & INSTANT VOUCHER CREATION */}
+        {bonusTiers.length > 0 && (
+          <section className="rounded-2xl sm:rounded-3xl border border-white/10 bg-[#09090d]/95 p-4 sm:p-6 shadow-2xl space-y-4 relative overflow-hidden">
+            <div
+              className="absolute -top-24 -left-24 w-64 h-64 bg-[#e32f8c]/10 rounded-full blur-[90px] pointer-events-none"
+              aria-hidden="true"
+            />
+
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Gift size={17} className="text-[#ff66b2] shrink-0" />
+                  <h2 className="text-base sm:text-lg font-black uppercase tracking-tight text-white font-heading">
+                    {isRo ? 'Bonusuri de Performanță' : 'Performance Bonus Goals'}
+                  </h2>
+                </div>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  {isRo
+                    ? 'Vouchere de cumpărături pe trenzone.fit deblocate pe baza vânzărilor eligibile.'
+                    : 'Fixed store vouchers on trenzone.fit unlocked based on eligible referral sales.'}
+                  {hasMultipleCurrencies
+                    ? isRo
+                      ? ' Vânzările din toate monedele se adună automat.'
+                      : ' Multi-currency sales combine automatically toward each target.'
+                    : ''}
+                </p>
               </div>
 
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="inline-flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-1.5 text-[11px]">
+                  <span className="text-zinc-400">
+                    {isRo ? 'Vânzări eligibile:' : 'Eligible sales:'}
+                  </span>
+                  <strong className="text-white tabular-nums">
+                    {deliveredSalesForGoalsDisplay}
+                  </strong>
+                  {hasInTransitForGoals && (
+                    <span className="text-amber-300 font-semibold tabular-nums">
+                      (+{inTransitSalesForGoalsDisplay} {isRo ? 'în curs' : 'pending'})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {bonusTiers.map((tier) => {
+                const voucher = tier.claimedVoucher;
+                const isClaiming = claimingTierId === tier.id;
+                const isCopied = copiedId === `bonus-voucher-${tier.id}`;
+                const feedback = claimFeedback?.tierId === tier.id ? claimFeedback : null;
+
+                const isRonDisplay = displayCurrency === 'RON';
+                const targetDisplayAmount = isRonDisplay
+                  ? tier.salesTargetRon
+                  : displayCurrency === 'EUR'
+                    ? tier.salesTargetEur
+                    : Math.round(eurToDisplayAmount(tier.salesTargetEur));
+                const voucherDisplayAmount = isRonDisplay
+                  ? voucher?.valueRon || tier.voucherRon
+                  : displayCurrency === 'EUR'
+                    ? voucher
+                      ? voucher.issuedCurrency === 'EUR' && voucher.valueEur
+                        ? voucher.valueEur
+                        : roundCurrency(voucher.valueRon / eurRate)
+                      : tier.voucherEur
+                    : Math.round(
+                        eurToDisplayAmount(
+                          voucher
+                            ? voucher.issuedCurrency === 'EUR' && voucher.valueEur
+                              ? voucher.valueEur
+                              : voucher.valueRon / eurRate
+                            : tier.voucherEur
+                        )
+                      );
+                const eligibleForTierDisplay = isRonDisplay
+                  ? tier.eligibleSalesRon
+                  : eurToDisplayAmount(tier.eligibleSalesEur);
+                const remainingForTierDisplay = isRonDisplay
+                  ? tier.remainingRon
+                  : eurToDisplayAmount(tier.remainingEur);
+                const tierProgressPct = isRonDisplay ? tier.progressPct : tier.progressPctEur;
+                const isTierUnlocked = isRonDisplay ? tier.unlocked : tier.unlockedEur;
+
+                const isVoucherUsed = Boolean(voucher?.isUsed);
+                const isVoucherActive = Boolean(voucher?.isActive && !voucher?.isUsed);
+                const isReadyToClaim = isTierUnlocked && !voucher;
+
+                return (
+                  <div
+                    key={tier.id}
+                    className={`rounded-2xl p-4 border flex flex-col justify-between gap-3.5 transition-all ${
+                      isReadyToClaim
+                        ? 'border-[#e32f8c]/60 bg-gradient-to-br from-[#e32f8c]/20 via-[#160b12] to-[#09090d] shadow-[0_0_25px_rgba(227,47,140,0.16)]'
+                        : isVoucherActive
+                          ? 'border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 via-[#09090d] to-[#09090d]'
+                          : 'border-white/10 bg-white/[0.025]'
+                    }`}
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                          {isRo ? 'Prag' : 'Goal'}{' '}
+                          {formatMoneyInCurrency(targetDisplayAmount, displayCurrency, uiLocale, 0)}
+                        </span>
+                        <span
+                          className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                            isTierUnlocked || Boolean(voucher)
+                              ? 'bg-[#e32f8c]/20 text-[#ff66b2] border-[#e32f8c]/40'
+                              : 'bg-white/5 text-zinc-400 border-white/10'
+                          }`}
+                        >
+                          {tier.pctLabel}
+                        </span>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                          {isRo ? 'Voucher Bonus' : 'Bonus Voucher'}
+                        </p>
+                        <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
+                          <span className="text-2xl font-black tracking-tight text-white tabular-nums">
+                            {formatMoneyInCurrency(voucherDisplayAmount, displayCurrency, uiLocale, 0)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {voucher ? (
+                      <div className="space-y-2.5 pt-2 border-t border-white/10">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                              isVoucherUsed
+                                ? 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30'
+                                : isVoucherActive
+                                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+                                  : 'bg-red-500/15 text-red-300 border-red-500/35'
+                            }`}
+                          >
+                            {isVoucherUsed
+                              ? isRo
+                                ? 'Utilizat'
+                                : 'Used'
+                              : isVoucherActive
+                                ? isRo
+                                  ? 'Activ'
+                                  : 'Active'
+                                : isRo
+                                  ? 'Expirat'
+                                  : 'Expired'}
+                          </span>
+                          {voucher.expiresAt && (
+                            <span className="text-[10px] text-zinc-500">
+                              {isRo ? 'Exp:' : 'Exp:'}{' '}
+                              {new Date(voucher.expiresAt).toLocaleDateString(
+                                isRo ? 'ro-RO' : 'en-US',
+                                { day: '2-digit', month: 'short', year: 'numeric' }
+                              )}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 bg-black/55 border border-white/15 rounded-xl px-2.5 py-2">
+                          <span className="text-[11px] font-mono font-black text-white truncate flex-1 select-all">
+                            {voucher.code}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => triggerCopy(`bonus-voucher-${tier.id}`, voucher.code)}
+                            className={`shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                              isCopied
+                                ? 'bg-emerald-500 text-black'
+                                : 'bg-white/10 hover:bg-[#e32f8c] text-white'
+                            }`}
+                          >
+                            {isCopied ? <Check size={11} /> : <Copy size={11} />}
+                            <span>
+                              {isCopied
+                                ? isRo
+                                  ? 'Copiat'
+                                  : 'Copied'
+                                : isRo
+                                  ? 'Copiază'
+                                  : 'Copy'}
+                            </span>
+                          </button>
+                        </div>
+
+                        {isVoucherActive && (
+                          <Link
+                            href="/shop"
+                            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-[#e32f8c] text-white text-[11px] font-black uppercase tracking-wider transition-all"
+                          >
+                            <span>{isRo ? 'Folosește pe /shop' : 'Use on /shop'}</span>
+                            <ExternalLink size={12} />
+                          </Link>
+                        )}
+                      </div>
+                    ) : isTierUnlocked ? (
+                      <div className="space-y-2 pt-2 border-t border-white/10">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="font-black uppercase tracking-wider text-[#ff66b2]">
+                            {isRo ? 'Prag atins' : 'Unlocked'}
+                          </span>
+                          <span className="font-bold text-emerald-400">100%</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleClaimBonusVoucher(tier.id)}
+                          disabled={Boolean(claimingTierId)}
+                          className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#e32f8c] hover:bg-[#ff3b9e] text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-[#e32f8c]/25 transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+                        >
+                          {isClaiming ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin shrink-0" />
+                              <span>{isRo ? 'Se creează...' : 'Creating...'}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Gift size={14} className="shrink-0" />
+                              <span>{isRo ? 'Creează Voucher' : 'Create Voucher'}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 pt-2 border-t border-white/10">
+                        <div className="flex items-center justify-between gap-2 text-[10px]">
+                          <span className="inline-flex items-center gap-1 text-zinc-400 font-bold">
+                            <Lock size={11} className="shrink-0" />
+                            {tierProgressPct}%
+                          </span>
+                          <span className="text-zinc-300 font-semibold tabular-nums truncate">
+                            {formatMoneyInCurrency(
+                              eligibleForTierDisplay,
+                              displayCurrency,
+                              uiLocale,
+                              0
+                            )}{' '}
+                            /{' '}
+                            {formatMoneyInCurrency(targetDisplayAmount, displayCurrency, uiLocale, 0)}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-[#e32f8c] to-[#ff66b2] transition-all duration-300"
+                            style={{ width: `${Math.max(4, tierProgressPct)}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-zinc-400 leading-snug">
+                          {isRo ? 'Mai ai nevoie de' : 'Remaining:'}{' '}
+                          <strong className="text-zinc-200 tabular-nums">
+                            {formatMoneyInCurrency(
+                              remainingForTierDisplay,
+                              displayCurrency,
+                              uiLocale,
+                              0
+                            )}
+                          </strong>
+                          {hasInTransitForGoals && (
+                            <span className="block text-amber-300/90 mt-0.5 tabular-nums">
+                              +{inTransitSalesForGoalsDisplay}{' '}
+                              {isRo ? 'în curs' : 'pending'}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    )}
+
+                    {feedback && (
+                      <p
+                        className={`text-[10px] font-bold leading-snug rounded-lg px-2.5 py-1.5 border ${
+                          feedback.type === 'success'
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                            : 'bg-red-500/15 border-red-500/30 text-red-300'
+                        }`}
+                      >
+                        {feedback.message}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* 6. MULTI-CURRENCY BREAKDOWN, COUNTRY PERFORMANCE & SALES HISTORY */}
+        <section id="affiliate-orders-section" className="space-y-4">
+          {Array.isArray(data.currencyBreakdown) && data.currencyBreakdown.length > 0 && (
+            <div className="rounded-2xl sm:rounded-3xl border border-white/10 bg-[#09090d]/95 p-4 sm:p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Coins size={16} className="text-[#ff66b2]" />
+                <h2 className="text-xs font-black uppercase tracking-widest text-white">
+                  {isRo ? 'Vânzări pe Monede' : 'Sales by Currency'}
+                </h2>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {data.currencyBreakdown.map((entry) => (
+                  <div
+                    key={entry.currency}
+                    className="inline-flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.03] text-xs"
+                  >
+                    <span className="font-black text-white">
+                      {entry.currency} ({entry.orders})
+                    </span>
+                    {entry.currency !== displayCurrency && (
+                      <span className="text-[11px] font-mono text-zinc-400">
+                        {formatNativeAmount(entry.salesNative, entry.currency, uiLocale)}
+                      </span>
+                    )}
+                    <span className="text-[11px] font-bold text-zinc-200 tabular-nums">
+                      {entry.currency === displayCurrency
+                        ? formatMoneyInCurrency(entry.salesNative, displayCurrency, uiLocale, 2)
+                        : formatMoney(entry.salesRon)}
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-400 tabular-nums">
+                      +{formatMoney(entry.commissionRon)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {countryBreakdown.length > 0 && (
+            <div className="rounded-2xl sm:rounded-3xl border border-white/10 bg-[#09090d]/95 p-4 sm:p-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Globe2 size={16} className="text-[#ff66b2]" />
+                  <h2 className="text-xs font-black uppercase tracking-widest text-white">
+                    {isRo ? 'Performanță pe Țări' : 'Performance by Country'}
+                  </h2>
+                </div>
+                {selectedCountry !== 'ALL' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCountry('ALL');
+                      setCurrentPage(1);
+                    }}
+                    className="text-[11px] font-bold text-[#ff66b2] hover:text-white transition-colors cursor-pointer"
+                  >
+                    {isRo ? 'Resetează țara ✕' : 'Clear country ✕'}
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {countryBreakdown.map((c) => {
+                  const isActive = selectedCountry === c.code;
+                  const cName = isRo ? c.nameRo : c.nameEn;
+                  return (
+                    <button
+                      key={c.code}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCountry((prev) => (prev === c.code ? 'ALL' : c.code));
+                        setCurrentPage(1);
+                      }}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-left transition-all cursor-pointer active:scale-[0.98] ${
+                        isActive
+                          ? 'bg-[#e32f8c]/20 border-[#e32f8c]'
+                          : 'bg-white/[0.03] hover:bg-white/[0.07] border-white/10'
+                      }`}
+                    >
+                      <CountryFlag code={c.code} name={cName} />
+                      <span className="text-xs font-black text-white">{cName}</span>
+                      {c.totalOrders > 0 && (
+                        <span className="text-[10px] font-bold text-emerald-400">
+                          {c.totalOrders} · +{formatMoney(c.totalCommissionRon)}
+                        </span>
+                      )}
+                      {c.ga4Clicks > 0 && (
+                        <span className="text-[10px] font-semibold text-zinc-400">
+                          ({c.ga4Clicks}{' '}
+                          {isRo
+                            ? c.ga4Clicks === 1
+                              ? 'click'
+                              : 'click-uri'
+                            : c.ga4Clicks === 1
+                              ? 'click'
+                              : 'clicks'}
+                          )
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Sales History Header + Search */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white flex items-center gap-2 font-heading">
+                <Layers size={18} className="text-[#ff66b2]" />
+                <span>{isRo ? 'Istoric Vânzări' : 'Sales History'}</span>
+              </h2>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                {isRo
+                  ? 'Comenzile valide intră direct în sold; retururile/anulările se scad automat.'
+                  : 'Valid orders credit immediately; returns/cancellations are deducted automatically.'}
+              </p>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder={isRo ? 'Caută țară sau produs...' : 'Filter country or category...'}
+                className="w-full sm:w-56 bg-[#09090d] border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#e32f8c] transition-colors"
+              />
+              <Search
+                size={13}
+                className="text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+              />
             </div>
           </div>
 
-          {/* ORDERS LIST / TABLE */}
           {filteredOrders.length === 0 ? (
-            /* EMPTY STATE */
-            <div className="rounded-3xl border border-dashed border-slate-300 bg-white/80 backdrop-blur-sm p-12 text-center shadow-xs">
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 mx-auto flex items-center justify-center text-slate-400 mb-4">
-                <ShoppingBag size={28} />
+            <div className="rounded-2xl sm:rounded-3xl border border-dashed border-white/15 bg-[#09090d]/80 p-8 sm:p-10 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 mx-auto flex items-center justify-center text-zinc-400 mb-3">
+                <ShoppingBag size={22} />
               </div>
-              <h3 className="text-base font-black uppercase tracking-tight text-slate-900 mb-1 font-heading">
-                {isRo ? 'Nicio comandă în această perioadă' : 'No orders in this period'}
-              </h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto mb-6">
-                {isRo 
-                  ? 'Nu există încă înregistrări conform filtrelor alese. Încearcă să selectezi o altă perioadă sau distribuie codul tău.'
-                  : 'No orders match your selected period or search. Try changing the period filter or sharing your referral link.'}
+              <p className="text-sm font-black uppercase text-white mb-1">
+                {isRo ? 'Nicio vânzare în această selecție' : 'No sales match this selection'}
               </p>
-              {period !== 'all' && (
+              <p className="text-xs text-zinc-400 max-w-sm mx-auto mb-4">
+                {isRo
+                  ? 'Schimbă perioada, țara sau distribuie link-ul tău inteligent de mai sus.'
+                  : 'Adjust your filters or share your smart link above.'}
+              </p>
+              {(period !== 'all' || selectedCountry !== 'ALL' || searchQuery) && (
                 <button
                   type="button"
-                  onClick={() => setPeriod('all')}
-                  className="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer"
+                  onClick={() => {
+                    setPeriod('all');
+                    setSelectedCountry('ALL');
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  className="bg-white hover:bg-[#e32f8c] text-black hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
                 >
-                  {isRo ? 'Vezi toate perioadele' : 'View all time'}
+                  {isRo ? 'Arată tot istoricul' : 'Show all sales'}
                 </button>
               )}
             </div>
           ) : (
-            <div className="space-y-3">
-
-              {/* DESKTOP TABLE HEADER (VISIBLE ON MD+) */}
-              <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-200">
-                <div className="col-span-3">{isRo ? 'Dată & Oră Comandă' : 'Order Date & Time'}</div>
-                <div className="col-span-5">{isRo ? 'Ce a Cumpărat (Produse)' : 'Items Purchased'}</div>
-                <div className="col-span-2 text-right">{isRo ? 'Total Coș' : 'Order Total'}</div>
-                <div className="col-span-2 text-right">{isRo ? 'Comision Tău' : 'Your Commission'}</div>
+            <div className="space-y-2.5">
+              {/* Desktop Table Header */}
+              <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-zinc-500 border-b border-white/10">
+                <div className="col-span-3">{isRo ? 'Țară & Dată' : 'Country & Date'}</div>
+                <div className="col-span-4">{isRo ? 'Produse & Categorii' : 'Items & Categories'}</div>
+                <div className="col-span-2">{isRo ? 'Status' : 'Status'}</div>
+                <div className="col-span-1 text-right">{isRo ? 'Coș' : 'Order'}</div>
+                <div className="col-span-2 text-right">{isRo ? 'Comision' : 'Commission'}</div>
               </div>
 
-              {/* ORDERS ITERATION */}
-              {paginatedOrders.map(order => {
-                const isExpanded = expandedOrderId === order.id;
-                const formattedDate = new Date(order.createdAt).toLocaleDateString(isRo ? 'ro-RO' : 'en-US', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric'
-                });
-                const formattedTime = new Date(order.createdAt).toLocaleTimeString(isRo ? 'ro-RO' : 'en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                });
+              {paginatedOrders.map((order) => {
+                const formattedDate = new Date(order.date || order.createdAt).toLocaleDateString(
+                  isRo ? 'ro-RO' : 'en-US',
+                  { day: '2-digit', month: 'short', year: 'numeric' }
+                );
+                const formattedTime = new Date(order.date || order.createdAt).toLocaleTimeString(
+                  isRo ? 'ro-RO' : 'en-US',
+                  { hour: '2-digit', minute: '2-digit' }
+                );
+
                 const statusCheck = classifyOrderNonCountable(order.status);
                 const payoutCheck = classifyAffiliateOrderPayoutStatus(order.status);
                 const payoutStatus = order.payoutStatus || payoutCheck.payoutStatus;
-                const isEligible = payoutStatus === 'eligible';
-                const isPendingPickup = payoutStatus === 'pending_pickup';
-                const isCancelled = statusCheck.reason === 'cancelled';
-                const isReturned = statusCheck.reason === 'returned';
-                const isRefunded = statusCheck.reason === 'refunded';
-                const isFailed = statusCheck.reason === 'failed';
-                const isNonCountable = !statusCheck.isCountable || order.isCountable === false || payoutStatus === 'voided';
-                const voidBadgeLabel = isCancelled || isReturned
-                  ? (isRo ? 'Anulată / Returnată' : 'Cancelled / Returned')
-                  : isRefunded
-                    ? (isRo ? 'Rambursată' : 'Refunded')
-                    : isFailed
-                      ? (isRo ? 'Eșuată' : 'Failed')
-                      : order.nonCountableLabel || (isRo ? 'Anulată / Returnată' : 'Cancelled / Returned');
-                const statusBadgeLabel = isEligible
-                  ? (isRo ? (order.payoutStatusLabelRo || payoutCheck.labelRo) : (order.payoutStatusLabelEn || payoutCheck.labelEn))
-                  : isPendingPickup
-                    ? (isRo ? (order.payoutStatusLabelRo || payoutCheck.labelRo) : (order.payoutStatusLabelEn || payoutCheck.labelEn))
-                    : voidBadgeLabel;
+                const isNonCountable =
+                  !statusCheck.isCountable || order.isCountable === false || payoutStatus === 'voided';
+                const isEligible = !isNonCountable && (payoutStatus === 'eligible' || activePendingPickup === 0);
+
+                const statusLabel = isRo ? order.statusLabelRo : order.statusLabelEn;
+                const payoutSubLabel = isEligible
+                  ? isRo
+                    ? 'Eligibilă'
+                    : 'Eligible'
+                  : isNonCountable
+                    ? localizeNonCountableReason(
+                        order.nonCountableReason || statusCheck.reason,
+                        isRo
+                      )
+                    : isRo
+                      ? 'În curs'
+                      : 'Pending';
+
                 const statusBadgeClass = isEligible
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : isPendingPickup
-                    ? 'bg-amber-50 text-amber-800 border-amber-200'
-                    : isReturned
-                      ? 'bg-orange-50 text-orange-700 border-orange-200'
-                      : isRefunded
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : 'bg-red-50 text-red-700 border-red-200';
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+                  : isNonCountable
+                    ? 'bg-red-500/15 text-red-300 border-red-500/35'
+                    : order.normalizedStatus === 'in_transit'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/35'
+                      : 'bg-sky-500/15 text-sky-300 border-sky-500/35';
+
+                const countryName = isRo ? order.countryNameRo : order.countryNameEn;
                 const hasForeignCurrency =
                   order.originalCurrency &&
                   order.originalCurrency !== displayCurrency &&
@@ -948,362 +2680,454 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                     key={order.id}
                     className={`rounded-2xl border transition-all overflow-hidden ${
                       isNonCountable
-                        ? 'border-slate-200 bg-slate-50/60 opacity-90'
-                        : 'border-slate-200/90 hover:border-slate-300 bg-white shadow-2xs hover:shadow-xs'
+                        ? 'border-white/5 bg-white/[0.02] opacity-75'
+                        : 'border-white/10 hover:border-[#e32f8c]/40 bg-[#09090d]/95'
                     }`}
                   >
-                    {/* DESKTOP ROW (MD+) */}
-                    <div 
-                      onClick={() => toggleExpandOrder(order.id)}
-                      className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 items-center cursor-pointer select-none"
-                    >
-                      {/* CÂND: DATĂ, ORĂ, NUMĂR COMANDĂ */}
-                      <div className="col-span-3 flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center font-bold text-blue-600 shrink-0 mt-0.5 shadow-2xs">
-                          <Calendar size={18} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-black text-slate-900 leading-snug">{formattedDate}</p>
-                          <p className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5 mt-0.5">
-                            <Clock size={11} className="text-slate-400" />
-                            <span>{isRo ? `ora ${formattedTime}` : `at ${formattedTime}`}</span>
+                    {/* Desktop Row */}
+                    <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3.5 items-center">
+                      <div className="col-span-3 flex items-center gap-2.5 min-w-0">
+                        <CountryFlag code={order.countryCode} name={countryName} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-white truncate">{countryName}</p>
+                          <p className="text-[11px] text-zinc-400 mt-0.5">
+                            {formattedDate} · {formattedTime}
                           </p>
-                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                            <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                              #{order.orderNumber}
-                            </span>
-                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${statusBadgeClass}`}>
-                              {statusBadgeLabel}
-                            </span>
-                            {order.customerName && (
-                              <span className="text-[10px] font-bold text-slate-700 bg-blue-50 text-blue-700 border border-blue-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                <Users size={11} className="text-blue-500" />
-                                <span>{order.customerName}</span>
-                                {order.customerCity && <span className="text-blue-400 font-normal">({order.customerCity})</span>}
-                              </span>
-                            )}
-                          </div>
                         </div>
                       </div>
 
-                      {/* CE A CUMPĂRAT: PRODUSE, CULORI, CANTITĂȚI */}
-                      <div className="col-span-5 flex flex-col justify-center">
-                        {order.items.length > 0 ? (
-                          <div className="space-y-2">
-                            {order.items.slice(0, 2).map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-2.5">
-                                {item.image ? (
-                                  <div className="w-10 h-10 relative rounded-xl bg-slate-50 border border-slate-200 shrink-0 overflow-hidden">
-                                    <Image src={getOptimizedImageUrl(item.image) || '/placeholder.png'} alt={item.name} fill sizes="40px" className="object-cover" />
-                                  </div>
-                                ) : (
-                                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                                    <ShoppingBag size={16} />
-                                  </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-bold text-slate-900 truncate leading-tight">{item.name}</p>
-                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                    {item.variant && (
-                                      <span className="text-[9px] font-bold text-[#008ba3] bg-[#e32f8c]/10 px-2 py-0.5 rounded-full border border-[#e32f8c]/25 truncate">
-                                        {item.variant}
-                                      </span>
-                                    )}
-                                    <span className="text-[10px] font-extrabold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                                      x{item.quantity} {isRo ? 'buc' : 'pcs'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                            {order.items.length > 2 && (
-                              <div className="flex items-center gap-1 text-[11px] font-bold text-[#008ba3] hover:underline pt-0.5">
-                                <span>+{order.items.length - 2} {isRo ? 'alte produse' : 'more items'}</span>
-                                <ChevronDown size={13} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">{isRo ? 'Pachet TrenZone' : 'TrenZone Bundle'}</span>
-                        )}
+                      <div className="col-span-4 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-black text-zinc-200 bg-white/10 px-2 py-0.5 rounded-md shrink-0">
+                          {order.itemsCount}{' '}
+                          {order.itemsCount === 1
+                            ? isRo
+                              ? 'produs'
+                              : 'item'
+                            : isRo
+                              ? 'produse'
+                              : 'items'}
+                        </span>
+                        {order.categories.map((cat) => (
+                          <span
+                            key={cat.key}
+                            className="text-[10px] font-semibold text-zinc-300 bg-white/[0.04] border border-white/10 px-2 py-0.5 rounded-md"
+                          >
+                            {cat.count > 1 ? `${cat.count}x ` : ''}
+                            {isRo ? cat.labelRo : cat.labelEn}
+                          </span>
+                        ))}
                       </div>
 
-                      {/* TOTAL COMANDĂ */}
-                      <div className="col-span-2 text-right">
-                        <p className={`text-sm font-black ${isNonCountable ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                          {formatMoney(order.totalAmount)}
+                      <div className="col-span-2">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${statusBadgeClass}`}
+                        >
+                          {statusLabel}
+                        </span>
+                        <p className="text-[10px] font-semibold text-zinc-500 mt-0.5 pl-0.5">
+                          {payoutSubLabel}
+                        </p>
+                      </div>
+
+                      <div className="col-span-1 text-right">
+                        <p
+                          className={`text-xs font-black ${
+                            isNonCountable ? 'text-zinc-500 line-through' : 'text-zinc-200'
+                          }`}
+                        >
+                          {formatMoney(order.orderTotal)}
                         </p>
                         {hasForeignCurrency && (
-                          <p className="text-[10px] font-bold text-slate-500 mt-0.5">
-                            ({isRo ? 'plătit ' : 'paid '}
-                            {formatOriginalAmount(order.originalTotalAmount, order.originalCurrency)})
+                          <p className="text-[10px] text-zinc-500 mt-0.5">
+                            {formatNativeAmount(
+                              order.originalTotalAmount,
+                              order.originalCurrency,
+                              uiLocale
+                            )}
                           </p>
                         )}
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          {isRo ? 'bază netă' : 'net base'}: {formatMoney(order.subtotal)}
-                        </p>
                       </div>
 
-                      {/* COMISION TĂU */}
                       <div className="col-span-2 text-right">
                         {isNonCountable ? (
-                          <>
-                            <p className="text-sm font-black text-slate-400">
-                              {formatMoney(0)}
-                            </p>
-                            <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-red-700 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
-                              {statusBadgeLabel}
-                            </span>
-                          </>
-                        ) : isEligible ? (
-                          <>
-                            <p className="text-sm font-black text-emerald-600">
-                              +{formatMoney(order.commissionAmount)}
-                            </p>
-                            <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                              {isRo ? 'Eligibil de încasat' : 'Ready to cash out'}
-                            </span>
-                          </>
+                          <span className="text-sm font-black text-zinc-500">{formatMoney(0)}</span>
                         ) : (
-                          <>
-                            <p className="text-sm font-black text-amber-700">
-                              +{formatMoney(order.commissionAmount)}
-                            </p>
-                            <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                              {isRo ? 'În așteptare (neridicat)' : 'Pending pickup'}
-                            </span>
-                          </>
+                          <span
+                            className={`text-sm font-black ${
+                              isEligible ? 'text-emerald-400' : 'text-amber-300'
+                            }`}
+                          >
+                            +{formatMoney(order.commissionAmount)}
+                          </span>
                         )}
                       </div>
                     </div>
 
-                    {/* MOBILE CARD (BELOW MD) */}
-                    <div 
-                      onClick={() => toggleExpandOrder(order.id)}
-                      className="md:hidden p-4 cursor-pointer select-none space-y-3"
-                    >
-                      {/* CÂND & STATUS + COMISION HEADER */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <Calendar size={13} className="text-blue-600 shrink-0" />
-                            <p className="text-xs font-black text-slate-900">{formattedDate}</p>
-                            <span className="text-[10px] text-slate-400">• {isRo ? `ora ${formattedTime}` : `at ${formattedTime}`}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                            <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                              #{order.orderNumber}
-                            </span>
-                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusBadgeClass}`}>
-                              {statusBadgeLabel}
-                            </span>
-                            {order.customerName && (
-                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                <Users size={11} className="text-blue-500" />
-                                <span>{order.customerName}</span>
-                                {order.customerCity && <span className="text-blue-400 font-normal">({order.customerCity})</span>}
-                              </span>
-                            )}
+                    {/* Mobile Card */}
+                    <div className="md:hidden p-3.5 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CountryFlag code={order.countryCode} name={countryName} />
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-white truncate">{countryName}</p>
+                            <p className="text-[10px] text-zinc-400">
+                              {formattedDate} · {formattedTime}
+                            </p>
                           </div>
                         </div>
 
                         <div className="text-right shrink-0">
                           {isNonCountable ? (
-                            <>
-                              <p className="text-xs font-black text-slate-400">
-                                {formatMoney(0)}
-                              </p>
-                              <p className="text-[10px] font-bold text-slate-400 mt-0.5 line-through">
-                                {isRo ? 'coș: ' : 'order: '}{formatMoney(order.totalAmount)}
-                              </p>
-                              <span className="inline-block mt-0.5 text-[8px] font-black uppercase tracking-wider text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
-                                {statusBadgeLabel}
-                              </span>
-                            </>
+                            <p className="text-xs font-black text-zinc-500">{formatMoney(0)}</p>
                           ) : (
-                            <>
-                              <p className={`text-xs font-black ${isEligible ? 'text-emerald-600' : 'text-amber-700'}`}>
-                                +{formatMoney(order.commissionAmount)}
-                              </p>
-                              <p className="text-[9px] font-bold mt-0.5 text-slate-500">
-                                {isEligible
-                                  ? (isRo ? 'Eligibil de încasat' : 'Eligible')
-                                  : (isRo ? 'În așteptare' : 'Awaiting pickup')}
-                              </p>
-                              <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                                {isRo ? 'coș: ' : 'order: '}{formatMoney(order.totalAmount)}
-                              </p>
-                              {hasForeignCurrency && (
-                                <p className="text-[9px] font-bold text-slate-400">
-                                  ({formatOriginalAmount(order.originalTotalAmount, order.originalCurrency)})
-                                </p>
-                              )}
-                            </>
+                            <p
+                              className={`text-xs font-black ${
+                                isEligible ? 'text-emerald-400' : 'text-amber-300'
+                              }`}
+                            >
+                              +{formatMoney(order.commissionAmount)}
+                            </p>
                           )}
+                          <p
+                            className={`text-[10px] mt-0.5 ${
+                              isNonCountable ? 'text-zinc-500 line-through' : 'text-zinc-400'
+                            }`}
+                          >
+                            {isRo ? 'Coș: ' : 'Total: '}
+                            {formatMoney(order.orderTotal)}
+                          </p>
                         </div>
                       </div>
 
-                      {/* PRODUSE CUMPĂRATE (DIRECT PE MOBIL) */}
-                      <div className="pt-2.5 border-t border-slate-100 space-y-2">
-                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          <span>{isRo ? 'Produse achiziționate:' : 'Items purchased:'}</span>
-                          <span>{order.items.length} {order.items.length === 1 ? (isRo ? 'articol' : 'item') : (isRo ? 'articole' : 'items')}</span>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="text-[10px] font-black text-zinc-200 bg-white/10 px-2 py-0.5 rounded-md">
+                            {order.itemsCount}x
+                          </span>
+                          {order.categories.map((cat) => (
+                            <span
+                              key={cat.key}
+                              className="text-[10px] font-semibold text-zinc-300 bg-white/[0.04] border border-white/10 px-2 py-0.5 rounded-md"
+                            >
+                              {cat.count > 1 ? `${cat.count}x ` : ''}
+                              {isRo ? cat.labelRo : cat.labelEn}
+                            </span>
+                          ))}
                         </div>
-                        {order.items.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-2.5 bg-slate-50/90 border border-slate-100 rounded-xl p-2.5 shadow-2xs">
-                              {item.image ? (
-                              <div className="w-11 h-11 relative rounded-lg bg-white border border-slate-200 shrink-0 overflow-hidden">
-                                <Image src={getOptimizedImageUrl(item.image) || '/placeholder.png'} alt={item.name} fill sizes="44px" className="object-cover" />
-                              </div>
-                            ) : (
-                              <div className="w-11 h-11 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                                <ShoppingBag size={16} />
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold text-slate-900 truncate leading-tight">{item.name}</p>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                {item.variant && (
-                                  <span className="text-[9px] font-bold text-[#008ba3] bg-white px-1.5 py-0.5 rounded border border-[#e32f8c]/20 truncate">
-                                    {item.variant}
-                                  </span>
-                                )}
-                                <span className="text-[10px] font-bold text-slate-600">
-                                  x{item.quantity} {isRo ? 'buc' : 'pcs'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="text-xs font-black text-slate-800">
-                                {formatMoney(item.quantity * item.price)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${statusBadgeClass}`}
+                        >
+                          {statusLabel}
+                        </span>
                       </div>
                     </div>
-
-                    {/* EXPANDABLE DETAILS ON DESKTOP (IF > 2 ITEMS OR EXPANDED) */}
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="border-t border-slate-200 bg-slate-50/70 px-4 sm:px-6 py-4"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#008ba3]">
-                              {isRo ? 'Toate produsele achiziționate în comanda aceasta:' : 'All products purchased in this order:'}
-                            </p>
-                            <span className="text-xs font-bold text-slate-500">
-                              {order.items.length} {order.items.length === 1 ? (isRo ? 'produs' : 'item') : (isRo ? 'produse' : 'items')}
-                            </span>
-                          </div>
-
-                          {order.items && order.items.length > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {order.items.map((item, idx) => (
-                                <div 
-                                  key={idx}
-                                  className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-3 shadow-2xs"
-                                >
-                                  {item.image ? (
-                                    <div className="w-12 h-12 relative rounded-lg bg-slate-50 border border-slate-200 shrink-0 overflow-hidden">
-                                      <Image src={getOptimizedImageUrl(item.image) || '/placeholder.png'} alt={item.name} fill sizes="48px" className="object-cover" />
-                                    </div>
-                                  ) : (
-                                    <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                                      <ShoppingBag size={18} />
-                                    </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-bold text-slate-900 truncate">{item.name}</p>
-                                    {item.variant && (
-                                      <p className="text-[10px] text-[#008ba3] font-semibold mt-0.5">{item.variant}</p>
-                                    )}
-                                    <p className="text-[10px] text-slate-500 mt-0.5">
-                                      {item.quantity} x {formatMoney(item.price)}
-                                    </p>
-                                  </div>
-                                  <div className="text-right">
-                                    <span className="text-xs font-black text-slate-900">
-                                      {formatMoney(item.quantity * item.price)}
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-slate-500 italic">
-                              {isRo ? 'Detalii produse indisponibile.' : 'No detailed item breakdown available.'}
-                            </p>
-                          )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
                   </div>
                 );
               })}
-
             </div>
           )}
 
-          {/* PAGINATION CONTROLS */}
+          {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
-              <p className="text-xs text-slate-500">
-                {isRo ? 'Afișare' : 'Showing'}{' '}
-                <span className="font-bold text-slate-900">{(currentPage - 1) * itemsPerPage + 1}</span> -{' '}
-                <span className="font-bold text-slate-900">{Math.min(currentPage * itemsPerPage, filteredOrders.length)}</span>{' '}
-                {isRo ? 'din' : 'of'}{' '}
-                <span className="font-bold text-slate-900">{filteredOrders.length}</span> {isRo ? 'comenzi' : 'orders'}
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/10">
+              <p className="text-[11px] text-zinc-400">
+                {(currentPage - 1) * itemsPerPage + 1}–
+                {Math.min(currentPage * itemsPerPage, filteredOrders.length)}{' '}
+                {isRo ? 'din' : 'of'} {filteredOrders.length}
               </p>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-700 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+                  className="w-8 h-8 rounded-lg border border-white/10 bg-[#09090d] hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-zinc-200 cursor-pointer"
                 >
-                  <ChevronLeft size={16} />
+                  <ChevronLeft size={14} />
                 </button>
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => {
-                  const isActive = pageNum === currentPage;
-                  return (
-                    <button
-                      key={pageNum}
-                      type="button"
-                      onClick={() => handlePageChange(pageNum)}
-                      className={`w-9 h-9 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer ${
-                        isActive
-                          ? 'bg-[#e32f8c] text-black shadow-md shadow-[#e32f8c]/25 font-black scale-105'
-                          : 'border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => handlePageChange(pageNum)}
+                    className={`w-8 h-8 rounded-lg text-xs font-bold cursor-pointer ${
+                      pageNum === currentPage
+                        ? 'bg-[#e32f8c] text-white font-black'
+                        : 'border border-white/10 bg-[#09090d] hover:bg-white/10 text-zinc-300'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
                 <button
                   type="button"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-700 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+                  className="w-8 h-8 rounded-lg border border-white/10 bg-[#09090d] hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-zinc-200 cursor-pointer"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronRight size={14} />
                 </button>
               </div>
             </div>
           )}
+        </section>
 
-        </div>
+        {/* 7. GHID PENTRU CREATORI & PACHETE DE HASHTAG-URI */}
+        <section className="rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-b from-[#0c0c12] to-[#08080c] p-4 sm:p-6 shadow-2xl space-y-5">
+          <div className="border-b border-white/10 pb-3.5">
+            <span className="block text-[10px] font-black uppercase tracking-widest text-[#ff66b2]">
+              {isRo ? 'Ghid pentru Creatori' : 'Creator Guide'}
+            </span>
+            <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white font-heading mt-0.5">
+              {isRo ? 'Integrare naturală & ghid de filmare' : 'Natural Integration & Filming Guide'}
+            </h2>
+          </div>
 
+          {/* Part A: Content Mix — Organic vs. Direct Promo */}
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">
+              {isRo ? 'Cum combini natural clipurile' : 'Blending Organic Clips & Promo'}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              {clipGuideCards.map((card) => (
+                <div
+                  key={card.id}
+                  className="rounded-xl bg-black/45 border border-white/10 p-3.5 space-y-1.5"
+                >
+                  <p className="text-xs font-black text-white">{card.title}</p>
+                  <p className="text-[11px] text-zinc-400 leading-snug">{card.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Part B: By Product */}
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">
+              {isRo ? 'Pe fiecare produs' : 'By Product'}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {productMiniCards.map((prod) => (
+                <div
+                  key={prod.id}
+                  className="rounded-xl bg-white/[0.03] border border-white/10 p-3.5 space-y-1.5"
+                >
+                  <p className="text-xs font-black text-white">{prod.title}</p>
+                  <p className="text-[11px] text-zinc-300 leading-snug">
+                    <strong className="text-[#ff66b2]">{isRo ? 'Cum porți:' : 'Fit:'}</strong>{' '}
+                    {prod.wear}
+                  </p>
+                  <p className="text-[11px] text-zinc-400 leading-snug">
+                    <strong className="text-zinc-200">{isRo ? 'Unghiuri:' : 'Angles:'}</strong>{' '}
+                    {prod.film}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Part C: Product Hashtag Packs (5 per clip) */}
+          <div className="space-y-2.5">
+            <div className="space-y-1">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">
+                {isRo
+                  ? 'Idei de hashtag-uri pe produs (5 per clip)'
+                  : 'Product Hashtag Ideas (5 per clip)'}
+              </h3>
+              <p className="text-[11px] text-zinc-400">
+                {isRo
+                  ? 'Alege pachetul pentru produsul purtat în clip — funcționează și pe clipuri naturale de sală, fără text comercial.'
+                  : 'Pick the set matching the gear in your clip — works cleanly for organic workout reels without salesy captions.'}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {productHashtagPacks.map((pack) => {
+                const isCopied = copiedId === pack.id;
+                return (
+                  <div
+                    key={pack.id}
+                    className="rounded-xl bg-black/40 border border-white/10 p-3.5 flex flex-col justify-between gap-2.5"
+                  >
+                    <div className="space-y-2">
+                      <span className="block text-[10px] font-black uppercase tracking-wider text-[#ff66b2]">
+                        {pack.tag}
+                      </span>
+                      <p className="text-xs text-zinc-300 leading-snug">{pack.angle}</p>
+                      <div className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2 font-mono text-[11px] text-zinc-100 break-words">
+                        {pack.hashtags}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => triggerCopy(pack.id, pack.hashtags)}
+                      className={`self-start inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        isCopied
+                          ? 'bg-emerald-500 text-black'
+                          : 'bg-white/10 hover:bg-[#e32f8c] text-white'
+                      }`}
+                    >
+                      {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                      <span>
+                        {isCopied ? (isRo ? 'Copiat!' : 'Copied!') : isRo ? 'Copiază' : 'Copy'}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Precomandă vs Stoc */}
+          <div className="rounded-xl bg-[#e32f8c]/10 border border-[#e32f8c]/30 px-3.5 py-3 flex items-start gap-2.5">
+            <Info size={15} className="text-[#ff66b2] shrink-0 mt-0.5" />
+            <p className="text-[11px] sm:text-xs text-zinc-200 leading-snug">
+              <strong className="text-white">
+                {isRo ? 'Precomandă vs. Stoc:' : 'Pre-Order vs. Stock:'}
+              </strong>{' '}
+              {isRo
+                ? `Dacă o culoare apare pe precomandă între loturi, codul ${data.code} (-${discountDisplay}) funcționează normal, iar comisionul se contorizează imediat în cont.`
+                : `If a colorway is on pre-order between drops, code ${data.code} (-${discountDisplay}) still works normally and credits immediately to your balance.`}
+            </p>
+          </div>
+        </section>
+
+        {/* 8. DATE PLATĂ (IBAN) & ISTORIC PLĂȚI */}
+        <section id="affiliate-payout-section" className="space-y-3.5">
+          {paymentDetails?.iban ? (
+            <div className="bg-[#09090d]/95 border border-emerald-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                  <CreditCard size={18} />
+                </div>
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-emerald-300">
+                      {isRo ? 'IBAN Activ pentru Plată' : 'Active Payout IBAN'}
+                    </span>
+                    {paymentDetails.bankName && (
+                      <span className="text-[10px] font-bold text-zinc-200 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">
+                        {paymentDetails.bankName}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm sm:text-base font-mono font-black text-white tracking-wider break-all">
+                    {formatIban(paymentDetails.iban)}
+                  </p>
+                  {paymentDetails.accountHolder && (
+                    <p className="text-[11px] text-zinc-400">
+                      {isRo ? 'Titular: ' : 'Holder: '}
+                      <strong className="text-zinc-200">{paymentDetails.accountHolder}</strong>
+                    </p>
+                  )}
+                  <p className="text-[11px] text-zinc-400 pt-0.5">
+                    {isRo
+                      ? `Comenzile valide intră direct în sold; retururile/anulările se scad automat (prag minim ${minWithdrawalLabel}).`
+                      : `Valid orders credit immediately; returns/cancellations are deducted automatically (min ${minWithdrawalLabel}).`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={handleOpenEditIban}
+                  className="flex-1 md:flex-initial bg-white/5 hover:bg-white/10 text-white text-xs font-bold px-3.5 py-2 rounded-xl border border-white/10 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Pencil size={13} />
+                  <span>{isRo ? 'Editează' : 'Edit'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex-1 md:flex-initial bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-bold px-3.5 py-2 rounded-xl border border-red-500/30 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 size={13} />
+                  <span>{isRo ? 'Șterge' : 'Delete'}</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300 shrink-0">
+                  <Clock size={18} />
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-bold text-white">
+                    {isRo
+                      ? 'Adaugă contul IBAN pentru viramentul comisioanelor.'
+                      : 'Add your payout IBAN to receive eligible commissions.'}
+                  </p>
+                  <p className="text-[11px] text-amber-200/80">
+                    {isRo
+                      ? `Comenzile valide intră direct în sold; retururile/anulările se scad automat (prag minim ${minWithdrawalLabel}).`
+                      : `Valid orders credit immediately; returns/cancellations are deducted automatically (min ${minWithdrawalLabel}).`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenEditIban}
+                className="w-full sm:w-auto shrink-0 bg-[#e32f8c] hover:bg-[#ff3b9e] text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all cursor-pointer"
+              >
+                {isRo ? '+ Adaugă IBAN' : '+ Add IBAN'}
+              </button>
+            </div>
+          )}
+
+          {/* Payout History */}
+          {Array.isArray(data.payoutHistory) && data.payoutHistory.length > 0 && (
+            <div className="rounded-2xl sm:rounded-3xl p-4 sm:p-5 bg-[#09090d]/95 border border-white/10 shadow-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                  <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
+                    {isRo ? 'Istoric Plăți Primite' : 'Payouts Received'}
+                  </h3>
+                </div>
+                <span className="text-[11px] font-black text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+                  {data.payoutProgressPercent ?? 0}% {isRo ? 'achitat' : 'settled'} ·{' '}
+                  {formatMoney(data.paidPayout)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {data.payoutHistory.map((payout) => (
+                  <div
+                    key={payout.id}
+                    className="p-3 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col justify-between gap-1"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-black text-emerald-400">
+                        +{formatMoney(payout.amount)}
+                      </span>
+                      {payout.paidAt && (
+                        <span className="text-[11px] text-zinc-400">
+                          {new Date(payout.paidAt).toLocaleDateString(isRo ? 'ro-RO' : 'en-US', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </span>
+                      )}
+                    </div>
+                    {payout.note && (
+                      <p className="text-[11px] text-zinc-300 truncate">
+                        {localizePayoutNote(payout.note, isRo)}
+                      </p>
+                    )}
+                    {payout.ibanSnapshot && (
+                      <p className="text-[10px] font-mono text-zinc-500 truncate">
+                        IBAN: {payout.ibanSnapshot}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
       </main>
 
       {/* IBAN / PAYOUT DETAILS MODAL */}
@@ -1315,98 +3139,104 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsIbanModalOpen(false)}
-              className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
             />
 
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl z-10 text-slate-900"
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              className="relative w-full max-w-md bg-[#0b0b10] border border-white/15 rounded-3xl p-6 shadow-2xl z-10 text-white"
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-5">
                 <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 font-heading">
+                  <h3 className="text-lg font-black uppercase tracking-tight text-white font-heading">
                     {isRo ? 'Date Plată Comisioane' : 'Payout Details'}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {isRo ? 'Introdu contul unde dorești să primești viramentul comisioanelor.' : 'Enter the account where you want to receive earnings.'}
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {isRo
+                      ? 'Contul bancar unde primești comisioanele eligibile.'
+                      : 'Bank account where your eligible payouts are sent.'}
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setIsIbanModalOpen(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 flex items-center justify-center cursor-pointer"
+                  aria-label={isRo ? 'Închide' : 'Close'}
                 >
-                  ✕
+                  <X size={16} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveIban} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              <form onSubmit={handleSaveIban} className="space-y-3.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
                     {isRo ? 'Cont IBAN' : 'IBAN Account'}
                   </label>
                   <input
                     type="text"
                     required
                     value={ibanInput}
-                    onChange={e => setIbanInput(e.target.value.toUpperCase())}
-                    placeholder={isRo ? 'RO49AAAA1B31007593840000' : 'GB29NWBK60161331926819 / IBAN'}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#e32f8c] focus:bg-white focus:ring-1 focus:ring-[#e32f8c] transition-colors"
+                    onChange={(e) => setIbanInput(e.target.value.toUpperCase())}
+                    placeholder={isRo ? 'RO49AAAA1B31007593840000' : 'GB29NWBK60161331926819'}
+                    className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm font-mono font-bold text-white placeholder-zinc-500 focus:outline-none focus:border-[#e32f8c]"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
                     {isRo ? 'Nume Bancă' : 'Bank Name'}
                   </label>
                   <input
                     type="text"
                     value={bankNameInput}
-                    onChange={e => setBankNameInput(e.target.value)}
-                    placeholder={isRo ? 'ex: Banca Transilvania, ING, Revolut' : 'e.g. Revolut, Wise, Monzo, Barclays'}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#e32f8c] focus:bg-white focus:ring-1 focus:ring-[#e32f8c] transition-colors"
+                    onChange={(e) => setBankNameInput(e.target.value)}
+                    placeholder={isRo ? 'ex: Banca Transilvania, ING, Revolut' : 'e.g. Revolut, Wise'}
+                    className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white placeholder-zinc-500 focus:outline-none focus:border-[#e32f8c]"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
                     {isRo ? 'Titular Cont' : 'Account Holder'}
                   </label>
                   <input
                     type="text"
                     value={holderInput}
-                    onChange={e => setHolderInput(e.target.value)}
-                    placeholder="Nume Prenume"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#e32f8c] focus:bg-white focus:ring-1 focus:ring-[#e32f8c] transition-colors"
+                    onChange={(e) => setHolderInput(e.target.value)}
+                    placeholder={isRo ? 'Nume Prenume' : 'First & Last Name'}
+                    className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white placeholder-zinc-500 focus:outline-none focus:border-[#e32f8c]"
                   />
                 </div>
 
                 {ibanError && (
-                  <div className="bg-red-50 border border-red-200 text-red-600 text-xs font-bold p-3.5 rounded-xl">
+                  <div className="bg-red-500/15 border border-red-500/35 text-red-300 text-xs font-bold p-3 rounded-xl">
                     {ibanError}
                   </div>
                 )}
 
                 {ibanSuccess && (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold p-3.5 rounded-xl flex items-center gap-2">
-                    <CheckCircle2 size={16} />
-                    <span>{isRo ? 'Datele bancare au fost salvate cu succes!' : 'Payout details saved successfully!'}</span>
+                  <div className="bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
+                    <CheckCircle2 size={15} />
+                    <span>
+                      {isRo ? 'Datele bancare au fost salvate!' : 'Payout details saved!'}
+                    </span>
                   </div>
                 )}
 
-                <div className="pt-2 flex gap-3">
+                <div className="pt-2 flex gap-2.5">
                   <button
                     type="button"
                     onClick={() => setIsIbanModalOpen(false)}
-                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer"
+                    className="flex-1 bg-white/10 hover:bg-white/15 text-zinc-200 py-2.5 rounded-xl text-xs font-bold cursor-pointer"
                   >
                     {isRo ? 'Anulează' : 'Cancel'}
                   </button>
                   <button
                     type="submit"
                     disabled={ibanSaving}
-                    className="flex-1 bg-[#e32f8c] hover:bg-[#c41a72] text-black py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#e32f8c]/20 cursor-pointer flex items-center justify-center gap-2"
+                    className="flex-1 bg-[#e32f8c] hover:bg-[#ff3b9e] text-white py-2.5 rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
                   >
                     {ibanSaving ? (
                       <>
@@ -1414,23 +3244,23 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                         <span>{isRo ? 'Se salvează...' : 'Saving...'}</span>
                       </>
                     ) : (
-                      <span>{isRo ? 'Salvează' : 'Save Details'}</span>
+                      <span>{isRo ? 'Salvează' : 'Save'}</span>
                     )}
                   </button>
                 </div>
 
                 {paymentDetails.iban && (
-                  <div className="pt-3 border-t border-slate-100 flex justify-center">
+                  <div className="pt-2 border-t border-white/10 flex justify-center">
                     <button
                       type="button"
                       onClick={() => {
                         setIsIbanModalOpen(false);
                         setShowDeleteConfirm(true);
                       }}
-                      className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1.5 py-1 px-3 rounded-lg hover:bg-red-50 transition-colors"
+                      className="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1.5 py-1 px-3 rounded-lg hover:bg-red-500/10 cursor-pointer"
                     >
                       <Trash2 size={13} />
-                      <span>{isRo ? 'Șterge acest cont bancar' : 'Delete this bank account'}</span>
+                      <span>{isRo ? 'Șterge acest cont IBAN' : 'Delete this IBAN'}</span>
                     </button>
                   </div>
                 )}
@@ -1449,30 +3279,30 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowDeleteConfirm(false)}
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl z-10 border border-slate-200 text-slate-900"
+              className="relative w-full max-w-sm bg-[#0b0b10] rounded-3xl p-6 shadow-2xl z-10 border border-white/15 text-white"
             >
-              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-4">
-                <Trash2 size={24} />
+              <div className="w-11 h-11 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-400 flex items-center justify-center mb-3.5">
+                <Trash2 size={20} />
               </div>
-              <h4 className="text-lg font-black text-slate-900 uppercase font-heading">
+              <h4 className="text-base font-black text-white uppercase font-heading">
                 {isRo ? 'Ștergi contul IBAN?' : 'Delete IBAN?'}
               </h4>
-              <p className="text-xs text-slate-500 mt-1 mb-6 leading-relaxed">
-                {isRo 
-                  ? 'Ești sigur că vrei să elimini acest cont bancar? Nu vei mai avea un cont setat pentru plata comisioanelor până când nu adaugi unul nou.'
-                  : 'Are you sure you want to remove this bank account? Automatic payouts will be paused until a new account is added.'}
+              <p className="text-xs text-zinc-400 mt-1 mb-5 leading-relaxed">
+                {isRo
+                  ? 'Viramentele vor fi puse pe pauză până adaugi un nou cont IBAN.'
+                  : 'Payouts will pause until a new IBAN is added.'}
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-[0.98] cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl border border-white/15 text-xs font-bold text-zinc-200 hover:bg-white/10 cursor-pointer"
                 >
                   {isRo ? 'Anulează' : 'Cancel'}
                 </button>
@@ -1480,7 +3310,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                   type="button"
                   disabled={ibanDeleting}
                   onClick={handleDeleteIban}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
                 >
                   {ibanDeleting ? (
                     <>
@@ -1488,7 +3318,7 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
                       <span>{isRo ? 'Se șterge...' : 'Deleting...'}</span>
                     </>
                   ) : (
-                    <span>{isRo ? 'Da, Șterge' : 'Delete'}</span>
+                    <span>{isRo ? 'Șterge' : 'Delete'}</span>
                   )}
                 </button>
               </div>
@@ -1496,7 +3326,6 @@ export default function DashboardClient({ data, locale, exchangeRates: serverRat
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }

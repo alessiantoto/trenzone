@@ -61,6 +61,7 @@ import {
 import { getOptimizedImageUrl } from '@/lib/utils/imageProxy';
 import { getSingleFlavorImage, resolveItemImage } from '@/lib/product-images';
 import { getItemDisplayDetails } from '@/app/admin/orders/page';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 type FilterStatus = 'all' | 'ready_to_send' | 'sent' | 'abandoned' | 'active' | 'recovered';
 type SortOrder = 'newest' | 'oldest' | 'highest' | 'lowest';
@@ -279,6 +280,8 @@ export default function AbandonedCartsPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [onlyWithContact, setOnlyWithContact] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   // UI state
   const [expandedCartIds, setExpandedCartIds] = useState<Record<string, boolean>>({});
@@ -633,6 +636,16 @@ export default function AbandonedCartsPage() {
 
     return result;
   }, [carts, statusFilter, onlyWithContact, dateFilter, searchQuery, sortOrder]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, onlyWithContact, dateFilter, searchQuery, sortOrder]);
+
+  const safeCurrentPage = Math.min(currentPage, Math.max(1, Math.ceil(filteredCarts.length / itemsPerPage)));
+  const paginatedCarts = useMemo(
+    () => filteredCarts.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage),
+    [filteredCarts, safeCurrentPage, itemsPerPage]
+  );
 
   // WhatsApp link helper
   const getWhatsAppLink = (phone: string, customerName: string, items: any[]) => {
@@ -1246,7 +1259,7 @@ export default function AbandonedCartsPage() {
             </span>
           </div>
 
-          {filteredCarts.map((cart) => {
+          {paginatedCarts.map((cart) => {
             const isExpanded = !!expandedCartIds[cart.id];
             const hasEmail = !!cart.customer.email;
             const hasPhone = !!cart.customer.phone;
@@ -1952,6 +1965,17 @@ export default function AbandonedCartsPage() {
               </div>
             );
           })}
+
+          <AdminPagination
+            currentPage={safeCurrentPage}
+            totalItems={filteredCarts.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(p) => {
+              setCurrentPage(p);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            label="coșuri"
+          />
         </div>
       )}
 

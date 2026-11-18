@@ -120,8 +120,12 @@ export async function POST(req: Request) {
       safeCurrency,
       multiplier,
       safeLocale,
-      false
+      false,
+      email
     );
+    if (!couponResolution.ok && "selfUseBlocked" in couponResolution && couponResolution.selfUseBlocked) {
+      return NextResponse.json({ error: couponResolution.error }, { status: 400 });
+    }
     const couponData = couponResolution.ok ? couponResolution.couponData : null;
 
     const shippingConfig = await getShippingConfig();

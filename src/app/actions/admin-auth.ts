@@ -36,13 +36,13 @@ export async function isAdminAuthorized(): Promise<boolean> {
       .from('admin_users')
       .select('id, is_active')
       .eq('email', cleanEmail)
-      .single();
+      .maybeSingle();
 
     if (adminData && adminData.is_active !== false) {
       return true;
     }
 
-    // Fallback if db table issue
+    // Fallback ONLY on genuine DB infrastructure error (not when row is missing/deleted)
     if (dbError && AUTHORIZED_FALLBACK_EMAILS.includes(cleanEmail)) {
       return true;
     }
@@ -90,7 +90,7 @@ export async function verifyAdminEmail(email: string): Promise<boolean> {
     .from('admin_users')
     .select('id, is_active')
     .eq('email', cleanEmail)
-    .single();
+    .maybeSingle();
 
   return !!(adminData && adminData.is_active !== false);
 }

@@ -37,9 +37,9 @@ export async function GET(request: Request) {
       allowUnreleasedPreorderOverride: false,
     });
 
-    if (result.excludedPreorders && result.excludedPreorders > 0) {
+    if ((result.excludedPreorders && result.excludedPreorders > 0) || (result.excludedLiveOutOfStock && result.excludedLiveOutOfStock > 0)) {
       console.log(
-        `[CRON FULFILLMENT] Safely held back ${result.excludedPreorders} active preorder(s) (${result.excludedMixedPreorders || 0} mixed):`,
+        `[CRON FULFILLMENT] Safely held back ${result.excludedLiveOutOfStock || 0} live out-of-stock/preorder order(s) and ${result.excludedPreorders || 0} preorder(s) (${result.excludedMixedPreorders || 0} mixed):`,
         result.skippedPreorderOrderIds || []
       );
     }

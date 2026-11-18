@@ -5,7 +5,7 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const rawNext = searchParams.get('next') ?? '/admin'
-  const isSafePath = rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes(':')
+  const isSafePath = rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes(':') && !rawNext.includes('\\')
   const next = isSafePath ? rawNext : '/admin'
 
   if (code) {

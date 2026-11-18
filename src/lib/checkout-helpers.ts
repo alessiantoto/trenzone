@@ -85,9 +85,15 @@ export function findMatchingVariantOption(dbProduct: DbCheckoutProduct, item: an
 }
 
 export function isItemPreorder(item: any, dbProduct?: DbCheckoutProduct | null): boolean {
-  const matchedOption = dbProduct ? findMatchingVariantOption(dbProduct, item) : null;
-  if (matchedOption?.stock_status === "preorder") {
-    return true;
+  if (dbProduct) {
+    const matchedOption = findMatchingVariantOption(dbProduct, item);
+    if (matchedOption?.stock_status) {
+      return matchedOption.stock_status === "preorder";
+    }
+    if (dbProduct?.metadata?.is_preorder === true) {
+      return true;
+    }
+    return false;
   }
 
   const vName =
@@ -129,9 +135,7 @@ export function isItemUnavailableOrSoldOut(
   }
 
   const matchedOption = findMatchingVariantOption(dbProduct, item);
-  const optStatus = String(
-    matchedOption?.stock_status || item?.selectedVariant?.stock_status || ""
-  ).toLowerCase();
+  const optStatus = String(matchedOption?.stock_status || "").toLowerCase();
 
   if (optStatus === "sold_out" || optStatus === "out_of_stock") {
     const vName = extractRawVariantName(item, "ro");

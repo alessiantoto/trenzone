@@ -774,6 +774,8 @@ export async function processOrder(
           console.log('📧 [PHASE 4] Sending confirmation email...');
           await sendOrderConfirmationEmail(orderData.customer.email, {
             ...orderData,
+            status: initialStatus,
+            isPreorder: isPreorderOrder,
             customer: {
               ...orderData.customer,
               name: `${orderData.customer.firstName} ${orderData.customer.lastName}`.trim()

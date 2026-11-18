@@ -9,10 +9,14 @@ import {
   ArrowUpRight,
   BarChart3,
   CheckCircle2,
+  Clock,
   CreditCard,
   Eye,
+  Filter,
+  Flame,
   Gift,
   Globe,
+  Languages,
   Layers,
   Loader2,
   Mail,
@@ -20,17 +24,26 @@ import {
   Monitor,
   Package,
   RefreshCw,
+  RotateCcw,
+  Search,
   Share2,
+  ShoppingBag,
   Smartphone,
+  Sparkles,
   Tablet,
   Tag,
   Ticket,
   TrendingUp,
   Truck,
+  Users,
+  Zap,
 } from 'lucide-react';
 import {
   Area,
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Line,
   ResponsiveContainer,
@@ -38,7 +51,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { AnalyticsRangeKey, Ga4AnalyticsReport } from '@/lib/ga4-analytics';
+import type {
+  AnalyticsRangeKey,
+  Ga4AnalyticsReport,
+  Ga4DeviceFilter,
+  Ga4GranularityOption,
+} from '@/lib/ga4-analytics';
 
 interface CurrencyBreakdownEntry {
   currency: 'RON' | 'EUR' | 'USD' | 'GBP';
@@ -50,11 +68,18 @@ interface CurrencyBreakdownEntry {
 interface AnalyticsApiResponse {
   success: boolean;
   range: AnalyticsRangeKey;
+  filters?: {
+    device: Ga4DeviceFilter;
+    channel: string;
+    country: string;
+    granularity: Ga4GranularityOption;
+  };
   period: {
     startDate: string;
     endDate: string;
     prevStartDate: string;
     prevEndDate: string;
+    granularity?: 'hourly' | 'daily';
   };
   exchangeRates?: Record<string, number>;
   currencyBreakdown?: CurrencyBreakdownEntry[];
@@ -157,8 +182,16 @@ const RANGE_OPTIONS: Array<{ key: AnalyticsRangeKey; label: string }> = [
   { key: '90d', label: '90 zile' },
 ];
 
-type ChartMetric = 'sessions' | 'users' | 'pageviews';
+const DEVICE_OPTIONS: Array<{ key: Ga4DeviceFilter; label: string }> = [
+  { key: 'all', label: 'Toate' },
+  { key: 'mobile', label: 'Mobile' },
+  { key: 'desktop', label: 'Desktop' },
+  { key: 'tablet', label: 'Tablet' },
+];
+
+type ChartMetric = 'sessions' | 'engagedSessions' | 'users' | 'pageviews';
 type DisplayCurrency = 'RON' | 'EUR' | 'USD' | 'GBP';
+type PagesTab = 'landing' | 'all';
 
 const AVAILABLE_CURRENCIES: Array<{ code: DisplayCurrency; symbol: string }> = [
   { code: 'RON', symbol: 'RON' },
@@ -171,6 +204,21 @@ const FALLBACK_EXCHANGE_RATES: Record<string, number> = {
   EUR: 5.3,
   USD: 4.88,
   GBP: 6.2,
+};
+
+const EVENT_LABELS: Record<string, string> = {
+  page_view: 'Afișare pagină',
+  session_start: 'Start sesiune',
+  first_visit: 'Prima vizită',
+  user_engagement: 'Interacțiune activă',
+  scroll: 'Scroll 90%',
+  click: 'Click extern',
+  view_item: 'Vizualizare produs',
+  add_to_cart: 'Adăugare în coș',
+  begin_checkout: 'Inițiere checkout',
+  purchase: 'Achiziție finalizată',
+  form_start: 'Începere formular',
+  form_submit: 'Trimitere formular',
 };
 
 function convertRonForDisplay(
@@ -244,10 +292,32 @@ function SourceBarColor(sourceMedium: string): string {
   return 'bg-[#e32f8c]';
 }
 
+function ChannelBarColor(channelGroup: string): string {
+  const lower = channelGroup.toLowerCase();
+  if (lower.includes('social')) return '#e32f8c';
+  if (lower.includes('direct')) return '#10b981';
+  if (lower.includes('search')) return '#2563eb';
+  if (lower.includes('referral')) return '#8b5cf6';
+  if (lower.includes('paid')) return '#f59e0b';
+  return '#475569';
+}
+
 export default function AdminAnalyticsPage() {
   const [range, setRange] = useState<AnalyticsRangeKey>('30d');
+  const [deviceFilter, setDeviceFilter] = useState<Ga4DeviceFilter>('all');
+  const [channelFilter, setChannelFilter] = useState<string>('all');
+  const [countryFilter, setCountryFilter] = useState<string>('all');
+  const [granularityFilter, setGranularityFilter] = useState<Ga4GranularityOption>('auto');
+
+  const [knownChannels, setKnownChannels] = useState<string[]>([]);
+  const [knownCountries, setKnownCountries] = useState<string[]>([]);
+
   const [selectedCurrency, setSelectedCurrency] = useState<DisplayCurrency>('RON');
   const [chartMetric, setChartMetric] = useState<ChartMetric>('sessions');
+  const [comparePrevious, setComparePrevious] = useState(true);
+  const [pagesTab, setPagesTab] = useState<PagesTab>('landing');
+  const [pageSearch, setPageSearch] = useState('');
+
   const [data, setData] = useState<AnalyticsApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -259,13 +329,29 @@ export default function AdminAnalyticsPage() {
   );
 
   const loadAnalytics = useCallback(
-    async (selectedRange: AnalyticsRangeKey, isRefresh = false) => {
+    async (
+      params: {
+        range: AnalyticsRangeKey;
+        device: Ga4DeviceFilter;
+        channel: string;
+        country: string;
+        granularity: Ga4GranularityOption;
+      },
+      isRefresh = false
+    ) => {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setErrorMsg(null);
 
       try {
-        const res = await fetch(`/api/admin/analytics?range=${selectedRange}`, {
+        const qs = new URLSearchParams({
+          range: params.range,
+          device: params.device,
+          channel: params.channel,
+          country: params.country,
+          granularity: params.granularity,
+        });
+        const res = await fetch(`/api/admin/analytics?${qs.toString()}`, {
           cache: 'no-store',
         });
         const json: AnalyticsApiResponse = await res.json();
@@ -273,6 +359,18 @@ export default function AdminAnalyticsPage() {
           throw new Error(json.error || 'Nu s-au putut încărca datele de analytics.');
         }
         setData(json);
+
+        // Preserve selectable filter options even when a specific channel/country filter is active
+        const fetchedChannels = (json.ga4?.channels || []).map((c) => c.channelGroup).filter(Boolean);
+        if (fetchedChannels.length > 0) {
+          setKnownChannels((prev) => Array.from(new Set([...prev, ...fetchedChannels])));
+        }
+        const fetchedCountries = (json.ga4?.countries || [])
+          .map((c) => c.name)
+          .filter((n) => n && n !== 'Necunoscut');
+        if (fetchedCountries.length > 0) {
+          setKnownCountries((prev) => Array.from(new Set([...prev, ...fetchedCountries])));
+        }
       } catch (err: any) {
         setErrorMsg(err?.message || 'Eroare la încărcarea datelor.');
       } finally {
@@ -284,8 +382,32 @@ export default function AdminAnalyticsPage() {
   );
 
   useEffect(() => {
-    loadAnalytics(range);
-  }, [range, loadAnalytics]);
+    loadAnalytics({
+      range,
+      device: deviceFilter,
+      channel: channelFilter,
+      country: countryFilter,
+      granularity: granularityFilter,
+    });
+  }, [range, deviceFilter, channelFilter, countryFilter, granularityFilter, loadAnalytics]);
+
+  const handleRangeChange = (nextRange: AnalyticsRangeKey) => {
+    setRange(nextRange);
+    setGranularityFilter('auto');
+  };
+
+  const resetFilters = () => {
+    setDeviceFilter('all');
+    setChannelFilter('all');
+    setCountryFilter('all');
+    setGranularityFilter('auto');
+  };
+
+  const hasActiveFilters =
+    deviceFilter !== 'all' ||
+    channelFilter !== 'all' ||
+    countryFilter !== 'all' ||
+    granularityFilter !== 'auto';
 
   const chartSeries = useMemo(() => {
     const raw = data?.ga4?.timeseries || [];
@@ -294,17 +416,54 @@ export default function AdminAnalyticsPage() {
       current:
         chartMetric === 'sessions'
           ? pt.sessions
-          : chartMetric === 'users'
-            ? pt.users
-            : pt.pageviews,
+          : chartMetric === 'engagedSessions'
+            ? pt.engagedSessions
+            : chartMetric === 'users'
+              ? pt.users
+              : pt.pageviews,
       previous:
         chartMetric === 'sessions'
           ? pt.prevSessions
-          : chartMetric === 'users'
-            ? pt.prevUsers
-            : pt.prevPageviews,
+          : chartMetric === 'engagedSessions'
+            ? pt.prevEngagedSessions
+            : chartMetric === 'users'
+              ? pt.prevUsers
+              : pt.prevPageviews,
     }));
   }, [data?.ga4?.timeseries, chartMetric]);
+
+  const peakHoursSummary = useMemo(() => {
+    const profile = data?.ga4?.hourlyProfile || [];
+    if (profile.length === 0) return null;
+    const sorted = [...profile].sort((a, b) => b.sessions - a.sessions);
+    const top = sorted[0];
+    if (!top || top.sessions === 0) return null;
+    const topThree = sorted
+      .filter((h) => h.sessions > 0)
+      .slice(0, 3)
+      .map((h) => h.label);
+    return {
+      peakLabel: top.label,
+      peakSessions: top.sessions,
+      topThreeLabels: topThree,
+    };
+  }, [data?.ga4?.hourlyProfile]);
+
+  const filteredTopPages = useMemo(() => {
+    const list = data?.ga4?.topPages || [];
+    const q = pageSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (p) => p.path.toLowerCase().includes(q) || p.title.toLowerCase().includes(q)
+    );
+  }, [data?.ga4?.topPages, pageSearch]);
+
+  const filteredLandingPages = useMemo(() => {
+    const list = data?.ga4?.landingPages || [];
+    const q = pageSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((p) => p.path.toLowerCase().includes(q));
+  }, [data?.ga4?.landingPages, pageSearch]);
 
   if (loading && !data) {
     return (
@@ -330,7 +489,7 @@ export default function AdminAnalyticsPage() {
           </div>
         </div>
 
-        {/* Dark Hero: 4 KPI Cards + Chart Skeleton */}
+        {/* Dark Hero Skeleton */}
         <div className="bg-[#09090d] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/10 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/[0.08]">
             <div className="h-9 w-56 rounded-2xl bg-white/10" />
@@ -341,7 +500,7 @@ export default function AdminAnalyticsPage() {
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
+            {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="rounded-2xl p-3.5 border border-white/[0.08] bg-white/[0.04] space-y-2">
                 <div className="h-3 w-20 rounded bg-white/10" />
                 <div className="flex items-baseline justify-between gap-2">
@@ -358,56 +517,6 @@ export default function AdminAnalyticsPage() {
             ))}
           </div>
         </div>
-
-        {/* 5-Step Funnel Skeleton */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="space-y-1.5">
-              <div className="h-5 w-56 rounded bg-slate-200" />
-              <div className="h-3.5 w-72 rounded bg-slate-100" />
-            </div>
-            <div className="h-7 w-36 rounded-xl bg-slate-100" />
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-3">
-                <div className="flex items-center justify-between gap-1">
-                  <div className="h-3 w-24 rounded bg-slate-200" />
-                  <div className="h-4 w-9 rounded-full bg-slate-200" />
-                </div>
-                <div className="h-7 w-16 rounded bg-slate-200" />
-                <div className="h-1.5 w-full rounded-full bg-slate-200" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Marketing Cards Skeleton */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs lg:col-span-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="h-5 w-44 rounded bg-slate-200" />
-              <div className="h-4 w-20 rounded bg-slate-100" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="h-20 rounded-xl bg-slate-50 border border-slate-100" />
-              <div className="h-20 rounded-xl bg-slate-50 border border-slate-100" />
-            </div>
-            <div className="h-16 rounded-xl bg-slate-900/90" />
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs lg:col-span-7 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="h-5 w-52 rounded bg-slate-200" />
-              <div className="h-4 w-24 rounded bg-slate-100" />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-20 rounded-xl bg-slate-50 border border-slate-100" />
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
     );
   }
@@ -418,98 +527,193 @@ export default function AdminAnalyticsPage() {
   const realtime = ga4?.realtime;
   const mkt = data?.supabaseMarketing;
   const funnel = data?.funnel;
+  const activeGranularity = ga4?.granularity || 'daily';
 
   const newUsersPct =
     overview && overview.totalUsers > 0
       ? Math.round((overview.newUsers / overview.totalUsers) * 100)
       : 0;
 
+  const chartStrokeColor =
+    chartMetric === 'sessions'
+      ? '#e32f8c'
+      : chartMetric === 'engagedSessions'
+        ? '#a855f7'
+        : chartMetric === 'users'
+          ? '#38bdf8'
+          : '#10b981';
+
   return (
     <div className="animate-in fade-in duration-500 pb-16 text-slate-900 max-w-[1400px] mx-auto space-y-5 sm:space-y-6">
       {/* ========================================================================= */}
       {/* TOP HEADER & RANGE CONTROLS                                               */}
       {/* ========================================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Activity size={20} className="text-[#e32f8c] shrink-0" />
-            <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900">
-              Web Analytics & Statistici Marketing
-            </h1>
-            {ga4Ready ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
-                <CheckCircle2 size={11} /> GA4 Conectat
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
-                <AlertTriangle size={11} /> GA4 Neconfigurat
-              </span>
-            )}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Activity size={20} className="text-[#e32f8c] shrink-0" />
+              <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900">
+                Web Analytics & Statistici Marketing
+              </h1>
+              {ga4Ready ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <CheckCircle2 size={11} /> GA4 Conectat
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
+                  <AlertTriangle size={11} /> GA4 Neconfigurat
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {data?.period
+                ? `Interval: ${data.period.startDate} – ${data.period.endDate} (comparat cu ${data.period.prevStartDate} – ${data.period.prevEndDate})`
+                : 'Google Analytics 4 Data API + Supabase Marketing'}
+            </p>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            {data?.period
-              ? `Interval: ${data.period.startDate} – ${data.period.endDate} (comparat cu ${data.period.prevStartDate} – ${data.period.prevEndDate})`
-              : 'Google Analytics 4 Data API + Supabase Marketing'}
-          </p>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
+              {RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => handleRangeChange(opt.key)}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-[0.98] shrink-0 cursor-pointer inline-flex items-center gap-1.5 ${
+                    range === opt.key
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+                  }`}
+                >
+                  {loading && range === opt.key && <Loader2 size={11} className="animate-spin" />}
+                  <span>{opt.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              {AVAILABLE_CURRENCIES.map((c) => (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => setSelectedCurrency(c.code)}
+                  className={`px-2 py-1.5 rounded-lg text-[11px] font-black transition-all active:scale-[0.98] cursor-pointer ${
+                    selectedCurrency === c.code
+                      ? 'bg-[#e32f8c] text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+                  }`}
+                >
+                  {c.code}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                loadAnalytics(
+                  {
+                    range,
+                    device: deviceFilter,
+                    channel: channelFilter,
+                    country: countryFilter,
+                    granularity: granularityFilter,
+                  },
+                  true
+                )
+              }
+              disabled={refreshing || loading}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
+            >
+              {refreshing || loading ? (
+                <Loader2 size={13} className="animate-spin text-[#e32f8c]" />
+              ) : (
+                <RefreshCw size={13} />
+              )}
+              <span className="hidden sm:inline">
+                {refreshing || loading ? 'Se actualizează...' : 'Actualizează'}
+              </span>
+            </button>
+
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all active:scale-[0.98]"
+            >
+              <ArrowLeft size={13} />
+              <span>Dashboard</span>
+            </Link>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
-            {RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setRange(opt.key)}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-[0.98] shrink-0 cursor-pointer inline-flex items-center gap-1.5 ${
-                  range === opt.key
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-                }`}
-              >
-                {loading && range === opt.key && <Loader2 size={11} className="animate-spin" />}
-                <span>{opt.label}</span>
-              </button>
-            ))}
+        {/* Interactive GA4 Filters Bar */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-slate-400 mr-1">
+              <Filter size={12} className="text-[#e32f8c]" /> Filtre GA4:
+            </span>
+
+            {/* Device Segmented Pills */}
+            <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-xl">
+              {DEVICE_OPTIONS.map((dev) => (
+                <button
+                  key={dev.key}
+                  type="button"
+                  onClick={() => setDeviceFilter(dev.key)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    deviceFilter === dev.key
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {dev.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Channel Filter Select */}
+            <select
+              aria-label="Filtru canal GA4"
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value)}
+              className="h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/30 cursor-pointer"
+            >
+              <option value="all">Toate canalele</option>
+              {knownChannels.map((ch) => (
+                <option key={ch} value={ch}>
+                  Canal: {ch}
+                </option>
+              ))}
+            </select>
+
+            {/* Country Filter Select */}
+            <select
+              aria-label="Filtru țară GA4"
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              className="h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/30 cursor-pointer"
+            >
+              <option value="all">Toate țările</option>
+              {knownCountries.map((co) => (
+                <option key={co} value={co}>
+                  Țară: {co}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-            {AVAILABLE_CURRENCIES.map((c) => (
+          <div className="flex items-center gap-2">
+            {hasActiveFilters && (
               <button
-                key={c.code}
                 type="button"
-                onClick={() => setSelectedCurrency(c.code)}
-                className={`px-2 py-1.5 rounded-lg text-[11px] font-black transition-all active:scale-[0.98] cursor-pointer ${
-                  selectedCurrency === c.code
-                    ? 'bg-[#e32f8c] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-                }`}
+                onClick={resetFilters}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black text-[#e32f8c] bg-pink-50 hover:bg-pink-100 border border-pink-200 transition-colors cursor-pointer"
               >
-                {c.code}
+                <RotateCcw size={11} />
+                Reset filtre
               </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => loadAnalytics(range, true)}
-            disabled={refreshing || loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
-          >
-            {refreshing || loading ? (
-              <Loader2 size={13} className="animate-spin text-[#e32f8c]" />
-            ) : (
-              <RefreshCw size={13} />
             )}
-            <span className="hidden sm:inline">{refreshing || loading ? 'Se actualizează...' : 'Actualizează'}</span>
-          </button>
-
-          <Link
-            href="/admin"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all active:scale-[0.98]"
-          >
-            <ArrowLeft size={13} />
-            <span>Dashboard</span>
-          </Link>
+          </div>
         </div>
       </div>
 
@@ -521,7 +725,7 @@ export default function AdminAnalyticsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* GA4 SETUP / ERROR BANNER (NO FAKE NUMBERS WHEN UNCONFIGURED)              */}
+      {/* GA4 SETUP / ERROR BANNER                                                  */}
       {/* ========================================================================= */}
       {ga4 && !ga4.configured && (
         <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-3">
@@ -582,7 +786,7 @@ export default function AdminAnalyticsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* GA4 HERO: LIVE REALTIME + TRAFIC & CALITATE                               */}
+      {/* GA4 HERO: LIVE REALTIME + 8 KPI TILES + INTERACTIVE TIME SERIES           */}
       {/* ========================================================================= */}
       {ga4Ready && overview && (
         <div className="bg-[#09090d] text-white rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/10 relative overflow-hidden space-y-5">
@@ -590,7 +794,7 @@ export default function AdminAnalyticsPage() {
 
           {/* Realtime Strip */}
           <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 border-b border-white/[0.08]">
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 px-3.5 py-2 rounded-2xl">
                 <span className="relative flex h-2.5 w-2.5">
                   {(realtime?.activeUsers || 0) > 0 && (
@@ -602,10 +806,31 @@ export default function AdminAnalyticsPage() {
                     }`}
                   />
                 </span>
-                <span className="text-xs font-black uppercase tracking-wider text-emerald-300">
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-300 tabular-nums">
                   Live acum (30m): {realtime?.activeUsers ?? 0} utilizatori
+                  {(realtime?.screenPageViews || 0) > 0 && ` · ${realtime?.screenPageViews} afișări`}
                 </span>
               </div>
+
+              {realtime?.deviceBreakdown && realtime.deviceBreakdown.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {realtime.deviceBreakdown.map((d) => (
+                    <span
+                      key={d.device}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold bg-white/[0.07] border border-white/10 px-2.5 py-1 rounded-full text-zinc-200 tabular-nums"
+                    >
+                      {d.device.toLowerCase().includes('mobile') ? (
+                        <Smartphone size={11} className="text-sky-400" />
+                      ) : d.device.toLowerCase().includes('tablet') ? (
+                        <Tablet size={11} className="text-violet-400" />
+                      ) : (
+                        <Monitor size={11} className="text-zinc-300" />
+                      )}
+                      {d.device}: {d.activeUsers}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {realtime?.topCountries && realtime.topCountries.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -627,8 +852,8 @@ export default function AdminAnalyticsPage() {
                 {realtime.topPages.slice(0, 3).map((p) => (
                   <span
                     key={p.title}
-                    className="bg-white/[0.06] border border-white/10 px-2 py-0.5 rounded-lg truncate max-w-[180px]"
-                    title={p.title}
+                    className="bg-white/[0.06] border border-white/10 px-2 py-0.5 rounded-lg truncate max-w-[190px]"
+                    title={`${p.title} (${p.activeUsers} activi, ${p.screenPageViews} afișări)`}
                   >
                     {p.title} ({p.activeUsers})
                   </span>
@@ -637,21 +862,44 @@ export default function AdminAnalyticsPage() {
             )}
           </div>
 
-          {/* 6 Traffic & Quality KPI Tiles */}
-          <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+          {/* 8 Traffic & Quality KPI Tiles */}
+          <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
             <button
               type="button"
               onClick={() => setChartMetric('sessions')}
               className={`text-left rounded-2xl p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
                 chartMetric === 'sessions'
-                  ? 'bg-white/[0.11] border-[#e32f8c]/60'
+                  ? 'bg-white/[0.11] border-[#e32f8c]/70'
                   : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'
               }`}
             >
               <div className="text-[11px] font-bold text-zinc-400">Sesiuni</div>
               <div className="mt-1 flex items-baseline justify-between gap-1 flex-wrap">
-                <span className="text-lg sm:text-xl font-black tabular-nums">{overview.sessions.toLocaleString('ro-RO')}</span>
+                <span className="text-lg sm:text-xl font-black tabular-nums">
+                  {overview.sessions.toLocaleString('ro-RO')}
+                </span>
                 <DeltaPill pct={overview.deltas.sessionsPct} dark />
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setChartMetric('engagedSessions')}
+              className={`text-left rounded-2xl p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
+                chartMetric === 'engagedSessions'
+                  ? 'bg-white/[0.11] border-purple-400/70'
+                  : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'
+              }`}
+            >
+              <div className="text-[11px] font-bold text-zinc-400">Sesiuni Engaged</div>
+              <div className="mt-1 flex items-baseline justify-between gap-1 flex-wrap">
+                <span className="text-lg sm:text-xl font-black tabular-nums">
+                  {overview.engagedSessions.toLocaleString('ro-RO')}
+                </span>
+                <DeltaPill pct={overview.deltas.engagedSessionsPct} dark />
+              </div>
+              <div className="text-[10px] text-purple-300 font-semibold mt-0.5 tabular-nums">
+                Rată engagement: {overview.engagementRatePct}%
               </div>
             </button>
 
@@ -660,13 +908,15 @@ export default function AdminAnalyticsPage() {
               onClick={() => setChartMetric('users')}
               className={`text-left rounded-2xl p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
                 chartMetric === 'users'
-                  ? 'bg-white/[0.11] border-sky-400/60'
+                  ? 'bg-white/[0.11] border-sky-400/70'
                   : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'
               }`}
             >
               <div className="text-[11px] font-bold text-zinc-400">Utilizatori Unici</div>
               <div className="mt-1 flex items-baseline justify-between gap-1 flex-wrap">
-                <span className="text-lg sm:text-xl font-black tabular-nums">{overview.totalUsers.toLocaleString('ro-RO')}</span>
+                <span className="text-lg sm:text-xl font-black tabular-nums">
+                  {overview.totalUsers.toLocaleString('ro-RO')}
+                </span>
                 <DeltaPill pct={overview.deltas.usersPct} dark />
               </div>
             </button>
@@ -676,13 +926,15 @@ export default function AdminAnalyticsPage() {
               onClick={() => setChartMetric('pageviews')}
               className={`text-left rounded-2xl p-3.5 border transition-all active:scale-[0.98] cursor-pointer ${
                 chartMetric === 'pageviews'
-                  ? 'bg-white/[0.11] border-emerald-400/60'
+                  ? 'bg-white/[0.11] border-emerald-400/70'
                   : 'bg-white/[0.04] border-white/[0.08] hover:bg-white/[0.07]'
               }`}
             >
               <div className="text-[11px] font-bold text-zinc-400">Pageviews</div>
               <div className="mt-1 flex items-baseline justify-between gap-1 flex-wrap">
-                <span className="text-lg sm:text-xl font-black tabular-nums">{overview.pageviews.toLocaleString('ro-RO')}</span>
+                <span className="text-lg sm:text-xl font-black tabular-nums">
+                  {overview.pageviews.toLocaleString('ro-RO')}
+                </span>
                 <DeltaPill pct={overview.deltas.pageviewsPct} dark />
               </div>
             </button>
@@ -714,23 +966,105 @@ export default function AdminAnalyticsPage() {
                 {overview.pagesPerSession} pagini/sesiune
               </div>
             </div>
+
+            <div className="rounded-2xl p-3.5 border border-emerald-500/25 bg-emerald-500/[0.08]">
+              <div className="text-[11px] font-bold text-emerald-300 flex items-center gap-1">
+                <ShoppingBag size={12} /> Achiziții (GA4)
+              </div>
+              <div className="mt-1 flex items-baseline justify-between gap-1 flex-wrap">
+                <span className="text-lg sm:text-xl font-black tabular-nums text-white">
+                  {overview.ecommercePurchases.toLocaleString('ro-RO')}
+                </span>
+                <DeltaPill pct={overview.deltas.ecommercePurchasesPct} dark />
+              </div>
+              <div className="text-[10px] text-emerald-300/80 font-semibold mt-0.5 tabular-nums">
+                {overview.sessions > 0
+                  ? `${((overview.ecommercePurchases / overview.sessions) * 100).toFixed(2)}% din sesiuni`
+                  : 'Evenimente purchase'}
+              </div>
+            </div>
+          </div>
+
+          {/* Chart Toolbar: Metric Tabs + Compare Toggle + Granularity Toggle */}
+          <div className="relative z-10 flex flex-wrap items-center justify-between gap-2.5 pt-1">
+            <div className="flex items-center gap-1 bg-white/[0.06] p-1 rounded-xl border border-white/10 overflow-x-auto max-w-full">
+              {(
+                [
+                  { key: 'sessions', label: 'Sesiuni' },
+                  { key: 'engagedSessions', label: 'Sesiuni Engaged' },
+                  { key: 'users', label: 'Utilizatori' },
+                  { key: 'pageviews', label: 'Pageviews' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setChartMetric(tab.key)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
+                    chartMetric === tab.key
+                      ? 'bg-white text-slate-900'
+                      : 'text-zinc-300 hover:text-white hover:bg-white/[0.06]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setComparePrevious((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                  comparePrevious
+                    ? 'bg-white/10 border-white/25 text-white'
+                    : 'bg-transparent border-white/10 text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    comparePrevious ? 'bg-emerald-400' : 'bg-zinc-600'
+                  }`}
+                />
+                Compară cu perioada anterioară
+              </button>
+
+              <div className="flex items-center gap-0.5 bg-white/[0.06] p-0.5 rounded-xl border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setGranularityFilter('daily')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    activeGranularity === 'daily'
+                      ? 'bg-[#e32f8c] text-white'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Zilnic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGranularityFilter('hourly')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    activeGranularity === 'hourly'
+                      ? 'bg-[#e32f8c] text-white'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Pe ore 00–23
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Comparative Chart */}
-          <div className="relative z-10 h-[220px] sm:h-[260px] w-full">
+          <div className="relative z-10 h-[230px] sm:h-[270px] w-full">
             {chartSeries.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartSeries} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="ga4AreaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="5%"
-                        stopColor={
-                          chartMetric === 'sessions' ? '#e32f8c' : chartMetric === 'users' ? '#38bdf8' : '#10b981'
-                        }
-                        stopOpacity={0.35}
-                      />
-                      <stop offset="95%" stopColor="#e32f8c" stopOpacity={0} />
+                      <stop offset="5%" stopColor={chartStrokeColor} stopOpacity={0.38} />
+                      <stop offset="95%" stopColor={chartStrokeColor} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.08)" />
@@ -761,20 +1095,20 @@ export default function AdminAnalyticsPage() {
                       String(name) === 'previous' ? 'Perioada anterioară' : 'Perioada curentă',
                     ]}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="previous"
-                    stroke="#71717a"
-                    strokeWidth={1.75}
-                    strokeDasharray="4 4"
-                    dot={false}
-                  />
+                  {comparePrevious && (
+                    <Line
+                      type="monotone"
+                      dataKey="previous"
+                      stroke="#71717a"
+                      strokeWidth={1.75}
+                      strokeDasharray="4 4"
+                      dot={false}
+                    />
+                  )}
                   <Area
                     type="monotone"
                     dataKey="current"
-                    stroke={
-                      chartMetric === 'sessions' ? '#e32f8c' : chartMetric === 'users' ? '#38bdf8' : '#10b981'
-                    }
+                    stroke={chartStrokeColor}
                     strokeWidth={2.5}
                     fillOpacity={1}
                     fill="url(#ga4AreaGrad)"
@@ -897,10 +1231,178 @@ export default function AdminAnalyticsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* GA4 DETAILS: SOURCES, UTM, PAGES, VIEWED VS SOLD, AUDIENCE                */}
+      {/* GA4 PEAK HOURS (00–23) + CHANNELS & CONVERSIONS                           */}
       {/* ========================================================================= */}
       {ga4Ready && (
         <>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+            {/* Activitate pe Ore (00:00 – 23:00) */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs lg:col-span-7 flex flex-col justify-between">
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+                <div>
+                  <h2 className="text-base font-black tracking-tight flex items-center gap-2">
+                    <Clock size={17} className="text-[#e32f8c]" />
+                    Activitate pe Ore (00:00 – 23:00)
+                  </h2>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Profil orar cumulat în interval · ideal pentru programarea campaniilor & postărilor
+                  </p>
+                </div>
+                {peakHoursSummary && (
+                  <div className="inline-flex items-center gap-1.5 bg-pink-50 border border-pink-200 text-[#c92077] px-2.5 py-1 rounded-xl text-[11px] font-black">
+                    <Flame size={12} className="text-[#e32f8c]" />
+                    Ore de vârf: {peakHoursSummary.topThreeLabels.join(', ')}
+                  </div>
+                )}
+              </div>
+
+              <div className="h-[220px] sm:h-[245px] w-full min-w-0">
+                {ga4?.hourlyProfile && ga4.hourlyProfile.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={ga4.hourlyProfile} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis
+                        dataKey="label"
+                        axisLine={false}
+                        tickLine={false}
+                        interval={2}
+                        tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        width={40}
+                        allowDecimals={false}
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(227,47,140,0.06)' }}
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          borderRadius: '12px',
+                          border: 'none',
+                          fontSize: '12px',
+                          color: '#fff',
+                        }}
+                        formatter={(value: any, name: any) => [
+                          Number(value).toLocaleString('ro-RO'),
+                          String(name) === 'sessions'
+                            ? 'Sesiuni'
+                            : String(name) === 'engagedSessions'
+                              ? 'Sesiuni Engaged'
+                              : 'Utilizatori',
+                        ]}
+                      />
+                      <Bar dataKey="sessions" radius={[5, 5, 0, 0]}>
+                        {ga4.hourlyProfile.map((entry) => (
+                          <Cell
+                            key={entry.hour}
+                            fill={entry.isPeak ? '#e32f8c' : '#1e293b'}
+                            fillOpacity={entry.isPeak ? 1 : 0.8}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                    Fără date orare în interval.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Canale & Conversii */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs lg:col-span-5 flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-black tracking-tight flex items-center gap-2">
+                    <Sparkles size={17} className="text-emerald-600" />
+                    Canale & Conversii (GA4)
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    sessionDefaultChannelGroup · engagement & achiziții
+                  </p>
+                </div>
+                <span className="text-[11px] font-black text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+                  {ga4?.channels?.length || 0} canale
+                </span>
+              </div>
+
+              {ga4?.channels && ga4.channels.length > 0 ? (
+                <div className="space-y-3 flex-1 flex flex-col justify-between">
+                  <div className="h-[145px] w-full min-w-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={ga4.channels.slice(0, 6)}
+                        layout="vertical"
+                        margin={{ top: 0, right: 12, left: 0, bottom: 0 }}
+                      >
+                        <XAxis type="number" hide />
+                        <YAxis
+                          type="category"
+                          dataKey="channelGroup"
+                          width={110}
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fontSize: 11, fill: '#334155', fontWeight: 700 }}
+                        />
+                        <Tooltip
+                          cursor={{ fill: 'rgba(15,23,42,0.04)' }}
+                          contentStyle={{
+                            backgroundColor: '#0f172a',
+                            borderRadius: '12px',
+                            border: 'none',
+                            fontSize: '12px',
+                            color: '#fff',
+                          }}
+                          formatter={(value: any) => [Number(value).toLocaleString('ro-RO'), 'Sesiuni']}
+                        />
+                        <Bar dataKey="sessions" radius={[0, 6, 6, 0]} barSize={16}>
+                          {ga4.channels.slice(0, 6).map((ch) => (
+                            <Cell key={ch.channelGroup} fill={ChannelBarColor(ch.channelGroup)} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="space-y-2 max-h-[175px] overflow-y-auto pr-1 custom-scrollbar">
+                    {ga4.channels.map((ch) => (
+                      <div
+                        key={ch.channelGroup}
+                        className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-black text-slate-900 truncate">{ch.channelGroup}</div>
+                          <div className="text-[10px] font-semibold text-slate-500 tabular-nums">
+                            {ch.engagedSessions.toLocaleString('ro-RO')} engaged ({ch.engagementRatePct}%)
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {ch.purchases > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 tabular-nums">
+                              <ShoppingBag size={10} />
+                              {ch.purchases}
+                            </span>
+                          )}
+                          <span className="font-black text-slate-900 tabular-nums">
+                            {ch.sessions.toLocaleString('ro-RO')} ({ch.sharePct}%)
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-10 text-center">Niciun canal în acest interval.</p>
+              )}
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* DETAILED SOURCES & UTM CAMPAIGNS                                          */}
+          {/* ========================================================================= */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
             {/* Surse de Trafic */}
             <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col">
@@ -908,9 +1410,11 @@ export default function AdminAnalyticsPage() {
                 <div>
                   <h2 className="text-base font-black tracking-tight flex items-center gap-2">
                     <Share2 size={17} className="text-blue-600" />
-                    Surse de Trafic (GA4)
+                    Surse Detaliate de Trafic (GA4)
                   </h2>
-                  <p className="text-[11px] text-slate-400">sessionSourceMedium · engagement rate</p>
+                  <p className="text-[11px] text-slate-400">
+                    sessionSourceMedium · engagement, engaged sessions & achiziții
+                  </p>
                 </div>
                 <span className="text-[11px] font-black text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
                   {ga4?.sources.length || 0} surse
@@ -920,17 +1424,28 @@ export default function AdminAnalyticsPage() {
               <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1 custom-scrollbar">
                 {ga4?.sources && ga4.sources.length > 0 ? (
                   ga4.sources.map((src) => (
-                    <div key={`${src.sourceMedium}-${src.channelGroup}`} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
+                    <div
+                      key={`${src.sourceMedium}-${src.channelGroup}`}
+                      className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70"
+                    >
                       <div className="flex items-center justify-between gap-2 text-xs mb-1.5">
                         <div className="min-w-0">
                           <span className="font-black text-slate-800 truncate block">{src.sourceMedium}</span>
                           <span className="text-[10px] font-semibold text-slate-400">
-                            {src.channelGroup} · Engagement {src.engagementRatePct}%
+                            {src.channelGroup} · Engaged {src.engagedSessions} ({src.engagementRatePct}%)
                           </span>
                         </div>
-                        <span className="font-black text-slate-900 shrink-0 tabular-nums">
-                          {src.sessions.toLocaleString('ro-RO')} ({src.sharePct}%)
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {src.purchases > 0 && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 tabular-nums">
+                              <ShoppingBag size={10} />
+                              {src.purchases}
+                            </span>
+                          )}
+                          <span className="font-black text-slate-900 tabular-nums">
+                            {src.sessions.toLocaleString('ro-RO')} ({src.sharePct}%)
+                          </span>
+                        </div>
                       </div>
                       <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                         <div
@@ -993,59 +1508,291 @@ export default function AdminAnalyticsPage() {
             </div>
           </div>
 
-          {/* Top Pagini */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
+          {/* ========================================================================= */}
+          {/* LANDING PAGES TAB VS ALL PAGES TAB (WITH SEARCH INPUT)                    */}
+          {/* ========================================================================= */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-black tracking-tight flex items-center gap-2">
                   <Layers size={17} className="text-[#e32f8c]" />
-                  Top Pagini Vizitate (GA4)
+                  Performanță Pagini (GA4)
                 </h2>
-                <p className="text-[11px] text-slate-400">Afișări, utilizatori unici, timp mediu și bounce rate</p>
+                <p className="text-[11px] text-slate-400">
+                  Compară paginile de intrare (Landing Pages) cu toate paginile vizitate
+                </p>
               </div>
-              <span className="text-[11px] font-black text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-                {ga4?.topPages.length || 0} pagini
-              </span>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={pageSearch}
+                    onChange={(e) => setPageSearch(e.target.value)}
+                    placeholder="Caută rută..."
+                    className="h-8 pl-8 pr-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#e32f8c]/25 w-44 sm:w-52"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setPagesTab('landing')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      pagesTab === 'landing'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Landing Pages ({filteredLandingPages.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPagesTab('all')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      pagesTab === 'all'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Toate Paginile ({filteredTopPages.length})
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
-                    <th className="py-2.5 pr-3 font-black">Rută Pagină</th>
-                    <th className="py-2.5 px-2 font-black text-right">Afișări</th>
-                    <th className="py-2.5 px-2 font-black text-right">Unici</th>
-                    <th className="py-2.5 px-2 font-black text-right hidden sm:table-cell">Timp Mediu</th>
-                    <th className="py-2.5 pl-2 font-black text-right hidden sm:table-cell">Bounce</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {ga4?.topPages.slice(0, 12).map((pg) => (
-                    <tr key={pg.path} className="hover:bg-slate-50/70">
-                      <td className="py-2.5 pr-3 font-mono font-bold text-slate-800 max-w-[240px] sm:max-w-[420px] truncate">
-                        {pg.path}
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-black text-slate-900 tabular-nums">
-                        {pg.views.toLocaleString('ro-RO')}
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-semibold text-slate-600 tabular-nums">
-                        {pg.users.toLocaleString('ro-RO')}
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-semibold text-slate-600 hidden sm:table-cell tabular-nums">
-                        {formatDuration(pg.avgDurationSec)}
-                      </td>
-                      <td className="py-2.5 pl-2 text-right font-semibold text-slate-600 hidden sm:table-cell tabular-nums">
-                        {pg.bounceRatePct}%
-                      </td>
+              {pagesTab === 'landing' ? (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+                      <th className="py-2.5 pr-3 font-black">Landing Page (Intrare)</th>
+                      <th className="py-2.5 px-2 font-black text-right">Sesiuni</th>
+                      <th className="py-2.5 px-2 font-black text-right">Engaged</th>
+                      <th className="py-2.5 px-2 font-black text-right hidden sm:table-cell">Durată Medie</th>
+                      <th className="py-2.5 pl-2 font-black text-right">Bounce</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredLandingPages.length > 0 ? (
+                      filteredLandingPages.slice(0, 15).map((lp) => (
+                        <tr key={lp.path} className="hover:bg-slate-50/70">
+                          <td
+                            className="py-2.5 pr-3 font-mono font-bold text-slate-800 max-w-[220px] sm:max-w-[460px] truncate"
+                            title={lp.path}
+                          >
+                            {lp.path}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-black text-slate-900 tabular-nums">
+                            {lp.sessions.toLocaleString('ro-RO')}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-semibold text-emerald-700 tabular-nums">
+                            {lp.engagedSessions.toLocaleString('ro-RO')}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-semibold text-slate-600 hidden sm:table-cell tabular-nums">
+                            {formatDuration(lp.avgDurationSec)}
+                          </td>
+                          <td className="py-2.5 pl-2 text-right font-semibold text-slate-600 tabular-nums">
+                            {lp.bounceRatePct}%
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                          Nicio pagină landing găsită.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+                      <th className="py-2.5 pr-3 font-black">Rută Pagină</th>
+                      <th className="py-2.5 px-2 font-black text-right">Afișări</th>
+                      <th className="py-2.5 px-2 font-black text-right">Unici</th>
+                      <th className="py-2.5 px-2 font-black text-right hidden sm:table-cell">Timp Mediu</th>
+                      <th className="py-2.5 pl-2 font-black text-right hidden sm:table-cell">Bounce</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredTopPages.length > 0 ? (
+                      filteredTopPages.slice(0, 15).map((pg) => (
+                        <tr key={pg.path} className="hover:bg-slate-50/70">
+                          <td
+                            className="py-2.5 pr-3 font-mono font-bold text-slate-800 max-w-[240px] sm:max-w-[460px] truncate"
+                            title={pg.path}
+                          >
+                            {pg.path}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-black text-slate-900 tabular-nums">
+                            {pg.views.toLocaleString('ro-RO')}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-semibold text-slate-600 tabular-nums">
+                            {pg.users.toLocaleString('ro-RO')}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-semibold text-slate-600 hidden sm:table-cell tabular-nums">
+                            {formatDuration(pg.avgDurationSec)}
+                          </td>
+                          <td className="py-2.5 pl-2 text-right font-semibold text-slate-600 hidden sm:table-cell tabular-nums">
+                            {pg.bounceRatePct}%
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                          Nicio pagină găsită.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 
-          {/* Audiență & Tehnic: Device / OS / Browser / Countries / Cities */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* ========================================================================= */}
+          {/* EVENIMENTE GA4 & CALITATE AUDIENȚĂ (NEW VS RETURNING)                     */}
+          {/* ========================================================================= */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+            {/* All GA4 Events */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs lg:col-span-7 flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-black tracking-tight flex items-center gap-2">
+                    <Zap size={17} className="text-amber-500" />
+                    Evenimente GA4 Înregistrate
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    Toate evenimentele active (scroll, formulare, e-commerce, click-uri)
+                  </p>
+                </div>
+                <span className="text-[11px] font-black text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+                  {ga4?.allEvents?.length || 0} tipuri
+                </span>
+              </div>
+
+              {ga4?.allEvents && ga4.allEvents.length > 0 ? (
+                <div className="overflow-x-auto max-h-[300px] overflow-y-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+                        <th className="py-2 pr-3 font-black">Eveniment</th>
+                        <th className="py-2 px-2 font-black text-right">Declanșări</th>
+                        <th className="py-2 px-2 font-black text-right">Utilizatori</th>
+                        <th className="py-2 pl-2 font-black text-right">% Audiență</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {ga4.allEvents.map((ev) => (
+                        <tr key={ev.eventName} className="hover:bg-slate-50/70">
+                          <td className="py-2 pr-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[11px] font-bold">
+                                {ev.eventName}
+                              </code>
+                              {EVENT_LABELS[ev.eventName] && (
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  {EVENT_LABELS[ev.eventName]}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2 px-2 text-right font-black text-slate-900 tabular-nums">
+                            {ev.eventCount.toLocaleString('ro-RO')}
+                          </td>
+                          <td className="py-2 px-2 text-right font-semibold text-slate-600 tabular-nums">
+                            {ev.totalUsers.toLocaleString('ro-RO')}
+                          </td>
+                          <td className="py-2 pl-2 text-right font-bold text-[#e32f8c] tabular-nums">
+                            {ev.userPct}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-8 text-center">Fără evenimente înregistrate.</p>
+              )}
+            </div>
+
+            {/* New vs Returning Quality Breakdown */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs lg:col-span-5 flex flex-col justify-between space-y-4">
+              <div>
+                <h2 className="text-base font-black tracking-tight flex items-center gap-2">
+                  <Users size={17} className="text-blue-600" />
+                  Calitate Audiență: Noi vs Recurenți
+                </h2>
+                <p className="text-[11px] text-slate-400">
+                  Compară engagement-ul și durata medie pe segment (newVsReturning)
+                </p>
+              </div>
+
+              <div className="space-y-3 flex-1 flex flex-col justify-center">
+                {ga4?.newVsReturning && ga4.newVsReturning.length > 0 ? (
+                  ga4.newVsReturning.map((seg) => {
+                    const isReturning = seg.segment === 'returning';
+                    return (
+                      <div
+                        key={seg.segment}
+                        className={`p-3.5 rounded-xl border ${
+                          isReturning
+                            ? 'bg-emerald-50/50 border-emerald-200/80'
+                            : 'bg-blue-50/50 border-blue-200/80'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-xs font-black text-slate-900">{seg.label}</span>
+                          <span
+                            className={`text-[10px] font-black px-2 py-0.5 rounded-full tabular-nums ${
+                              isReturning
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
+                            {seg.sharePct}% din sesiuni
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+                          <div>
+                            <div className="text-[10px] text-slate-500 font-semibold">Sesiuni / Unici</div>
+                            <div className="font-black text-slate-900 tabular-nums">
+                              {seg.sessions.toLocaleString('ro-RO')} / {seg.users.toLocaleString('ro-RO')}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-slate-500 font-semibold">Engagement</div>
+                            <div className="font-black text-slate-900 tabular-nums">
+                              {seg.engagementRatePct}%
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-slate-500 font-semibold">Durată medie</div>
+                            <div className="font-black text-slate-900 tabular-nums">
+                              {formatDuration(seg.avgDurationSec)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-slate-400 py-8 text-center">Fără date de segmentare.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* AUDIENȚĂ & TEHNIC: DEVICE / OS / BROWSER / LANGUAGES / RESOLUTIONS        */}
+          {/* ========================================================================= */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Dispozitive */}
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-3">
@@ -1066,7 +1813,9 @@ export default function AdminAnalyticsPage() {
                           )}
                           {d.name}
                         </span>
-                        <span className="font-black text-slate-900 tabular-nums">{d.percentage}%</span>
+                        <span className="font-black text-slate-900 tabular-nums">
+                          {d.percentage}% ({d.sessions})
+                        </span>
                       </div>
                       <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div className="bg-blue-600 h-full rounded-full" style={{ width: `${Math.max(4, d.percentage)}%` }} />
@@ -1122,17 +1871,48 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
 
-            {/* Țări */}
+            {/* Limbi (Languages) */}
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-3">
-                <Globe size={14} className="text-sky-600" /> Top Țări
+                <Languages size={14} className="text-amber-600" /> Limbi Utilizatori
               </h3>
               <div className="space-y-2 max-h-[190px] overflow-y-auto custom-scrollbar pr-1">
+                {ga4?.languages?.length ? (
+                  ga4.languages.slice(0, 8).map((lang) => (
+                    <div key={lang.name} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
+                      <span className="font-bold text-slate-700 truncate pr-2">{lang.name}</span>
+                      <span className="font-black text-slate-900 shrink-0 tabular-nums">
+                        {lang.sessions} ({lang.percentage}%)
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-400 py-4 text-center">Fără date</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Geo (Țări & Orașe cu engagement) + Rezoluții Ecran */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Top Țări */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-3">
+                <Globe size={14} className="text-sky-600" /> Top Țări (Sesiuni & Engagement)
+              </h3>
+              <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                 {ga4?.countries.length ? (
-                  ga4.countries.slice(0, 7).map((c) => (
-                    <div key={c.name} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
-                      <span className="font-bold text-slate-700 truncate pr-2">{c.name}</span>
-                      <span className="font-black text-slate-900 shrink-0 tabular-nums">{c.percentage}%</span>
+                  ga4.countries.slice(0, 10).map((c) => (
+                    <div key={c.name} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 last:border-0 gap-2">
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-800 truncate block">{c.name}</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">
+                          Engagement {c.engagementRatePct}%
+                        </span>
+                      </div>
+                      <span className="font-black text-slate-900 shrink-0 tabular-nums">
+                        {c.sessions} ({c.percentage}%)
+                      </span>
                     </div>
                   ))
                 ) : (
@@ -1141,17 +1921,49 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
 
-            {/* Orașe */}
+            {/* Top Orașe */}
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-3">
-                <MapPin size={14} className="text-[#e32f8c]" /> Top Orașe
+                <MapPin size={14} className="text-[#e32f8c]" /> Top Orașe (cu Țară & Engagement)
               </h3>
-              <div className="space-y-2 max-h-[190px] overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                 {ga4?.cities.length ? (
-                  ga4.cities.slice(0, 7).map((ci) => (
-                    <div key={ci.name} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
-                      <span className="font-bold text-slate-700 truncate pr-2">{ci.name}</span>
-                      <span className="font-black text-slate-900 shrink-0 tabular-nums">{ci.sessions}</span>
+                  ga4.cities.slice(0, 10).map((ci) => (
+                    <div
+                      key={`${ci.name}-${ci.country}`}
+                      className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 last:border-0 gap-2"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-800 truncate block">{ci.name}</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">
+                          {ci.country} · Engagement {ci.engagementRatePct}%
+                        </span>
+                      </div>
+                      <span className="font-black text-slate-900 shrink-0 tabular-nums">{ci.sessions} ses.</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-400 py-4 text-center">Fără date</p>
+                )}
+              </div>
+            </div>
+
+            {/* Rezoluții Ecran */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-3">
+                <Monitor size={14} className="text-indigo-600" /> Rezoluții Ecran
+              </h3>
+              <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                {ga4?.screenResolutions?.length ? (
+                  ga4.screenResolutions.slice(0, 10).map((res) => (
+                    <div
+                      key={res.name}
+                      className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 last:border-0 gap-2"
+                    >
+                      <span className="font-mono font-bold text-slate-700 truncate pr-2">{res.name}</span>
+                      <span className="font-black text-slate-900 shrink-0 tabular-nums">
+                        {res.sessions} ({res.percentage}%)
+                      </span>
                     </div>
                   ))
                 ) : (
@@ -1260,7 +2072,7 @@ export default function AdminAnalyticsPage() {
             </span>
           </div>
 
-          {/* Unified Total Strip (all 4 currencies converted cleanly to selected display currency) */}
+          {/* Unified Total Strip */}
           {(() => {
             const rawBreakdown = mkt.currencyBreakdown || data?.currencyBreakdown || [];
             const activeCurrencies = rawBreakdown.filter((b) => b.orders > 0 || b.revenueNative > 0);
@@ -1279,9 +2091,7 @@ export default function AdminAnalyticsPage() {
                   {activeCurrencies.length > 1 && (
                     <p className="text-[11px] text-slate-500 mt-1 tabular-nums">
                       Mix comenzi:{' '}
-                      {activeCurrencies
-                        .map((b) => `${b.currency} (${b.orders})`)
-                        .join(' · ')}
+                      {activeCurrencies.map((b) => `${b.currency} (${b.orders})`).join(' · ')}
                     </p>
                   )}
                 </div>
@@ -1448,7 +2258,10 @@ export default function AdminAnalyticsPage() {
                     {mkt.leads.activeSubscribersAllTime} activi din {mkt.leads.totalSubscribersAllTime} total (+{mkt.leads.subscribersInPeriod} în interval)
                   </p>
                 </div>
-                <Link href="/admin/marketing/broadcast?tab=subscribers" className="text-[11px] font-bold text-blue-600 hover:underline shrink-0">
+                <Link
+                  href="/admin/marketing/broadcast?tab=subscribers"
+                  className="text-[11px] font-bold text-blue-600 hover:underline shrink-0"
+                >
                   Vezi Abonați
                 </Link>
               </div>

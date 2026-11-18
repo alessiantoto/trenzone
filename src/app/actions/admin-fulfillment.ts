@@ -3,31 +3,38 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isAdminAuthorized } from './admin-auth';
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { Redis } from '@upstash/redis';
 import {
   FulfillmentSettings,
   FulfillmentDispatchLog,
   FulfillmentOrderSummary,
   FulfillmentItemSummary,
-  FulfillmentOrderSnapshot
+  FulfillmentOrderSnapshot,
+  BlockedFulfillmentItem,
+  BlockedFulfillmentOrder,
 } from '@/types/fulfillment';
 import { sendFulfillmentDispatchEmail, buildFulfillmentDispatchSubject } from '@/lib/resend-service';
 import { getSingleFlavorImage } from '@/lib/product-images';
 import { getCanonicalOrderNumber } from '@/utils/admin-helpers';
 import { isDigitalOnlyCart, isDigitalProgramItem } from '@/lib/programs';
-import { isItemSnapshotPreorder } from '@/utils/order-search';
+import { isItemSnapshotPreorder, normalizeSearchText } from '@/utils/order-search';
 import { headers } from 'next/headers';
 
 export interface FulfillmentQueueOverview {
   pendingOrders: FulfillmentOrderSummary[];
+  blockedOrders: BlockedFulfillmentOrder[];
   templatePreviewOrders: FulfillmentOrderSummary[];
   isSamplePreview: boolean;
   isHistoricalPreview: boolean;
   excludedPreorders: number;
   excludedMixedPreorders: number;
+  excludedLiveOutOfStock: number;
+  excludedPhantomOrInvalid: number;
   skippedPreorderOrderIds: string[];
   excludedDigital: number;
   excludedAlreadyDispatched: number;
   excludedUnpaidOrInvalid: number;
+  liveProductsError?: string;
 }
 
 export interface FulfillmentDispatchResult {
@@ -43,6 +50,8 @@ export interface FulfillmentDispatchResult {
   busy?: boolean;
   excludedPreorders?: number;
   excludedMixedPreorders?: number;
+  excludedLiveOutOfStock?: number;
+  excludedPhantomOrInvalid?: number;
   skippedPreorderOrderIds?: string[];
   excludedDigital?: number;
   excludedAlreadyDispatched?: number;
@@ -51,10 +60,21 @@ export interface FulfillmentDispatchResult {
 }
 
 const DISPATCH_LOCK_KEY = 'fulfillment_dispatch_lock';
+const REDIS_DISPATCH_LOCK_KEY = 'trenzone:fulfillment:dispatch_lock';
 const RECONCILIATION_LOG_KEY = 'fulfillment_reconciliation_logs';
 const DISPATCH_LOCK_TTL_MS = 90_000;
+const CLAIM_TTL_MS = 3 * 60_000;
+const BUNDLE_ID_REGEX = /^(.+)-bundle-(\d+)$/i;
 
-// In-process mutex on top of the distributed DB CAS lock for same-instance bursts
+const redisClient =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      })
+    : null;
+
+// In-process mutex on top of the distributed Redis/DB CAS locks for same-instance bursts
 let activeProcessDispatchPromise: Promise<FulfillmentDispatchResult> | null = null;
 
 async function isAdminOrCronAuthorized(): Promise<boolean> {
@@ -84,6 +104,7 @@ const DEFAULT_SETTINGS: FulfillmentSettings = {
 
 const NON_FULFILLABLE_STATUSES = new Set([
   'cancelled',
+  'canceled',
   'anulata',
   'refunded',
   'returned',
@@ -95,6 +116,11 @@ const NON_FULFILLABLE_STATUSES = new Set([
   'expediata',
   'in_transit',
   'completed',
+  'draft',
+  'test',
+  'void',
+  'abandoned',
+  'expired',
 ]);
 
 const UNPAID_STATUSES = new Set([
@@ -105,6 +131,8 @@ const UNPAID_STATUSES = new Set([
   'requires_payment_method',
   'payment_failed',
   'incomplete',
+  'canceled',
+  'cancelled',
 ]);
 
 const CARD_PAYMENT_METHODS = new Set(['online', 'card', 'stripe']);
@@ -122,12 +150,23 @@ export async function getFulfillmentSettings(): Promise<FulfillmentSettings> {
       .maybeSingle();
 
     if (error || !data || !data.value) {
+      if (!isAuth) {
+        return {
+          ...DEFAULT_SETTINGS,
+          email: '',
+          secondary_email: '',
+          notes: '',
+        };
+      }
       return DEFAULT_SETTINGS;
     }
 
     if (!isAuth) {
       return {
         ...DEFAULT_SETTINGS,
+        email: '',
+        secondary_email: '',
+        notes: '',
         manual_shipping_enabled: Boolean(data.value.manual_shipping_enabled),
         auto_dispatch_enabled: Boolean(data.value.auto_dispatch_enabled),
       };
@@ -139,7 +178,12 @@ export async function getFulfillmentSettings(): Promise<FulfillmentSettings> {
     };
   } catch (err) {
     console.error('Error fetching fulfillment settings:', err);
-    return DEFAULT_SETTINGS;
+    return {
+      ...DEFAULT_SETTINGS,
+      email: '',
+      secondary_email: '',
+      notes: '',
+    };
   }
 }
 
@@ -409,7 +453,7 @@ async function readFulfillmentHistoryInternal(): Promise<FulfillmentDispatchLog[
       for (const row of fetchedRows) {
         if (!row?.id || orderByUuid.has(row.id)) continue;
         // Never enrich digital-only orders into fulfillment reports
-        if (classifyOrderForFulfillment(row).isDigitalOnly) continue;
+        if (isDigitalOnlyOrderRow(row)) continue;
 
         orderByUuid.set(row.id, row);
         const canonical = getCanonicalOrderNumber(row);
@@ -666,39 +710,427 @@ function formatOrderForFulfillment(order: any): FulfillmentOrderSummary {
   };
 }
 
+interface LiveProductRow {
+  id: string;
+  slug: string;
+  name: any;
+  is_active: boolean | null;
+  stock_quantity: number | null;
+  variants: any;
+  specs_summary: any;
+  metadata: any;
+}
+
+function getLocalizedTextSimple(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string' || typeof val === 'number') return String(val).trim();
+  if (typeof val === 'object') {
+    return String(val.ro || val.en || Object.values(val)[0] || '').trim();
+  }
+  return '';
+}
+
+function stripPreorderMarkersText(text: string): string {
+  return normalizeSearchText(
+    String(text || '')
+      .replace(/\(?\s*precomand[aă]?\s*\)?/gi, '')
+      .replace(/\(?\s*pre-?order\s*\)?/gi, '')
+  );
+}
+
+function isDigitalOnlyOrderRow(order: any): boolean {
+  const carrierId = String(order?.carrier_id || '').trim().toLowerCase();
+  const shippingType = String(order?.shipping_type || '').trim().toLowerCase();
+  const meta =
+    order?.carrier_metadata && typeof order.carrier_metadata === 'object'
+      ? order.carrier_metadata
+      : {};
+  const rawItems = parseOrderItemsArray(order?.items);
+  const physicalItems = rawItems.filter((item: any) => !isDigitalProgramItem(item));
+  return (
+    Boolean(meta.is_digital_only === true) ||
+    carrierId === 'digital' ||
+    shippingType === 'digital' ||
+    rawItems.length === 0 ||
+    physicalItems.length === 0 ||
+    isDigitalOnlyCart(rawItems)
+  );
+}
+
+async function fetchLiveProductsForFulfillment(): Promise<
+  { ok: true; products: LiveProductRow[] } | { ok: false; error: string }
+> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('products')
+      .select('id, slug, name, is_active, stock_quantity, variants, specs_summary, metadata');
+
+    if (error || !Array.isArray(data)) {
+      return {
+        ok: false,
+        error: error?.message || 'Nu s-a putut citi tabelul live products.',
+      };
+    }
+
+    return { ok: true, products: data as LiveProductRow[] };
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: err?.message || 'Eroare la citirea stocului live din baza de date.',
+    };
+  }
+}
+
+function matchOrderItemToLiveProduct(item: any, liveProducts: LiveProductRow[]): LiveProductRow | null {
+  if (!item || liveProducts.length === 0) return null;
+
+  const rawId = String(item.id || '').trim();
+  const bundleMatch = rawId.match(BUNDLE_ID_REGEX);
+  const realId = (bundleMatch ? bundleMatch[1] : rawId).toLowerCase();
+  const itemSlug = String(item.slug || '').trim().toLowerCase();
+
+  if (realId) {
+    const byId = liveProducts.find((p) => String(p.id || '').trim().toLowerCase() === realId);
+    if (byId) return byId;
+
+    const bySlugFromId = liveProducts.find((p) => String(p.slug || '').trim().toLowerCase() === realId);
+    if (bySlugFromId) return bySlugFromId;
+  }
+
+  if (itemSlug) {
+    const bySlug = liveProducts.find((p) => String(p.slug || '').trim().toLowerCase() === itemSlug);
+    if (bySlug) return bySlug;
+  }
+
+  // Name fallback for legacy orders lacking item.id / item.slug
+  const rawItemName = getLocalizedTextSimple(item.name);
+  const itemNameNorm = normalizeSearchText(rawItemName);
+  const itemBaseNorm = normalizeSearchText(rawItemName.replace(/\s*\([^)]*\)\s*$/, ''));
+  if (!itemNameNorm) return null;
+
+  for (const prod of liveProducts) {
+    const pRo = normalizeSearchText(typeof prod.name === 'object' ? prod.name?.ro : prod.name);
+    const pEn = normalizeSearchText(typeof prod.name === 'object' ? prod.name?.en : prod.name);
+    if (
+      (pRo && (pRo === itemNameNorm || (itemBaseNorm && pRo === itemBaseNorm))) ||
+      (pEn && (pEn === itemNameNorm || (itemBaseNorm && pEn === itemBaseNorm)))
+    ) {
+      return prod;
+    }
+  }
+
+  return null;
+}
+
+function evaluatePhysicalItemLiveStock(
+  item: any,
+  liveProducts: LiveProductRow[]
+): {
+  isInStockLive: boolean;
+  statusLabel: string;
+  blockedReason?: BlockedFulfillmentItem;
+} {
+  const itemName = getLocalizedTextSimple(item?.name) || 'Produs';
+  const variantRaw = item?.selectedVariant?.name ?? item?.variant;
+  const variantLabel = getLocalizedTextSimple(variantRaw) || undefined;
+
+  const matchedProduct = matchOrderItemToLiveProduct(item, liveProducts);
+  if (!matchedProduct) {
+    return {
+      isInStockLive: false,
+      statusLabel: 'Produs negăsit în catalog',
+      blockedReason: {
+        productName: itemName,
+        variant: variantLabel,
+        reasonCode: 'product_not_found',
+        reasonLabel: 'Produs negăsit în catalog',
+      },
+    };
+  }
+
+  const productLabel = getLocalizedTextSimple(matchedProduct.name) || itemName;
+
+  if (matchedProduct.is_active === false) {
+    return {
+      isInStockLive: false,
+      statusLabel: 'Produs inactiv',
+      blockedReason: {
+        productName: productLabel,
+        variant: variantLabel,
+        reasonCode: 'product_inactive',
+        reasonLabel: 'Produs inactiv în catalog',
+      },
+    };
+  }
+
+  if (typeof matchedProduct.stock_quantity === 'number' && matchedProduct.stock_quantity <= 0) {
+    return {
+      isInStockLive: false,
+      statusLabel: 'Stoc 0',
+      blockedReason: {
+        productName: productLabel,
+        variant: variantLabel,
+        reasonCode: 'live_zero_stock',
+        reasonLabel: 'Stoc 0 în catalog',
+      },
+    };
+  }
+
+  const options: any[] = Array.isArray(matchedProduct.variants?.options)
+    ? matchedProduct.variants.options
+    : [];
+
+  if (options.length > 0) {
+    const candidates: string[] = [];
+    if (variantRaw && typeof variantRaw === 'object') {
+      if (variantRaw.ro) candidates.push(String(variantRaw.ro));
+      if (variantRaw.en) candidates.push(String(variantRaw.en));
+    } else if (variantRaw) {
+      candidates.push(String(variantRaw));
+    }
+
+    if (candidates.length === 0) {
+      const parenMatch = itemName.match(/\(([^)]+)\)\s*$/);
+      if (parenMatch?.[1]) candidates.push(parenMatch[1]);
+    }
+
+    const targets = new Set<string>();
+    const cleanTargets = new Set<string>();
+    for (const cand of candidates) {
+      const full = normalizeSearchText(cand);
+      if (full) targets.add(full);
+      const base = normalizeSearchText(cand.split(' · ')[0]);
+      if (base) targets.add(base);
+      const cleanFull = stripPreorderMarkersText(cand);
+      if (cleanFull) cleanTargets.add(cleanFull);
+      const cleanBase = stripPreorderMarkersText(cand.split(' · ')[0]);
+      if (cleanBase) cleanTargets.add(cleanBase);
+    }
+
+    const matchedOption =
+      targets.size > 0 || cleanTargets.size > 0
+        ? options.find((opt) => {
+            const optNames: string[] = [];
+            if (opt?.name && typeof opt.name === 'object') {
+              if (opt.name.ro) optNames.push(String(opt.name.ro));
+              if (opt.name.en) optNames.push(String(opt.name.en));
+            } else if (opt?.name) {
+              optNames.push(String(opt.name));
+            }
+            for (const oName of optNames) {
+              const oNorm = normalizeSearchText(oName);
+              const oClean = stripPreorderMarkersText(oName);
+              if (oNorm && targets.has(oNorm)) return true;
+              if (oClean && cleanTargets.has(oClean)) return true;
+            }
+            return false;
+          }) || null
+        : null;
+
+    if (matchedOption) {
+      const optStatus = String(matchedOption.stock_status || 'in_stock')
+        .trim()
+        .toLowerCase();
+      if (optStatus === 'preorder') {
+        return {
+          isInStockLive: false,
+          statusLabel: 'Precomandă în catalog',
+          blockedReason: {
+            productName: productLabel,
+            variant: variantLabel,
+            reasonCode: 'live_preorder',
+            reasonLabel: 'Precomandă în catalog',
+          },
+        };
+      }
+      if (optStatus === 'sold_out' || optStatus === 'out_of_stock') {
+        return {
+          isInStockLive: false,
+          statusLabel: 'Epuizat în catalog',
+          blockedReason: {
+            productName: productLabel,
+            variant: variantLabel,
+            reasonCode: 'live_sold_out',
+            reasonLabel: 'Stoc epuizat în catalog',
+          },
+        };
+      }
+      if (optStatus !== 'in_stock') {
+        return {
+          isInStockLive: false,
+          statusLabel: `Stoc indisponibil (${optStatus})`,
+          blockedReason: {
+            productName: productLabel,
+            variant: variantLabel,
+            reasonCode: 'live_preorder',
+            reasonLabel: `Status stoc: ${optStatus}`,
+          },
+        };
+      }
+      return {
+        isInStockLive: true,
+        statusLabel: 'În stoc curent',
+      };
+    }
+
+    // No exact option matched: check if all options are non-in-stock, else fail closed
+    const allPreorder = options.every(
+      (o) => String(o?.stock_status || '').trim().toLowerCase() === 'preorder'
+    );
+    const allSoldOut = options.every((o) => {
+      const st = String(o?.stock_status || '').trim().toLowerCase();
+      return st === 'sold_out' || st === 'out_of_stock';
+    });
+
+    if (allPreorder) {
+      return {
+        isInStockLive: false,
+        statusLabel: 'Precomandă în catalog',
+        blockedReason: {
+          productName: productLabel,
+          variant: variantLabel,
+          reasonCode: 'live_preorder',
+          reasonLabel: 'Precomandă în catalog',
+        },
+      };
+    }
+
+    if (allSoldOut) {
+      return {
+        isInStockLive: false,
+        statusLabel: 'Epuizat în catalog',
+        blockedReason: {
+          productName: productLabel,
+          variant: variantLabel,
+          reasonCode: 'live_sold_out',
+          reasonLabel: 'Stoc epuizat în catalog',
+        },
+      };
+    }
+
+    return {
+      isInStockLive: false,
+      statusLabel: 'Variantă neidentificată',
+      blockedReason: {
+        productName: productLabel,
+        variant: variantLabel,
+        reasonCode: 'variant_unmatched',
+        reasonLabel: 'Variantă neidentificată — verificare stoc necesară',
+      },
+    };
+  }
+
+  return {
+    isInStockLive: true,
+    statusLabel: 'În stoc curent',
+  };
+}
+
+function getPhantomOrderReason(order: any, physicalItems: any[]): string | null {
+  const totalAmount = Number(order?.total_amount ?? 0);
+  const meta =
+    order?.carrier_metadata && typeof order.carrier_metadata === 'object'
+      ? order.carrier_metadata
+      : {};
+  const hasCoupon = Boolean(order?.coupon_id || meta.coupon_id || meta.coupon_code);
+
+  if (!Number.isFinite(totalAmount) || (totalAmount <= 0 && !hasCoupon)) {
+    return 'Sumă invalidă (total <= 0 fără cupon)';
+  }
+
+  const hasValidQty = physicalItems.some((it: any) => (Number(it?.quantity) || 0) > 0);
+  if (!hasValidQty) {
+    return 'Cantitate articole fizice invalidă (<= 0)';
+  }
+
+  const fullName = `${order?.customer_firstname || ''} ${order?.customer_lastname || ''}`.trim();
+  if (!fullName || fullName.length < 2 || fullName.toLowerCase() === 'n/a') {
+    return 'Nume destinatar lipsă';
+  }
+
+  const phoneDigits = String(order?.customer_phone || '').replace(/\D/g, '');
+  if (phoneDigits.length < 6) {
+    return 'Număr telefon lipsă / invalid';
+  }
+
+  const shippingType = String(order?.shipping_type || 'hd').trim().toLowerCase();
+  if (shippingType === 'pudo') {
+    const hasLocker = Boolean(
+      String(order?.branch_id || '').trim() ||
+        String(order?.branch_name || '').trim() ||
+        String(meta.locker_id || '').trim() ||
+        String(order?.addr_line1 || '').trim()
+    );
+    if (!hasLocker) {
+      return 'Locker / adresă Easybox lipsă';
+    }
+  } else {
+    const line1 = String(order?.addr_line1 || '').trim();
+    const city = String(order?.addr_city || '').trim();
+    if (!line1 || line1.toLowerCase() === 'n/a' || !city || city.toLowerCase() === 'n/a') {
+      return 'Adresă / oraș livrare lipsă';
+    }
+  }
+
+  return null;
+}
+
 interface OrderFulfillmentClassification {
   alreadyDispatched: boolean;
+  currentlyClaiming: boolean;
   hasAwb: boolean;
   isNonFulfillableStatus: boolean;
   isUnpaidCard: boolean;
   isDigitalOnly: boolean;
+  isPhantomOrCorrupted: boolean;
+  phantomReason: string | null;
   hasPreorderItems: boolean;
   isMixedPreorder: boolean;
   isExplicitlyReleasedPreorder: boolean;
   isUnreleasedPreorder: boolean;
+  hasLiveOutOfStockOrPreorder: boolean;
+  blockedLiveItems: BlockedFulfillmentItem[];
+  evaluatedItems: Array<{
+    name: string;
+    variant?: string;
+    quantity: number;
+    isInStockLive: boolean;
+    statusLabel: string;
+  }>;
   isEligibleDefault: boolean;
 }
 
 /**
  * Classifies an order's eligibility for warehouse fulfillment dispatch.
  * Enforces strict safety against:
+ * - Live catalog preorder / sold_out / zero-stock / inactive products
  * - Unreleased pure & mixed preorders
  * - Digital-only orders
+ * - Phantom / corrupted orders (missing recipient/address/phone, <=0 total without coupon)
  * - Unpaid card / failed / cancelled / refunded / returned / shipped / delivered orders
- * - Already-AWB and already-dispatched orders
+ * - Already-AWB, currently-claiming, and already-dispatched orders
  */
-function classifyOrderForFulfillment(order: any): OrderFulfillmentClassification {
+function classifyOrderForFulfillment(
+  order: any,
+  liveProducts: LiveProductRow[]
+): OrderFulfillmentClassification {
   const status = String(order?.status || '').trim().toLowerCase();
   const paymentMethod = String(order?.payment_method || '').trim().toLowerCase();
-  const carrierId = String(order?.carrier_id || '').trim().toLowerCase();
-  const shippingType = String(order?.shipping_type || '').trim().toLowerCase();
   const meta = (order?.carrier_metadata && typeof order.carrier_metadata === 'object')
     ? order.carrier_metadata
     : {};
   const rawItems = parseOrderItemsArray(order?.items);
   const physicalItems = rawItems.filter((item: any) => !isDigitalProgramItem(item));
 
-  const alreadyDispatched = Boolean(meta.fulfillment_dispatched_at);
+  const alreadyDispatched = Boolean(
+    meta.fulfillment_dispatched_at || meta.fulfillment_dispatched === true
+  );
+  const claimingAtMs = meta.fulfillment_claiming_at
+    ? new Date(meta.fulfillment_claiming_at).getTime()
+    : NaN;
+  const currentlyClaiming =
+    Number.isFinite(claimingAtMs) && Date.now() - claimingAtMs < CLAIM_TTL_MS;
+
   const hasAwb = Boolean(order?.tracking_number && String(order.tracking_number).trim());
   const isNonFulfillableStatus = NON_FULFILLABLE_STATUSES.has(status);
 
@@ -709,26 +1141,24 @@ function classifyOrderForFulfillment(order: any): OrderFulfillmentClassification
       metaPaymentStatus === 'unpaid' ||
       metaPaymentStatus === 'failed' ||
       metaPaymentStatus === 'pending' ||
+      metaPaymentStatus === 'canceled' ||
+      metaPaymentStatus === 'cancelled' ||
       meta.paid === false
     ));
 
-  const isDigitalOnly =
-    Boolean(meta.is_digital_only === true) ||
-    carrierId === 'digital' ||
-    shippingType === 'digital' ||
-    rawItems.length === 0 ||
-    physicalItems.length === 0 ||
-    isDigitalOnlyCart(rawItems);
+  const isDigitalOnly = isDigitalOnlyOrderRow(order);
+  const phantomReason = !isDigitalOnly ? getPhantomOrderReason(order, physicalItems) : null;
+  const isPhantomOrCorrupted = Boolean(phantomReason);
 
   const hasPreorderItems =
     status === 'preorder' ||
     meta.is_preorder === true ||
     rawItems.some((item: any) => isItemSnapshotPreorder(item));
 
-  const hasInStockPhysicalItems = rawItems.some(
+  const hasInStockSnapshotPhysical = rawItems.some(
     (item: any) => !isItemSnapshotPreorder(item) && !isDigitalProgramItem(item)
   );
-  const isMixedPreorder = hasPreorderItems && hasInStockPhysicalItems;
+  const isMixedPreorder = hasPreorderItems && hasInStockSnapshotPhysical;
 
   const isExplicitlyReleasedPreorder =
     status !== 'preorder' &&
@@ -736,36 +1166,129 @@ function classifyOrderForFulfillment(order: any): OrderFulfillmentClassification
 
   const isUnreleasedPreorder = hasPreorderItems && !isExplicitlyReleasedPreorder;
 
+  const blockedLiveItems: BlockedFulfillmentItem[] = [];
+  const evaluatedItems: Array<{
+    name: string;
+    variant?: string;
+    quantity: number;
+    isInStockLive: boolean;
+    statusLabel: string;
+  }> = [];
+
+  if (!isDigitalOnly) {
+    for (const item of physicalItems) {
+      const liveEval = evaluatePhysicalItemLiveStock(item, liveProducts);
+      const itemName = getLocalizedTextSimple(item?.name) || 'Produs';
+      const variantLabel = getLocalizedTextSimple(item?.selectedVariant?.name ?? item?.variant) || undefined;
+      evaluatedItems.push({
+        name: itemName,
+        variant: variantLabel,
+        quantity: Number(item?.quantity) || 1,
+        isInStockLive: liveEval.isInStockLive,
+        statusLabel: liveEval.statusLabel,
+      });
+      if (!liveEval.isInStockLive && liveEval.blockedReason) {
+        blockedLiveItems.push(liveEval.blockedReason);
+      }
+    }
+  }
+
+  const hasLiveOutOfStockOrPreorder = blockedLiveItems.length > 0;
+
   const isEligibleDefault =
     !alreadyDispatched &&
+    !currentlyClaiming &&
     !hasAwb &&
     !isNonFulfillableStatus &&
     !isUnpaidCard &&
     !isDigitalOnly &&
-    !isUnreleasedPreorder;
+    !isPhantomOrCorrupted &&
+    !isUnreleasedPreorder &&
+    !hasLiveOutOfStockOrPreorder;
 
   return {
     alreadyDispatched,
+    currentlyClaiming,
     hasAwb,
     isNonFulfillableStatus,
     isUnpaidCard,
     isDigitalOnly,
+    isPhantomOrCorrupted,
+    phantomReason,
     hasPreorderItems,
     isMixedPreorder,
     isExplicitlyReleasedPreorder,
     isUnreleasedPreorder,
+    hasLiveOutOfStockOrPreorder,
+    blockedLiveItems,
+    evaluatedItems,
     isEligibleDefault,
+  };
+}
+
+function buildBlockedOrderEntry(
+  order: any,
+  cls: OrderFulfillmentClassification
+): BlockedFulfillmentOrder {
+  const formatted = formatOrderForFulfillment(order);
+  const blockedItems: BlockedFulfillmentItem[] = [...cls.blockedLiveItems];
+
+  if (cls.isPhantomOrCorrupted && cls.phantomReason) {
+    blockedItems.push({
+      productName: 'Date comandă incomplete / invalide',
+      reasonCode: 'phantom_invalid',
+      reasonLabel: cls.phantomReason,
+    });
+  } else if (cls.isUnreleasedPreorder && blockedItems.length === 0) {
+    blockedItems.push({
+      productName: 'Comandă în așteptare (Precomandă neeliberată)',
+      reasonCode: 'snapshot_preorder',
+      reasonLabel: 'Status Precomandă — necesită eliberare manuală',
+    });
+  }
+
+  let blockReasonType: BlockedFulfillmentOrder['blockReasonType'] = 'live_stock';
+  if (cls.isPhantomOrCorrupted) {
+    blockReasonType = 'phantom_invalid';
+  } else if (cls.isMixedPreorder) {
+    blockReasonType = 'mixed_preorder';
+  } else if (cls.isUnreleasedPreorder && !cls.hasLiveOutOfStockOrPreorder) {
+    blockReasonType = 'preorder_hold';
+  }
+
+  const summaryParts = blockedItems.map((bi) =>
+    bi.variant ? `${bi.productName} (${bi.variant}): ${bi.reasonLabel}` : `${bi.productName}: ${bi.reasonLabel}`
+  );
+
+  return {
+    id: formatted.id,
+    supabaseId: formatted.supabaseId,
+    date: formatted.date,
+    customer: formatted.customer,
+    city: formatted.city,
+    country: formatted.country,
+    total: formatted.total,
+    status: String(order?.status || 'processing'),
+    paymentMethod: formatted.paymentMethod,
+    blockReasonType,
+    blockSummary: Array.from(new Set(summaryParts)).join(' | ') || 'Blocată temporar',
+    blockedItems,
+    allItems: cls.evaluatedItems,
   };
 }
 
 interface EvaluatedOrdersResult {
   readyRawOrders: any[];
+  blockedOrders: BlockedFulfillmentOrder[];
   excludedPreorders: number;
   excludedMixedPreorders: number;
+  excludedLiveOutOfStock: number;
+  excludedPhantomOrInvalid: number;
   skippedPreorderOrderIds: string[];
   excludedDigital: number;
   excludedAlreadyDispatched: number;
   excludedUnpaidOrInvalid: number;
+  liveProductsError?: string;
 }
 
 async function evaluateFulfillmentOrders(options?: {
@@ -773,6 +1296,28 @@ async function evaluateFulfillmentOrders(options?: {
   includeAlreadyDispatched?: boolean;
   includePreorders?: boolean;
 }): Promise<EvaluatedOrdersResult> {
+  const emptyResult = (liveProductsError?: string): EvaluatedOrdersResult => ({
+    readyRawOrders: [],
+    blockedOrders: [],
+    excludedPreorders: 0,
+    excludedMixedPreorders: 0,
+    excludedLiveOutOfStock: 0,
+    excludedPhantomOrInvalid: 0,
+    skippedPreorderOrderIds: [],
+    excludedDigital: 0,
+    excludedAlreadyDispatched: 0,
+    excludedUnpaidOrInvalid: 0,
+    ...(liveProductsError ? { liveProductsError } : {}),
+  });
+
+  // Always verify live catalog stock first — fail closed if DB query fails
+  const liveProductsRes = await fetchLiveProductsForFulfillment();
+  if (!liveProductsRes.ok) {
+    console.error('[FULFILLMENT] Failed fetching live products for stock guard:', liveProductsRes.error);
+    return emptyResult(liveProductsRes.error);
+  }
+  const liveProducts = liveProductsRes.products;
+
   let query = supabaseAdmin
     .from('orders')
     .select('*')
@@ -782,36 +1327,23 @@ async function evaluateFulfillmentOrders(options?: {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const uuids = Array.from(new Set(options.orderIds.filter(id => uuidRegex.test(id))));
     if (uuids.length === 0) {
-      return {
-        readyRawOrders: [],
-        excludedPreorders: 0,
-        excludedMixedPreorders: 0,
-        skippedPreorderOrderIds: [],
-        excludedDigital: 0,
-        excludedAlreadyDispatched: 0,
-        excludedUnpaidOrInvalid: 0,
-      };
+      return emptyResult();
     }
     query = query.in('id', uuids);
   }
 
   const { data, error } = await query;
   if (error || !data) {
-    return {
-      readyRawOrders: [],
-      excludedPreorders: 0,
-      excludedMixedPreorders: 0,
-      skippedPreorderOrderIds: [],
-      excludedDigital: 0,
-      excludedAlreadyDispatched: 0,
-      excludedUnpaidOrInvalid: 0,
-    };
+    return emptyResult(error?.message);
   }
 
   const readyRawOrders: any[] = [];
+  const blockedOrders: BlockedFulfillmentOrder[] = [];
   const seenIds = new Set<string>();
   let excludedPreorders = 0;
   let excludedMixedPreorders = 0;
+  let excludedLiveOutOfStock = 0;
+  let excludedPhantomOrInvalid = 0;
   const skippedPreorderOrderIds: string[] = [];
   let excludedDigital = 0;
   let excludedAlreadyDispatched = 0;
@@ -821,7 +1353,7 @@ async function evaluateFulfillmentOrders(options?: {
     if (!order?.id || seenIds.has(order.id)) continue;
     seenIds.add(order.id);
 
-    const cls = classifyOrderForFulfillment(order);
+    const cls = classifyOrderForFulfillment(order, liveProducts);
 
     // Hard safety gates (never bypassed even with explicit orderIds)
     if (cls.isDigitalOnly) {
@@ -834,8 +1366,27 @@ async function evaluateFulfillmentOrders(options?: {
       continue;
     }
 
-    if (!options?.includeAlreadyDispatched && cls.alreadyDispatched) {
+    if (!options?.includeAlreadyDispatched && (cls.alreadyDispatched || cls.currentlyClaiming)) {
       excludedAlreadyDispatched++;
+      continue;
+    }
+
+    if (cls.isPhantomOrCorrupted) {
+      excludedPhantomOrInvalid++;
+      excludedUnpaidOrInvalid++;
+      blockedOrders.push(buildBlockedOrderEntry(order, cls));
+      continue;
+    }
+
+    // Live catalog stock gate: NEVER allow preorder/out-of-stock/inactive physical products
+    if (cls.hasLiveOutOfStockOrPreorder) {
+      excludedLiveOutOfStock++;
+      if (cls.isUnreleasedPreorder || cls.hasPreorderItems) {
+        excludedPreorders++;
+        if (cls.isMixedPreorder) excludedMixedPreorders++;
+      }
+      skippedPreorderOrderIds.push(getCanonicalOrderNumber(order));
+      blockedOrders.push(buildBlockedOrderEntry(order, cls));
       continue;
     }
 
@@ -843,6 +1394,7 @@ async function evaluateFulfillmentOrders(options?: {
       excludedPreorders++;
       if (cls.isMixedPreorder) excludedMixedPreorders++;
       skippedPreorderOrderIds.push(getCanonicalOrderNumber(order));
+      blockedOrders.push(buildBlockedOrderEntry(order, cls));
       continue;
     }
 
@@ -851,8 +1403,11 @@ async function evaluateFulfillmentOrders(options?: {
 
   return {
     readyRawOrders,
+    blockedOrders,
     excludedPreorders,
     excludedMixedPreorders,
+    excludedLiveOutOfStock,
+    excludedPhantomOrInvalid,
     skippedPreorderOrderIds,
     excludedDigital,
     excludedAlreadyDispatched,
@@ -861,7 +1416,7 @@ async function evaluateFulfillmentOrders(options?: {
 }
 
 /**
- * Get orders ready for fulfillment (filters out already dispatched orders, digital-only, unpaid/cancelled/AWB, and unreleased preorders)
+ * Get orders ready for fulfillment (filters out already dispatched orders, digital-only, unpaid/cancelled/AWB, phantom, unreleased preorders, and live out-of-stock/preorder products)
  */
 export async function getFulfillmentOrdersReady(
   orderIds?: string[],
@@ -885,49 +1440,33 @@ export async function getFulfillmentOrdersReady(
 }
 
 /**
- * Get count of orders waiting for fulfillment vs already dispatched (and held preorders)
+ * Get count of orders waiting for fulfillment vs already dispatched (and held preorders / live-blocked stock)
  */
 export async function getFulfillmentPendingCount(): Promise<{
   pendingCount: number;
   dispatchedCount: number;
   heldPreorderCount: number;
+  blockedLiveStockCount: number;
 }> {
   const isAuthorized = await isAdminAuthorized();
-  if (!isAuthorized) return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0 };
+  if (!isAuthorized) {
+    return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0, blockedLiveStockCount: 0 };
+  }
 
   try {
-    const { data } = await supabaseAdmin
-      .from('orders')
-      .select('id, status, payment_method, tracking_number, carrier_id, shipping_type, carrier_metadata, items');
-
-    if (!data) return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0 };
-
-    let pendingCount = 0;
-    let dispatchedCount = 0;
-    let heldPreorderCount = 0;
-
-    for (const o of data) {
-      const cls = classifyOrderForFulfillment(o);
-      if (cls.isDigitalOnly) {
-        continue;
-      }
-      if (cls.alreadyDispatched) {
-        dispatchedCount++;
-        continue;
-      }
-      if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.hasAwb) {
-        continue;
-      }
-      if (cls.isUnreleasedPreorder) {
-        heldPreorderCount++;
-        continue;
-      }
-      pendingCount++;
+    const evaluated = await evaluateFulfillmentOrders();
+    if (evaluated.liveProductsError) {
+      return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0, blockedLiveStockCount: 0 };
     }
 
-    return { pendingCount, dispatchedCount, heldPreorderCount };
+    return {
+      pendingCount: evaluated.readyRawOrders.length,
+      dispatchedCount: evaluated.excludedAlreadyDispatched,
+      heldPreorderCount: evaluated.excludedPreorders,
+      blockedLiveStockCount: evaluated.excludedLiveOutOfStock,
+    };
   } catch {
-    return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0 };
+    return { pendingCount: 0, dispatchedCount: 0, heldPreorderCount: 0, blockedLiveStockCount: 0 };
   }
 }
 
@@ -935,6 +1474,9 @@ export async function getFulfillmentPendingCount(): Promise<{
  * Generate standardized CSV content for warehouse fulfillment systems (Excel compatible with UTF-8 BOM)
  */
 export async function generateFulfillmentCsv(orders: FulfillmentOrderSummary[]): Promise<string> {
+  const isAuthorized = await isAdminOrCronAuthorized();
+  if (!isAuthorized) throw new Error('Neautorizat');
+
   const escapeCell = (val: any) => {
     if (val === null || val === undefined) return '';
     const str = String(val).trim();
@@ -1108,18 +1650,21 @@ function getSamplePreviewOrders(): FulfillmentOrderSummary[] {
 }
 
 /**
- * Full queue overview for FulfillmentModal (separating genuine pending orders from template preview fallback and held preorders)
+ * Full queue overview for FulfillmentModal (separating genuine pending orders from template preview fallback, held preorders, and live-blocked orders)
  */
 export async function getFulfillmentQueueOverview(): Promise<FulfillmentQueueOverview> {
   const isAuthorized = await isAdminOrCronAuthorized();
   if (!isAuthorized) {
     return {
       pendingOrders: [],
+      blockedOrders: [],
       templatePreviewOrders: [],
       isSamplePreview: false,
       isHistoricalPreview: false,
       excludedPreorders: 0,
       excludedMixedPreorders: 0,
+      excludedLiveOutOfStock: 0,
+      excludedPhantomOrInvalid: 0,
       skippedPreorderOrderIds: [],
       excludedDigital: 0,
       excludedAlreadyDispatched: 0,
@@ -1133,27 +1678,36 @@ export async function getFulfillmentQueueOverview(): Promise<FulfillmentQueueOve
   if (pendingOrders.length > 0) {
     return {
       pendingOrders,
+      blockedOrders: evaluated.blockedOrders,
       templatePreviewOrders: pendingOrders,
       isSamplePreview: false,
       isHistoricalPreview: false,
       excludedPreorders: evaluated.excludedPreorders,
       excludedMixedPreorders: evaluated.excludedMixedPreorders,
+      excludedLiveOutOfStock: evaluated.excludedLiveOutOfStock,
+      excludedPhantomOrInvalid: evaluated.excludedPhantomOrInvalid,
       skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
       excludedDigital: evaluated.excludedDigital,
       excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
       excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+      ...(evaluated.liveProductsError ? { liveProductsError: evaluated.liveProductsError } : {}),
     };
   }
 
-  const anyOrders = await getFulfillmentOrdersReady(undefined, { includeAlreadyDispatched: true });
+  const anyOrders = evaluated.liveProductsError
+    ? []
+    : await getFulfillmentOrdersReady(undefined, { includeAlreadyDispatched: true });
   if (anyOrders.length > 0) {
     return {
       pendingOrders: [],
+      blockedOrders: evaluated.blockedOrders,
       templatePreviewOrders: anyOrders.slice(0, 10),
       isSamplePreview: false,
       isHistoricalPreview: true,
       excludedPreorders: evaluated.excludedPreorders,
       excludedMixedPreorders: evaluated.excludedMixedPreorders,
+      excludedLiveOutOfStock: evaluated.excludedLiveOutOfStock,
+      excludedPhantomOrInvalid: evaluated.excludedPhantomOrInvalid,
       skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
       excludedDigital: evaluated.excludedDigital,
       excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
@@ -1163,15 +1717,19 @@ export async function getFulfillmentQueueOverview(): Promise<FulfillmentQueueOve
 
   return {
     pendingOrders: [],
+    blockedOrders: evaluated.blockedOrders,
     templatePreviewOrders: getSamplePreviewOrders(),
     isSamplePreview: true,
     isHistoricalPreview: false,
     excludedPreorders: evaluated.excludedPreorders,
     excludedMixedPreorders: evaluated.excludedMixedPreorders,
+    excludedLiveOutOfStock: evaluated.excludedLiveOutOfStock,
+    excludedPhantomOrInvalid: evaluated.excludedPhantomOrInvalid,
     skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
     excludedDigital: evaluated.excludedDigital,
     excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
     excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+    ...(evaluated.liveProductsError ? { liveProductsError: evaluated.liveProductsError } : {}),
   };
 }
 
@@ -1190,6 +1748,9 @@ export async function getFulfillmentFormattedSubject(
   orders: FulfillmentOrderSummary[],
   trigger?: 'manual' | 'scheduled_8am'
 ): Promise<string> {
+  const isAuthorized = await isAdminOrCronAuthorized();
+  if (!isAuthorized) throw new Error('Neautorizat');
+
   const totalItems = orders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + (Number(i.quantity) || 1), 0), 0);
   const roCount = orders.filter(o => {
     const c = (o.country || 'RO').trim().toUpperCase();
@@ -1225,20 +1786,25 @@ export async function releasePreorderForFulfillmentAction(orderIds: string[]) {
   }
 
   try {
-    const { data: rows, error } = await supabaseAdmin
-      .from('orders')
-      .select('id, status, payment_method, tracking_number, carrier_id, shipping_type, carrier_metadata, items, payment_intent_id, receipt_url')
-      .in('id', uuids);
+    const [ordersRes, liveProductsRes] = await Promise.all([
+      supabaseAdmin
+        .from('orders')
+        .select('id, status, payment_method, tracking_number, carrier_id, shipping_type, carrier_metadata, items, payment_intent_id, receipt_url')
+        .in('id', uuids),
+      fetchLiveProductsForFulfillment(),
+    ]);
 
+    const { data: rows, error } = ordersRes;
     if (error || !rows || rows.length === 0) {
       return { success: false, error: error?.message || 'Comenzile nu au fost găsite.' };
     }
 
+    const liveProducts = liveProductsRes.ok ? liveProductsRes.products : [];
     const releasedAt = new Date().toISOString();
     const releasedOrderNumbers: string[] = [];
 
     for (const row of rows) {
-      const cls = classifyOrderForFulfillment(row);
+      const cls = classifyOrderForFulfillment(row, liveProducts);
       if (cls.isNonFulfillableStatus || cls.isUnpaidCard || cls.isDigitalOnly) continue;
 
       const currentMeta = (row.carrier_metadata && typeof row.carrier_metadata === 'object')
@@ -1267,6 +1833,7 @@ export async function releasePreorderForFulfillmentAction(orderIds: string[]) {
 
     revalidatePath('/admin/orders');
     revalidatePath('/admin/preorders');
+    revalidatePath('/admin/fulfillment');
 
     return {
       success: releasedOrderNumbers.length > 0,
@@ -1281,10 +1848,47 @@ export async function releasePreorderForFulfillmentAction(orderIds: string[]) {
 async function acquireDistributedDispatchLock(trigger: 'manual' | 'scheduled_8am'): Promise<{
   acquired: boolean;
   token?: string;
+  redisLocked?: boolean;
   reason?: string;
 }> {
   const nowMs = Date.now();
   const lockToken = `lock_${nowMs}_${Math.random().toString(36).slice(2, 10)}`;
+  let redisLocked = false;
+
+  // Layer 1: Optional Upstash Redis SET NX atomic lock (fast cross-instance exclusion)
+  if (redisClient) {
+    try {
+      const ttlSeconds = Math.max(30, Math.ceil(DISPATCH_LOCK_TTL_MS / 1000));
+      const setRes = await redisClient.set(REDIS_DISPATCH_LOCK_KEY, lockToken, {
+        nx: true,
+        ex: ttlSeconds,
+      });
+      if (setRes !== 'OK') {
+        return {
+          acquired: false,
+          reason: 'O expediere către fulfillment este deja în curs de procesare (lock activ). Te rugăm să aștepți finalizarea ei.',
+        };
+      }
+      redisLocked = true;
+    } catch (redisErr) {
+      console.warn('[FULFILLMENT LOCK] Redis lock check failed, falling back to DB CAS lock:', redisErr);
+    }
+  }
+
+  const releaseRedisIfHeld = async () => {
+    if (!redisLocked || !redisClient) return;
+    try {
+      await redisClient.eval(
+        `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+        [REDIS_DISPATCH_LOCK_KEY],
+        [lockToken]
+      );
+    } catch {
+      // Ignore cleanup error
+    }
+  };
+
+  // Layer 2: Supabase store_settings optimistic CAS lock
   const newLockValue = {
     locked: true,
     token: lockToken,
@@ -1300,6 +1904,7 @@ async function acquireDistributedDispatchLock(trigger: 'manual' | 'scheduled_8am
     .maybeSingle();
 
   if (readErr) {
+    await releaseRedisIfHeld();
     return { acquired: false, reason: `Eroare citire lock fulfillment: ${readErr.message}` };
   }
 
@@ -1309,17 +1914,19 @@ async function acquireDistributedDispatchLock(trigger: 'manual' | 'scheduled_8am
       .insert({ key: DISPATCH_LOCK_KEY, value: newLockValue });
 
     if (insertErr) {
+      await releaseRedisIfHeld();
       return {
         acquired: false,
         reason: 'O altă expediere către fulfillment a început chiar acum. Reîncearcă în câteva secunde.',
       };
     }
-    return { acquired: true, token: lockToken };
+    return { acquired: true, token: lockToken, redisLocked };
   }
 
   const prevVal = (existingRow.value && typeof existingRow.value === 'object') ? existingRow.value : {};
   const prevExpiresMs = prevVal.expires_at ? new Date(prevVal.expires_at).getTime() : 0;
   if (prevVal.locked === true && Number.isFinite(prevExpiresMs) && prevExpiresMs > nowMs) {
+    await releaseRedisIfHeld();
     return {
       acquired: false,
       reason: 'O expediere către fulfillment este deja în curs de procesare. Te rugăm să aștepți finalizarea ei.',
@@ -1340,16 +1947,17 @@ async function acquireDistributedDispatchLock(trigger: 'manual' | 'scheduled_8am
 
   const { data: casUpdated, error: casErr } = await casQuery.select('key').maybeSingle();
   if (casErr || !casUpdated) {
+    await releaseRedisIfHeld();
     return {
       acquired: false,
       reason: 'O altă expediere către fulfillment este deja în curs. Reîncearcă în câteva secunde.',
     };
   }
 
-  return { acquired: true, token: lockToken };
+  return { acquired: true, token: lockToken, redisLocked };
 }
 
-async function releaseDistributedDispatchLock(lockToken: string): Promise<void> {
+async function releaseDistributedDispatchLock(lockToken: string, redisLocked?: boolean): Promise<void> {
   try {
     const releasedToken = `released_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     await supabaseAdmin
@@ -1364,7 +1972,139 @@ async function releaseDistributedDispatchLock(lockToken: string): Promise<void> 
       .eq('key', DISPATCH_LOCK_KEY)
       .filter('value->>token', 'eq', lockToken);
   } catch (err) {
-    console.error('[FULFILLMENT LOCK] Failed to release lock:', err);
+    console.error('[FULFILLMENT LOCK] Failed to release DB lock:', err);
+  }
+
+  if (redisLocked && redisClient) {
+    try {
+      await redisClient.eval(
+        `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+        [REDIS_DISPATCH_LOCK_KEY],
+        [lockToken]
+      );
+    } catch (err) {
+      console.error('[FULFILLMENT LOCK] Failed to release Redis lock:', err);
+    }
+  }
+}
+
+async function claimOrdersForDispatchBatch(
+  candidateOrders: any[],
+  batchId: string,
+  claimTimestamp: string,
+  trigger: 'manual' | 'scheduled_8am',
+  allowForceResend: boolean
+): Promise<any[]> {
+  const claimedOrders: any[] = [];
+
+  for (const candidate of candidateOrders) {
+    const uuid = candidate?.id;
+    if (!uuid) continue;
+
+    const { data: freshOrder, error: fetchErr } = await supabaseAdmin
+      .from('orders')
+      .select('id, status, tracking_number, carrier_metadata')
+      .eq('id', uuid)
+      .maybeSingle();
+
+    if (fetchErr || !freshOrder) continue;
+
+    const statusLower = String(freshOrder.status || '').trim().toLowerCase();
+    if (NON_FULFILLABLE_STATUSES.has(statusLower) || UNPAID_STATUSES.has(statusLower) || statusLower === 'preorder') {
+      continue;
+    }
+
+    if (freshOrder.tracking_number && String(freshOrder.tracking_number).trim()) {
+      continue;
+    }
+
+    const currentMeta =
+      freshOrder.carrier_metadata && typeof freshOrder.carrier_metadata === 'object'
+        ? freshOrder.carrier_metadata
+        : {};
+
+    if (!allowForceResend && (currentMeta.fulfillment_dispatched_at || currentMeta.fulfillment_dispatched === true)) {
+      continue;
+    }
+
+    const existingClaimAt = currentMeta.fulfillment_claiming_at
+      ? String(currentMeta.fulfillment_claiming_at)
+      : null;
+    if (existingClaimAt) {
+      const claimAgeMs = Date.now() - new Date(existingClaimAt).getTime();
+      if (Number.isFinite(claimAgeMs) && claimAgeMs < CLAIM_TTL_MS) {
+        continue;
+      }
+    }
+
+    const nextMeta = {
+      ...currentMeta,
+      fulfillment_claiming_at: claimTimestamp,
+      fulfillment_claiming_batch_id: batchId,
+      fulfillment_claiming_trigger: trigger,
+    };
+
+    let claimQuery = supabaseAdmin
+      .from('orders')
+      .update({
+        carrier_metadata: nextMeta,
+        updated_at: claimTimestamp,
+      })
+      .eq('id', uuid)
+      .is('tracking_number', null);
+
+    if (!allowForceResend) {
+      claimQuery = claimQuery.is('carrier_metadata->>fulfillment_dispatched_at', null);
+    }
+    if (existingClaimAt) {
+      claimQuery = claimQuery.filter('carrier_metadata->>fulfillment_claiming_at', 'eq', existingClaimAt);
+    } else {
+      claimQuery = claimQuery.is('carrier_metadata->>fulfillment_claiming_at', null);
+    }
+
+    const { data: claimedRow, error: claimErr } = await claimQuery.select('id').maybeSingle();
+    if (!claimErr && claimedRow) {
+      claimedOrders.push(candidate);
+    }
+  }
+
+  return claimedOrders;
+}
+
+async function rollbackOrderDispatchClaims(claimedOrders: any[], batchId: string): Promise<void> {
+  const rolledBackAt = new Date().toISOString();
+  for (const row of claimedOrders) {
+    if (!row?.id) continue;
+    try {
+      const { data: freshOrder } = await supabaseAdmin
+        .from('orders')
+        .select('id, carrier_metadata')
+        .eq('id', row.id)
+        .maybeSingle();
+
+      if (!freshOrder) continue;
+      const currentMeta =
+        freshOrder.carrier_metadata && typeof freshOrder.carrier_metadata === 'object'
+          ? { ...freshOrder.carrier_metadata }
+          : {};
+
+      if (currentMeta.fulfillment_claiming_batch_id !== batchId) continue;
+
+      delete currentMeta.fulfillment_claiming_at;
+      delete currentMeta.fulfillment_claiming_batch_id;
+      delete currentMeta.fulfillment_claiming_trigger;
+
+      await supabaseAdmin
+        .from('orders')
+        .update({
+          carrier_metadata: currentMeta,
+          updated_at: rolledBackAt,
+        })
+        .eq('id', row.id)
+        .filter('carrier_metadata->>fulfillment_claiming_batch_id', 'eq', batchId);
+    } catch (err) {
+      console.error(`[FULFILLMENT CLAIM ROLLBACK] Failed rolling back order ${row.id}:`, err);
+    }
   }
 }
 
@@ -1439,7 +2179,7 @@ async function recordCriticalReconciliationAlert(params: {
 
 /**
  * Dispatch orders to fulfillment center email (manual or automated cron)
- * Protected by in-process mutex + distributed DB CAS lock + atomic claim + reconciliation logging.
+ * Protected by in-process mutex + distributed Redis/DB CAS locks + live catalog stock verification + two-phase claim with rollback.
  */
 export async function dispatchOrdersToFulfillment(options?: {
   orderIds?: string[];
@@ -1457,7 +2197,7 @@ export async function dispatchOrdersToFulfillment(options?: {
     return { success: false, error: 'Neautorizat' };
   }
 
-  // Cron must NEVER bypass duplicate protection or preorder hold
+  // Cron must NEVER bypass duplicate protection or preorder hold; live stock guard is ALWAYS enforced.
   const allowForceResend = trigger === 'manual' && Boolean(options?.forceResend);
   const allowPreorderOverride = trigger === 'manual' && Boolean(options?.allowUnreleasedPreorderOverride);
 
@@ -1490,29 +2230,43 @@ export async function dispatchOrdersToFulfillment(options?: {
         };
       }
 
-      // Re-query eligible orders inside the lock so stale snapshots cannot cause duplicates or lost orders
+      // Re-query eligible orders + live products inside the lock
       const evaluated = await evaluateFulfillmentOrders({
         orderIds: options?.orderIds,
         includeAlreadyDispatched: allowForceResend,
         includePreorders: allowPreorderOverride,
       });
 
-      const orders = evaluated.readyRawOrders.map(formatOrderForFulfillment);
+      if (evaluated.liveProductsError) {
+        return {
+          success: false,
+          count: 0,
+          error: `Nu s-a putut verifica stocul live din catalog (${evaluated.liveProductsError}). Expedierea a fost oprită preventiv.`,
+        };
+      }
 
-      if (orders.length === 0) {
-        const preorderNote = evaluated.excludedPreorders > 0
-          ? ` ${evaluated.excludedPreorders} ${evaluated.excludedPreorders === 1 ? 'precomandă activă a fost reținută' : 'precomenzi active au fost reținute'} (nu se trimit până la eliberarea stocului).`
-          : '';
+      if (evaluated.readyRawOrders.length === 0) {
+        const heldNotes: string[] = [];
+        if (evaluated.excludedLiveOutOfStock > 0) {
+          heldNotes.push(`${evaluated.excludedLiveOutOfStock} ${evaluated.excludedLiveOutOfStock === 1 ? 'comandă blocată' : 'comenzi blocate'} (produse pe precomandă / fără stoc în catalog)`);
+        }
+        if (evaluated.excludedPreorders > evaluated.excludedLiveOutOfStock) {
+          const snapshotOnly = evaluated.excludedPreorders - evaluated.excludedLiveOutOfStock;
+          heldNotes.push(`${snapshotOnly} ${snapshotOnly === 1 ? 'precomandă reținută' : 'precomenzi reținute'}`);
+        }
+        const suffix = heldNotes.length > 0 ? ` (${heldNotes.join('; ')}).` : '';
         return {
           success: true,
           count: 0,
           excludedPreorders: evaluated.excludedPreorders,
           excludedMixedPreorders: evaluated.excludedMixedPreorders,
+          excludedLiveOutOfStock: evaluated.excludedLiveOutOfStock,
+          excludedPhantomOrInvalid: evaluated.excludedPhantomOrInvalid,
           skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
           excludedDigital: evaluated.excludedDigital,
           excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
           excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
-          message: `Toate comenzile active eligibile au fost deja transmise către fulfillment. Nu există comenzi noi de trimis (protecție anti-duplicate activă).${preorderNote}`
+          message: `Nu există comenzi eligibile în stoc curent de transmis către fulfillment.${suffix}`
         };
       }
 
@@ -1520,6 +2274,32 @@ export async function dispatchOrdersToFulfillment(options?: {
       const dateStr = sentAt.split('T')[0];
       const batchId = `disp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
+      // Phase 1: Atomically claim each eligible order BEFORE sending any email
+      const claimedRawOrders = await claimOrdersForDispatchBatch(
+        evaluated.readyRawOrders,
+        batchId,
+        sentAt,
+        trigger,
+        allowForceResend
+      );
+
+      if (claimedRawOrders.length === 0) {
+        return {
+          success: true,
+          count: 0,
+          excludedPreorders: evaluated.excludedPreorders,
+          excludedMixedPreorders: evaluated.excludedMixedPreorders,
+          excludedLiveOutOfStock: evaluated.excludedLiveOutOfStock,
+          excludedPhantomOrInvalid: evaluated.excludedPhantomOrInvalid,
+          skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
+          excludedDigital: evaluated.excludedDigital,
+          excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
+          excludedUnpaidOrInvalid: evaluated.excludedUnpaidOrInvalid,
+          message: 'Comenzile eligibile au fost deja revendicate sau expediate de un alt proces.'
+        };
+      }
+
+      const orders = claimedRawOrders.map(formatOrderForFulfillment);
       const totalItems = orders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + (Number(i.quantity) || 1), 0), 0);
       const roCount = orders.filter(o => {
         const c = (o.country || 'RO').trim().toUpperCase();
@@ -1539,7 +2319,7 @@ export async function dispatchOrdersToFulfillment(options?: {
       const csvContent = await generateFulfillmentCsv(orders);
       const csvFilename = `comenzi_trenzone_${dateStr}.csv`;
 
-      // Send email ONLY after acquiring lock and before marking orders as dispatched
+      // Send email ONLY for atomically claimed orders
       const emailRes = await sendFulfillmentDispatchEmail(settings.email.trim(), {
         orders,
         sentAt,
@@ -1553,9 +2333,12 @@ export async function dispatchOrdersToFulfillment(options?: {
 
       const ordersSnapshot = orders.map(toOrderSnapshot);
       const orderNumbers = orders.map((o) => o.id);
-      const orderIds = evaluated.readyRawOrders.map((r) => r.id);
+      const orderIds = claimedRawOrders.map((r) => r.id);
 
       if (!emailRes.success) {
+        // Rollback claim so failed email delivery does not lock out valid orders
+        await rollbackOrderDispatchClaims(claimedRawOrders, batchId);
+
         await appendFulfillmentHistoryLog({
           id: batchId,
           sentAt,
@@ -1584,6 +2367,8 @@ export async function dispatchOrdersToFulfillment(options?: {
           batchId,
           excludedPreorders: evaluated.excludedPreorders,
           excludedMixedPreorders: evaluated.excludedMixedPreorders,
+          excludedLiveOutOfStock: evaluated.excludedLiveOutOfStock,
+          excludedPhantomOrInvalid: evaluated.excludedPhantomOrInvalid,
           skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
           excludedDigital: evaluated.excludedDigital,
           excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
@@ -1592,10 +2377,10 @@ export async function dispatchOrdersToFulfillment(options?: {
         };
       }
 
-      // Email succeeded — atomically claim/mark dispatched orders and track any DB update failures for reconciliation
+      // Phase 2: Email succeeded — finalize claim into permanent fulfillment_dispatched state
       const failedDbUpdates: Array<{ uuid: string; displayId: string; error: string }> = [];
 
-      for (const rawOrder of evaluated.readyRawOrders) {
+      for (const rawOrder of claimedRawOrders) {
         const uuid = rawOrder.id;
         const displayId = getCanonicalOrderNumber(rawOrder);
         let updatedOk = false;
@@ -1609,21 +2394,26 @@ export async function dispatchOrdersToFulfillment(options?: {
             .maybeSingle();
 
           if (fetchErr || !freshOrder) {
-            lastErr = fetchErr?.message || 'Order not found during post-dispatch claim';
+            lastErr = fetchErr?.message || 'Order not found during post-dispatch finalize';
             continue;
           }
 
           const currentMeta = (freshOrder.carrier_metadata && typeof freshOrder.carrier_metadata === 'object')
-            ? freshOrder.carrier_metadata
+            ? { ...freshOrder.carrier_metadata }
             : {};
 
-          if (!allowForceResend && currentMeta.fulfillment_dispatched_at) {
+          if (!allowForceResend && (currentMeta.fulfillment_dispatched_at || currentMeta.fulfillment_dispatched === true)) {
             updatedOk = true;
             break;
           }
 
+          delete currentMeta.fulfillment_claiming_at;
+          delete currentMeta.fulfillment_claiming_batch_id;
+          delete currentMeta.fulfillment_claiming_trigger;
+
           const nextMeta = {
             ...currentMeta,
+            fulfillment_dispatched: true,
             fulfillment_dispatched_at: sentAt,
             fulfillment_dispatched_to: settings.email.trim(),
             fulfillment_dispatch_id: batchId,
@@ -1642,11 +2432,11 @@ export async function dispatchOrdersToFulfillment(options?: {
             updateQuery = updateQuery.is('carrier_metadata->>fulfillment_dispatched_at', null);
           }
 
-          const { data: claimedRow, error: updateErr } = await updateQuery.select('id').maybeSingle();
-          if (!updateErr && claimedRow) {
+          const { data: finalizedRow, error: updateErr } = await updateQuery.select('id').maybeSingle();
+          if (!updateErr && finalizedRow) {
             updatedOk = true;
           } else {
-            lastErr = updateErr?.message || 'Atomic claim returned 0 rows';
+            lastErr = updateErr?.message || 'Atomic finalize returned 0 rows';
             if (attempt === 0) {
               await new Promise(resolve => setTimeout(resolve, 250));
             }
@@ -1727,6 +2517,8 @@ export async function dispatchOrdersToFulfillment(options?: {
         sentAt,
         excludedPreorders: evaluated.excludedPreorders,
         excludedMixedPreorders: evaluated.excludedMixedPreorders,
+        excludedLiveOutOfStock: evaluated.excludedLiveOutOfStock,
+        excludedPhantomOrInvalid: evaluated.excludedPhantomOrInvalid,
         skippedPreorderOrderIds: evaluated.skippedPreorderOrderIds,
         excludedDigital: evaluated.excludedDigital,
         excludedAlreadyDispatched: evaluated.excludedAlreadyDispatched,
@@ -1734,7 +2526,7 @@ export async function dispatchOrdersToFulfillment(options?: {
         reconciliationWarning,
       };
     } finally {
-      await releaseDistributedDispatchLock(lockRes.token);
+      await releaseDistributedDispatchLock(lockRes.token, lockRes.redisLocked);
     }
   })();
 

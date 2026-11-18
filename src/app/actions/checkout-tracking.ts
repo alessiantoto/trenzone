@@ -41,6 +41,9 @@ export async function trackCheckoutSession(data: {
     }
 
     const emailClean = data.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
+      return { success: false, error: "Invalid email" };
+    }
     const payload = {
       payment_intent_id: data.paymentIntentId || null,
       email: emailClean,
@@ -67,7 +70,7 @@ export async function trackCheckoutSession(data: {
     if (payload.payment_intent_id) {
       const { data: existing, error: fetchError } = await supabaseAdmin
         .from("checkout_sessions")
-        .select("id, status")
+        .select("id, status, email")
         .eq("payment_intent_id", payload.payment_intent_id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -81,6 +84,9 @@ export async function trackCheckoutSession(data: {
       }
 
       if (existing) {
+        if (existing.email && existing.email.toLowerCase() !== emailClean) {
+          return { success: false, error: "Session email mismatch" };
+        }
         const { error: updateError } = await supabaseAdmin
           .from("checkout_sessions")
           .update(payload)
@@ -122,53 +128,5 @@ export async function trackCheckoutSession(data: {
   } catch (error: any) {
     console.error("❌ [trackCheckoutSession] Error:", error.message || error);
     return { success: false, error: error.message || "Eroare internă la salvarea coșului." };
-  }
-}
-
-/**
- * COMPLETE CHECKOUT SESSION
- * Marks a checkout session as completed.
- */
-export async function completeCheckoutSession(paymentIntentId: string | null, email?: string) {
-  try {
-    if (!paymentIntentId && !email) {
-      return { success: false, error: "Either paymentIntentId or email is required" };
-    }
-
-    // If called only with email (no paymentIntentId), verify an actual order was placed recently for this email
-    if (!paymentIntentId && email) {
-      const cleanEmail = email.trim().toLowerCase();
-      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      const { data: recentOrder } = await supabaseAdmin
-        .from("orders")
-        .select("id")
-        .ilike("customer_email", cleanEmail.replace(/[%_]/g, ''))
-        .gte("created_at", tenMinutesAgo)
-        .limit(1)
-        .maybeSingle();
-
-      if (!recentOrder) {
-        return { success: false, error: "No matching recent order found" };
-      }
-    }
-
-    let query = supabaseAdmin
-      .from("checkout_sessions")
-      .update({ status: "completed" });
-
-    if (paymentIntentId) {
-      query = query.eq("payment_intent_id", paymentIntentId);
-    } else if (email) {
-      query = query.eq("email", email.trim().toLowerCase()).eq("status", "initiated");
-    }
-
-    const { error } = await query;
-    if (error) throw error;
-
-    console.log(`✅ [completeCheckoutSession] Session marked completed: ID=${paymentIntentId}, Email=${email}`);
-    return { success: true };
-  } catch (error: any) {
-    console.error("❌ [completeCheckoutSession] Error:", error.message || error);
-    return { success: false, error: error.message };
   }
 }

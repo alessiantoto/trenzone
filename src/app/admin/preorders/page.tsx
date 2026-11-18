@@ -157,20 +157,29 @@ function isItemCatalogReady(item: any, products: any[]): boolean {
 
   const matchedProduct = products.find((p) => !isProductDigital(p) && itemMatchesProduct(item, p));
   if (!matchedProduct) return false;
+  if (matchedProduct.is_active === false) return false;
+  if (typeof matchedProduct.stock_quantity === 'number' && matchedProduct.stock_quantity <= 0) {
+    return false;
+  }
 
   const options = Array.isArray(matchedProduct.variants?.options) ? matchedProduct.variants.options : [];
-  if (options.length === 0) return false;
+  if (options.length === 0) return true;
 
   const itemVarRaw = getItemVariantLabel(item);
+  const itemVarBase = itemVarRaw.split(' · ')[0].trim();
   const itemVarNorm = normalizeSearchText(itemVarRaw);
+  const itemVarBaseNorm = normalizeSearchText(itemVarBase);
   const itemVarClean = stripPreorderMarkers(itemVarRaw);
+  const itemVarBaseClean = stripPreorderMarkers(itemVarBase);
 
   const matchedOption = options.find((opt: any) => {
     const optName = getLocalizedText(opt?.name);
     const optNorm = normalizeSearchText(optName);
     const optClean = stripPreorderMarkers(optName);
     if (itemVarNorm && optNorm === itemVarNorm) return true;
+    if (itemVarBaseNorm && optNorm === itemVarBaseNorm) return true;
     if (itemVarClean && optClean && optClean === itemVarClean) return true;
+    if (itemVarBaseClean && optClean && optClean === itemVarBaseClean) return true;
     return false;
   });
 
@@ -246,6 +255,7 @@ function getPreorderStatusMeta(params: {
 
 function analyzePreorder(order: any, products: any[]): AnalyzedPreorder {
   const items = Array.isArray(order.items) ? order.items : [];
+  const physicalItems = items.filter((it: any) => !isDigitalProgramItem(it));
   const preorderItems = items.filter((it: any) => isItemSnapshotPreorder(it));
   const inStockItems = items.filter((it: any) => !isItemSnapshotPreorder(it));
   const isMixed = preorderItems.length > 0 && inStockItems.length > 0;
@@ -254,8 +264,8 @@ function analyzePreorder(order: any, products: any[]): AnalyzedPreorder {
   const isDispatchedToFulfillment = Boolean(order.fulfillmentDispatchedAt);
   const isProcessing = String(order.status || '').toLowerCase().trim() === 'processing';
   const catalogStockArrived =
-    preorderItems.length > 0 && preorderItems.every((it: any) => isItemCatalogReady(it, products));
-  const isReadyForRelease = !isClosed && (isProcessing || isDispatchedToFulfillment || catalogStockArrived);
+    physicalItems.length > 0 && physicalItems.every((it: any) => isItemCatalogReady(it, products));
+  const isReadyForRelease = !isClosed && ((isProcessing && catalogStockArrived) || isDispatchedToFulfillment || catalogStockArrived);
   const reservedUnitsCount = preorderItems.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 1), 0);
 
   return {
@@ -493,6 +503,15 @@ export default function AdminPreordersPage() {
             toast.error(
               `Precomanda a fost eliberată în Procesare, dar trimiterea emailului către fulfillment a eșuat: ${dispatchRes.error || 'Eroare necunoscută'}`,
               { id: toastId, duration: 5000 }
+            );
+            setReleasingEntry(null);
+            await fetchOrders();
+            return;
+          }
+          if ((dispatchRes.count || 0) === 0) {
+            toast.error(
+              `Comanda ${order.id} a fost trecută în Procesare, dar NU a fost trimisă la fulfillment deoarece unul sau mai multe produse apar încă pe Precomandă / fără stoc în /admin/products.`,
+              { id: toastId, duration: 6000 }
             );
             setReleasingEntry(null);
             await fetchOrders();

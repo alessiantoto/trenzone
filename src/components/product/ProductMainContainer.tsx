@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, Minus, Check, ShoppingCart, Zap, ShieldCheck, Dumbbell, AlertCircle, Ruler, X, Truck, Mail, Award, Flame, Target } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, Minus, Check, ShoppingCart, Zap, ShieldCheck, Dumbbell, AlertCircle, Ruler, X, Truck, Mail, Award, Flame, Target, Clock } from "lucide-react";
 import { Link } from "@/i18n/routing";
 import { useLocale } from "next-intl";
 import { useCartStore } from "@/store/useCartStore";
@@ -303,6 +303,9 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
       })
     : undefined;
   const currentVariantStatus = currentOpt?.stock_status;
+  const isCurrentVariantPreorder =
+    !isDigitalProgramItem(product) &&
+    (currentVariantStatus === 'preorder' || (product as any).stock_status === 'preorder');
   const isSoftStock = Boolean((product as any).metadata?.soft_stock_tracking);
   const isProductOutOfStock = product.is_active === false || (!isSoftStock && typeof product.stock_quantity === 'number' && product.stock_quantity <= 0 && currentVariantStatus !== 'preorder');
   const isCurrentVariantSoldOut = currentVariantStatus === 'sold_out' || isProductOutOfStock;
@@ -642,6 +645,12 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                             <span className={cn("text-sm font-black uppercase tracking-wider truncate", selectedVariant ? "text-white" : "text-zinc-400")}>
                               {selectedVariant || (locale === 'ro' ? 'Alege varianta...' : 'Select variant...')}
                             </span>
+                            {selectedVarOpt?.stock_status === 'preorder' && !isDigital && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/35 text-amber-300 text-[9.5px] font-black uppercase tracking-wider shrink-0">
+                                <Clock className="w-2.5 h-2.5" />
+                                {locale === 'en' ? 'PRE-ORDER' : 'PRECOMANDĂ'}
+                              </span>
+                            )}
                           </div>
                           {isOpen ? (
                             <Check className="w-4 h-4 text-white shrink-0" />
@@ -782,6 +791,23 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
               </div>
             )}
 
+            {/* Pre-order Timeline & Notice */}
+            {isCurrentVariantPreorder && !isCurrentVariantSoldOut && (
+              <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/30 flex items-start gap-2.5 text-left">
+                <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs leading-relaxed">
+                  <p className="font-black uppercase tracking-wider text-amber-300 text-[11px]">
+                    {locale === 'ro' ? 'Precomandă · Lot nou în curs de sosire' : 'Pre-Order · Next batch arriving soon'}
+                  </p>
+                  <p className="text-zinc-300 font-medium mt-0.5 text-[11.5px]">
+                    {locale === 'ro'
+                      ? 'Rezervă-ți produsul acum — se expediază automat la sosirea stocului (plată exclusiv online cu cardul).'
+                      : 'Reserve yours now — ships automatically as soon as the new batch arrives (online card payment only).'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Quantity + ADD TO CART (Compact inline row) */}
             <div className="flex items-stretch gap-2.5 sm:gap-3 mb-5">
               {!isDigitalProgramItem(product) && (
@@ -843,8 +869,16 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                   <span>{locale === 'ro' ? "STOC EPUIZAT" : "SOLD OUT"}</span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-                    <span className="truncate">{locale === 'ro' ? "ADAUGĂ ÎN COȘ" : "ADD TO CART"}</span>
+                    {isCurrentVariantPreorder ? (
+                      <Clock className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                    ) : (
+                      <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {isCurrentVariantPreorder
+                        ? (locale === 'ro' ? "PRECOMANDĂ ACUM" : "PRE-ORDER NOW")
+                        : (locale === 'ro' ? "ADAUGĂ ÎN COȘ" : "ADD TO CART")}
+                    </span>
                   </span>
                 )}
               </button>
@@ -883,6 +917,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       is_digital: isDigitalProd,
                       specs_summary: (product as any).specs_summary,
                       name: product.name,
+                      stock_status: currentOpt?.stock_status || (product as any).stock_status,
+                      is_preorder: isCurrentVariantPreorder,
                       selectedVariant: combinedVariantName
                         ? {
                             name: combinedVariantName,
@@ -1147,8 +1183,16 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5">
-                      <ShoppingCart className="w-3.5 h-3.5" />
-                      <span>{locale === 'ro' ? "Adaugă în Coș" : "Add to Cart"}</span>
+                      {isCurrentVariantPreorder ? (
+                        <Clock className="w-3.5 h-3.5" />
+                      ) : (
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {isCurrentVariantPreorder
+                          ? (locale === 'ro' ? "Precomandă" : "Pre-Order")
+                          : (locale === 'ro' ? "Adaugă în Coș" : "Add to Cart")}
+                      </span>
                     </span>
                   )}
                 </button>

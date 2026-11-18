@@ -61,7 +61,10 @@ export async function GET(request: Request) {
     console.log('[CRON DAILY] Starting fulfillment dispatch...');
     const { GET: runFulfillmentDispatch } = await import('../fulfillment-dispatch/route');
     const res4 = await runFulfillmentDispatch(request);
-    results.fulfillmentDispatch = res4.status === 200 ? await res4.json() : 'failed';
+    const body4 = await res4.json().catch(() => null);
+    results.fulfillmentDispatch = res4.status === 200
+      ? body4
+      : { status: res4.status, error: body4?.error || 'failed', details: body4 };
   } catch (err: any) {
     console.error('[CRON DAILY] Fulfillment dispatch error:', err);
     results.fulfillmentDispatch = { error: err.message };

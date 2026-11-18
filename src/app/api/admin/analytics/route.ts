@@ -5,6 +5,8 @@ import {
   fetchGa4AnalyticsReport,
   resolveAnalyticsDateRange,
   type AnalyticsRangeKey,
+  type Ga4DeviceFilter,
+  type Ga4GranularityOption,
 } from '@/lib/ga4-analytics';
 import { getServerExchangeRates, FALLBACK_RATES } from '@/utils/pricing';
 import { getBucharestIsoBounds, normalizeCountry } from '@/utils/admin-helpers';
@@ -14,6 +16,8 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const VALID_RANGES = new Set<AnalyticsRangeKey>(['today', 'yesterday', '7d', '30d', '90d']);
+const VALID_DEVICES = new Set<Ga4DeviceFilter>(['all', 'mobile', 'desktop', 'tablet']);
+const VALID_GRANULARITIES = new Set<Ga4GranularityOption>(['auto', 'hourly', 'daily']);
 const NON_COUNTABLE_STATUSES = new Set([
   'cancelled',
   'refunded',
@@ -150,7 +154,19 @@ export async function GET(request: Request) {
     const rawRange = (url.searchParams.get('range') || '30d') as AnalyticsRangeKey;
     const range: AnalyticsRangeKey = VALID_RANGES.has(rawRange) ? rawRange : '30d';
 
-    const dates = resolveAnalyticsDateRange(range);
+    const rawDevice = (url.searchParams.get('device') || 'all').toLowerCase() as Ga4DeviceFilter;
+    const device: Ga4DeviceFilter = VALID_DEVICES.has(rawDevice) ? rawDevice : 'all';
+
+    const rawGranularity = (url.searchParams.get('granularity') || 'auto').toLowerCase() as Ga4GranularityOption;
+    const granularity: Ga4GranularityOption = VALID_GRANULARITIES.has(rawGranularity) ? rawGranularity : 'auto';
+
+    const rawChannel = (url.searchParams.get('channel') || 'all').trim();
+    const channel = rawChannel && rawChannel.toLowerCase() !== 'all' ? rawChannel.slice(0, 80) : 'all';
+
+    const rawCountry = (url.searchParams.get('country') || 'all').trim();
+    const country = rawCountry && rawCountry.toLowerCase() !== 'all' ? rawCountry.slice(0, 80) : 'all';
+
+    const dates = resolveAnalyticsDateRange(range, granularity);
     const { startIso, endIso } = getBucharestIsoBounds(dates.startDate, dates.endDate);
 
     let periodOrdersQuery = supabaseAdmin
@@ -195,7 +211,7 @@ export async function GET(request: Request) {
       contactAllTimeRes,
       { data: checkoutsInPeriod },
     ] = await Promise.all([
-      fetchGa4AnalyticsReport(range),
+      fetchGa4AnalyticsReport({ range, device, channel, country, granularity }),
       getServerExchangeRates(),
       periodOrdersQuery,
       supabaseAdmin
@@ -573,11 +589,18 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       range,
+      filters: {
+        device,
+        channel,
+        country,
+        granularity,
+      },
       period: {
         startDate: dates.startDate,
         endDate: dates.endDate,
         prevStartDate: dates.prevStartDate,
         prevEndDate: dates.prevEndDate,
+        granularity: dates.granularity,
       },
       exchangeRates: rates,
       currencyBreakdown,

@@ -94,41 +94,48 @@ const areVariantNamesEqual = (name1: any, name2: any) => {
   return Boolean(s1 && s2 && normalizeLanguageVariantToken(s1) === normalizeLanguageVariantToken(s2));
 };
 
+const findMatchingCartVariantOption = (product: any, variant: any): any | null => {
+  const options = product?.variants?.options;
+  if (!Array.isArray(options) || options.length === 0 || !variant) return null;
+
+  const vName = typeof variant === 'object'
+    ? (variant.name?.ro || variant.name?.en || variant.name || '')
+    : String(variant);
+  const baseName = String(vName).split(' · ')[0].trim();
+  const vLower = String(vName).toLowerCase();
+  const baseLower = baseName.toLowerCase();
+
+  return (
+    options.find((opt: any) => {
+      const optRo = typeof opt.name === 'object' ? opt.name.ro : opt.name;
+      const optEn = typeof opt.name === 'object' ? opt.name.en : opt.name;
+      const optRoLow = String(optRo || '').trim().toLowerCase();
+      const optEnLow = String(optEn || '').trim().toLowerCase();
+      return (
+        optRo === vName ||
+        optEn === vName ||
+        optRo === baseName ||
+        optEn === baseName ||
+        (optRoLow && (optRoLow === vLower || optRoLow === baseLower)) ||
+        (optEnLow && (optEnLow === vLower || optEnLow === baseLower)) ||
+        (opt.id && variant.id && opt.id === variant.id)
+      );
+    }) || null
+  );
+};
+
 export const isPreorder = (product: any, variant?: any): boolean => {
   if (!product) return false;
   if (product.stock_status === 'preorder' || product.is_preorder === true) return true;
-  if (product.selectedVariant?.stock_status === 'preorder') return true;
 
   const v = variant || product.selectedVariant || product.variant;
   if (v) {
+    const selectedOpt = findMatchingCartVariantOption(product, v);
+    if (selectedOpt?.stock_status) {
+      return selectedOpt.stock_status === 'preorder';
+    }
+
     const vName = typeof v === 'object' ? (v.name?.ro || v.name?.en || v.name || '') : String(v);
-    const baseName = String(vName).split(' · ')[0].trim();
-    const vLower = String(vName).toLowerCase();
-    const baseLower = baseName.toLowerCase();
-
-    if (vLower.includes('precomand') || vLower.includes('pre-order') || vLower.includes('preorder')) {
-      return true;
-    }
-
-    if (product.variants?.options) {
-      const selectedOpt = product.variants.options.find((opt: any) => {
-        const optRo = typeof opt.name === 'object' ? opt.name.ro : opt.name;
-        const optEn = typeof opt.name === 'object' ? opt.name.en : opt.name;
-        const optRoLow = String(optRo || '').trim().toLowerCase();
-        const optEnLow = String(optEn || '').trim().toLowerCase();
-        return (
-          optRo === vName ||
-          optEn === vName ||
-          optRo === baseName ||
-          optEn === baseName ||
-          (optRoLow && (optRoLow === vLower || optRoLow === baseLower)) ||
-          (optEnLow && (optEnLow === vLower || optEnLow === baseLower)) ||
-          (opt.id && v.id && opt.id === v.id)
-        );
-      });
-      if (selectedOpt?.stock_status === 'preorder') return true;
-    }
-
     if (product.bundleVariants?.flavor?.options) {
       const hasPreorder = product.bundleVariants.flavor.options.some((opt: any) => {
         const optRo = typeof opt.name === 'object' ? opt.name.ro : opt.name;
@@ -138,8 +145,18 @@ export const isPreorder = (product: any, variant?: any): boolean => {
       });
       if (hasPreorder) return true;
     }
+
+    if (v?.stock_status === 'preorder' || product.selectedVariant?.stock_status === 'preorder') {
+      return true;
+    }
+
+    const vLower = String(vName).toLowerCase();
+    if (vLower.includes('precomand') || vLower.includes('pre-order') || vLower.includes('preorder')) {
+      return true;
+    }
   }
 
+  if (product.selectedVariant?.stock_status === 'preorder') return true;
   return false;
 };
 
@@ -327,15 +344,45 @@ export const useCartStore = create<CartState>()(
               (p) => p.id === item.id || (item.slug && p.slug === item.slug)
             );
             if (!match) return item;
+
             const nextPrice = Number(match.price);
             const nextOrig = match.originalPrice !== undefined ? Number(match.originalPrice) : undefined;
-            if (
+            const priceChanged =
               Number.isFinite(nextPrice) &&
               nextPrice > 0 &&
-              (Math.abs(Number(item.price) - nextPrice) > 0.001 || item.originalPrice !== nextOrig)
-            ) {
+              (Math.abs(Number(item.price) - nextPrice) > 0.001 || item.originalPrice !== nextOrig);
+
+            const matchedOpt = item.selectedVariant
+              ? findMatchingCartVariantOption(match, item.selectedVariant)
+              : null;
+            const nextVariantStockStatus = matchedOpt?.stock_status ?? item.selectedVariant?.stock_status;
+            const variantStatusChanged = Boolean(
+              item.selectedVariant &&
+              nextVariantStockStatus !== item.selectedVariant.stock_status
+            );
+            const variantsChanged =
+              JSON.stringify(item.variants ?? null) !== JSON.stringify(match.variants ?? null);
+            const stockQtyChanged = item.stock_quantity !== match.stock_quantity;
+            const activeChanged = item.is_active !== match.is_active;
+
+            if (priceChanged || variantStatusChanged || variantsChanged || stockQtyChanged || activeChanged) {
               changed = true;
-              return { ...item, price: nextPrice, originalPrice: nextOrig };
+              return {
+                ...item,
+                ...(priceChanged ? { price: nextPrice, originalPrice: nextOrig } : {}),
+                variants: match.variants ?? item.variants,
+                stock_quantity: match.stock_quantity,
+                is_active: match.is_active,
+                metadata: match.metadata ?? item.metadata,
+                ...(item.selectedVariant && variantStatusChanged
+                  ? {
+                      selectedVariant: {
+                        ...item.selectedVariant,
+                        stock_status: nextVariantStockStatus,
+                      },
+                    }
+                  : {}),
+              };
             }
             return item;
           });

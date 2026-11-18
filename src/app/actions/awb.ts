@@ -10,6 +10,7 @@ import { detectPrimaryCourier } from "@/lib/tracking-sync";
 import { getCanonicalOrderNumber } from "@/utils/admin-helpers";
 import { getCountyFromZip } from "@/lib/oblio-api";
 import { convertToRon, getServerExchangeRates } from "@/utils/pricing";
+import { isDigitalOnlyCart } from "@/lib/programs";
 
 // Helper: parse raw Sameday/Packeta JSON error into a clean, human-readable message
 function parseAwbError(rawMessage: string, displayId: string): string {
@@ -132,6 +133,18 @@ export async function generateManualAwbAction(orderIds: string[]) {
       try {
         if (order.tracking_number) {
           errors.push({ id: order.id, message: 'AWB already exists' });
+          continue;
+        }
+
+        const st = String(order.status || '').trim().toLowerCase();
+        if (['cancelled', 'canceled', 'anulata', 'refunded', 'returned', 'returnata', 'failed', 'preorder'].includes(st)) {
+          errors.push({ id: order.id, message: `Comanda are statusul "${st}" și nu poate genera AWB.` });
+          continue;
+        }
+
+        const orderItems = Array.isArray(order.items) ? order.items : [];
+        if (order.carrier_id === 'digital' || order.shipping_type === 'digital' || order.carrier_metadata?.is_digital_only === true || isDigitalOnlyCart(orderItems)) {
+          errors.push({ id: order.id, message: 'Comandă exclusiv digitală — nu necesită AWB.' });
           continue;
         }
 

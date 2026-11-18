@@ -6,7 +6,7 @@ import { rateLimiters, getClientIp, checkRateLimit } from "@/lib/ratelimit";
 import { processOrder } from "@/lib/orders";
 import type { OrderData } from "@/lib/orders";
 import { getNextOrderNumber } from "@/lib/sequences";
-import { completeCheckoutSession } from "@/app/actions/checkout-tracking";
+import { completeCheckoutSession } from "@/lib/checkout-tracking-server";
 import { getSingleFlavorImage } from "@/lib/product-images";
 import { getServerExchangeRates, FALLBACK_RATES } from "@/utils/pricing";
 import { getShippingConfig } from "@/app/actions/shipping";
@@ -362,6 +362,12 @@ export async function POST(req: Request) {
       const realUuid = dbProduct?.id || parsed._realId;
       const qty = Math.max(1, Math.floor(Number(clientItem.quantity) || 1));
 
+      const resolvedSelectedVariant = clientItem.selectedVariant
+        ? { ...clientItem.selectedVariant, stock_status: "in_stock" }
+        : variantName
+          ? { name: variantName, stock_status: "in_stock" }
+          : null;
+
       return {
         ...clientItem,
         id: realUuid,
@@ -371,9 +377,11 @@ export async function POST(req: Request) {
         slug: clientItem.slug || dbProduct?.slug,
         price,
         is_digital: isDigital,
+        is_preorder: false,
+        stock_status: "in_stock",
         specs_summary: dbProduct?.specs_summary || clientItem.specs_summary,
         variant: variantName || null,
-        selectedVariant: clientItem.selectedVariant || (variantName ? { name: variantName } : null),
+        selectedVariant: resolvedSelectedVariant,
         image: effectiveImage,
       };
     });

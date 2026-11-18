@@ -846,6 +846,27 @@ export async function buildOrderDataFromStripePI(
       return vName.includes('precomand') || vName.includes('pre-order') || vName.includes('preorder');
     });
 
+  // Backfill item-level preorder flags when recovering from compact Stripe metadata without checkout_sessions
+  const normalizedEnrichedItems = enrichedItems.map((it: any) => {
+    if (isDigitalProgramItem(it)) {
+      return { ...it, is_preorder: false };
+    }
+    const itemIsPre =
+      it?.is_preorder === true ||
+      it?.stock_status === 'preorder' ||
+      it?.selectedVariant?.stock_status === 'preorder' ||
+      (isPreorderAtOrder && typeof it?.is_preorder !== 'boolean');
+    if (!itemIsPre) return it;
+    return {
+      ...it,
+      is_preorder: true,
+      stock_status: it.stock_status || 'preorder',
+      selectedVariant: it.selectedVariant
+        ? { ...it.selectedVariant, stock_status: it.selectedVariant.stock_status || 'preorder' }
+        : it.selectedVariant,
+    };
+  });
+
   const shippingCost = Number.parseFloat(meta.shippingCost || '0') || 0;
   const bundleDiscount = Number.parseFloat(meta.bundleDiscount || '0') || 0;
   const couponDiscount = Number.parseFloat(meta.couponDiscount || '0') || 0;
@@ -913,7 +934,7 @@ export async function buildOrderDataFromStripePI(
       addr_zip: addrZip,
       addr_country: addrCountry,
     },
-    items: enrichedItems,
+    items: normalizedEnrichedItems,
   };
 
   return {

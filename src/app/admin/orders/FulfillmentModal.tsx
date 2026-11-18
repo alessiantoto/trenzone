@@ -86,11 +86,14 @@ export function FulfillmentModal({
   // Queue & preview state
   const [queueOverview, setQueueOverview] = useState<FulfillmentQueueOverview>({
     pendingOrders: [],
+    blockedOrders: [],
     templatePreviewOrders: [],
     isSamplePreview: false,
     isHistoricalPreview: false,
     excludedPreorders: 0,
     excludedMixedPreorders: 0,
+    excludedLiveOutOfStock: 0,
+    excludedPhantomOrInvalid: 0,
     skippedPreorderOrderIds: [],
     excludedDigital: 0,
     excludedAlreadyDispatched: 0,
@@ -492,23 +495,108 @@ export function FulfillmentModal({
 
               {/* Operational Queue Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Gata de Expediere</div>
+                <div className="bg-white border border-emerald-200 rounded-2xl p-3 shadow-2xs min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-emerald-700 truncate">Eligibile (În Stoc Curent)</div>
                   <div className="text-lg font-black text-emerald-700 mt-0.5">{pendingOrders.length}</div>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Precomenzi Reținute</div>
-                  <div className="text-lg font-black text-violet-700 mt-0.5">{queueOverview.excludedPreorders}</div>
+                <div className="bg-white border border-amber-200 rounded-2xl p-3 shadow-2xs min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-amber-800 truncate">Blocate (Precomandă / Stoc)</div>
+                  <div className="text-lg font-black text-amber-700 mt-0.5">{queueOverview.blockedOrders.length}</div>
                 </div>
                 <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
                   <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Deja Trimise</div>
                   <div className="text-lg font-black text-indigo-700 mt-0.5">{queueOverview.excludedAlreadyDispatched}</div>
                 </div>
                 <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs min-w-0">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Excluse (Anul./AWB)</div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Excluse (Anul./AWB/Dig.)</div>
                   <div className="text-lg font-black text-slate-600 mt-0.5">
-                    {queueOverview.excludedUnpaidOrInvalid}
+                    {queueOverview.excludedUnpaidOrInvalid + queueOverview.excludedDigital}
                   </div>
+                </div>
+              </div>
+
+              {queueOverview.liveProductsError && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-xs text-red-900 font-bold">
+                  Eroare verificare stoc live din catalog: {queueOverview.liveProductsError}. Trimiterea către fulfillment este blocată preventiv.
+                </div>
+              )}
+
+              {/* Live Queue Breakdown: Eligible (In Stock) vs Held/Blocked (Preorder / Out of Stock) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* Eligible Orders (Live In Stock) */}
+                <div className="bg-white border border-emerald-200 rounded-2xl p-3.5 shadow-2xs space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                      <Check size={14} className="text-emerald-600" />
+                      Eligibile (În stoc curent)
+                    </span>
+                    <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      {pendingOrders.length} {pendingOrders.length === 1 ? 'comandă' : 'comenzi'}
+                    </span>
+                  </div>
+                  {loadingPreview ? (
+                    <div className="text-[11px] text-slate-400 py-2">Se verifică stocul live...</div>
+                  ) : pendingOrders.length === 0 ? (
+                    <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                      Nicio comandă eligibilă cu toate produsele fizice în stoc curent.
+                    </div>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                      {pendingOrders.map((o) => (
+                        <div key={o.supabaseId || o.id} className="p-2 rounded-xl bg-emerald-50/50 border border-emerald-100 text-[11px] space-y-0.5">
+                          <div className="flex items-center justify-between gap-2 font-black text-slate-900">
+                            <span>{o.id} · {o.customer}</span>
+                            <span className="text-[10px] text-emerald-800 shrink-0">{o.city}, {o.country}</span>
+                          </div>
+                          <div className="text-slate-700 font-medium">
+                            {o.items.map((it) => `${it.quantity}x ${it.name}${it.variant ? ` (${it.variant})` : ''}`).join(', ')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Blocked / Held Orders (Preorder / Out of Stock / Invalid) */}
+                <div className="bg-white border border-amber-200 rounded-2xl p-3.5 shadow-2xs space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                      <Clock size={14} className="text-amber-600" />
+                      Reținute / Blocate (Precomandă / Stoc)
+                    </span>
+                    <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
+                      {queueOverview.blockedOrders.length} {queueOverview.blockedOrders.length === 1 ? 'blocată' : 'blocate'}
+                    </span>
+                  </div>
+                  {loadingPreview ? (
+                    <div className="text-[11px] text-slate-400 py-2">Se verifică stocul live...</div>
+                  ) : queueOverview.blockedOrders.length === 0 ? (
+                    <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                      Nicio comandă blocată de lipsă stoc sau precomandă.
+                    </div>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                      {queueOverview.blockedOrders.map((bo) => (
+                        <div key={bo.supabaseId || bo.id} className="p-2 rounded-xl bg-amber-50/70 border border-amber-200 text-[11px] space-y-1">
+                          <div className="flex items-center justify-between gap-2 font-black text-slate-900">
+                            <span>{bo.id} · {bo.customer}</span>
+                            <span className="text-[10px] text-slate-600 shrink-0">{bo.city}, {bo.country}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {bo.blockedItems.map((bi, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 text-[10px] font-bold bg-white text-amber-950 border border-amber-300 px-1.5 py-0.5 rounded-md">
+                                <span>{bi.productName}{bi.variant ? ` (${bi.variant})` : ''}</span>
+                                <span className="text-amber-700">· {bi.reasonLabel}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-amber-900/80 leading-snug">
+                    Rămân blocate automat (cron & manual) până când pui manual produsele pe <strong>În stoc</strong> în <code>/admin/products</code>.
+                  </p>
                 </div>
               </div>
 
@@ -849,8 +937,8 @@ export function FulfillmentModal({
 
                     <button
                       onClick={handleTriggerDispatchNow}
-                      disabled={dispatching || !settings.email}
-                      className="min-h-[40px] px-5 py-2.5 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-[#e32f8c]/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                      disabled={dispatching || !settings.email || pendingOrders.length === 0 || Boolean(queueOverview.liveProductsError)}
+                      className="min-h-[40px] px-5 py-2.5 bg-[#e32f8c] hover:bg-[#c41a72] active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-[#e32f8c]/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       {dispatching ? (
                         <>

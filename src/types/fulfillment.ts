@@ -16,6 +16,43 @@ export interface FulfillmentItemSummary {
   image?: string;
 }
 
+export interface BlockedFulfillmentItem {
+  productName: string;
+  variant?: string;
+  reasonCode:
+    | 'live_preorder'
+    | 'live_sold_out'
+    | 'live_zero_stock'
+    | 'product_inactive'
+    | 'product_not_found'
+    | 'snapshot_preorder'
+    | 'variant_unmatched'
+    | 'phantom_invalid';
+  reasonLabel: string;
+}
+
+export interface BlockedFulfillmentOrder {
+  id: string; // display ID like TZ-2026-XXXX
+  supabaseId: string;
+  date: string;
+  customer: string;
+  city: string;
+  country: string;
+  total: string;
+  status: string;
+  paymentMethod: string;
+  blockReasonType: 'live_stock' | 'preorder_hold' | 'mixed_preorder' | 'phantom_invalid';
+  blockSummary: string;
+  blockedItems: BlockedFulfillmentItem[];
+  allItems: Array<{
+    name: string;
+    variant?: string;
+    quantity: number;
+    isInStockLive: boolean;
+    statusLabel: string;
+  }>;
+}
+
 export interface FulfillmentOrderSummary {
   id: string; // display ID like TZ-2026-XXXX
   supabaseId: string;

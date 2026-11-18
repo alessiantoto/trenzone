@@ -38,6 +38,9 @@ export async function GET(
         order = byPi.data;
       } else {
         const safeId = orderId.replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeId) {
+          return NextResponse.json({ error: 'ID comandă invalid.' }, { status: 400 });
+        }
         const byUrl = await supabaseAdmin
           .from('orders')
           .select('id, tracking_number, carrier_id, addr_country, status, tracking_metadata')

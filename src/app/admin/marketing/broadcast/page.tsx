@@ -1477,12 +1477,9 @@ export default function BroadcastMarketingPage() {
                       {formData.title || 'Titlu Campanie'}
                     </h2>
 
-                    <div 
-                      className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-wrap max-w-sm mx-auto"
-                      dangerouslySetInnerHTML={{ 
-                        __html: formData.message ? formData.message.replace(/\n/g, '<br />') : 'Mesajul campaniei va apărea aici...' 
-                      }}
-                    />
+                    <div className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-wrap max-w-sm mx-auto">
+                      {formData.message || 'Mesajul campaniei va apărea aici...'}
+                    </div>
 
                     {formData.ctaText && (
                       <div className="pt-2">
@@ -1576,12 +1573,9 @@ export default function BroadcastMarketingPage() {
                   <h4 className="text-lg font-black text-slate-900 uppercase">
                     {selectedCampaignForPreview.title}
                   </h4>
-                  <div 
-                    className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-wrap"
-                    dangerouslySetInnerHTML={{ 
-                      __html: (selectedCampaignForPreview.message || '').replace(/\n/g, '<br />') 
-                    }}
-                  />
+                  <div className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
+                    {selectedCampaignForPreview.message || ''}
+                  </div>
                   {selectedCampaignForPreview.ctaText && (
                     <div className="pt-2">
                       <span className="inline-block px-6 py-2.5 bg-black text-white font-black uppercase text-[10px] rounded-lg">

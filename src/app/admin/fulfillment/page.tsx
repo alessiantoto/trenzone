@@ -4,7 +4,7 @@ import { ArrowLeft, Truck } from 'lucide-react';
 import { isAdminAuthorized } from '@/app/actions/admin-auth';
 import {
   getFulfillmentHistory,
-  getFulfillmentPendingCount,
+  getFulfillmentQueueOverview,
   getFulfillmentSettings,
 } from '@/app/actions/admin-fulfillment';
 import { FulfillmentReportView } from '@/components/admin/FulfillmentReportView';
@@ -17,10 +17,10 @@ export default async function AdminFulfillmentReportPage() {
     redirect('/admin/login');
   }
 
-  const [history, settings, counts] = await Promise.all([
+  const [history, settings, queueOverview] = await Promise.all([
     getFulfillmentHistory(),
     getFulfillmentSettings(),
-    getFulfillmentPendingCount(),
+    getFulfillmentQueueOverview(),
   ]);
 
   return (
@@ -61,7 +61,8 @@ export default async function AdminFulfillmentReportPage() {
       <FulfillmentReportView
         logs={history}
         settings={settings}
-        pendingCount={counts.pendingCount}
+        pendingCount={queueOverview.pendingOrders.length}
+        queueOverview={queueOverview}
       />
     </div>
   );

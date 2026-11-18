@@ -136,7 +136,7 @@ export async function POST(req: Request) {
 
     const digitalOnly = isDigitalOnlyCart(calculationItems);
     let validatedCarrierId = digitalOnly ? "digital" : (carrier_id ? String(carrier_id) : "");
-    if (!digitalOnly && isFinalSync === true) {
+    if (!digitalOnly) {
       const shippingCheck = validateShippingSelection({
         country: normalizedCountry,
         shippingType: shipping_type || "hd",
@@ -199,6 +199,11 @@ export async function POST(req: Request) {
 
       const localizedPrice = safeCurrency === "RON" ? price : getProductPrice(price, safeCurrency);
       const isDigital = Boolean(i.is_digital || dbProduct?.specs_summary?.is_digital || isDigitalProgramItem(dbProduct || i));
+      const resolvedVariant = i.selectedVariant
+        ? { ...i.selectedVariant, stock_status: isPreorder ? "preorder" : "in_stock" }
+        : i.variant
+          ? { name: i.variant, stock_status: isPreorder ? "preorder" : "in_stock" }
+          : null;
       return {
         id: i.id || i.slug || dbProduct?.id,
         slug: i.slug || dbProduct?.slug,
@@ -208,8 +213,9 @@ export async function POST(req: Request) {
         image: i.image || i.selectedVariant?.image || undefined,
         is_digital: isDigital,
         specs_summary: dbProduct?.specs_summary || i.specs_summary,
-        selectedVariant: i.selectedVariant || (i.variant ? { name: i.variant } : null),
+        selectedVariant: resolvedVariant,
         _isBundle: parsed._isBundle,
+        stock_status: isPreorder ? "preorder" : "in_stock",
         is_preorder: isPreorder,
       };
     });

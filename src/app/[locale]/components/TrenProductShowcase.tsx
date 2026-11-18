@@ -50,7 +50,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
             color: "#a855f7",
             image: "/images/products/x10_elbow_wraps_purple.webp",
             imageIndex: 0,
-            stock_status: "in_stock",
+            stock_status: "preorder",
             badge: "BEST SELLER"
           },
           {
@@ -153,7 +153,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
             color: "#a855f7",
             image: "/images/products/x10_wrist_wraps_purple.webp",
             imageIndex: 0,
-            stock_status: "in_stock",
+            stock_status: "preorder",
             badge: "BEST SELLER"
           },
           {
@@ -161,7 +161,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
             color: "#f8fafc",
             image: "/images/products/x10_wrist_wraps_white.webp",
             imageIndex: 1,
-            stock_status: "in_stock"
+            stock_status: "preorder"
           }
         ]
       },
@@ -194,12 +194,12 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         type: "size",
         label: { ro: "Mărime", en: "Size" },
         options: [
-          { name: { ro: "XS (57.5-70 cm)", en: "XS (57.5-70 cm)" }, stock_status: "in_stock" },
-          { name: { ro: "S (65-80 cm)", en: "S (65-80 cm)" }, stock_status: "in_stock" },
-          { name: { ro: "M (72.5-90 cm)", en: "M (72.5-90 cm)" }, badge: "POPULAR", stock_status: "in_stock" },
-          { name: { ro: "L (80-100 cm)", en: "L (80-100 cm)" }, stock_status: "in_stock" },
-          { name: { ro: "XL (87.5-110 cm)", en: "XL (87.5-110 cm)" }, stock_status: "in_stock" },
-          { name: { ro: "2XL (95-120 cm)", en: "2XL (95-120 cm)" }, stock_status: "in_stock" }
+          { name: { ro: "XS (57.5-70 cm)", en: "XS (57.5-70 cm)" }, stock_status: "preorder" },
+          { name: { ro: "S (65-80 cm)", en: "S (65-80 cm)" }, stock_status: "preorder" },
+          { name: { ro: "M (72.5-90 cm)", en: "M (72.5-90 cm)" }, badge: "POPULAR", stock_status: "preorder" },
+          { name: { ro: "L (80-100 cm)", en: "L (80-100 cm)" }, stock_status: "preorder" },
+          { name: { ro: "XL (87.5-110 cm)", en: "XL (87.5-110 cm)" }, stock_status: "preorder" },
+          { name: { ro: "2XL (95-120 cm)", en: "2XL (95-120 cm)" }, stock_status: "preorder" }
         ]
       },
       description: {
@@ -235,11 +235,11 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         type: "design",
         label: { ro: "Model", en: "Design" },
         options: [
-          { name: { ro: "Stay Hard", en: "Stay Hard" }, badge: "BEST SELLER", image: "/images/products/shirt_stay_hard.webp", imageIndex: 0, stock_status: "in_stock" },
-          { name: { ro: "Eat Tren Sleep Repeat", en: "Eat Tren Sleep Repeat" }, badge: "TRENZONE OG", image: "/images/products/shirt_eat_tren_sleep_repeat.webp", imageIndex: 1, stock_status: "in_stock" },
-          { name: { ro: "Beast", en: "Beast" }, badge: "POPULAR", image: "/images/products/shirt_beast.webp", imageIndex: 2, stock_status: "in_stock" },
-          { name: { ro: "Soldier of God", en: "Soldier of God" }, badge: "LIMITED", image: "/images/products/shirt_soldier_of_god.webp", imageIndex: 3, stock_status: "in_stock" },
-          { name: { ro: "Pain Creates Men", en: "Pain Creates Men" }, badge: "HARDCORE", image: "/images/products/shirt_pain_creates_men.webp", imageIndex: 4, stock_status: "in_stock" }
+          { name: { ro: "Stay Hard", en: "Stay Hard" }, badge: "BEST SELLER", image: "/images/products/shirt_stay_hard.webp", imageIndex: 0, stock_status: "preorder" },
+          { name: { ro: "Eat Tren Sleep Repeat", en: "Eat Tren Sleep Repeat" }, badge: "TRENZONE OG", image: "/images/products/shirt_eat_tren_sleep_repeat.webp", imageIndex: 1, stock_status: "preorder" },
+          { name: { ro: "Beast", en: "Beast" }, badge: "POPULAR", image: "/images/products/shirt_beast.webp", imageIndex: 2, stock_status: "preorder" },
+          { name: { ro: "Soldier of God", en: "Soldier of God" }, badge: "LIMITED", image: "/images/products/shirt_soldier_of_god.webp", imageIndex: 3, stock_status: "preorder" },
+          { name: { ro: "Pain Creates Men", en: "Pain Creates Men" }, badge: "HARDCORE", image: "/images/products/shirt_pain_creates_men.webp", imageIndex: 4, stock_status: "preorder" }
         ]
       },
       bundleVariants: {

@@ -1,5 +1,6 @@
 "use server";
 
+import crypto from "crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { isAdminAuthorized } from "./admin-auth";
 
@@ -48,7 +49,7 @@ export async function addAdminUser(email: string, fullName: string) {
     if (!existing) {
       await supabaseAdmin.auth.admin.createUser({
         email: cleanEmail,
-        password: 'milionar2028tren',
+        password: crypto.randomBytes(24).toString('hex'),
         email_confirm: true,
         user_metadata: { role: 'admin', full_name: fullName }
       });

@@ -184,11 +184,19 @@ async function dispatchResendForLog(log: EmailLog): Promise<{ skipped?: boolean;
 
       await sendOrderConfirmationEmail(recipient, builtOrderData, pdfBuffer);
 
-      if (orderRow?.id && !orderRow.email_sent_at) {
+      if (orderRow?.id) {
         const nowIso = new Date().toISOString();
+        const cleanedMeta = orderRow.carrier_metadata && typeof orderRow.carrier_metadata === 'object'
+          ? { ...orderRow.carrier_metadata }
+          : {};
+        delete cleanedMeta.last_comm_error;
         await supabaseAdmin
           .from('orders')
-          .update({ email_sent_at: nowIso, updated_at: nowIso })
+          .update({
+            email_sent_at: orderRow.email_sent_at || nowIso,
+            carrier_metadata: cleanedMeta,
+            updated_at: nowIso,
+          })
           .eq('id', orderRow.id);
       }
       return {};

@@ -94,7 +94,7 @@ const appearance = {
 export default function CheckoutPage() {
   const params = useParams();
   const locale = (params?.locale as string) || 'ro';
-  const { items, getTotals, appliedCoupon, clearCart } = useCartStore();
+  const { items, getTotals, appliedCoupon, clearCart, syncCartWithCatalog } = useCartStore();
   const { currency } = useRegionStore();
   const { country: storedCountry, shippingType: storedShippingType, priorityProcessing, giftPackaging } = useCheckoutStore();
   const latestCountryRef = useRef(storedCountry);
@@ -113,9 +113,27 @@ export default function CheckoutPage() {
   const [isStripeDisabled, setIsStripeDisabled] = useState(false);
   const [initError, setInitError] = useState("");
   const [csrfToken, setCsrfToken] = useState("");
+  const [catalogSynced, setCatalogSynced] = useState(false);
   const initializedCurrencyRef = useRef<string | null>(null);
   const { total } = getTotals(currency);
   const t = useTranslations("Checkout");
+
+  // Sync persisted cart items against live catalog stock_status/prices on checkout mount
+  useEffect(() => {
+    let active = true;
+    fetch("/api/products")
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data?.success && Array.isArray(data.products)) {
+          syncCartWithCatalog(data.products);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setCatalogSynced(true);
+      });
+    return () => { active = false; };
+  }, [syncCartWithCatalog]);
 
   // 1. Fetch CSRF Token ONCE on mount
   useEffect(() => {
@@ -143,7 +161,7 @@ export default function CheckoutPage() {
 
   // 2. Initialize checkout once per currency (subsequent item/coupon/option changes update the existing PI via /api/checkout/update without remounting Elements)
   useEffect(() => {
-    if (items.length === 0 || !csrfToken) return;
+    if (items.length === 0 || !csrfToken || !catalogSynced) return;
 
     const hasPreorder = items.some(item => !isDigitalProgramItem(item) && isPreorder(item, item.selectedVariant));
     const hasInStock = items.some(item => !isDigitalProgramItem(item) && !isPreorder(item, item.selectedVariant));
@@ -213,7 +231,7 @@ export default function CheckoutPage() {
 
     initCheckout();
     return () => controller.abort();
-  }, [items, total, currency, csrfToken, appliedCoupon?.code, locale, clientSecret]);
+  }, [items, total, currency, csrfToken, catalogSynced, appliedCoupon?.code, locale, clientSecret]);
 
   const options: any = useMemo(() => {
     const baseOptions = {

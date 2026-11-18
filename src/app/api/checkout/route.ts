@@ -9,6 +9,7 @@ import {
   fetchServerProductsForItems,
   parseAndStripBundleIds,
   resolveServerCoupon,
+  validateShippingSelection,
 } from "@/lib/checkout-helpers";
 import {
   backupCheckoutSessionForPI,
@@ -127,6 +128,21 @@ export async function POST(req: Request) {
     const lockersEnabled = Boolean(shippingConfig?.lockers_enabled);
     const normalizedCountry = String(country || "RO").trim().toUpperCase() || "RO";
     const digitalOnly = isDigitalOnlyCart(calculationItems);
+
+    if (!digitalOnly) {
+      const shippingCheck = validateShippingSelection({
+        country: normalizedCountry,
+        shippingType: shippingType || "hd",
+        carrierId: body.carrier_id ? String(body.carrier_id) : undefined,
+        branchId: body.branch_id ? String(body.branch_id) : undefined,
+        locale: safeLocale,
+        lockersEnabled,
+      });
+      if (!shippingCheck.ok) {
+        return NextResponse.json({ error: shippingCheck.error }, { status: 400 });
+      }
+    }
+
     const effectiveShippingType: "hd" | "pudo" =
       !digitalOnly && shippingType === "pudo" && lockersEnabled && normalizedCountry === "RO" ? "pudo" : "hd";
 
@@ -166,6 +182,11 @@ export async function POST(req: Request) {
 
       const localizedPrice = safeCurrency === "RON" ? price : getProductPrice(price, safeCurrency);
       const isDigital = Boolean(i.is_digital || dbProduct?.specs_summary?.is_digital || isDigitalProgramItem(dbProduct || i));
+      const resolvedVariant = i.selectedVariant
+        ? { ...i.selectedVariant, stock_status: isPreorder ? "preorder" : "in_stock" }
+        : i.variant
+          ? { name: i.variant, stock_status: isPreorder ? "preorder" : "in_stock" }
+          : null;
       return {
         id: i.id || dbProduct?.id || i.slug,
         slug: i.slug || dbProduct?.slug,
@@ -175,8 +196,9 @@ export async function POST(req: Request) {
         image: i.image || i.selectedVariant?.image || undefined,
         is_digital: isDigital,
         specs_summary: dbProduct?.specs_summary || i.specs_summary,
-        selectedVariant: i.selectedVariant || (i.variant ? { name: i.variant } : null),
+        selectedVariant: resolvedVariant,
         _isBundle: parsed._isBundle,
+        stock_status: isPreorder ? "preorder" : "in_stock",
         is_preorder: isPreorder,
       };
     });

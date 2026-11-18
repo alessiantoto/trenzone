@@ -65,6 +65,11 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
   const hasSizes = sizeOptions.length > 0;
   const isTrueBundle = Boolean(product.bundleVariants?.flavor?.options?.length);
   const isDigital = isDigitalProgramItem(product);
+  const activeNonSoldOutOptions = (product.variants?.options || []).filter((o: any) => o.stock_status !== 'sold_out');
+  const isAllVariantsPreorder = !isDigital && (
+    (product as any).stock_status === 'preorder' ||
+    (activeNonSoldOutOptions.length > 0 && activeNonSoldOutOptions.every((o: any) => o.stock_status === 'preorder'))
+  );
   const [isAdded, setIsAdded] = useState(false);
   const [selectingVariant, setSelectingVariant] = useState(false);
   const [selectedModalOptIdx, setSelectedModalOptIdx] = useState(() => (locale === 'en' && isDigital ? 1 : 0));
@@ -173,7 +178,7 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
         isWideCard ? "bg-black border border-white/10 hover:border-white/25" : (dark ? "bg-zinc-900/90 border border-white/10 hover:border-white/20" : "bg-[#f8f8f8]")
       )}>
         {/* Style 2026 Badges — Elite 'Emerald Power' Conversion Logic (Top Left) */}
-        <div className="absolute top-2 left-2 md:top-4 md:left-4 z-20 flex flex-col gap-2">
+        <div className="absolute top-2 left-2 md:top-4 md:left-4 z-20 flex flex-col items-start gap-1.5">
           {numericOriginalPrice > numericPrice && (
             <motion.div 
               initial={{ scale: 0.8, opacity: 0 }}
@@ -182,6 +187,11 @@ export function ProductCard({ product, priority = false, dark = true }: ProductC
             >
               -{Math.round(((numericOriginalPrice - numericPrice) / numericOriginalPrice) * 100)}%
             </motion.div>
+          )}
+          {isAllVariantsPreorder && (
+            <div className="bg-amber-400 text-black font-black uppercase tracking-[0.12em] text-[8.5px] md:text-[9.5px] px-2.5 py-1 rounded-full shadow-md border border-black/15">
+              {locale === 'en' ? 'PRE-ORDER' : 'PRECOMANDĂ'}
+            </div>
           )}
         </div>
         

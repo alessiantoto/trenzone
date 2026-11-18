@@ -27,8 +27,9 @@ import {
 import toast from 'react-hot-toast';
 import {
   getFulfillmentHistory,
-  getFulfillmentPendingCount,
+  getFulfillmentQueueOverview,
   getFulfillmentSettings,
+  type FulfillmentQueueOverview,
 } from '@/app/actions/admin-fulfillment';
 import {
   formatRomaniaDateKey,
@@ -45,6 +46,7 @@ interface FulfillmentReportViewProps {
   loading?: boolean;
   settings?: FulfillmentSettings | null;
   pendingCount?: number;
+  queueOverview?: FulfillmentQueueOverview | null;
   onRefresh?: () => void | Promise<void>;
   compact?: boolean;
 }
@@ -234,6 +236,7 @@ export function FulfillmentReportView({
   loading: controlledLoading,
   settings: controlledSettings,
   pendingCount: controlledPendingCount,
+  queueOverview: controlledQueueOverview,
   onRefresh,
   compact = false,
 }: FulfillmentReportViewProps) {
@@ -243,6 +246,7 @@ export function FulfillmentReportView({
   const [internalLoading, setInternalLoading] = useState(!isControlled);
   const [internalSettings, setInternalSettings] = useState<FulfillmentSettings | null>(null);
   const [internalPendingCount, setInternalPendingCount] = useState<number>(0);
+  const [internalQueueOverview, setInternalQueueOverview] = useState<FulfillmentQueueOverview | null>(null);
 
   const [now, setNow] = useState<Date>(() => new Date());
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,14 +259,15 @@ export function FulfillmentReportView({
   const loadStandaloneData = async () => {
     setInternalLoading(true);
     try {
-      const [hist, sett, counts] = await Promise.all([
+      const [hist, sett, overview] = await Promise.all([
         getFulfillmentHistory(),
         getFulfillmentSettings(),
-        getFulfillmentPendingCount(),
+        getFulfillmentQueueOverview(),
       ]);
       setInternalLogs(hist);
       setInternalSettings(sett);
-      setInternalPendingCount(counts.pendingCount);
+      setInternalPendingCount(overview.pendingOrders.length);
+      setInternalQueueOverview(overview);
     } catch (err) {
       console.error('Error loading fulfillment report:', err);
       toast.error('Nu s-a putut încărca raportul de fulfillment.');
@@ -286,6 +291,7 @@ export function FulfillmentReportView({
   const loading = isControlled ? Boolean(controlledLoading) : internalLoading;
   const settings = controlledSettings !== undefined ? controlledSettings : internalSettings;
   const pendingCount = controlledPendingCount !== undefined ? controlledPendingCount : internalPendingCount;
+  const queueOverview = controlledQueueOverview !== undefined ? controlledQueueOverview : internalQueueOverview;
 
   // Auto-expand the most recent batch once logs arrive
   useEffect(() => {
@@ -516,10 +522,16 @@ export function FulfillmentReportView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700">
-              <Package size={13} className="text-[#e32f8c]" />
-              <span>În așteptare acum: {pendingCount}</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800">
+              <Package size={13} className="text-emerald-600" />
+              <span>Eligibile (În stoc): {queueOverview ? queueOverview.pendingOrders.length : pendingCount}</span>
             </span>
+            {queueOverview && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
+                <AlertCircle size={13} className="text-amber-600" />
+                <span>Blocate (Precomandă / Stoc): {queueOverview.blockedOrders.length}</span>
+              </span>
+            )}
             <button
               type="button"
               onClick={handleRefresh}
@@ -532,6 +544,78 @@ export function FulfillmentReportView({
           </div>
         </div>
       </div>
+
+      {/* Live Queue Verification Panel (Eligible In-Stock vs Blocked Preorder/Out-of-Stock) */}
+      {!compact && queueOverview && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="bg-white border border-emerald-200 rounded-2xl p-3.5 sm:p-4 shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                <CheckCircle2 size={14} className="text-emerald-600" />
+                Eligibile pentru Fulfillment (În stoc curent)
+              </span>
+              <span className="text-[11px] font-black bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
+                {queueOverview.pendingOrders.length} {queueOverview.pendingOrders.length === 1 ? 'comandă' : 'comenzi'}
+              </span>
+            </div>
+            {queueOverview.pendingOrders.length === 0 ? (
+              <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                Nicio comandă eligibilă cu toate produsele fizice în stoc curent.
+              </div>
+            ) : (
+              <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                {queueOverview.pendingOrders.map((o) => (
+                  <div key={o.supabaseId || o.id} className="p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-100 text-xs space-y-0.5">
+                    <div className="flex items-center justify-between gap-2 font-black text-slate-900">
+                      <span>{o.id} · {o.customer}</span>
+                      <span className="text-[11px] text-emerald-800 shrink-0">{o.city}, {o.country}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-700 font-medium">
+                      {o.items.map((it) => `${it.quantity}x ${it.name}${it.variant ? ` (${it.variant})` : ''}`).join(', ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white border border-amber-200 rounded-2xl p-3.5 sm:p-4 shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                <Clock size={14} className="text-amber-600" />
+                Reținute / Blocate (Precomandă / Lipsă stoc curent)
+              </span>
+              <span className="text-[11px] font-black bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full">
+                {queueOverview.blockedOrders.length} {queueOverview.blockedOrders.length === 1 ? 'blocată' : 'blocate'}
+              </span>
+            </div>
+            {queueOverview.blockedOrders.length === 0 ? (
+              <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                Nicio comandă blocată de precomandă sau stoc insuficient.
+              </div>
+            ) : (
+              <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                {queueOverview.blockedOrders.map((bo) => (
+                  <div key={bo.supabaseId || bo.id} className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2 font-black text-slate-900">
+                      <span>{bo.id} · {bo.customer}</span>
+                      <span className="text-[11px] text-slate-600 shrink-0">{bo.city}, {bo.country}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {bo.blockedItems.map((bi, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 text-[10px] font-bold bg-white text-amber-950 border border-amber-300 px-1.5 py-0.5 rounded-md">
+                          <span>{bi.productName}{bi.variant ? ` (${bi.variant})` : ''}</span>
+                          <span className="text-amber-700">· {bi.reasonLabel}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 4 Daily Summary KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">

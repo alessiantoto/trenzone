@@ -1,19 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Image from "next/image";
-import { ShoppingCart, ArrowRight, X, ChevronDown, Check, ChevronRight, AlertCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Truck } from "lucide-react";
 import { Link } from "@/i18n/routing";
-import { useCartStore } from "@/store/useCartStore";
 import { useRegionStore } from "@/store/useRegionStore";
+import { useCheckoutStore } from "@/store/useCheckoutStore";
+import { useShippingConfig } from "@/lib/use-shipping-config";
+import { getFreeShippingThreshold } from "@/lib/cart-calculations";
 import { useLocale } from "next-intl";
 import { Product } from "@/lib/api";
 import { ProductCard } from "@/components/product/ProductCard";
 import { formatPrice } from "@/utils/currency";
 import { getProductPrice } from "@/utils/pricing";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn, getLocalized } from "@/lib/utils";
 import { isDigitalProgramItem } from "@/lib/programs";
+import { getCdnUrl } from "@/lib/utils/cdn";
 
 interface TrenProductShowcaseProps {
   products?: Product[];
@@ -22,7 +23,6 @@ interface TrenProductShowcaseProps {
 export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps) {
   const locale = useLocale();
   const isRo = locale === "ro";
-  const { addItemsBatch, setCartOpen } = useCartStore();
 
   // The 5 official TrenZone products with identical shop structure and data
   const defaultProducts: Product[] = [
@@ -33,8 +33,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         ro: "X10 Elbow Wraps",
         en: "X10 Elbow Wraps"
       },
-      price: 529.99,
-      originalPrice: 599.99,
+      price: 409.99,
+      originalPrice: 479.99,
       badge: "PR CHASER · +20 KG",
       image: "/images/products/x10_elbow_wraps_purple.webp",
       images: [
@@ -58,8 +58,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
             color: "#f8fafc",
             image: "/images/products/x10_elbow_wraps_white.webp",
             imageIndex: 1,
-            stock_status: "preorder",
-            badge: locale === "ro" ? "PRECOMANDĂ" : "PRE-ORDER"
+            stock_status: "preorder"
           }
         ]
       },
@@ -81,8 +80,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         ro: "X5 Elbow Wraps",
         en: "X5 Elbow Wraps"
       },
-      price: 329.99,
-      originalPrice: 379.99,
+      price: 309.99,
+      originalPrice: 359.99,
       badge: "HIPERTROFIE & VOLUM",
       image: "/images/products/x5_elbow_wraps_purple_1.webp",
       images: [
@@ -137,8 +136,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         ro: "X10 Wrist Wraps",
         en: "X10 Wrist Wraps"
       },
-      price: 299.99,
-      originalPrice: 349.99,
+      price: 249.99,
+      originalPrice: 299.99,
       badge: "EXTREME STIFFNESS",
       image: "/images/products/x10_wrist_wraps_purple.webp",
       images: [
@@ -174,7 +173,7 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
       weight: 0.35,
       length_mm: 600,
       width_mm: 80,
-      height_mm: 10,
+      height_mm: 12,
       is_active: true
     },
     {
@@ -184,8 +183,8 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         ro: "Heavy Lifting Belt",
         en: "Heavy Lifting Belt"
       },
-      price: 749.99,
-      originalPrice: 849.99,
+      price: 599.99,
+      originalPrice: 649.99,
       badge: "IPF GRADE · 13MM",
       image: "/images/products/heavy_lifting_belt.webp",
       images: [
@@ -286,81 +285,59 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
   // Max 5 products for desktop, 4 on mobile
   const showcaseProducts = sortedDisplayProducts.slice(0, 5);
 
-  const x10Prod = displayProducts.find(p => p.slug.includes("x10-elbow")) || displayProducts.find(p => p.slug.includes("x10")) || defaultProducts[0];
+  const x10Prod = displayProducts.find(p => p.slug === "x10-elbow-wraps") || displayProducts.find(p => p.slug.includes("x10-elbow")) || defaultProducts[0];
   const x5Prod = displayProducts.find(p => p.slug.includes("x5")) || defaultProducts[1];
+  const wristProd = displayProducts.find(p => p.slug.includes("wrist")) || defaultProducts[2];
 
-  const x5Options = x5Prod?.variants?.options || defaultProducts[1].variants?.options || [];
-  const x10Options = x10Prod?.variants?.options || defaultProducts[0].variants?.options || [];
-
-  const [isDuoModalOpen, setIsDuoModalOpen] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState<'x5' | 'x10' | null>(null);
-  const [selectedX5Opt, setSelectedX5Opt] = useState<any>(() => x5Options.find((o: any) => o.stock_status !== 'sold_out') || x5Options[0]);
-  const [selectedX10Opt, setSelectedX10Opt] = useState<any>(() => x10Options.find((o: any) => o.stock_status !== 'sold_out') || x10Options[0]);
-
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    if (!selectedX5Opt && x5Options.length > 0) setSelectedX5Opt(x5Options.find((o: any) => o.stock_status !== 'sold_out') || x5Options[0]);
-    if (!selectedX10Opt && x10Options.length > 0) setSelectedX10Opt(x10Options.find((o: any) => o.stock_status !== 'sold_out') || x10Options[0]);
-  }, [x5Options, x10Options, selectedX5Opt, selectedX10Opt]);
+    setMounted(true);
+  }, []);
 
-  const { currency } = useRegionStore();
-  const priceX5 = getProductPrice(x5Prod?.price || 329.99, currency);
-  const priceX10 = getProductPrice(x10Prod?.price || 529.99, currency);
-  const subtotalSubunits = Math.round(priceX5 * 100) + Math.round(priceX10 * 100);
-  const originalTotal = subtotalSubunits / 100;
-  const discountedTotal = (subtotalSubunits - Math.round(subtotalSubunits * 0.05)) / 100; // 5% tiered bundle discount (2 items)
-  const isMixedDuo = (selectedX5Opt?.stock_status === 'preorder') !== (selectedX10Opt?.stock_status === 'preorder');
-  const isDuoSoldOut = selectedX5Opt?.stock_status === 'sold_out' || selectedX10Opt?.stock_status === 'sold_out';
+  const { currency, countryCode: regionCountryCode, hasDetectedCountry } = useRegionStore();
+  const storedCheckoutCountry = useCheckoutStore((s) => s.country);
+  const hasManualCountry = useCheckoutStore((s) => s.hasManualCountry);
+  const shippingConfig = useShippingConfig();
 
-  const handleConfirmDuo = () => {
-    if (!x5Prod || !x10Prod || isMixedDuo || isDuoSoldOut) return;
+  const activeCurrency = mounted ? currency : (isRo ? "RON" : "EUR");
+  const effectiveCountry = (
+    mounted
+      ? hasManualCountry
+        ? storedCheckoutCountry
+        : activeCurrency === "RON"
+          ? "RO"
+          : hasDetectedCountry && regionCountryCode !== "RO"
+            ? regionCountryCode
+            : "INTL"
+      : isRo
+        ? "RO"
+        : "INTL"
+  ).toUpperCase();
 
-    const x5OptName = typeof selectedX5Opt?.name === 'object' 
-      ? (selectedX5Opt?.name[locale] || selectedX5Opt?.name['ro']) 
-      : selectedX5Opt?.name;
+  const rawShippingThreshold = getFreeShippingThreshold(effectiveCountry, activeCurrency, shippingConfig);
+  const compactShippingThreshold = `${Math.round(rawShippingThreshold)}+ ${activeCurrency === "RON" ? "lei" : activeCurrency}`;
 
-    const x10OptName = typeof selectedX10Opt?.name === 'object' 
-      ? (selectedX10Opt?.name[locale] || selectedX10Opt?.name['ro']) 
-      : selectedX10Opt?.name;
+  const elbowPrice = getProductPrice(x10Prod?.price || 409.99, activeCurrency);
+  const x5Price = getProductPrice(x5Prod?.price || 309.99, activeCurrency);
+  const wristPrice = getProductPrice(wristProd?.price || 249.99, activeCurrency);
+  const minElbowPrice = Math.min(x5Price, elbowPrice);
+  const minStartPrice = Math.min(wristPrice, minElbowPrice);
 
-    addItemsBatch([
-      {
-        product: x5Prod,
-        variant: {
-          name: x5OptName,
-          image: selectedX5Opt?.image,
-          imageIndex: selectedX5Opt?.imageIndex !== undefined ? selectedX5Opt.imageIndex : 0,
-          stock_status: selectedX5Opt?.stock_status,
-        },
-        quantity: 1,
-      },
-      {
-        product: x10Prod,
-        variant: {
-          name: x10OptName,
-          image: selectedX10Opt?.image,
-          imageIndex: selectedX10Opt?.imageIndex !== undefined ? selectedX10Opt.imageIndex : 0,
-          stock_status: selectedX10Opt?.stock_status,
-        },
-        quantity: 1,
-      },
-    ]);
-
-    setIsDuoModalOpen(false);
-    setCartOpen(true);
-  };
+  const elbowCardImg = getCdnUrl(x10Prod?.image || "/images/products/x10_elbow_wraps_purple.webp");
+  const wristCardImg = getCdnUrl(wristProd?.image || "/images/products/x10_wrist_wraps_purple.webp");
 
   return (
     <section id="shop-products" className="py-16 md:py-24 bg-transparent text-white relative overflow-hidden">
       <div className="container mx-auto px-4 md:px-8 max-w-6xl relative z-10">
-        
+
         {/* Header - Clean, direct, human fitness brand style */}
         <div className="flex flex-col items-center justify-center mb-8 md:mb-12 text-center">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white font-[family-name:var(--font-oswald)]">
             {isRo ? "CELE MAI CĂUTATE" : "BEST SELLERS"}
           </h2>
           <p className="text-xs sm:text-sm md:text-base text-zinc-400 font-medium mt-2 max-w-lg">
-            {isRo 
-              ? "Cele mai căutate produse și echipamente din magazin." 
+            {isRo
+              ? "Cele mai căutate produse și echipamente din magazin."
               : "The most popular products and gear in our store."}
           </p>
         </div>
@@ -368,111 +345,164 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         {/* Product Cards Grid: 2 centered if 2 products, or responsive grid */}
         <div className={`grid grid-cols-2 ${showcaseProducts.length <= 2 ? 'sm:grid-cols-2 max-w-2xl mx-auto' : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5'} gap-3 sm:gap-4 md:gap-6 mb-8 sm:mb-10`}>
           {showcaseProducts.map((product, idx) => (
-            <div 
+            <div
               key={product.id}
               className={idx >= 4 ? "hidden md:block" : ""}
             >
-              <ProductCard 
-                product={product} 
-                dark={true} 
-                priority={idx < 2} 
+              <ProductCard
+                product={product}
+                dark={true}
+                priority={idx < 2}
               />
             </div>
           ))}
         </div>
 
-        {/* View Shop CTA Button */}
-        <div className="flex justify-center mb-12 sm:mb-16">
-          <Link
-            href="/shop"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 py-3.5 px-8 sm:px-12 rounded-xl bg-white/10 hover:bg-white text-white hover:text-black border border-white/15 font-black uppercase text-xs sm:text-sm tracking-wider transition-all duration-300 shadow-lg active:scale-[0.98] group cursor-pointer"
-          >
-            <span>{isRo ? "VEZI TOATE PRODUSELE" : "VIEW ALL PRODUCTS"}</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
-        </div>
+        {/* FULL LOCKOUT DISCOVERY CARD: ELBOW & WRIST WRAPS */}
+        <div className="mt-8 sm:mt-10 rounded-2xl md:rounded-3xl bg-zinc-900/75 border border-white/10 p-4 sm:p-7 md:p-9 relative overflow-hidden shadow-2xl">
+          {/* Subtle corner ambient glow without heavy GPU blur filter */}
+          <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-[radial-gradient(circle,rgba(227,47,140,0.16)_0%,transparent_70%)] pointer-events-none" />
 
-        {/* DUO PACK BUNDLE (Clean, minimal, non-repetitive) */}
-        <div className="mt-10 rounded-2xl md:rounded-3xl bg-zinc-900/70 border border-white/10 p-5 sm:p-7 md:p-8 relative overflow-hidden shadow-2xl backdrop-blur-md">
-          {/* Subtle ambient lighting */}
-          <div className="absolute -top-32 -right-32 w-80 h-80 bg-[#e32f8c]/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-9 items-center relative z-10">
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-center">
-            
-            {/* Left: Dual Product Visuals */}
+            {/* Left: Interactive Elbow + Wrist Product Visual Cards */}
             <div className="lg:col-span-5 flex justify-center">
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 w-full max-w-sm relative">
-                {/* Wrap 1: X5 */}
-                <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden bg-zinc-900 border border-white/10 shadow-lg group">
-                  <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full bg-black/75 backdrop-blur-md border border-white/10 text-[9px] font-black text-white uppercase">
-                    X5
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-sm relative">
+                {/* Card 1: Elbow Wraps */}
+                <Link
+                  href={`/product/${x10Prod?.slug || "x10-elbow-wraps"}`}
+                  className="relative aspect-[4/5] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 hover:border-[#e32f8c]/50 shadow-lg group transition-colors duration-300 block"
+                >
+                  <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[9px] font-black text-white uppercase tracking-wider">
+                    X10 / X5
                   </div>
                   <Image
-                    src={selectedX5Opt?.image || "/images/products/x5_elbow_wraps_purple_square.webp"}
-                    alt="TrenZone X5 Elbow Wraps"
+                    src={elbowCardImg}
+                    alt="TrenZone Elbow Wraps"
                     fill
+                    loading="lazy"
+                    decoding="async"
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                     sizes="(max-width: 768px) 45vw, 200px"
                   />
-                </div>
+                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/95 via-black/75 to-transparent z-10" />
+                  <div className="absolute inset-x-2.5 bottom-2.5 z-20 flex items-end justify-between gap-1">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black uppercase tracking-wide text-white leading-tight truncate">
+                        Elbow Wraps
+                      </p>
+                      <p className="text-[10.5px] font-bold text-zinc-300 mt-0.5 tabular-nums truncate">
+                        {isRo ? "De la " : "From "}
+                        {formatPrice(minElbowPrice, activeCurrency)}
+                      </p>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-[#e32f8c] group-hover:translate-x-0.5 transition-all shrink-0 mb-0.5" />
+                  </div>
+                </Link>
 
-                {/* Floating Plus divider */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white text-black font-black text-sm flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.6)] border-2 border-zinc-900">
+                {/* Center Connector */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white text-black font-black text-xs sm:text-sm flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.75)] border-2 border-zinc-900 pointer-events-none">
                   +
                 </div>
 
-                {/* Wrap 2: X10 */}
-                <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden bg-zinc-900 border border-white/10 shadow-lg group">
-                  <div className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full bg-[#e32f8c] text-white text-[9px] font-black uppercase shadow-sm">
-                    X10
+                {/* Card 2: Wrist Wraps */}
+                <Link
+                  href={`/product/${wristProd?.slug || "x10-wrist-wraps"}`}
+                  className="relative aspect-[4/5] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 hover:border-[#e32f8c]/50 shadow-lg group transition-colors duration-300 block"
+                >
+                  <div className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-[#e32f8c] text-white text-[9px] font-black uppercase tracking-wider shadow-sm">
+                    60 CM
                   </div>
                   <Image
-                    src={selectedX10Opt?.image || "/images/products/x10_elbow_wraps_purple.webp"}
-                    alt="TrenZone X10 Elbow Wraps"
+                    src={wristCardImg}
+                    alt="TrenZone X10 Wrist Wraps"
                     fill
+                    loading="lazy"
+                    decoding="async"
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                     sizes="(max-width: 768px) 45vw, 200px"
                   />
-                </div>
+                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/95 via-black/75 to-transparent z-10" />
+                  <div className="absolute inset-x-2.5 bottom-2.5 z-20 flex items-end justify-between gap-1">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black uppercase tracking-wide text-white leading-tight truncate">
+                        Wrist Wraps
+                      </p>
+                      <p className="text-[10.5px] font-bold text-zinc-300 mt-0.5 tabular-nums truncate">
+                        {formatPrice(wristPrice, activeCurrency)}
+                      </p>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-[#e32f8c] group-hover:translate-x-0.5 transition-all shrink-0 mb-0.5" />
+                  </div>
+                </Link>
               </div>
             </div>
 
-            {/* Right: Info, Price & CTA */}
+            {/* Right: Clean Copy, Cart Milestone Perks, Dynamic Price & Shop CTA */}
             <div className="lg:col-span-7 flex flex-col justify-between">
               <div>
-                <h3 className="font-heading font-black text-xl sm:text-2xl md:text-3xl uppercase tracking-tight text-white mb-2">
-                  DUO STACK: <span className="text-[#e32f8c]">X5 + X10</span>
+                <h3 className="font-[family-name:var(--font-oswald)] font-black text-2xl sm:text-3xl md:text-4xl uppercase tracking-tight text-white leading-[0.95] mb-2.5">
+                  ELBOW &amp; WRIST <span className="text-[#e32f8c]">WRAPS</span>
                 </h3>
 
-                <p className="text-xs sm:text-sm text-zinc-300 font-medium leading-relaxed mb-4">
-                  {isRo 
-                    ? "Pachetul complet: 1x Pereche X5 + 1x Pereche X10."
-                    : "The complete set: 1x Pair X5 + 1x Pair X10."}
+                <p className="text-xs sm:text-sm text-zinc-300 font-medium leading-relaxed max-w-lg mb-4 sm:mb-5">
+                  {isRo
+                    ? "Susținere reală pentru coate și încheieturi când urci greutățile. Alege modelul și culoarea potrivită în magazin."
+                    : "Solid support for elbows and wrists when the bar gets heavy. Pick your stiffness and colorway in the shop."}
                 </p>
+
+                {/* Cart Perks Bar (Matching CartSheet 3-milestone rewards in sleek dark obsidian) */}
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 mb-5">
+                  <div className="rounded-xl bg-black/50 border border-white/10 px-2 py-2 sm:px-3 sm:py-2.5 flex items-center justify-center gap-1.5 sm:gap-2">
+                    <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#e32f8c] shrink-0" />
+                    <div className="min-w-0 text-left">
+                      <div className="text-[10px] sm:text-[11px] font-black text-white leading-tight truncate">
+                        {isRo ? "Gratuit" : "Free ship"}
+                      </div>
+                      <div className="text-[9.5px] sm:text-[10px] font-semibold text-zinc-400 leading-tight tabular-nums truncate">
+                        {compactShippingThreshold}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-black/50 border border-white/10 px-2 py-2 sm:px-3 sm:py-2.5 flex flex-col items-center justify-center text-center">
+                    <div className="text-[11px] sm:text-xs font-black text-white leading-tight tabular-nums">
+                      -5%
+                    </div>
+                    <div className="text-[9.5px] sm:text-[10px] font-semibold text-zinc-400 leading-tight truncate">
+                      {isRo ? "2 produse" : "2 items"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-[#e32f8c]/10 border border-[#e32f8c]/35 px-2 py-2 sm:px-3 sm:py-2.5 flex flex-col items-center justify-center text-center">
+                    <div className="text-[11px] sm:text-xs font-black text-[#e32f8c] leading-tight tabular-nums">
+                      -10%
+                    </div>
+                    <div className="text-[9.5px] sm:text-[10px] font-semibold text-zinc-200 leading-tight truncate">
+                      {isRo ? "3+ produse" : "3+ items"}
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Price & CTA row */}
-              <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-baseline gap-2.5 flex-wrap">
-                  <span className="text-2xl sm:text-3xl font-black text-white tracking-tight whitespace-nowrap">
-                    {formatPrice(discountedTotal, currency)}
+              {/* Price Anchor & Single Shop CTA Row */}
+              <div className="pt-4 sm:pt-5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
+                <div className="flex items-baseline justify-between sm:justify-start gap-2 whitespace-nowrap">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    {isRo ? "Prețuri de la" : "Starting from"}
                   </span>
-                  <span className="text-sm text-zinc-500 line-through font-bold whitespace-nowrap">
-                    {formatPrice(originalTotal, currency)}
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-[#e32f8c]/20 border border-[#e32f8c]/40 text-[#e32f8c] text-[10px] sm:text-[11px] font-black uppercase whitespace-nowrap">
-                    -5% {isRo ? "REDUCERE" : "OFF"}
+                  <span className="text-xl sm:text-3xl font-black text-white tracking-tight tabular-nums">
+                    {formatPrice(minStartPrice, activeCurrency)}
                   </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsDuoModalOpen(true)}
-                  className="w-full sm:w-auto py-3.5 px-8 rounded-xl bg-white hover:bg-[#e32f8c] hover:text-white text-black font-black uppercase text-xs tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] cursor-pointer"
+                <Link
+                  href="/shop"
+                  className="w-full sm:w-auto shrink-0 whitespace-nowrap py-3.5 px-7 rounded-xl bg-white hover:bg-[#e32f8c] hover:text-white text-black font-black uppercase text-xs tracking-wider transition-all duration-300 inline-flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] group cursor-pointer"
                 >
-                  <ShoppingCart className="w-4 h-4 shrink-0" />
-                  <span>{isRo ? "ADAUGĂ PACHETUL ÎN COȘ" : "ADD DUO PACK TO CART"}</span>
-                </button>
+                  <span>{isRo ? "DESCOPERĂ PRODUSELE" : "DISCOVER PRODUCTS"}</span>
+                  <ArrowRight className="w-4 h-4 shrink-0 group-hover:translate-x-1 transition-transform" />
+                </Link>
               </div>
 
             </div>
@@ -481,311 +511,6 @@ export function TrenProductShowcase({ products = [] }: TrenProductShowcaseProps)
         </div>
 
       </div>
-
-      {/* ═══ MODERN DUO BUNDLE COLOR SELECTOR MODAL ═══ */}
-      <AnimatePresence>
-        {isDuoModalOpen && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => {
-                setIsDuoModalOpen(false);
-                setOpenDropdown(null);
-              }}
-              className="absolute inset-0 bg-black/75 backdrop-blur-md"
-            />
-
-            {/* Modal Card */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative w-full max-w-[390px] bg-white text-black p-5 sm:p-6 rounded-3xl shadow-2xl flex flex-col z-10 border border-zinc-100"
-            >
-              {/* Header - Clean, direct, non-repetitive */}
-              <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-zinc-100">
-                <div>
-                  <h3 className="text-base sm:text-lg font-black uppercase tracking-tight text-black leading-none">
-                    {isRo ? "Alege culorile" : "Select Colors"}
-                  </h3>
-                  <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mt-1">
-                    DUO PACK: X5 + X10
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDuoModalOpen(false);
-                    setOpenDropdown(null);
-                  }}
-                  className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-black flex items-center justify-center transition-all active:scale-[0.98] cursor-pointer shrink-0 -mt-1 -mr-1"
-                  aria-label="Close"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              {/* SELECTION 1: X5 with Dropdown (Side cart style) */}
-              <div className="relative mb-3.5">
-                <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1.5">
-                  <span>TRENZONE X5</span>
-                  <span className="text-[10px] font-bold text-zinc-400">{isRo ? "1x PERECHE" : "1x PAIR"}</span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-zinc-950 rounded-xl relative overflow-hidden shrink-0 border border-zinc-800 shadow-inner">
-                    <Image
-                      src={selectedX5Opt?.image || x5Prod?.image || "/images/products/x5_elbow_wraps_purple_square.webp"}
-                      alt="X5 Elbow Wraps"
-                      fill
-                      sizes="48px"
-                      className="object-contain p-1 transition-all duration-200"
-                    />
-                  </div>
-
-                  <div className="flex-1 relative">
-                    <button
-                      type="button"
-                      onClick={() => setOpenDropdown(openDropdown === 'x5' ? null : 'x5')}
-                      className="w-full flex items-center justify-between py-2.5 px-3 bg-white border border-black rounded-xl hover:bg-zinc-50 transition-all active:scale-[0.98] cursor-pointer shadow-xs text-left"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span 
-                          className="w-4 h-4 rounded-full border border-black/15 shrink-0 shadow-inner" 
-                          style={{ backgroundColor: selectedX5Opt?.color || '#a855f7' }}
-                        />
-                        <span className="text-xs font-black uppercase tracking-wider text-black truncate">
-                          {getLocalized(selectedX5Opt?.name, locale)}
-                        </span>
-                      </div>
-                      <ChevronDown 
-                        className={cn("w-4 h-4 text-black transition-transform duration-200 shrink-0 ml-2", openDropdown === 'x5' && "rotate-180")} 
-                      />
-                    </button>
-
-                    {/* Dropdown Options (Side cart / CartSheet exact styling) */}
-                    <AnimatePresence>
-                      {openDropdown === 'x5' && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                          transition={{ duration: 0.12 }}
-                          className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-black rounded-xl overflow-hidden shadow-2xl z-30 flex flex-col"
-                        >
-                          {x5Options.map((opt: any, idx: number) => {
-                            const optName = getLocalized(opt.name, locale);
-                            const isSelected = (selectedX5Opt?.name?.ro || selectedX5Opt?.name) === (opt.name?.ro || opt.name);
-                            const isSoldOutOpt = opt.stock_status === 'sold_out';
-                            return (
-                              <button
-                                key={`x5-${idx}`}
-                                type="button"
-                                disabled={isSoldOutOpt}
-                                onClick={() => {
-                                  if (isSoldOutOpt) return;
-                                  setSelectedX5Opt(opt);
-                                  setOpenDropdown(null);
-                                }}
-                                className={cn(
-                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-all border-b border-black/10 last:border-none text-left",
-                                  isSoldOutOpt ? "opacity-40 cursor-not-allowed bg-zinc-50" : isSelected ? "bg-[#f4f4f4] font-black cursor-pointer active:scale-[0.98]" : "hover:bg-[#f4f4f4] cursor-pointer active:scale-[0.98]"
-                                )}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <span 
-                                    className="w-4 h-4 rounded-full border border-black/15 shrink-0 shadow-inner" 
-                                    style={{ backgroundColor: opt.color || '#a855f7' }}
-                                  />
-                                  <span className="text-xs uppercase font-black tracking-wider text-black truncate">
-                                    {optName}
-                                  </span>
-                                  {isSoldOutOpt && (
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 font-black uppercase border border-red-500/20">
-                                      {isRo ? "STOC EPUIZAT" : "SOLD OUT"}
-                                    </span>
-                                  )}
-                                </div>
-                                {isSelected ? (
-                                  <Check className="w-4 h-4 text-black shrink-0" />
-                                ) : (
-                                  <ChevronRight className="w-3.5 h-3.5 text-black/30 shrink-0" />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-              </div>
-
-              {/* SELECTION 2: X10 with Dropdown (Side cart style) */}
-              <div className="relative mb-4">
-                <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1.5">
-                  <span>TRENZONE X10</span>
-                  <span className="text-[10px] font-bold text-zinc-400">{isRo ? "1x PERECHE" : "1x PAIR"}</span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-zinc-950 rounded-xl relative overflow-hidden shrink-0 border border-zinc-800 shadow-inner">
-                    <Image
-                      src={selectedX10Opt?.image || x10Prod?.image || "/images/products/x10_elbow_wraps_purple.webp"}
-                      alt="X10 Elbow Wraps"
-                      fill
-                      sizes="48px"
-                      className="object-contain p-1 transition-all duration-200"
-                    />
-                  </div>
-
-                  <div className="flex-1 relative">
-                    <button
-                      type="button"
-                      onClick={() => setOpenDropdown(openDropdown === 'x10' ? null : 'x10')}
-                      className="w-full flex items-center justify-between py-2.5 px-3 bg-white border border-black rounded-xl hover:bg-zinc-50 transition-all active:scale-[0.98] cursor-pointer shadow-xs text-left"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span 
-                          className="w-4 h-4 rounded-full border border-black/15 shrink-0 shadow-inner" 
-                          style={{ backgroundColor: selectedX10Opt?.color || '#a855f7' }}
-                        />
-                        <span className="text-xs font-black uppercase tracking-wider text-black truncate">
-                          {getLocalized(selectedX10Opt?.name, locale)}
-                        </span>
-                        {selectedX10Opt?.stock_status === 'preorder' && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 font-black uppercase border border-amber-500/20">
-                            PRE
-                          </span>
-                        )}
-                      </div>
-                      <ChevronDown 
-                        className={cn("w-4 h-4 text-black transition-transform duration-200 shrink-0 ml-2", openDropdown === 'x10' && "rotate-180")} 
-                      />
-                    </button>
-
-                    {/* Dropdown Options */}
-                    <AnimatePresence>
-                      {openDropdown === 'x10' && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                          transition={{ duration: 0.12 }}
-                          className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-black rounded-xl overflow-hidden shadow-2xl z-30 flex flex-col"
-                        >
-                          {x10Options.map((opt: any, idx: number) => {
-                            const optName = getLocalized(opt.name, locale);
-                            const isSelected = (selectedX10Opt?.name?.ro || selectedX10Opt?.name) === (opt.name?.ro || opt.name);
-                            const isPreorderOpt = opt.stock_status === 'preorder';
-                            const isSoldOutOpt = opt.stock_status === 'sold_out';
-                            return (
-                              <button
-                                key={`x10-${idx}`}
-                                type="button"
-                                disabled={isSoldOutOpt}
-                                onClick={() => {
-                                  if (isSoldOutOpt) return;
-                                  setSelectedX10Opt(opt);
-                                  setOpenDropdown(null);
-                                }}
-                                className={cn(
-                                  "w-full flex items-center justify-between py-2.5 px-3.5 transition-all border-b border-black/10 last:border-none text-left",
-                                  isSoldOutOpt ? "opacity-40 cursor-not-allowed bg-zinc-50" : isSelected ? "bg-[#f4f4f4] font-black cursor-pointer active:scale-[0.98]" : "hover:bg-[#f4f4f4] cursor-pointer active:scale-[0.98]"
-                                )}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <span 
-                                    className="w-4 h-4 rounded-full border border-black/15 shrink-0 shadow-inner" 
-                                    style={{ backgroundColor: opt.color || '#a855f7' }}
-                                  />
-                                  <span className="text-xs uppercase font-black tracking-wider text-black truncate">
-                                    {optName}
-                                  </span>
-                                  {isSoldOutOpt ? (
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 font-black uppercase border border-red-500/20">
-                                      {isRo ? "STOC EPUIZAT" : "SOLD OUT"}
-                                    </span>
-                                  ) : isPreorderOpt && (
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 font-black uppercase border border-amber-500/20">
-                                      {isRo ? "PRECOMANDĂ" : "PRE-ORDER"}
-                                    </span>
-                                  )}
-                                </div>
-                                {isSelected ? (
-                                  <Check className="w-4 h-4 text-black shrink-0" />
-                                ) : (
-                                  <ChevronRight className="w-3.5 h-3.5 text-black/30 shrink-0" />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mixed Preorder Alert */}
-              {isMixedDuo && (
-                <div className="mb-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 flex items-center gap-2.5">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span className="font-semibold leading-snug">
-                    {isRo 
-                      ? "Precomenzile se livrează separat și nu pot fi combinate cu produse din stoc în același pachet."
-                      : "Pre-orders ship separately and cannot be bundled with in-stock products."}
-                  </span>
-                </div>
-              )}
-
-              {/* Price Row & Action */}
-              <div className="pt-3.5 border-t border-zinc-100 mt-1">
-                <div className="flex items-center justify-between mb-3.5">
-                  <span className="text-xs font-black uppercase tracking-wider text-zinc-400">
-                    TOTAL
-                  </span>
-                  <div className="flex items-baseline gap-2 whitespace-nowrap">
-                    <span className="text-xl sm:text-2xl font-black text-black tracking-tight whitespace-nowrap">
-                      {formatPrice(discountedTotal, currency)}
-                    </span>
-                    <span className="text-xs text-zinc-400 line-through font-bold whitespace-nowrap">
-                      {formatPrice(originalTotal, currency)}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase border border-emerald-200 whitespace-nowrap">
-                      -5%
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={isMixedDuo || isDuoSoldOut}
-                  onClick={handleConfirmDuo}
-                  className={cn(
-                    "w-full py-3.5 px-6 rounded-2xl font-black uppercase text-xs sm:text-sm tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-xl",
-                    isMixedDuo || isDuoSoldOut
-                      ? "bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none"
-                      : "bg-[#e32f8c] hover:bg-[#c22074] active:scale-[0.98] text-white shadow-[#e32f8c]/25 cursor-pointer"
-                  )}
-                >
-                  <ShoppingCart className="w-4 h-4 shrink-0" />
-                  <span>
-                    {isDuoSoldOut
-                      ? (isRo ? "STOC EPUIZAT" : "SOLD OUT")
-                      : isMixedDuo
-                        ? (isRo ? "COMANDĂ SEPARAT" : "ORDER SEPARATELY")
-                        : (isRo ? "CONFIRMĂ ȘI ADAUGĂ ÎN COȘ" : "CONFIRM & ADD TO CART")}
-                  </span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </section>
   );
 }

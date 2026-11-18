@@ -195,8 +195,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
       ro: "X10 Elbow Wraps",
       en: "X10 Elbow Wraps"
     },
-    price: 529.99,
-    originalPrice: 599.99,
+    price: 409.99,
+    originalPrice: 479.99,
     badge: "PR CHASER · +20 KG",
     image: "/images/products/x10_elbow_wraps_purple.webp",
     images: [
@@ -251,8 +251,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
       ro: "X5 Elbow Wraps",
       en: "X5 Elbow Wraps"
     },
-    price: 329.99,
-    originalPrice: 379.99,
+    price: 309.99,
+    originalPrice: 359.99,
     badge: "HIPERTROFIE & VOLUM",
     image: "/images/products/x5_elbow_wraps_purple_1.webp",
     images: [
@@ -315,8 +315,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
       ro: "X10 Wrist Wraps",
       en: "X10 Wrist Wraps"
     },
-    price: 299.99,
-    originalPrice: 349.99,
+    price: 249.99,
+    originalPrice: 299.99,
     badge: "EXTREME STIFFNESS",
     image: "/images/products/x10_wrist_wraps_purple.webp",
     images: [
@@ -388,8 +388,8 @@ const FALLBACK_TRENZONE_PRODUCTS: Product[] = [
       ro: "Heavy Lifting Belt",
       en: "Heavy Lifting Belt"
     },
-    price: 749.99,
-    originalPrice: 849.99,
+    price: 599.99,
+    originalPrice: 649.99,
     badge: "IPF GRADE · 13MM",
     image: "/images/products/heavy_lifting_belt.webp",
     images: [
@@ -622,7 +622,7 @@ const getCachedProducts = unstable_cache(
       return sortProductsCanonical(FALLBACK_TRENZONE_PRODUCTS);
     }
   },
-  ['public-products-list-v18'],
+  ['public-products-list-v19'],
   {
     revalidate: 2592000, // 30 days cache — purged on admin edit or manual cache clear
     tags: ['products']

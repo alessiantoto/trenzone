@@ -528,18 +528,16 @@ export function ScratchPromoPopup() {
             transition={{ type: "spring", damping: 32, stiffness: 420, mass: 0.8 }}
             className="relative z-10 w-full max-w-[390px] md:max-w-[780px] min-h-[540px] sm:min-h-[600px] md:min-h-[440px] max-h-[92dvh] overflow-x-clip overflow-y-auto md:overflow-hidden rounded-[26px] border border-white/15 bg-[#07070b] shadow-[0_32px_90px_-16px_rgba(0,0,0,0.95),0_0_60px_-18px_rgba(227,47,140,0.35)] flex flex-col md:flex-row transform-gpu"
           >
-            {/* DESKTOP BACKGROUND (Landscape diagonal split + products right) */}
-            <img
-              src={getOptimizedImageUrl(pcBg)}
-              alt=""
-              className="pointer-events-none hidden md:block absolute inset-0 h-full w-full object-cover object-center"
-            />
-            {/* MOBILE BACKGROUND (Portrait diagonal split + products bottom) */}
-            <img
-              src={getOptimizedImageUrl(mobileBg)}
-              alt=""
-              className="pointer-events-none md:hidden absolute inset-0 h-full w-full object-cover object-bottom"
-            />
+            {/* RESPONSIVE BACKGROUND (Desktop landscape / Mobile portrait — single download per viewport) */}
+            <picture className="pointer-events-none absolute inset-0 h-full w-full">
+              <source media="(min-width: 768px)" srcSet={getOptimizedImageUrl(pcBg)} />
+              <img
+                src={getOptimizedImageUrl(mobileBg)}
+                alt=""
+                decoding="async"
+                className="h-full w-full object-cover object-bottom md:object-center"
+              />
+            </picture>
 
             {/* Subtle top/left readability scrim so foreground copy always pops cleanly */}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#07070b]/85 via-[#07070b]/45 to-transparent md:bg-gradient-to-r md:from-[#07070b]/85 md:via-[#07070b]/35 md:to-transparent" />

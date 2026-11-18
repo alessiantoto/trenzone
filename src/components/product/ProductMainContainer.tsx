@@ -347,9 +347,9 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
 
   return (
     <div className="relative w-full overflow-x-clip min-h-dvh text-white">
-      {/* Ambient Radial Spotlight Accents */}
-      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#e32f8c]/10 rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="absolute top-1/2 right-1/4 w-[400px] h-[400px] bg-[#0b3b4f]/15 rounded-full blur-[120px] pointer-events-none -z-10" />
+      {/* Ambient Radial Spotlight Accents (pure gradient — avoids heavy GPU blur filter INP/CLS) */}
+      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(227,47,140,0.12)_0%,transparent_70%)] pointer-events-none -z-10" />
+      <div className="absolute top-1/2 right-1/4 w-[400px] h-[400px] rounded-full bg-[radial-gradient(circle,rgba(11,59,79,0.20)_0%,transparent_70%)] pointer-events-none -z-10" />
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-5 sm:px-8 lg:px-12 pb-4 lg:pb-8 pt-32 sm:pt-36 md:pt-40">
         {/* ═══ TOP BREADCRUMB NAVIGATION ═══ */}
@@ -395,13 +395,13 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                   setActiveImage(allGalleryImages[nextIdx]);
                 }}
               >
-                {/* Pre-render all product images for instant switching */}
+                {/* Pre-render active & gallery product images (prioritize primary LCP image, lazy-load variants) */}
                 {allGalleryImages.map((img, idx) => (
                   <div
                     key={idx}
                     className={cn(
-                      "absolute inset-0 transition-all duration-500 ease-in-out flex items-center justify-center",
-                      (activeImage || product.image) === img ? "opacity-100 scale-100 z-10" : "opacity-0 scale-[0.98] pointer-events-none z-0"
+                      "absolute inset-0 transition-opacity duration-300 ease-out flex items-center justify-center",
+                      (activeImage || product.image) === img ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0"
                     )}
                   >
                     <Image
@@ -410,6 +410,10 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       width={1000}
                       height={1000}
                       priority={idx === 0}
+                      fetchPriority={idx === 0 ? "high" : "low"}
+                      loading={idx === 0 ? "eager" : "lazy"}
+                      decoding="async"
+                      sizes="(max-width: 1024px) 92vw, 576px"
                       className="w-auto h-auto max-w-full max-h-full object-contain rounded-[2rem] drop-shadow-[0_15px_30px_rgba(0,0,0,0.8)]"
                     />
                   </div>
@@ -482,7 +486,8 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
                       src={img}
                       alt={(optName as string) || `${name} - ${idx + 1}`}
                       fill
-                      priority={idx < 2}
+                      loading="lazy"
+                      decoding="async"
                       className={isWide ? "object-contain p-1" : "object-cover"}
                       sizes="(max-width: 768px) 64px, 112px"
                     />

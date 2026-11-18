@@ -70,7 +70,7 @@ export function TrenHero({ freeShippingRo = 500, freeShippingIntl = 150 }: TrenH
   };
 
   return (
-    <section className="relative h-[100dvh] w-full flex flex-col justify-end overflow-hidden bg-[#030305]">
+    <section className="relative h-[100svh] min-h-[640px] w-full flex flex-col justify-end overflow-hidden bg-[#030305]">
       
       {/* 1. TOP ANNOUNCEMENT BANNER */}
       <div className="absolute top-0 left-0 w-full bg-[#e32f8c] text-black py-2.5 z-50 overflow-hidden flex items-center justify-center text-[11px] md:text-xs font-black tracking-[0.2em] uppercase shadow-md">
@@ -97,6 +97,7 @@ export function TrenHero({ freeShippingRo = 500, freeShippingIntl = 150 }: TrenH
           alt="TrenZone Elbow Wraps"
           fill
           priority
+          fetchPriority="high"
           className="object-cover object-[center_20%] md:object-[center_25%]"
           sizes="100vw"
         />

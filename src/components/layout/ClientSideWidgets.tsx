@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import dynamic from "next/dynamic";
 import { Toaster } from "react-hot-toast";
 import { ReferralHandler } from "@/components/cart/ReferralHandler";
+import { Footer } from "@/components/layout/Footer";
 import { clearMaintenanceBypass } from "@/app/actions/admin-settings";
 import { Lock, Loader2 } from "lucide-react";
 
@@ -11,7 +12,6 @@ const ConsentBanner = dynamic(() => import("@/components/legal/ConsentBanner").t
 const ScratchPromoPopup = dynamic(() => import("@/components/promo/ScratchPromoPopup").then(mod => mod.ScratchPromoPopup), { ssr: false });
 
 const TrenZoneAssistant = dynamic(() => import("@/components/layout/TrenZoneAssistant").then(mod => mod.TrenZoneAssistant), { ssr: false });
-const Footer = dynamic(() => import("@/components/layout/Footer").then(mod => mod.Footer), { ssr: false });
 const PreorderConflictModal = dynamic(() => import("@/components/cart/PreorderConflictModal").then(mod => mod.PreorderConflictModal), { ssr: false });
 
 export function ClientSideWidgets({ isMaintenanceMode }: { isMaintenanceMode: boolean }) {

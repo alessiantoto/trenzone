@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getShippingConfig } from '@/app/actions/shipping';
 
-export const revalidate = 3600;
+export const revalidate = 2592000;
 
 export async function GET() {
   try {
@@ -10,8 +10,8 @@ export async function GET() {
       { success: true, config },
       {
         headers: {
-          'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
-          'CDN-Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+          'Cache-Control': 'public, max-age=300, s-maxage=2592000, stale-while-revalidate=2592000',
+          'CDN-Cache-Control': 'public, s-maxage=2592000, stale-while-revalidate=2592000',
         },
       }
     );

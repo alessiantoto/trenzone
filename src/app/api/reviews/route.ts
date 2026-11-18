@@ -8,8 +8,8 @@ import { getAllReviewsServer } from '@/app/actions/public-reviews';
 import { formatPublicReviews, sanitizeReviewImageUrl } from '@/lib/utils/reviews';
 import { upsertReviewTranslation } from '@/lib/review-i18n';
 
-// Cache public GET reviews for 24h on Vercel/Cloudflare CDN (POST stays uncached; admin edits call revalidateTag/revalidatePath)
-export const revalidate = 86400;
+// Cache public GET reviews for 30 days on Vercel/Cloudflare CDN (POST stays uncached; admin edits call revalidatePath/Clear Cache)
+export const revalidate = 2592000;
 
 export async function GET(request: Request) {
   try {
@@ -22,8 +22,8 @@ export async function GET(request: Request) {
       { reviews },
       {
         headers: {
-          'Cache-Control': 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800',
-          'CDN-Cache-Control': 'public, s-maxage=86400',
+          'Cache-Control': 'public, max-age=300, s-maxage=2592000, stale-while-revalidate=2592000',
+          'CDN-Cache-Control': 'public, s-maxage=2592000',
         },
       }
     );

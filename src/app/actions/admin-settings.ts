@@ -108,6 +108,7 @@ function invalidateGlobalSettingsNow() {
   revalidatePath('/en', 'layout');
   revalidatePath('/ro', 'page');
   revalidatePath('/en', 'page');
+  revalidatePath('/api/exchange-rates');
 }
 
 export async function toggleMaintenanceMode(isActive: boolean) {
@@ -314,11 +315,17 @@ export async function purgeAllSiteCache(): Promise<{ success: boolean; cloudflar
   revalidatePath('/en/product/[slug]', 'page');
   revalidatePath('/ro/reviews', 'page');
   revalidatePath('/en/reviews', 'page');
+  revalidatePath('/ro/programs', 'page');
+  revalidatePath('/en/programs', 'page');
   revalidatePath('/ro/about', 'page');
   revalidatePath('/en/about', 'page');
   revalidatePath('/api/products');
   revalidatePath('/api/reviews');
+  revalidatePath('/api/exchange-rates');
+  revalidatePath('/api/shipping-config');
+  revalidatePath('/api/promo-config');
   revalidatePath('/api/sameday/lockers');
+  revalidatePath('/api/feeds/google-merchant');
   revalidatePath('/sitemap.xml');
 
   // 3. Optional: Purge Cloudflare Edge Cache if Zone ID & API Token are configured

@@ -5,7 +5,7 @@ import { getSiteUrl } from '@/lib/site-config';
 
 const BASE_URL = getSiteUrl();
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 // All 24 countries we currently ship to — used for hreflang alternates
 const SHIPPING_COUNTRY_LOCALES: Record<string, string> = {

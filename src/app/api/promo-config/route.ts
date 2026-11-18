@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { normalizePromoSettings, ResolvedPromoConfig } from '@/lib/promo-config';
 
-export const revalidate = 300; // 5m Edge/ISR cache; purged immediately on admin update
+export const revalidate = 86400; // 24h Edge/ISR cache; purged immediately on admin update or Clear Cache
 
 export async function GET() {
   try {
@@ -63,8 +63,8 @@ export async function GET() {
 
     return NextResponse.json(payload, {
       headers: {
-        'Cache-Control': 'public, max-age=120, s-maxage=300, stale-while-revalidate=3600',
-        'CDN-Cache-Control': 'public, s-maxage=300, stale-while-revalidate=3600',
+        'Cache-Control': 'public, max-age=300, s-maxage=86400, stale-while-revalidate=86400',
+        'CDN-Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=86400',
       },
     });
   } catch (err) {

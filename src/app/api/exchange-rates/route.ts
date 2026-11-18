@@ -10,13 +10,13 @@ const DEFAULT_RATES: Record<string, number> = {
 
 const ALLOWED_CURRENCIES = ['EUR', 'USD', 'GBP'];
 
-// Statically pre-render and revalidate every hour on Vercel Edge (0 dynamic invocations per visitor; purged on Admin settings update)
-export const revalidate = 3600;
+// Statically pre-render for 30 days on Vercel Edge (purged instantly on Admin settings update or Clear Cache)
+export const revalidate = 2592000;
 
 /**
  * GET /api/exchange-rates
  * Returns the admin-managed exchange rates (RON base).
- * Cached for 1 hour on the CDN edge; rates cannot be overridden from the client.
+ * Cached for 30 days on the CDN edge; rates cannot be overridden from the client.
  */
 export async function GET() {
   try {
@@ -35,9 +35,9 @@ export async function GET() {
       { rates, base: 'RON', updatedAt: new Date().toISOString() },
       {
         headers: {
-          // Cache for 1 hour on Cloudflare/Edge + Browser so visitors don't trigger serverless functions
-          'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
-          'CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+          // Cache for 30 days on Cloudflare/Edge + 1h in browser so visitors don't trigger serverless functions
+          'Cache-Control': 'public, max-age=3600, s-maxage=2592000, stale-while-revalidate=2592000',
+          'CDN-Cache-Control': 'public, s-maxage=2592000, stale-while-revalidate=2592000',
         },
       }
     );

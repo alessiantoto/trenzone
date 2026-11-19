@@ -71,130 +71,238 @@ export function resolveAbandonedCartLocale(session: any): "ro" | "en" {
   return !session?.country || session.country === "RO" ? "ro" : "en";
 }
 
+const LOCK_KEY = "abandoned_carts_run_lock";
+const LOCK_TTL_MS = 3 * 60 * 1000;
+
+async function acquireRecoveryLock(lockToken: string): Promise<boolean> {
+  const nowMs = Date.now();
+  const { data: existing } = await supabaseAdmin
+    .from("store_settings")
+    .select("value")
+    .eq("key", LOCK_KEY)
+    .maybeSingle();
+
+  const val = existing?.value as any;
+  if (val?.locked && typeof val?.expires_at_ms === "number" && val.expires_at_ms > nowMs) {
+    return false;
+  }
+
+  await supabaseAdmin.from("store_settings").upsert(
+    {
+      key: LOCK_KEY,
+      value: {
+        locked: true,
+        token: lockToken,
+        acquired_at: new Date(nowMs).toISOString(),
+        expires_at_ms: nowMs + LOCK_TTL_MS,
+      },
+    },
+    { onConflict: "key" }
+  );
+  return true;
+}
+
+async function releaseRecoveryLock(lockToken: string) {
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from("store_settings")
+      .select("value")
+      .eq("key", LOCK_KEY)
+      .maybeSingle();
+    if ((existing?.value as any)?.token && (existing?.value as any).token !== lockToken) {
+      return;
+    }
+    await supabaseAdmin.from("store_settings").upsert(
+      {
+        key: LOCK_KEY,
+        value: {
+          locked: false,
+          token: lockToken,
+          released_at: new Date().toISOString(),
+        },
+      },
+      { onConflict: "key" }
+    );
+  } catch (err) {
+    console.error("[ABANDONED-CARTS] Failed to release lock:", err);
+  }
+}
+
 export async function executeAbandonedCartsRecovery() {
-  const now = new Date();
-  const lowerBound = new Date(now.getTime() - 120 * 60 * 60 * 1000);
-  const upperBound = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-  const { data: sessions, error } = await supabaseAdmin
-    .from("checkout_sessions")
-    .select("*")
-    .eq("status", "initiated")
-    .not("email", "is", null)
-    .neq("email", "")
-    .gte("created_at", lowerBound.toISOString())
-    .lte("created_at", upperBound.toISOString())
-    .order("updated_at", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-
-  if (!sessions || sessions.length === 0) {
+  const lockToken = `abandoned_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const acquired = await acquireRecoveryLock(lockToken);
+  if (!acquired) {
     return {
       success: true,
+      skippedLock: true,
       processed: 0,
       uniqueCustomers: 0,
       emailsSent: 0,
       emailsSent24h: 0,
       emailsSent72h: 0,
-      message: "Nu există coșuri abandonate eligibile în fereastra de 24h - 120h.",
+      message: "O altă rulare de recuperare coșuri este deja în desfășurare.",
     };
   }
 
-  // Group all sessions by normalized customer email so each customer gets at most 1 email per stage
-  const groupedByEmail = new Map<string, any[]>();
-  for (const session of sessions) {
-    const emailObj = String(session.email || "").toLowerCase().trim();
-    if (!emailObj || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailObj)) continue;
-    const list = groupedByEmail.get(emailObj) || [];
-    list.push(session);
-    groupedByEmail.set(emailObj, list);
-  }
+  try {
+    const now = new Date();
+    const lowerBound = new Date(now.getTime() - 120 * 60 * 60 * 1000);
+    const upperBound = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const historyWindowStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-  if (groupedByEmail.size === 0) {
-    return {
-      success: true,
-      processed: sessions.length,
-      uniqueCustomers: 0,
-      emailsSent: 0,
-      emailsSent24h: 0,
-      emailsSent72h: 0,
-      message: "Nu există coșuri abandonate cu email valid în fereastra de 24h - 120h.",
-    };
-  }
+    const { data: sessions, error } = await supabaseAdmin
+      .from("checkout_sessions")
+      .select("*")
+      .eq("status", "initiated")
+      .not("email", "is", null)
+      .neq("email", "")
+      .gte("created_at", lowerBound.toISOString())
+      .lte("created_at", upperBound.toISOString())
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false });
 
-  const candidateEmails = Array.from(groupedByEmail.keys());
+    if (error) throw error;
 
-  const [
-    template24h,
-    template72h,
-    liveRates,
-    setting72hRes,
-    unsubRes,
-    recentOrdersRes,
-  ] = await Promise.all([
-    getEmailTemplate("abandoned_24h"),
-    getEmailTemplate("abandoned_72h"),
-    getServerExchangeRates().catch(() => undefined),
-    supabaseAdmin.from("store_settings").select("value").eq("key", "abandoned_72h_coupon").maybeSingle(),
-    supabaseAdmin.from("unsubscribed_emails").select("email, marketing").in("email", candidateEmails),
-    supabaseAdmin
-      .from("orders")
-      .select("id, customer_email, created_at")
-      .gte("created_at", lowerBound.toISOString()),
-  ]);
-
-  const couponCode72h = String(setting72hRes.data?.value || "TREN10").trim().toUpperCase() || "TREN10";
-  const { data: couponData72h } = await supabaseAdmin
-    .from("coupons")
-    .select("value")
-    .eq("code", couponCode72h)
-    .maybeSingle();
-  const couponValue72h = Number(couponData72h?.value) || 10;
-
-  const optedOutEmails = new Set<string>();
-  for (const row of unsubRes.data || []) {
-    if (row?.marketing === false && row?.email) {
-      optedOutEmails.add(String(row.email).toLowerCase().trim());
-    }
-  }
-
-  const latestOrderByEmail = new Map<string, number>();
-  for (const ord of recentOrdersRes.data || []) {
-    const e = String(ord?.customer_email || "").toLowerCase().trim();
-    if (!e || !ord?.created_at) continue;
-    const ts = new Date(ord.created_at).getTime();
-    if (ts > (latestOrderByEmail.get(e) || 0)) {
-      latestOrderByEmail.set(e, ts);
-    }
-  }
-
-  let emailsSent = 0;
-  let emailsSent24h = 0;
-  let emailsSent72h = 0;
-  const siteUrl = getSiteUrl();
-
-  for (const [emailObj, customerSessions] of groupedByEmail.entries()) {
-    if (optedOutEmails.has(emailObj)) {
-      continue;
+    if (!sessions || sessions.length === 0) {
+      return {
+        success: true,
+        processed: 0,
+        uniqueCustomers: 0,
+        emailsSent: 0,
+        emailsSent24h: 0,
+        emailsSent72h: 0,
+        message: "Nu există coșuri abandonate eligibile în fereastra de 24h - 120h.",
+      };
     }
 
-    const earliestSessionTs = Math.min(
-      ...customerSessions.map((s) => new Date(s.created_at).getTime())
-    );
-    const latestOrderTs = latestOrderByEmail.get(emailObj) || 0;
-    if (latestOrderTs >= earliestSessionTs) {
-      const idsToRecover = customerSessions.map((s) => s.id);
-      await supabaseAdmin
+    // Group all sessions by normalized customer email so each customer gets at most 1 email per stage
+    const groupedByEmail = new Map<string, any[]>();
+    for (const session of sessions) {
+      const emailObj = String(session.email || "").toLowerCase().trim();
+      if (!emailObj || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailObj)) continue;
+      const list = groupedByEmail.get(emailObj) || [];
+      list.push(session);
+      groupedByEmail.set(emailObj, list);
+    }
+
+    if (groupedByEmail.size === 0) {
+      return {
+        success: true,
+        processed: sessions.length,
+        uniqueCustomers: 0,
+        emailsSent: 0,
+        emailsSent24h: 0,
+        emailsSent72h: 0,
+        message: "Nu există coșuri abandonate cu email valid în fereastra de 24h - 120h.",
+      };
+    }
+
+    const candidateEmails = Array.from(groupedByEmail.keys());
+
+    const [
+      template24h,
+      template72h,
+      liveRates,
+      setting72hRes,
+      unsubRes,
+      recentOrdersRes,
+      completedSessionsRes,
+      recentEmailLogsRes,
+    ] = await Promise.all([
+      getEmailTemplate("abandoned_24h"),
+      getEmailTemplate("abandoned_72h"),
+      getServerExchangeRates().catch(() => undefined),
+      supabaseAdmin.from("store_settings").select("value").eq("key", "abandoned_72h_coupon").maybeSingle(),
+      supabaseAdmin.from("unsubscribed_emails").select("email, marketing").in("email", candidateEmails),
+      supabaseAdmin
+        .from("orders")
+        .select("id, customer_email, created_at")
+        .gte("created_at", lowerBound.toISOString()),
+      supabaseAdmin
         .from("checkout_sessions")
-        .update({ status: "recovered" })
-        .in("id", idsToRecover);
-      continue;
+        .select("email, created_at")
+        .in("status", ["completed", "recovered"])
+        .gte("created_at", lowerBound.toISOString()),
+      supabaseAdmin
+        .from("email_logs")
+        .select("recipient, type, status")
+        .in("type", ["abandoned-24h", "abandoned-72h"])
+        .eq("status", "sent")
+        .gte("created_at", historyWindowStart.toISOString()),
+    ]);
+
+    const couponCode72h = String(setting72hRes.data?.value || "TREN10").trim().toUpperCase() || "TREN10";
+    const { data: couponData72h } = await supabaseAdmin
+      .from("coupons")
+      .select("value")
+      .eq("code", couponCode72h)
+      .maybeSingle();
+    const couponValue72h = Number(couponData72h?.value) || 10;
+
+    const optedOutEmails = new Set<string>();
+    for (const row of unsubRes.data || []) {
+      if (row?.marketing === false && row?.email) {
+        optedOutEmails.add(String(row.email).toLowerCase().trim());
+      }
     }
 
-    // Check if ANY sibling session for this customer already received 24h or 72h
-    const alreadySent24h = customerSessions.some((s) => Boolean(s.recovery_emails_sent?.["24h"]));
-    const alreadySent72h = customerSessions.some((s) => Boolean(s.recovery_emails_sent?.["72h"]));
+    const latestOrderByEmail = new Map<string, number>();
+    for (const ord of recentOrdersRes.data || []) {
+      const e = String(ord?.customer_email || "").toLowerCase().trim();
+      if (!e || !ord?.created_at) continue;
+      const ts = new Date(ord.created_at).getTime();
+      if (ts > (latestOrderByEmail.get(e) || 0)) {
+        latestOrderByEmail.set(e, ts);
+      }
+    }
+    for (const cs of completedSessionsRes.data || []) {
+      const e = String(cs?.email || "").toLowerCase().trim();
+      if (!e || !cs?.created_at) continue;
+      const ts = new Date(cs.created_at).getTime();
+      if (ts > (latestOrderByEmail.get(e) || 0)) {
+        latestOrderByEmail.set(e, ts);
+      }
+    }
+
+    const sent24hInLogs = new Set<string>();
+    const sent72hInLogs = new Set<string>();
+    for (const log of recentEmailLogsRes.data || []) {
+      const e = String(log?.recipient || "").toLowerCase().trim();
+      if (!e) continue;
+      if (log.type === "abandoned-24h") sent24hInLogs.add(e);
+      if (log.type === "abandoned-72h") sent72hInLogs.add(e);
+    }
+
+    let emailsSent = 0;
+    let emailsSent24h = 0;
+    let emailsSent72h = 0;
+    const siteUrl = getSiteUrl();
+
+    for (const [emailObj, customerSessions] of groupedByEmail.entries()) {
+      if (optedOutEmails.has(emailObj)) {
+        continue;
+      }
+
+      const earliestSessionTs = Math.min(
+        ...customerSessions.map((s) => new Date(s.created_at).getTime())
+      );
+      const latestOrderTs = latestOrderByEmail.get(emailObj) || 0;
+      if (latestOrderTs >= earliestSessionTs) {
+        const idsToRecover = customerSessions.map((s) => s.id);
+        await supabaseAdmin
+          .from("checkout_sessions")
+          .update({ status: "recovered" })
+          .in("id", idsToRecover);
+        continue;
+      }
+
+      // Check if ANY sibling session OR recent 14-day email_logs already sent 24h or 72h
+      const alreadySent24h =
+        sent24hInLogs.has(emailObj) ||
+        customerSessions.some((s) => Boolean(s.recovery_emails_sent?.["24h"]));
+      const alreadySent72h =
+        sent72hInLogs.has(emailObj) ||
+        customerSessions.some((s) => Boolean(s.recovery_emails_sent?.["72h"]));
 
     // Pick newest session with items (already sorted newest-first)
     const primarySession =
@@ -339,5 +447,8 @@ export async function executeAbandonedCartsRecovery() {
     emailsSent72h,
     message: `Procesat cu succes: ${emailsSent} emailuri trimise (${emailsSent24h} de 24h, ${emailsSent72h} de 72h cu ${couponValue72h}% reducere).`,
   };
+  } finally {
+    await releaseRecoveryLock(lockToken);
+  }
 }
 

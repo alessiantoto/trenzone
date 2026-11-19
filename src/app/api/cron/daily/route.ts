@@ -15,16 +15,8 @@ export async function GET(request: Request) {
 
   const results: any = {};
 
-  // 1. Abandoned Carts
-  try {
-    console.log('[CRON DAILY] Starting abandoned carts...');
-    const { GET: runAbandonedCarts } = await import('../abandoned-carts/route');
-    const res1 = await runAbandonedCarts(request);
-    results.abandonedCarts = res1.status === 200 ? await res1.json() : 'failed';
-  } catch (err: any) {
-    console.error('[CRON DAILY] Abandoned carts error:', err);
-    results.abandonedCarts = { error: err.message };
-  }
+  // 1. Abandoned Carts runs on its own dedicated daily cron (/api/cron/abandoned-carts at 14:00 UTC)
+  // so this morning cron reserves its 60s budget for fulfillment dispatch and reconciliations.
 
   // 2. Sync Tracking (AWB)
   try {

@@ -3,7 +3,6 @@ import { Metadata } from "next";
 import { getSiteUrl } from "@/lib/site-config";
 import { generateFAQSchema } from "@/lib/schema";
 import { ProgramsShowcaseSection } from "@/components/programs/ProgramsShowcaseSection";
-import { ProgramDetailsSection } from "@/components/programs/ProgramDetailsSection";
 import { ProgramsFaqSection } from "@/components/programs/ProgramsFaqSection";
 import { getProducts } from "@/lib/api";
 import { PROGRAM_SLUGS, PROGRAM_UUIDS } from "@/lib/programs";
@@ -172,11 +171,6 @@ export default async function ProgramsPage({
       <div className="relative z-10 pt-4">
         <ProgramsShowcaseSection standalonePage={true} products={allProducts} />
       </div>
-
-      <div className="trenzone-luminous-divider" />
-
-      {/* Interactive Rich Content & Audience Breakdown for All 3 PDFs + Bundle */}
-      <ProgramDetailsSection standaloneTabs={true} locale={locale} />
 
       <div className="trenzone-luminous-divider" />
 

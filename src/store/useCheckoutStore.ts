@@ -81,6 +81,7 @@ export const useCheckoutStore = create<CheckoutState>()(
       setCountry: (val) => set((state) => ({ 
         country: val,
         hasManualCountry: true,
+        phoneCountry: !state.phone.trim() ? val : state.phoneCountry,
         postalCode: val === 'RO' ? state.postalCode.replace(/[^0-9]/g, '').slice(0, 6) : state.postalCode
       })),
       setDetectedCountry: (val) => set((state) => {
@@ -89,6 +90,7 @@ export const useCheckoutStore = create<CheckoutState>()(
         const normalized = ALLOWED_SHIPPING_COUNTRIES.includes(raw) ? raw : 'RO';
         return {
           country: normalized,
+          phoneCountry: !state.phone.trim() ? normalized : state.phoneCountry,
           postalCode: normalized === 'RO' ? state.postalCode.replace(/[^0-9]/g, '').slice(0, 6) : state.postalCode,
         };
       }),

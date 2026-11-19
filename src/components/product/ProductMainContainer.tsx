@@ -307,7 +307,11 @@ export function ProductMainContainer({ product, initialStats }: ProductMainConta
     !isDigitalProgramItem(product) &&
     (currentVariantStatus === 'preorder' || (product as any).stock_status === 'preorder');
   const isSoftStock = Boolean((product as any).metadata?.soft_stock_tracking);
-  const isProductOutOfStock = product.is_active === false || (!isSoftStock && typeof product.stock_quantity === 'number' && product.stock_quantity <= 0 && currentVariantStatus !== 'preorder');
+  const isProductOutOfStock =
+    product.is_active === false ||
+    (product as any).stock_status === 'sold_out' ||
+    (product as any).metadata?.stock_status === 'sold_out' ||
+    (!isSoftStock && typeof product.stock_quantity === 'number' && product.stock_quantity <= 0 && currentVariantStatus !== 'preorder');
   const isCurrentVariantSoldOut = currentVariantStatus === 'sold_out' || isProductOutOfStock;
   const numericPrice = getProductPrice(product.price, currency) || 0;
   const numericOriginalPrice = getProductPrice(product.originalPrice, currency) || numericPrice;

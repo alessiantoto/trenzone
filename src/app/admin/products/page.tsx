@@ -18,8 +18,8 @@ function VariantRow({ v, variants, setVariants, setCroppingImage, variantType }:
 
   const statusOptions = [
     { value: 'in_stock', label: 'În stoc' },
+    { value: 'preorder', label: 'Precomandă' },
     { value: 'sold_out', label: 'Sold out' },
-    { value: 'best_seller', label: 'Best Seller' }
   ];
 
   useEffect(() => {

@@ -330,6 +330,21 @@ const StripePaymentSection = ({
               radios: true,
               spacedAccordionItems: true,
             },
+            defaultValues: {
+              billingDetails: {
+                name: `${firstName} ${lastName}`.trim(),
+                email: email.trim(),
+                phone: formatPhoneWithPrefix(phone, phoneCountry),
+                address: {
+                  line1: line1.trim(),
+                  line2: line2?.trim() || '',
+                  city: city.trim(),
+                  state: state?.trim() || '',
+                  postal_code: postalCode.trim(),
+                  country: toStripeIsoCountryCode(country),
+                },
+              },
+            },
             paymentMethodOrder: ['card', 'apple_pay', 'google_pay', 'revolut_pay', 'link', 'klarna', 'bancontact', 'ideal'],
           }}
         />
@@ -1285,9 +1300,14 @@ export default function CheckoutForm({
   }, [email, firstName, lastName, line1, city, phone, state, postalCode, country, selectedServiceId, shippingType, selectedBranches, lockersAllowed, setIsStep1Valid, setIsStep2Valid]);
 
   useEffect(() => {
-    // Skip clearing on initial mount so we don't wipe out persisted state from useCheckoutStore
+    // Skip clearing address fields on initial mount so we don't wipe out persisted state from useCheckoutStore,
+    // while aligning an empty phone input's prefix with the detected/selected country.
     if (isFirstRender.current) {
       isFirstRender.current = false;
+      const storeState = useCheckoutStore.getState();
+      if (!storeState.phone.trim() && storeState.phoneCountry !== country && COUNTRY_DATA[country]) {
+        setPhoneCountry(country);
+      }
       return;
     }
 
@@ -1296,7 +1316,9 @@ export default function CheckoutForm({
     setCity("");
     setState("");
     setPostalCode("");
-    setPhoneCountry(country);
+    if (COUNTRY_DATA[country]) {
+      setPhoneCountry(country);
+    }
   }, [country, setLine1, setLine2, setCity, setState, setPostalCode, setPhoneCountry]);
 
   useEffect(() => {
@@ -1719,6 +1741,34 @@ export default function CheckoutForm({
       if (digitalOnlyCart) {
         setPaymentMethod('online');
         setCurrentStep(4);
+        if (paymentIntentId) {
+          fetch("/api/checkout/update", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-csrf-token": csrfToken || "",
+            },
+            body: JSON.stringify({
+              paymentIntentId,
+              clientSecret,
+              shipping_type: 'hd',
+              carrier_id: 'digital',
+              branch_id: '',
+              branch_name: '',
+              payment_method: 'online',
+              firstName, lastName, email,
+              phone: formatPhoneWithPrefix(phone, phoneCountry),
+              line1, line2, city, state, postal_code: postalCode, country,
+              currency,
+              locale: locale || 'ro',
+              couponCode: appliedCoupon?.code?.trim()?.toUpperCase(),
+              priority_processing: false,
+              gift_packaging: false,
+              gift_message: '',
+              items: items.map(i => ({ id: i.id, slug: i.slug, name: i.name, quantity: i.quantity, price: i.price, image: i.image, is_digital: Boolean(i.is_digital || (i as any)?.specs_summary?.is_digital), specs_summary: (i as any).specs_summary, selectedVariant: i.selectedVariant, stock_status: i.stock_status || i.selectedVariant?.stock_status })),
+            }),
+          }).catch(() => {});
+        }
       } else {
         setCurrentStep(2);
       }

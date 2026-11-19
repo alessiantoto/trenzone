@@ -283,7 +283,7 @@ export function Footer() {
                   <li className="flex flex-col gap-1">
                     <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">{locale === 'ro' ? 'Telefon & WhatsApp' : 'Phone & WhatsApp'}</span>
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <a href="tel:+40721969380" className="hover:text-primary transition-colors">(0721) 969 380</a>
+                      <a href="tel:+40721969380" className="hover:text-primary transition-colors">{locale === 'en' ? '+40 721 969 380' : '(0721) 969 380'}</a>
                       <span className="text-zinc-600">·</span>
                       <a href="https://wa.me/40721969380" target="_blank" rel="noopener noreferrer" className="text-xs font-bold uppercase tracking-wider text-zinc-300 hover:text-primary transition-colors">WhatsApp</a>
                     </div>
@@ -327,7 +327,7 @@ export function Footer() {
                <div className="space-y-2">
                  <p>© {new Date().getFullYear()} TrenZone. {t('rights')}</p>
                  <p className="text-[9px] text-zinc-500 font-medium uppercase tracking-wider">
-                    TrenZone LLC | Reg. Com. / Filing ID: GZ-US-WY-1790986605415 | 75 E 3RD ST, SHERIDAN, WY, 82801, USA
+                    TrenZone LLC | {locale === 'en' ? 'Filing ID: 2026-002097904' : 'Reg. Com. / Filing ID: 2026-002097904'} | 75 E 3RD ST, SHERIDAN, WY, 82801, USA
                  </p>
                  <p className="text-[9px] text-zinc-400 font-semibold tracking-wider">
                     {locale === 'ro' 
@@ -336,41 +336,43 @@ export function Footer() {
                  </p>
                </div>
                
-               {/* Compliance Logos (ANPC SAL & SOL) */}
-               <div className="flex flex-wrap items-center justify-center gap-4">
-                  <a 
-                    href="https://reclamatiisal.anpc.ro" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="hover:opacity-85 transition-opacity outline-none"
-                    style={{ WebkitTapHighlightColor: 'transparent' } as any}
-                    title={locale === 'ro' ? "Soluționarea Alternativă a Litigiilor - ANPC" : "Alternative Dispute Resolution - ANPC"}
-                  >
-                    <Image 
-                      src="/images/compliance/anpc-sal.png" 
-                      alt={locale === 'ro' ? "SAL - Soluționarea Alternativă a Litigiilor" : "ADR - Alternative Dispute Resolution"} 
-                      width={180} 
-                      height={48} 
-                      className="h-10 md:h-12 w-auto object-contain rounded-lg shadow-sm"
-                    />
-                  </a>
-                  <a 
-                    href={locale === 'ro' ? "https://consumer-redress.ec.europa.eu/index_ro" : "https://consumer-redress.ec.europa.eu/index_en"} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="hover:opacity-85 transition-opacity outline-none"
-                    style={{ WebkitTapHighlightColor: 'transparent' } as any}
-                    title={locale === 'ro' ? "Soluționarea Online a Litigiilor - Comisia Europeană" : "Online Dispute Resolution - European Commission"}
-                  >
-                    <Image 
-                      src="/images/compliance/anpc-sol.png" 
-                      alt={locale === 'ro' ? "SOL - Soluționarea Online a Litigiilor" : "ODR - Online Dispute Resolution"} 
-                      width={180} 
-                      height={48} 
-                      className="h-10 md:h-12 w-auto object-contain rounded-lg shadow-sm"
-                    />
-                  </a>
-               </div>
+               {/* Compliance Logos (ANPC SAL & SOL — strictly for Romanian locale) */}
+               {locale === 'ro' && (
+                 <div className="flex flex-wrap items-center justify-center gap-4">
+                    <a 
+                      href="https://reclamatiisal.anpc.ro" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="hover:opacity-85 transition-opacity outline-none"
+                      style={{ WebkitTapHighlightColor: 'transparent' } as any}
+                      title="Soluționarea Alternativă a Litigiilor - ANPC"
+                    >
+                      <Image 
+                        src="/images/compliance/anpc-sal.png" 
+                        alt="SAL - Soluționarea Alternativă a Litigiilor" 
+                        width={180} 
+                        height={48} 
+                        className="h-10 md:h-12 w-auto object-contain rounded-lg shadow-sm"
+                      />
+                    </a>
+                    <a 
+                      href="https://consumer-redress.ec.europa.eu/index_ro" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="hover:opacity-85 transition-opacity outline-none"
+                      style={{ WebkitTapHighlightColor: 'transparent' } as any}
+                      title="Soluționarea Online a Litigiilor - Comisia Europeană"
+                    >
+                      <Image 
+                        src="/images/compliance/anpc-sol.png" 
+                        alt="SOL - Soluționarea Online a Litigiilor" 
+                        width={180} 
+                        height={48} 
+                        className="h-10 md:h-12 w-auto object-contain rounded-lg shadow-sm"
+                      />
+                    </a>
+                 </div>
+               )}
             </div>
             
             <div className="flex items-center gap-4 uppercase tracking-[0.2em] font-black">

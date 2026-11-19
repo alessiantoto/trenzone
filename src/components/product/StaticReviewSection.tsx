@@ -70,13 +70,13 @@ function ReviewSectionInner({
     { question: "Cât timp durează livrarea?", answer: "Comenzile sunt expediate prin curier rapid direct la adresă în 1-2 zile lucrătoare în România și 3-5 zile lucrătoare internațional. Livrare gratuită disponibilă peste pragul afișat." },
     { question: "Sunt potrivite și pentru începători?", answer: "Modelul X5 este excelent pentru orice lifter care dorește să-și protejeze articulația cotului și tendoanele de uzură. Modelul X10 este recomandat sportivilor avansați care au deja stabilitate formată pe greutăți mari." },
     { question: "Cum se întrețin benzile de cot?", answer: "Se recomandă aerisirea lor după fiecare antrenament intens și spălarea manuală la temperaturi reduse (apă călduță), fără uscare automată, pentru a păstra elasticitatea intactă." },
-    { question: "Care este politica de retur?", answer: "Beneficiezi de 14 zile drept de retur garantat fără riscuri. Dacă mărimea sau nivelul de rigiditate nu ți se potrivește, poți schimba sau returna produsul simplu și rapid." }
+    { question: "Care este politica de retur?", answer: "Beneficiezi de 30 de zile drept de retur. Dacă mărimea sau nivelul de rigiditate nu ți se potrivește, poți schimba sau returna produsul nefolosit și în ambalajul original (transportul de retur este suportat de client, cu excepția produselor defecte; rambursarea se procesează în max. 14 zile de la primire)." }
   ] : [
     { question: "How do I choose between X5 and X10?", answer: "Choose based on your training style: if you want versatile joint support, full mobility, and tendon protection for hypertrophy and volume, choose X5 (3.5/5 firmness). If you want extreme competition-grade stiffness and maximum lockout rebound on heavy sets, choose X10 (5/5 stiffness)." },
     { question: "How long does delivery take?", answer: "Orders are shipped via express tracked courier to your doorstep in 1-2 business days in Romania and 3-5 business days across Europe, the UK, and the US. Free shipping is available above the threshold." },
     { question: "Are these suitable for beginners?", answer: "The X5 model is great for lifters wanting reliable elbow protection and joint longevity. The X10 model is engineered for advanced lifters moving heavy poundages." },
     { question: "How do I care for my elbow wraps?", answer: "Air-dry after intense sessions and hand wash with lukewarm water when needed. Do not machine tumble dry to ensure elastic tension remains at peak performance." },
-    { question: "What is the return policy?", answer: "We offer a 14-day hassle-free return window. If you wish to exchange models or return unused wraps, our support team handles it quickly." }
+    { question: "What is the return policy?", answer: "We offer a 30-day return window. If you wish to exchange models or return unused wraps in their original packaging, our support team handles it quickly (return shipping is paid by the customer unless defective; refunds are processed within 14 days of receipt)." }
   ];
 
   const shouldRenderFaq = showFaq ?? Boolean(product);

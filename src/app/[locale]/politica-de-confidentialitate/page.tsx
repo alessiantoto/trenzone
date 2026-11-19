@@ -27,7 +27,7 @@ export default function PrivacyPolicyPage() {
           <br />
           Entity Type: Limited Liability Company (Wyoming, USA)
           <br />
-          Registration / Filing Number: GZ-US-WY-1790986605415
+          Filing ID: 2026-002097904
           <br />
           Principal Place of Business: 75 E 3RD ST, SHERIDAN, WY, 82801, USA
           <br />
@@ -95,13 +95,13 @@ export default function PrivacyPolicyPage() {
 
         <h2>9. Your Rights</h2>
         <p>
-          In accordance with the GDPR Regulation, you benefit from full rights over your data:
+          In accordance with Regulation (EU) 2016/679 (GDPR) where applicable, as well as applicable US state data privacy laws, you benefit from comprehensive rights over your personal data:
         </p>
         <ul>
-          <li>Right of access, rectification, and erasure of personal data</li>
-          <li>Right to restriction of processing and the right to object</li>
+          <li>Right of access, correction/rectification, and deletion/erasure of personal data</li>
+          <li>Right to restriction of processing, to object to processing (including opting out of marketing), and to non-discrimination for exercising privacy rights</li>
           <li>Right to data portability</li>
-          <li>Right to lodge a complaint with the supervisory authority (ANSPDCP)</li>
+          <li>Right to lodge a complaint with the competent data protection supervisory authority in your jurisdiction (such as your local EU/EEA Data Protection Authority where GDPR applies, or your applicable US state privacy regulator / attorney general)</li>
         </ul>
         <p>
           To exercise any of these rights, you can contact us at any time at: <strong>trenzone483@gmail.com</strong>.
@@ -144,7 +144,7 @@ export default function PrivacyPolicyPage() {
         <br />
         Formă Juridică: Societate cu răspundere limitată constituită în Statul Wyoming, SUA (Limited Liability Company)
         <br />
-        Număr de Înregistrare / Filing ID: GZ-US-WY-1790986605415
+        Număr de Înregistrare / Filing ID: 2026-002097904
         <br />
         Sediu Principal de Afaceri: 75 E 3RD ST, SHERIDAN, WY, 82801, USA
         <br />

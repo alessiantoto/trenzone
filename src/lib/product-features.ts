@@ -270,8 +270,8 @@ export function getDefaultProductHighlights(
         },
         {
           icon: 'shield',
-          title: { ro: '14 ZILE RETUR', en: '14-DAY RETURNS' },
-          subtitle: { ro: 'Schimb sau retur fără bătăi', en: 'Hassle-free returns' },
+          title: { ro: '30 ZILE RETUR', en: '30-DAY RETURNS' },
+          subtitle: { ro: 'Schimb sau retur simplu', en: 'Easy returns & exchanges' },
         },
       ];
   }
@@ -405,7 +405,7 @@ export function getDefaultProductFaqs(
           {
             question: 'Cât timp durează livrarea și ce garanție am?',
             answer:
-              'Livrăm prin curier rapid în 1-2 zile lucrătoare în România și beneficiezi de 14 zile drept de retur sau schimb de mărime.',
+              'Livrăm prin curier rapid în 1-2 zile lucrătoare în România și beneficiezi de 30 de zile drept de retur sau schimb de mărime (pentru produse nefolosite, în ambalajul original).',
           },
         ]
       : [
@@ -422,7 +422,7 @@ export function getDefaultProductFaqs(
           {
             question: 'How fast is shipping and what is the return policy?',
             answer:
-              'Express courier delivery takes 1-2 business days in Romania and 3-5 business days internationally, backed by a 14-day return or size exchange.',
+              'Express courier delivery takes 1-2 business days in Romania and 3-5 business days internationally, backed by a 30-day return or size exchange (for unused items in original packaging).',
           },
         ];
   }
@@ -443,7 +443,7 @@ export function getDefaultProductFaqs(
           {
             question: 'Pot schimba mărimea dacă nu îmi vine perfect?',
             answer:
-              'Da, ai 14 zile drept de retur sau schimb rapid de mărime.',
+              'Da, ai 30 de zile drept de retur sau schimb rapid de mărime (produsele trebuie să fie nepurtate, cu etichetele și ambalajul original intacte).',
           },
         ]
       : [
@@ -459,7 +459,7 @@ export function getDefaultProductFaqs(
           },
           {
             question: 'Can I exchange sizes if needed?',
-            answer: 'Yes — you have 14 days for quick size exchanges or returns.',
+            answer: 'Yes — you have 30 days for quick size exchanges or returns (items must be unworn with original tags and packaging intact).',
           },
         ];
   }
@@ -480,7 +480,7 @@ export function getDefaultProductFaqs(
           {
             question: 'Cât durează livrarea și care este politica de retur?',
             answer:
-              '1-2 zile lucrătoare prin curier în România, 3-5 zile internațional și 14 zile drept de retur.',
+              '1-2 zile lucrătoare prin curier în România, 3-5 zile internațional și 30 de zile drept de retur (pentru produse nefolosite, în ambalajul original).',
           },
         ]
       : [
@@ -497,7 +497,7 @@ export function getDefaultProductFaqs(
           {
             question: 'What are shipping times and returns?',
             answer:
-              '1-2 business days in Romania, 3-5 days internationally, plus a 14-day return window.',
+              '1-2 business days in Romania, 3-5 days internationally, plus a 30-day return window (for unused items in original packaging).',
           },
         ];
   }
@@ -528,7 +528,7 @@ export function getDefaultProductFaqs(
           {
             question: 'Care este politica de retur?',
             answer:
-              'Beneficiezi de 14 zile drept de retur garantat fără riscuri. Dacă mărimea sau nivelul de rigiditate nu ți se potrivește, poți schimba sau returna produsul simplu și rapid.',
+              'Beneficiezi de 30 de zile drept de retur. Dacă mărimea sau nivelul de rigiditate nu ți se potrivește, poți schimba sau returna produsul nefolosit și în ambalajul original (transportul de retur este suportat de client, cu excepția defectelor; rambursarea se procesează în max. 14 zile de la primire).',
           },
         ]
       : [
@@ -555,7 +555,7 @@ export function getDefaultProductFaqs(
           {
             question: 'What is the return policy?',
             answer:
-              'We offer a 14-day hassle-free return window. If you wish to exchange models or return unused wraps, our support team handles it quickly.',
+              'We offer a 30-day return window. If you wish to exchange models or return unused wraps in their original packaging, our support team handles it quickly (return shipping is paid by the customer unless defective; refunds are processed within 14 days of receipt).',
           },
         ];
   }
@@ -569,7 +569,7 @@ export function getDefaultProductFaqs(
         },
         {
           question: 'Care este politica de retur?',
-          answer: 'Ai 14 zile drept de retur garantat sau schimb fără bătăi de cap.',
+          answer: 'Ai 30 de zile drept de retur sau schimb pentru produsele nefolosite, în ambalajul original.',
         },
       ]
     : [
@@ -580,7 +580,7 @@ export function getDefaultProductFaqs(
         },
         {
           question: 'What is the return policy?',
-          answer: 'Every physical order includes a 14-day hassle-free return window.',
+          answer: 'Every physical order includes a 30-day return window for unused items in their original packaging.',
         },
       ];
 }

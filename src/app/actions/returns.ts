@@ -7,6 +7,15 @@ import { rateLimiters, getClientIpFromHeaders, checkRateLimit } from '@/lib/rate
 import { getCanonicalOrderNumber } from '@/utils/admin-helpers';
 import { headers } from 'next/headers';
 
+function getErrorMessage(error: unknown): string | undefined {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const msg = (error as { message?: unknown }).message;
+    if (typeof msg === 'string' && msg) return msg;
+  }
+  return undefined;
+}
+
 // For the public frontend form
 export async function submitReturnRequest(formData: FormData) {
   try {
@@ -32,7 +41,7 @@ export async function submitReturnRequest(formData: FormData) {
     try {
       const headersList = await headers();
       clientIp = getClientIpFromHeaders(headersList);
-    } catch (_) {}
+    } catch {}
 
     const locale: 'ro' | 'en' = ((formData.get('locale') as string) || '').toLowerCase() === 'en' ? 'en' : 'ro';
 
@@ -54,7 +63,7 @@ export async function submitReturnRequest(formData: FormData) {
     const rawIban = ((formData.get('iban') as string) || '').trim();
     const reason = ((formData.get('reason') as string) || '').trim().slice(0, 1000);
 
-    if (!rawOrderId || !name || !email || !rawIban) {
+    if (!rawOrderId || !name || !email) {
       return { 
         success: false, 
         error: locale === 'en' 
@@ -72,16 +81,18 @@ export async function submitReturnRequest(formData: FormData) {
       };
     }
 
-    // 5. Sanitize & Validate IBAN format (International ISO 13616 standard)
+    // 5. Sanitize & Validate optional IBAN format (International ISO 13616 standard, only required for COD orders)
     const cleanIban = rawIban.replace(/\s+/g, '').toUpperCase();
-    const ibanRegex = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
-    if (!ibanRegex.test(cleanIban)) {
-      return {
-        success: false,
-        error: locale === 'en'
-          ? 'The IBAN account format is invalid. Please enter a valid IBAN (domestic or international / SEPA).'
-          : 'Formatul contului IBAN este invalid. Te rugăm să introduci un IBAN valid (românesc sau internațional / SEPA).'
-      };
+    if (cleanIban.length > 0) {
+      const ibanRegex = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
+      if (!ibanRegex.test(cleanIban)) {
+        return {
+          success: false,
+          error: locale === 'en'
+            ? 'The IBAN account format is invalid. Please enter a valid IBAN (domestic or international / SEPA).'
+            : 'Formatul contului IBAN este invalid. Te rugăm să introduci un IBAN valid (românesc sau internațional / SEPA).'
+        };
+      }
     }
 
     // 6. Resilient Order Search: Check that the combination of email and order number exists in the database
@@ -221,10 +232,13 @@ export async function submitReturnRequest(formData: FormData) {
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('submitReturnRequest error:', error);
     const errLocale = (formData.get('locale') as string) === 'en' ? 'en' : 'ro';
-    return { success: false, error: error.message || (errLocale === 'en' ? 'An unexpected error occurred.' : 'Eroare neașteptată.') };
+    return {
+      success: false,
+      error: getErrorMessage(error) || (errLocale === 'en' ? 'An unexpected error occurred.' : 'Eroare neașteptată.'),
+    };
   }
 }
 
@@ -291,9 +305,9 @@ export async function updateReturnStatus(returnId: string, newStatus: string, or
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('updateReturnStatus error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error) || 'Eroare la actualizarea statusului.' };
   }
 }
 

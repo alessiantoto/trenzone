@@ -412,8 +412,8 @@ export function FaqSection({
         },
         paragraphs: [
           {
-            ro: "Da. Ai 14 zile la dispoziție pentru retur sau schimb simplu între X5 și X10, cât timp produsul este nefolosit și în ambalajul original.",
-            en: "Yes. You have 14 days to exchange between X5 and X10 or request a refund, as long as the wraps are unused and in their original packaging.",
+            ro: "Da. Ai 30 de zile la dispoziție pentru retur sau schimb între X5 și X10, cât timp produsul este nefolosit, fără urme de purtare și în ambalajul original cu etichetele intacte (produsele desigilate sau purtate nu se returnează din motive de igienă). Costul transportului de retur este suportat de client, cu excepția defectelor, iar rambursarea se procesează în max. 14 zile de la primirea coletului.",
+            en: "Yes. You have 30 days to exchange between X5 and X10 or request a refund, as long as the wraps are unworn, unused, and in their original packaging with tags intact (unsealed or used items are non-returnable for hygiene reasons). Return shipping is covered by the customer unless defective, and refunds are processed within 14 days of receiving the returned item.",
           },
         ],
         inlineLink: {

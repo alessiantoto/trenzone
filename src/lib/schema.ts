@@ -246,7 +246,7 @@ export function generateOrganizationSchema(locale: string = 'ro') {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    'name': 'TrenZone',
+    'name': 'TrenZone LLC',
     'alternateName': 'TrenZone®',
     'url': BASE_URL,
     'logo': {
@@ -277,7 +277,11 @@ export function generateOrganizationSchema(locale: string = 'ro') {
     ],
     'address': {
       '@type': 'PostalAddress',
-      'addressCountry': 'RO'
+      'streetAddress': '75 E 3RD ST',
+      'addressLocality': 'Sheridan',
+      'addressRegion': 'WY',
+      'postalCode': '82801',
+      'addressCountry': 'US'
     }
   };
 }

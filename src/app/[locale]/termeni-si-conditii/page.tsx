@@ -21,7 +21,7 @@ export default function TermsPage() {
           <br />
           Entity Type: Limited Liability Company (Wyoming, USA)
           <br />
-          Registration / Filing Number: GZ-US-WY-1790986605415
+          Filing Number: 2026-002097904
           <br />
           Principal Place of Business: 75 E 3RD ST, SHERIDAN, WY, 82801, USA
           <br />
@@ -98,13 +98,13 @@ export default function TermsPage() {
 
         <h2>9. Return Policy</h2>
         <p>
-          Individual consumers (B2C) have the <strong>right to return</strong> products within 30 calendar days, according to OUG 34/2014. 
-          For details on the technical inspection procedure for returns, consult the Return Policy.
+          Individual consumers (B2C) have the <strong>right to return</strong> eligible products within <strong>30 calendar days</strong> of delivery under TrenZone LLC&apos;s standard store return policy, without prejudice to any mandatory statutory consumer rights applicable in the buyer&apos;s jurisdiction (for example, EU consumers retain mandatory EU statutory rights). 
+          For details on the return and inspection procedure, please consult our Return Policy.
         </p>
 
-        <h2>10. Warranty and Product Conformity</h2>
+        <h2>10. Conformity Guarantee &amp; Warranty</h2>
         <p>
-          Our products are engineered to the highest performance standards. We offer a 30-day commercial warranty against manufacturing defects (e.g. stitching, material flaws) for our elbow wraps, powerlifting accessories, and apparel. This commercial warranty does not affect your statutory consumer rights regarding conformity under applicable law (OUG 140/2021). The warranty does not cover normal wear and tear from heavy training, misuse, or failure to follow care instructions.
+          Our products are engineered to the highest performance standards. <strong>TrenZone LLC</strong> provides a 30-day commercial warranty and product conformity guarantee against manufacturing defects (e.g., stitching or material flaws) for our elbow wraps, powerlifting accessories, and apparel, offering replacement or a refund for confirmed defects. This guarantee does not limit any mandatory statutory conformity rights applicable in the customer&apos;s country of residence. The guarantee does not cover normal wear and tear from heavy training, misuse, or failure to follow care instructions.
         </p>
         <p>
           For assistance or warranty claims, contact us directly at <strong>trenzone483@gmail.com</strong> with your order proof.
@@ -115,28 +115,28 @@ export default function TermsPage() {
           TrenZone® is not liable for any direct, indirect, or accidental damages resulting from the use or inability to use our products or website.
         </p>
 
-        <h2>12. Disputes and Alternative Dispute Resolution (ANPC / SAL / ODR)</h2>
+        <h2>12. Dispute Resolution</h2>
         <p>
-          Any dispute will be resolved amicably. Otherwise, jurisdiction belongs to the competent courts.
+          Any dispute should first be addressed amicably through direct customer support at <strong>trenzone483@gmail.com</strong>. Otherwise, jurisdiction belongs to the competent courts as set out below.
         </p>
         <p>
-          Consumers have the right to appeal to statutory alternative dispute resolution mechanisms through:
+          Where applicable under local consumer law, consumers may also utilize recognized alternative dispute resolution options:
         </p>
         <ul>
-          <li><strong>ANPC</strong> (National Authority for Consumer Protection) – <a href="https://anpc.ro" target="_blank" rel="noopener noreferrer" className="text-[#e32f8c] underline font-bold">www.anpc.ro</a></li>
-          <li><strong>SAL</strong> (Alternative Dispute Resolution) – <a href="https://reclamatiisal.anpc.ro/" target="_blank" rel="noopener noreferrer" className="text-[#e32f8c] underline font-bold">reclamatiisal.anpc.ro</a></li>
-          <li><strong>ODR Platform</strong> (European Commission Online Dispute Resolution) – <a href="https://consumer-redress.ec.europa.eu/index_en" target="_blank" rel="noopener noreferrer" className="text-[#e32f8c] underline font-bold">consumer-redress.ec.europa.eu</a></li>
+          <li><strong>Direct Customer Support</strong> – <a href="mailto:trenzone483@gmail.com" className="text-[#e32f8c] underline font-bold">trenzone483@gmail.com</a></li>
+          <li><strong>EU Consumer Redress / ODR</strong> (for EU consumers) – <a href="https://consumer-redress.ec.europa.eu/index_en" target="_blank" rel="noopener noreferrer" className="text-[#e32f8c] underline font-bold">consumer-redress.ec.europa.eu</a></li>
+          <li><strong>ANPC / SAL</strong> (exclusively for consumers residing in Romania) – <a href="https://reclamatiisal.anpc.ro/" target="_blank" rel="noopener noreferrer" className="text-[#e32f8c] underline font-bold">reclamatiisal.anpc.ro</a></li>
         </ul>
 
         <h2>13. Data Protection</h2>
         <p>
-          Processing of personal data is carried out according to Regulation (EU) 2016/679 (GDPR). 
-          For details on how we protect your data, consult the <strong>Privacy Policy</strong>.
+          Processing of personal data is carried out in accordance with applicable data privacy laws, including Regulation (EU) 2016/679 (GDPR) where applicable. 
+          For details on how we protect your data, consult our <strong>Privacy Policy</strong>.
         </p>
 
-        <h2>14. Governing Law & Jurisdiction</h2>
+        <h2>14. Final Provisions &amp; Governing Law</h2>
         <p>
-          This contract is governed by Romanian law. Any disputes arising from or in connection with the use of the site or the conclusion of the contract shall be settled by the competent courts in Romania.
+          These Terms and any contracts concluded with <strong>TrenZone LLC</strong> are governed by the laws of the <strong>State of Wyoming, USA</strong>, without regard to conflict-of-law principles. For individual consumers, this choice of law applies without prejudice to any mandatory consumer protection laws of the customer&apos;s country of residence where applicable (such as the EU, EEA, or UK).
         </p>
 
         <h2>15. Contact</h2>
@@ -162,7 +162,7 @@ export default function TermsPage() {
         <br />
         Formă Juridică: Societate cu răspundere limitată constituită în Statul Wyoming, SUA (Limited Liability Company)
         <br />
-        Număr de Înregistrare / Filing ID: GZ-US-WY-1790986605415
+        Număr de Înregistrare / Filing ID: 2026-002097904
         <br />
         Sediu Principal de Afaceri: 75 E 3RD ST, SHERIDAN, WY, 82801, USA
         <br />

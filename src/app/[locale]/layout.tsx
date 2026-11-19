@@ -157,8 +157,6 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       // google: "your-google-verification-code",
     },
     other: {
-      "og:price:amount": "329.99",
-      "og:price:currency": "RON",
       "product:condition": "new",
       "product:availability": "in stock",
       "product:brand": "TrenZone",
@@ -281,7 +279,7 @@ export default async function LocaleLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "Organization",
-              "name": "TrenZone",
+              "name": "TrenZone LLC",
               "alternateName": "TrenZone®",
               "url": BASE_URL,
               "logo": {
@@ -311,6 +309,14 @@ export default async function LocaleLayout({
                 "telephone": "+40 721 969 380",
                 "availableLanguage": ["Romanian", "English"],
                 "email": "trenzone483@gmail.com"
+              },
+              "address": {
+                "@type": "PostalAddress",
+                "streetAddress": "75 E 3RD ST",
+                "addressLocality": "Sheridan",
+                "addressRegion": "WY",
+                "postalCode": "82801",
+                "addressCountry": "US"
               }
             })
           }}

@@ -13,9 +13,9 @@ export default function ReturnPolicyPage() {
         title="Return Policy" 
         lastUpdated="September 3, 2026"
       >
-        <h2>1. Legal Right of Return</h2>
+        <h2>1. 30-Day Return Policy</h2>
         <p>
-          According to OUG 34/2014, individual customers (B2C) have the <strong>right to return</strong> products purchased online, without stating reasons, within 30 calendar days from the date of receipt of the product.
+          Under <strong>TrenZone LLC</strong>&apos;s standard store return policy, individual customers (B2C) have the <strong>right to return</strong> eligible products purchased online, without needing to state a reason, within <strong>30 calendar days</strong> from the date of delivery. This policy preserves any mandatory statutory consumer return rights applicable in your jurisdiction.
         </p>
 
         <h2>2. Conditions for Return</h2>
@@ -29,14 +29,15 @@ export default function ReturnPolicyPage() {
           <li>Be accompanied by all original accessories, labels, and documentation.</li>
         </ul>
 
-        <h2>3. Products that CANNOT be returned</h2>
+        <h2>3. Non-Returnable Items</h2>
         <p>
-          There are certain categories exempted from return according to legislation (OUG 34/2014, art. 16):
+          The following categories of items are excluded from returns:
         </p>
         <ul>
-          <li><strong>Sealed hygiene or protective goods that have been unsealed.</strong> According to legislation (OUG 34/2014 art. 16 lit. e), products unsealed after delivery that cannot be returned for health protection or hygiene reasons are strictly non-returnable.</li>
-          <li>Clothing or accessories (e.g., wraps, sleeves) that show signs of wear, have been washed, or lack original tags.</li>
-          <li>Products customized or modified at the express request of the customer.</li>
+          <li><strong>Unsealed hygiene or protective gear:</strong> Products sealed for health protection or hygiene reasons that have been unsealed after delivery.</li>
+          <li><strong>Worn or washed apparel without tags:</strong> Clothing or accessories (e.g., wraps, sleeves) that show signs of wear, have been washed, or lack original tags and packaging.</li>
+          <li><strong>Custom-made items:</strong> Products customized or modified at the express request of the customer.</li>
+          <li><strong>Opened or downloaded digital training programs:</strong> Digital training programs and electronic guides once accessed, unlocked, or downloaded.</li>
         </ul>
 
         <h2>4. Return Procedure</h2>
@@ -49,31 +50,31 @@ export default function ReturnPolicyPage() {
           </a>
         </p>
         <p>
-          You will need your <strong>Order Number</strong> and the <strong>Email</strong> used during checkout to submit the form. Once submitted, our team will review the request and contact you with further instructions.
+          You will need your <strong>Order Number</strong> and the <strong>Email</strong> used during checkout to submit the form. Once submitted, our team will review the request and contact you with further instructions. For card, Apple Pay, or Google Pay orders, no bank IBAN is required—refunds are issued directly back to your original payment method.
         </p>
         <p>
-          <strong>Return Shipping Address (EU / Romania):</strong> To avoid prohibitive transcontinental shipping costs and customs formalities to the US, customer returns from Romania and Europe are directed to TrenZone's designated regional logistics hub in Romania. The exact warehouse address and RMA tracking number are provided directly in the email confirmation upon completing the return form at <a href="/en/retur" className="text-[#e32f8c] underline font-bold">/en/retur</a>. Please note that return parcels sent with cash-on-delivery (COD) fees attached cannot be accepted and will be automatically refused by the warehouse.
+          <strong>Return Shipping Address (EU / Romania):</strong> To avoid prohibitive transcontinental shipping costs and customs formalities to the US, customer returns from Romania and Europe are directed to TrenZone&apos;s designated regional logistics hub in Romania. The exact warehouse address and RMA tracking number are provided directly in the email confirmation upon completing the return form at <a href="/en/retur" className="text-[#e32f8c] underline font-bold">/en/retur</a>. Please note that return parcels sent with cash-on-delivery (COD) fees attached cannot be accepted and will be automatically refused by the warehouse.
         </p>
         <p>
           The shipping cost for the return is borne entirely by the <strong>Customer</strong>, unless the return is due to a mistake on our part (e.g., wrong product shipped, manufacturing defect). In such exceptional cases, TrenZone® will fully cover the return shipping costs. In the case of international returns, the customer is also responsible for any customs duties or export taxes necessary for returning the product to our designated returns facility. Initial customs duties or import VAT paid upon delivery in non-EU countries are not refundable by TrenZone®, and if an international parcel is refused or unclaimed due to unpaid customs fees, carrier return/customs charges will be deducted from the refund.
         </p>
 
-        <h2>5. Diminution of Value & Reimbursement</h2>
+        <h2>5. Diminution of Value &amp; Refunds</h2>
         <p>
-          According to the law, the consumer is responsible for the diminution of the value of the products resulting from handlings other than those necessary to determine the nature, characteristics, and functioning of the products.
+          Customers are responsible for any diminution in the value of returned products resulting from handling beyond what is necessary to inspect the nature, characteristics, and fit of the items.
         </p>
         <p>
-          <strong>Diminished Value of Goods:</strong> In the case of eligible return products (e.g., apparel) that are returned without original tags, with damaged packaging, or showing minor signs of mishandling (not amounting to wear), TrenZone® reserves the right to withhold a <strong>value diminution fee</strong> (between 15% and 50% of the product price) to cover refurbishment costs. Note: Goods unsealed after delivery that cannot be returned for hygiene or health reasons are non-returnable.
+          <strong>Diminished Value of Goods:</strong> In the case of eligible return products (e.g., apparel) that are returned without original tags, with damaged packaging, or showing minor signs of mishandling (not amounting to wear), TrenZone® reserves the right to withhold a <strong>value diminution fee</strong> (between 15% and 50% of the product price) to cover refurbishment costs. Note: Unsealed hygiene or protective gear is non-returnable.
         </p>
         <p>
-          Reimbursement of the amount is processed within a maximum of <strong>14 calendar days</strong> from the physical receipt of the package at our facility and confirmation of its integrity (or calculation of value diminution, if applicable).
+          Refunds are processed within a maximum of <strong>14 calendar days</strong> from physical receipt and inspection of the returned package at our facility (less any value diminution fee, if applicable).
         </p>
         <p>
-          <strong>Payment Method for Refunds:</strong>
+          <strong>Refund Methods:</strong>
         </p>
         <ul>
-          <li><strong>Card Payments (Stripe):</strong> The refund is credited automatically back to the original card used during checkout.</li>
-          <li><strong>Cash on Delivery (COD):</strong> For orders paid cash to the courier, the money refund will be made via <strong>Bank Transfer (IBAN)</strong>, to the account indicated by the customer in the return form, after the product successfully passes the technical inspection.</li>
+          <li><strong>Credit/Debit Card &amp; Apple/Google Pay Orders (Stripe):</strong> Refunds are automatically credited back to the original payment method within 14 calendar days of physical return inspection. No bank IBAN is required for card or international wallet payments.</li>
+          <li><strong>Cash on Delivery (COD — Romania Only):</strong> IBAN bank transfer refunds apply <strong>only</strong> to Romanian Cash-on-Delivery (COD) orders, sent to the bank account provided in the return form once the returned item passes inspection.</li>
         </ul>
 
         <h2>6. Exchanging Products (Size/Model)</h2>

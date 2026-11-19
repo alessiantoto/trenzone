@@ -274,7 +274,7 @@ export default function ContactPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">{isRo ? 'Telefon & WhatsApp' : 'Phone & WhatsApp'}</p>
-                  <a href="tel:+40721969380" className="block text-base sm:text-lg font-bold text-black hover:text-[#e32f8c] transition-colors">(0721) 969 380</a>
+                  <a href="tel:+40721969380" className="block text-base sm:text-lg font-bold text-black hover:text-[#e32f8c] transition-colors">{isRo ? '(0721) 969 380' : '+40 721 969 380'}</a>
                   <a
                     href="https://wa.me/40721969380"
                     target="_blank"
@@ -306,7 +306,7 @@ export default function ContactPage() {
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">TrenZone LLC (USA)</p>
                   <p className="text-xs sm:text-sm font-bold text-black leading-snug">75 E 3RD ST, SHERIDAN, WY, 82801</p>
-                  <p className="text-[10px] font-medium text-zinc-400 mt-1">Reg. No.: GZ-US-WY-1790986605415</p>
+                  <p className="text-[10px] font-medium text-zinc-400 mt-1">{isRo ? 'Reg. No. / Filing ID: 2026-002097904' : 'Filing ID: 2026-002097904'}</p>
                 </div>
               </div>
           </div>

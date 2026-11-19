@@ -345,7 +345,7 @@ export const InvoicePDF: React.FC<InvoiceProps> = ({ orderData }) => {
           <View style={styles.column}>
             <Text style={styles.sectionLabel}>{lang.furnizor}</Text>
             <Text style={styles.entityName}>TrenZone LLC</Text>
-            <Text style={styles.infoLine}>Reg. Com.: GZ-US-WY-1790986605415</Text>
+            <Text style={styles.infoLine}>{orderData.locale === 'en' ? 'Filing ID: 2026-002097904' : 'Reg. Com. / Filing ID: 2026-002097904'}</Text>
             <Text style={styles.infoLine}>75 E 3RD ST, SHERIDAN, WY, 82801, USA</Text>
             <Text style={styles.infoLine}>Registered Agent: WY Commercial Registered Agent LLC</Text>
             <Text style={styles.infoLine}>Email: trenzone483@gmail.com</Text>

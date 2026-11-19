@@ -134,7 +134,7 @@ export function ShopProductGrid({ products, dark = true }: ShopProductGridProps)
             {isRo ? 'CALITATE VERIFICATĂ' : 'QUALITY GUARANTEED'}
           </span>
           <span className="text-[9px] sm:text-[11px] text-zinc-400 font-medium mt-0.5 leading-snug">
-            {isRo ? 'Cusături ranforsate · Retur 14 zile' : 'Reinforced build · 14d return'}
+            {isRo ? 'Cusături ranforsate · Retur 30 zile' : 'Reinforced build · 30d return'}
           </span>
         </div>
       </div>

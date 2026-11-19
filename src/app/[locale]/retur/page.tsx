@@ -51,15 +51,17 @@ export default function ReturPage() {
     const formData = new FormData(e.currentTarget);
     const cleanIban = ibanValue.replace(/\s+/g, '').toUpperCase();
 
-    // Client-side IBAN check (ISO standard: 2 letters, 2 digits, 11-30 alphanumeric chars, total 15-34)
-    const ibanRegex = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
-    if (!ibanRegex.test(cleanIban)) {
-      setError(
-        isEn
-          ? 'The entered IBAN account is not valid. Please ensure it begins with a country code (e.g. RO, LT, DE) and has between 15 and 34 characters.'
-          : 'Contul IBAN introdus nu este valid. Asigură-te că începe cu codul de țară (ex: RO, LT, DE) și are între 15 și 34 de caractere.'
-      );
-      return;
+    // Client-side IBAN check (only when provided; ISO standard: 2 letters, 2 digits, 11-30 alphanumeric chars, total 15-34)
+    if (cleanIban.length > 0) {
+      const ibanRegex = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
+      if (!ibanRegex.test(cleanIban)) {
+        setError(
+          isEn
+            ? 'The entered IBAN account is not valid. Please ensure it begins with a country code (e.g. RO, LT, DE) and has between 15 and 34 characters.'
+            : 'Contul IBAN introdus nu este valid. Asigură-te că începe cu codul de țară (ex: RO, LT, DE) și are între 15 și 34 de caractere.'
+        );
+        return;
+      }
     }
 
     submittingRef.current = true;
@@ -164,10 +166,22 @@ export default function ReturPage() {
                       </div>
                     )}
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[11px] font-medium text-slate-500">{isEn ? 'Refund IBAN' : 'Cont IBAN Rambursare'}</span>
-                      <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
-                        {submittedData.iban}
+                      <span className="text-[11px] font-medium text-slate-500">
+                        {submittedData.iban
+                          ? (isEn ? 'Refund IBAN' : 'Cont IBAN Rambursare')
+                          : (isEn ? 'Refund Method' : 'Metodă Rambursare')}
                       </span>
+                      {submittedData.iban ? (
+                        <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
+                          {submittedData.iban}
+                        </span>
+                      ) : (
+                        <span className="font-bold text-slate-800 text-xs">
+                          {isEn
+                            ? 'Original payment method (Stripe Card / Wallet)'
+                            : 'Metoda inițială de plată (Card / Apple Pay / Google Pay)'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -218,12 +232,18 @@ export default function ReturPage() {
                     </div>
                     <div>
                       <h4 className="text-xs sm:text-sm font-bold text-slate-900">
-                        {isEn ? 'Refund to specified IBAN' : 'Rambursarea sumei în contul IBAN'}
+                        {submittedData?.iban
+                          ? (isEn ? 'Refund to specified IBAN' : 'Rambursarea sumei în contul IBAN')
+                          : (isEn ? 'Refund to original payment method' : 'Rambursarea în metoda inițială de plată')}
                       </h4>
                       <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                        {isEn 
-                          ? 'Upon acceptance and verification of returned items in original condition, the refund is transferred to your provided bank account.' 
-                          : 'Dacă cererea este aprobată și produsele sunt recepționate în starea lor inițială, suma va fi transferată direct în contul IBAN specificat.'}
+                        {submittedData?.iban
+                          ? (isEn
+                              ? 'Upon acceptance and verification of returned items in original condition, the refund is transferred to your provided bank account.'
+                              : 'Dacă cererea este aprobată și produsele sunt recepționate în starea lor inițială, suma va fi transferată direct în contul IBAN specificat.')
+                          : (isEn
+                              ? 'Upon acceptance and verification of returned items in original condition, the refund is processed automatically back to your original payment method.'
+                              : 'Dacă cererea este aprobată și produsele sunt recepționate în starea lor inițială, suma va fi rambursată automat în contul sau pe cardul folosit la comandă.')}
                       </p>
                     </div>
                   </div>
@@ -278,8 +298,8 @@ export default function ReturPage() {
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               {isEn 
-                ? 'Fill out the form below to submit a return request. Refunds will be processed to the specified IBAN account in accordance with applicable consumer protection regulations.' 
-                : 'Completează formularul de mai jos pentru a iniția returnarea unuia sau mai multor produse. Banii vor fi rambursați în contul IBAN specificat, conform legislației în vigoare.'}
+                ? 'Fill out the form below to submit a return request. Card and digital wallet orders are automatically refunded to your original payment method; Cash on Delivery orders are refunded via IBAN bank transfer.' 
+                : 'Completează formularul de mai jos pentru a iniția returnarea unuia sau mai multor produse. Comenzile plătite cu cardul se rambursează automat în contul inițial, iar cele ramburs în contul IBAN.'}
             </p>
           </div>
 
@@ -380,11 +400,13 @@ export default function ReturPage() {
 
               {/* IBAN Account */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <label className="text-xs sm:text-sm font-bold text-slate-700">
-                    {isEn ? 'IBAN Account (for refund)' : 'Cont IBAN (pentru rambursare)'} <span className="text-red-500">*</span>
+                    {isEn
+                      ? 'IBAN Account (Optional — only for Cash on Delivery orders)'
+                      : 'Cont IBAN (Opțional — doar pentru comenzi plătite ramburs)'}
                   </label>
-                  <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                  <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1 shrink-0">
                     <ShieldCheck size={12} className="text-emerald-500" /> 
                     {isEn ? 'Secured SEPA / IBAN' : 'Securizat SEPA / IBAN'}
                   </span>
@@ -392,16 +414,19 @@ export default function ReturPage() {
                 <input 
                   name="iban" 
                   type="text" 
-                  required 
                   value={ibanValue}
                   onChange={handleIbanChange}
-                  placeholder={isEn ? 'e.g. ROXX XXXX... or LTXX XXXX... / Revolut' : 'ex: RO49AAAA1B31007593840000'}
+                  placeholder={
+                    isEn
+                      ? 'Optional — e.g. RO49 AAAA 1B31... (COD only)'
+                      : 'Opțional — ex: RO49 AAAA 1B31... (doar pentru ramburs)'
+                  }
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#e32f8c]/50 font-bold text-slate-900 bg-slate-50 font-mono tracking-wider sm:tracking-widest uppercase text-sm sm:text-base" 
                 />
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-slate-400 leading-relaxed">
                   {isEn 
-                    ? 'Bank account (domestic or international / Revolut / SEPA) for receiving your refund.' 
-                    : 'Contul bancar (românesc sau internațional / Revolut) în care dorești restituirea contravalorii.'}
+                    ? 'Card, Apple Pay, and Google Pay orders are automatically refunded to your original payment method. Only enter an IBAN if you paid Cash on Delivery in Romania.' 
+                    : 'Comenzile plătite cu cardul / Apple Pay / Google Pay se rambursează automat în contul/cardul inițial. Completează IBAN-ul doar dacă ai plătit ramburs la curier.'}
                 </p>
               </div>
 

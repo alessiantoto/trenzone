@@ -16,11 +16,11 @@ export default function CookiePolicyPage() {
       <p>
         {isEn ? (
           <>
-            Cookies are small text files stored on your device (computer, tablet, smartphone) when you visit our website, operated by <strong>TrenZone LLC</strong> (Filing ID: <strong>GZ-US-WY-1790986605415</strong>, 75 E 3RD ST, SHERIDAN, WY, 82801, USA). These files ensure optimal technical functioning of the store, remember your cart and language preferences, and provide a secure, seamless checkout experience.
+            Cookies are small text files stored on your device (computer, tablet, smartphone) when you visit our website, operated by <strong>TrenZone LLC</strong> (Filing ID: <strong>2026-002097904</strong>, 75 E 3RD ST, SHERIDAN, WY, 82801, USA). These files ensure optimal technical functioning of the store, remember your cart and language preferences, and provide a secure, seamless checkout experience.
           </>
         ) : (
           <>
-            Cookie-urile sunt fișiere text de mici dimensiuni stocate pe dispozitivul dvs. (computer, tabletă, smartphone) atunci când vizitați magazinul nostru online, operat de <strong>TrenZone LLC</strong> (Număr Înregistrare: <strong>GZ-US-WY-1790986605415</strong>, 75 E 3RD ST, SHERIDAN, WY, 82801, USA). Acestea sunt utilizate pentru a asigura funcționarea optimă a platformei noastre, salvarea coșului de cumpărături, securizarea plăților și oferirea unei experiențe personalizate fiecărui utilizator.
+            Cookie-urile sunt fișiere text de mici dimensiuni stocate pe dispozitivul dvs. (computer, tabletă, smartphone) atunci când vizitați magazinul nostru online, operat de <strong>TrenZone LLC</strong> (Număr Înregistrare / Filing ID: <strong>2026-002097904</strong>, 75 E 3RD ST, SHERIDAN, WY, 82801, USA). Acestea sunt utilizate pentru a asigura funcționarea optimă a platformei noastre, salvarea coșului de cumpărături, securizarea plăților și oferirea unei experiențe personalizate fiecărui utilizator.
           </>
         )}
       </p>

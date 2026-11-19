@@ -76,8 +76,8 @@ export const AffiliateApprovalEmail = ({
             )}
             <Text style={paragraph}>
               {isRo
-                ? `După aprobare, te vei putea conecta aici cu adresa ta de email și codul primit: `
-                : `Once approved, you will be able to sign in here using your email address and received code: `}
+                ? `După aprobare, te vei putea conecta aici cu adresa ta de email, codul primit și confirmarea rapidă prin cod unic pe email: `
+                : `Once approved, you will be able to sign in here using your email address, received code, and quick email verification: `}
               <Link href={loginUrl} style={{ color: '#e32f8c', fontWeight: 'bold' }}>{loginUrl}</Link>
             </Text>
           </>
@@ -110,8 +110,8 @@ export const AffiliateApprovalEmail = ({
 
             <Text style={paragraph}>
               {isRo
-                ? 'Am creat un panou special (Dashboard) unde îți poți urmări în timp real vânzările, comisioanele generate și unde îți poți salva contul IBAN pentru încasări. Pentru conectare folosește această adresă de email și codul tău de afiliat de mai sus.'
-                : 'We created a dedicated Dashboard where you can track your sales and generated commissions in real time and save your bank details for payouts. To log in, use this email address and your affiliate code above.'}
+                ? 'Am creat un panou special (Dashboard) unde îți poți urmări în timp real vânzările, comisioanele generate și unde îți poți salva contul IBAN pentru încasări. Pentru conectare folosește această adresă de email, codul tău de afiliat și codul de verificare pe care îl vei primi instant pe email.'
+                : 'We created a dedicated Dashboard where you can track your sales and generated commissions in real time and save your bank details for payouts. To log in, use this email address, your affiliate code, and the one-time verification code sent instantly to your email.'}
             </Text>
 
             <Section style={buttonContainer}>

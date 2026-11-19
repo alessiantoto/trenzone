@@ -59,7 +59,7 @@ function ReviewSectionInner({
   const [selectedReview, setSelectedReview] = useState<any | null>(null);
   const [isWriteReviewOpen, setIsWriteReviewOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const hasInitialReviews = Array.isArray(initialReviews);
+  const hasInitialReviews = Array.isArray(initialReviews) && initialReviews.length > 0;
   const [reviews, setReviews] = useState<any[]>(() =>
     hasInitialReviews ? mapClientReviews(initialReviews, locale) : []
   );

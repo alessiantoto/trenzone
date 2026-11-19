@@ -228,8 +228,8 @@ export function ProgramsFaqSection({
         },
         paragraphs: [
           {
-            ro: "Food Plan este ghidul complet în 10 capitole pentru alimentație (calcul caloric, meniuri pentru masă musculară sau definire și suplimente), Training Program îți oferă structura completă de antrenament pe grupe musculare (exerciții, serii și repetări), iar Bench Program este sistemul specializat pentru tehnică și progresie 4×4–6 la împins.",
-            en: "Food Plan is the 10-chapter nutrition guide (calorie targets, muscle-gain & fat-loss meal plans, and supplements), Training Program gives you the complete hypertrophy split across muscle groups, and Bench Program is the specialized 4×4–6 system for bench press strength and PRs.",
+            ro: "Food Plan este ghidul complet de alimentație (structură de mese, meniuri pentru masă musculară sau definire și suplimente), Training Program îți oferă planul săptămânal complet de antrenament pe grupe musculare, iar Bench Program este sistemul specializat pentru tehnică, stabilitate și progresie la împins.",
+            en: "Food Plan is the complete nutrition guide (meal architecture, muscle-gain & fat-loss sample days, and supplements), Training Program gives you a full workout split across major muscle groups, and Bench Program is the specialized protocol for bench press mechanics and strength PRs.",
           },
           {
             ro: "Alege Food Plan dacă vrei să îți pui la punct nutriția, Training Program pentru un plan complet la sală sau Bench Program pentru explozie la piept.",
@@ -250,12 +250,12 @@ export function ProgramsFaqSection({
         },
         paragraphs: [
           {
-            ro: "Majoritatea celor care stagnează la piept pierd forță din cauza poziției pe bancă (umeri instabili, lipsă de leg drive) și pentru că merg la eșec haotic la fiecare antrenament.",
-            en: "Most lifters plateau on bench because they leak power in their setup (unstable shoulders, no leg drive) and train to failure randomly every session.",
+            ro: "Majoritatea celor care stagnează la piept pierd forță din cauza poziției pe bancă (umeri instabili, lipsă de control) și pentru că merg la eșec haotic la fiecare antrenament.",
+            en: "Most lifters plateau on bench because they leak tension in their setup and test random max-outs without a plan.",
           },
           {
-            ro: "În program ai reguli clare: știi exact când crești greutatea pe bară (când atingi 4 serii × 6 repetări curate), cum îți dozezi efortul (1–2 repetări în rezervă) și ce accesorii îți întăresc tricepșii, umerii și spatele pentru stabilitate maximă.",
-            en: "This program gives you a clear rulebook: you know exactly when to add weight to the bar (once you hit 4 sets of 6 clean reps), how to manage fatigue (1–2 reps in reserve), and which accessories build lockout strength.",
+            ro: "În program ai reguli exacte: cum îți fixezi setup-ul pentru transfer maxim, când urci greutatea pe bară fără să strici tehnica și ce accesorii susțin împinsul.",
+            en: "Inside, you get clear setup mechanics, objective rules for when to add weight to the bar, and targeted accessories that reinforce lockout strength.",
           },
         ],
       },
@@ -268,12 +268,12 @@ export function ProgramsFaqSection({
         },
         paragraphs: [
           {
-            ro: "Nu. Planul este construit pe alimente simple și accesibile pe care le găsești în orice magazin: ouă, piept de pui, vită, orez, cartofi, ovăz, brânză cottage, telemea, iaurt grecesc, fructe și legume.",
-            en: "No. Every meal is built around simple, affordable supermarket staples: eggs, chicken breast, beef, rice, potatoes, oats, cottage cheese, Greek yogurt, fruit, and vegetables.",
+            ro: "Nu. Planul este construit pe alimente simple și accesibile pe care le găsești în orice magazin alimentar obișnuit.",
+            en: "No. Every meal is built around simple, affordable staples available at any regular supermarket.",
           },
           {
             ro: "În plus, ai un capitol dedicat pentru optimizarea bugetului și organizarea cumpărăturilor, astfel încât să mănânci corect fără să pierzi ore în bucătărie sau bani inutili.",
-            en: "It also includes a dedicated section on saving money and meal-prepping efficiently so you can hit your macros without wasting time or budget.",
+            en: "It also includes a dedicated section on saving money and meal-prepping efficiently so you stay consistent without wasting time or budget.",
           },
         ],
       },
@@ -286,8 +286,8 @@ export function ProgramsFaqSection({
         },
         paragraphs: [
           {
-            ro: "Ambele ghiduri sunt scrise direct și practic, fără teorie complicată. Dacă ești la început, îți scutesc luni întregi de încercări și greșeli în sală și în alimentație.",
-            en: "Both guides are written in a direct, practical style with zero fluff. If you are a beginner, they save you months of trial and error with your diet and bench form.",
+            ro: "Toate cele 3 ghiduri sunt scrise direct și practic, fără teorie complicată. Dacă ești la început, îți scutesc luni întregi de încercări și greșeli în sală și în alimentație.",
+            en: "All 3 guides are written in a direct, practical style with zero fluff. If you are a beginner, they save you months of trial and error with your diet, workout split, and bench form.",
           },
           {
             ro: "Dacă ai deja experiență, îți oferă structura de progresie și ajustările calorice necesare ca să treci peste plafonare.",

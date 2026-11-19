@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useLocale } from 'next-intl';
 import {
@@ -10,14 +10,20 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  KeyRound,
   Loader2,
   Lock,
   Mail,
+  RefreshCw,
   ShieldCheck,
   Tag,
   TrendingUp,
 } from 'lucide-react';
-import { affiliateLoginAction } from '@/app/actions/affiliate-auth';
+import {
+  affiliateLoginAction,
+  verifyAffiliateOtpAction,
+  resendAffiliateOtpAction,
+} from '@/app/actions/affiliate-auth';
 import { Link } from '@/i18n/routing';
 
 const EMAIL_PATTERN = /^[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
@@ -30,9 +36,56 @@ export default function AffiliateLogin() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [showCode, setShowCode] = useState(false);
+  const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
+  const [challengeToken, setChallengeToken] = useState('');
+  const [maskedEmail, setMaskedEmail] = useState('');
+  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const submittingRef = useRef(false);
+  const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('error');
+    if (err === 'magic_expired') {
+      setStatus('error');
+      setErrorMessage(
+        isRo
+          ? 'Linkul de conectare a expirat sau a fost deja folosit. Introdu emailul și codul de afiliat pentru a primi un cod nou.'
+          : 'This sign-in link has expired or was already used. Enter your email and affiliate code to receive a new code.'
+      );
+    } else if (err === 'magic_invalid') {
+      setStatus('error');
+      setErrorMessage(
+        isRo
+          ? 'Linkul de conectare este invalid. Te rugăm să soliciți un cod nou mai jos.'
+          : 'This sign-in link is invalid. Please request a fresh verification code below.'
+      );
+    } else if (err === 'magic_inactive') {
+      setStatus('error');
+      setErrorMessage(
+        isRo
+          ? 'Contul tău de afiliat nu este activ.'
+          : 'Your affiliate account is not active.'
+      );
+    }
+  }, [isRo]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((prev) => Math.max(0, prev - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    if (step === 'otp') {
+      const t = setTimeout(() => otpInputRefs.current[0]?.focus(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [step]);
 
   const clearError = () => {
     if (status === 'error') {
@@ -87,9 +140,17 @@ export default function AffiliateLogin() {
     setErrorMessage('');
 
     try {
-      const res = await affiliateLoginAction(cleanedEmail, cleanedCode, currentLocale);
+      const res: any = await affiliateLoginAction(cleanedEmail, cleanedCode, currentLocale);
 
-      if (res.success) {
+      if (res.success && res.requiresOtp && res.challengeToken) {
+        setChallengeToken(res.challengeToken);
+        setMaskedEmail(res.maskedEmail || cleanedEmail);
+        setOtpDigits(['', '', '', '', '', '']);
+        setResendCooldown(Number(res.cooldownSeconds) || 45);
+        setStatus('idle');
+        setStep('otp');
+        submittingRef.current = false;
+      } else if (res.success) {
         setStatus('success');
         const targetLocale = res.locale === 'en' ? 'en' : res.locale === 'ro' ? 'ro' : currentLocale || 'ro';
         window.location.href = `/${targetLocale}/affiliate/dashboard`;
@@ -103,6 +164,135 @@ export default function AffiliateLogin() {
       setStatus('error');
       setErrorMessage(message || (isRo ? 'Eroare de conexiune.' : 'Connection error.'));
       submittingRef.current = false;
+    }
+  };
+
+  const submitOtpCode = async (joinedOtp: string) => {
+    if (submittingRef.current || status === 'loading' || status === 'success') return;
+    if (!/^\d{6}$/.test(joinedOtp)) {
+      setStatus('error');
+      setErrorMessage(
+        isRo ? 'Te rugăm să introduci toate cele 6 cifre primite pe email.' : 'Please enter all 6 digits sent to your email.'
+      );
+      return;
+    }
+
+    submittingRef.current = true;
+    setStatus('loading');
+    setErrorMessage('');
+
+    try {
+      const res: any = await verifyAffiliateOtpAction(challengeToken, joinedOtp, currentLocale);
+      if (res.success) {
+        setStatus('success');
+        const targetLocale = res.locale === 'en' ? 'en' : res.locale === 'ro' ? 'ro' : currentLocale || 'ro';
+        window.location.href = `/${targetLocale}/affiliate/dashboard`;
+      } else {
+        setStatus('error');
+        setErrorMessage(res.error || (isRo ? 'Cod incorect.' : 'Incorrect code.'));
+        if (res.expired) {
+          setStep('credentials');
+          setChallengeToken('');
+          setOtpDigits(['', '', '', '', '', '']);
+        }
+        submittingRef.current = false;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '';
+      setStatus('error');
+      setErrorMessage(message || (isRo ? 'Eroare de conexiune.' : 'Connection error.'));
+      submittingRef.current = false;
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitOtpCode(otpDigits.join(''));
+  };
+
+  const handleOtpChange = (idx: number, rawVal: string) => {
+    clearError();
+    const digitsOnly = rawVal.replace(/\D/g, '');
+    if (!digitsOnly) {
+      setOtpDigits((prev) => {
+        const next = [...prev];
+        next[idx] = '';
+        return next;
+      });
+      return;
+    }
+
+    // Handle autofill or multi-digit paste inside a single box
+    if (digitsOnly.length > 1) {
+      const sliced = digitsOnly.slice(0, 6).split('');
+      const next = ['', '', '', '', '', ''];
+      for (let i = 0; i < 6; i++) {
+        next[i] = sliced[i] || '';
+      }
+      setOtpDigits(next);
+      const focusIdx = Math.min(5, sliced.length);
+      otpInputRefs.current[focusIdx]?.focus();
+      if (sliced.length === 6) {
+        submitOtpCode(next.join(''));
+      }
+      return;
+    }
+
+    const next = [...otpDigits];
+    next[idx] = digitsOnly;
+    setOtpDigits(next);
+    if (idx < 5) {
+      otpInputRefs.current[idx + 1]?.focus();
+    } else if (next.every((d) => /^\d$/.test(d))) {
+      submitOtpCode(next.join(''));
+    }
+  };
+
+  const handleOtpKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[idx] && idx > 0) {
+      e.preventDefault();
+      setOtpDigits((prev) => {
+        const next = [...prev];
+        next[idx - 1] = '';
+        return next;
+      });
+      otpInputRefs.current[idx - 1]?.focus();
+    } else if (e.key === 'ArrowLeft' && idx > 0) {
+      e.preventDefault();
+      otpInputRefs.current[idx - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && idx < 5) {
+      e.preventDefault();
+      otpInputRefs.current[idx + 1]?.focus();
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resending || resendCooldown > 0 || !challengeToken) return;
+    setResending(true);
+    clearError();
+    try {
+      const res: any = await resendAffiliateOtpAction(challengeToken, currentLocale);
+      if (res.success && res.challengeToken) {
+        setChallengeToken(res.challengeToken);
+        setOtpDigits(['', '', '', '', '', '']);
+        setResendCooldown(Number(res.cooldownSeconds) || 45);
+        otpInputRefs.current[0]?.focus();
+      } else {
+        setStatus('error');
+        setErrorMessage(res.error || (isRo ? 'Nu am putut retrimite codul.' : 'Could not resend code.'));
+        if (typeof res.retryAfterSeconds === 'number') {
+          setResendCooldown(res.retryAfterSeconds);
+        }
+        if (res.expired) {
+          setStep('credentials');
+          setChallengeToken('');
+        }
+      }
+    } catch {
+      setStatus('error');
+      setErrorMessage(isRo ? 'Eroare de conexiune.' : 'Connection error.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -272,152 +462,292 @@ export default function AffiliateLogin() {
                 </div>
 
                 <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white mb-1.5 font-[family-name:var(--font-oswald)]">
-                  {isRo ? 'Autentificare Afiliat' : 'Affiliate Sign In'}
+                  {step === 'otp'
+                    ? isRo
+                      ? 'Verifică Emailul'
+                      : 'Verify Your Email'
+                    : isRo
+                      ? 'Autentificare Afiliat'
+                      : 'Affiliate Sign In'}
                 </h1>
                 <p className="text-xs sm:text-sm text-zinc-400 font-medium leading-relaxed">
-                  {isRo
-                    ? 'Intră cu emailul și codul tău activ de afiliat.'
-                    : 'Sign in with your email and active affiliate code.'}
+                  {step === 'otp'
+                    ? isRo
+                      ? `Ți-am trimis pe ${maskedEmail} un cod unic de 6 cifre și un link rapid de autentificare.`
+                      : `We sent a 6-digit verification code and an instant sign-in link to ${maskedEmail}.`
+                    : isRo
+                      ? 'Introdu emailul și codul tău activ de afiliat, apoi confirmă codul primit pe email.'
+                      : 'Enter your email and active affiliate code, then confirm with the code sent to your email.'}
                 </p>
               </div>
 
-              <form onSubmit={handleLogin} noValidate className="space-y-4">
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="affiliate-email"
-                    className="block text-[11px] font-black uppercase tracking-widest text-zinc-300 ml-0.5"
-                  >
-                    {isRo ? 'Adresă de Email' : 'Email Address'}
-                  </label>
-                  <div className="group relative flex items-center bg-black/60 border border-white/15 rounded-xl focus-within:border-[#e32f8c] focus-within:ring-2 focus-within:ring-[#e32f8c]/20 transition-all">
-                    <Mail
-                      className="w-4 h-4 text-zinc-500 group-focus-within:text-[#ff66b2] absolute left-4 pointer-events-none transition-colors"
-                      aria-hidden="true"
-                    />
-                    <input
-                      id="affiliate-email"
-                      name="email"
-                      type="email"
-                      required
-                      autoComplete="email"
-                      inputMode="email"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        clearError();
-                      }}
-                      placeholder={isRo ? 'nume@exemplu.ro' : 'name@example.com'}
-                      className="w-full h-12 bg-transparent rounded-xl pl-11 pr-4 text-base font-medium text-white placeholder:text-zinc-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 px-0.5">
+              {step === 'credentials' ? (
+                <form onSubmit={handleLogin} noValidate className="space-y-4">
+                  <div className="space-y-1.5">
                     <label
-                      htmlFor="affiliate-code"
-                      className="text-[11px] font-black uppercase tracking-widest text-zinc-300"
+                      htmlFor="affiliate-email"
+                      className="block text-[11px] font-black uppercase tracking-widest text-zinc-300 ml-0.5"
                     >
-                      {isRo ? 'Cod Afiliat' : 'Affiliate Code'}
+                      {isRo ? 'Adresă de Email' : 'Email Address'}
                     </label>
-                    <span className="text-[11px] text-zinc-500 font-semibold">
-                      {isRo ? 'Codul tău de reducere' : 'Your promo code'}
-                    </span>
+                    <div className="group relative flex items-center bg-black/60 border border-white/15 rounded-xl focus-within:border-[#e32f8c] focus-within:ring-2 focus-within:ring-[#e32f8c]/20 transition-all">
+                      <Mail
+                        className="w-4 h-4 text-zinc-500 group-focus-within:text-[#ff66b2] absolute left-4 pointer-events-none transition-colors"
+                        aria-hidden="true"
+                      />
+                      <input
+                        id="affiliate-email"
+                        name="email"
+                        type="email"
+                        required
+                        autoComplete="email"
+                        inputMode="email"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          clearError();
+                        }}
+                        placeholder={isRo ? 'nume@exemplu.ro' : 'name@example.com'}
+                        className="w-full h-12 bg-transparent rounded-xl pl-11 pr-4 text-base font-medium text-white placeholder:text-zinc-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
-                  <div className="group relative flex items-center bg-black/60 border border-white/15 rounded-xl focus-within:border-[#e32f8c] focus-within:ring-2 focus-within:ring-[#e32f8c]/20 transition-all">
-                    <Lock
-                      className="w-4 h-4 text-zinc-500 group-focus-within:text-[#ff66b2] absolute left-4 pointer-events-none transition-colors"
-                      aria-hidden="true"
-                    />
-                    <input
-                      id="affiliate-code"
-                      name="password"
-                      type={showCode ? 'text' : 'password'}
-                      required
-                      autoComplete="current-password"
-                      autoCapitalize="characters"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      value={code}
-                      onChange={(e) => {
-                        setCode(e.target.value.toUpperCase());
-                        clearError();
-                      }}
-                      placeholder={isRo ? 'Ex: CODULTAU' : 'e.g. YOURCODE'}
-                      className={`w-full h-12 bg-transparent rounded-xl pl-11 pr-12 text-base font-mono font-bold tracking-wider text-white placeholder:text-zinc-500 placeholder:font-sans placeholder:font-medium placeholder:tracking-normal focus:outline-none ${
-                        showCode ? 'uppercase' : ''
-                      }`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCode((prev) => !prev)}
-                      aria-label={
-                        showCode
-                          ? isRo
-                            ? 'Ascunde codul de afiliat'
-                            : 'Hide affiliate code'
-                          : isRo
-                            ? 'Arată codul de afiliat'
-                            : 'Show affiliate code'
-                      }
-                      aria-pressed={showCode}
-                      className="absolute right-1 w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                    >
-                      {showCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
 
-                {status === 'error' && errorMessage && (
-                  <div
-                    role="alert"
-                    className="bg-red-500/10 text-red-200 text-xs sm:text-sm font-semibold px-3.5 py-3 rounded-xl border border-red-500/35 space-y-1.5 leading-relaxed"
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 px-0.5">
+                      <label
+                        htmlFor="affiliate-code"
+                        className="text-[11px] font-black uppercase tracking-widest text-zinc-300"
+                      >
+                        {isRo ? 'Cod Afiliat' : 'Affiliate Code'}
+                      </label>
+                      <span className="text-[11px] text-zinc-500 font-semibold">
+                        {isRo ? 'Codul tău de reducere' : 'Your promo code'}
+                      </span>
+                    </div>
+                    <div className="group relative flex items-center bg-black/60 border border-white/15 rounded-xl focus-within:border-[#e32f8c] focus-within:ring-2 focus-within:ring-[#e32f8c]/20 transition-all">
+                      <Lock
+                        className="w-4 h-4 text-zinc-500 group-focus-within:text-[#ff66b2] absolute left-4 pointer-events-none transition-colors"
+                        aria-hidden="true"
+                      />
+                      <input
+                        id="affiliate-code"
+                        name="affiliateCode"
+                        type={showCode ? 'text' : 'password'}
+                        required
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        value={code}
+                        onChange={(e) => {
+                          setCode(e.target.value.toUpperCase());
+                          clearError();
+                        }}
+                        placeholder={isRo ? 'Ex: CODULTAU' : 'e.g. YOURCODE'}
+                        className={`w-full h-12 bg-transparent rounded-xl pl-11 pr-12 text-base font-mono font-bold tracking-wider text-white placeholder:text-zinc-500 placeholder:font-sans placeholder:font-medium placeholder:tracking-normal focus:outline-none ${
+                          showCode ? 'uppercase' : ''
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCode((prev) => !prev)}
+                        aria-label={
+                          showCode
+                            ? isRo
+                              ? 'Ascunde codul de afiliat'
+                              : 'Hide affiliate code'
+                            : isRo
+                              ? 'Arată codul de afiliat'
+                              : 'Show affiliate code'
+                        }
+                        aria-pressed={showCode}
+                        className="absolute right-1 w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                      >
+                        {showCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {status === 'error' && errorMessage && (
+                    <div
+                      role="alert"
+                      className="bg-red-500/10 text-red-200 text-xs sm:text-sm font-semibold px-3.5 py-3 rounded-xl border border-red-500/35 space-y-1.5 leading-relaxed"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
+                        <span>{errorMessage}</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 pl-6.5 font-medium">
+                        {isRo
+                          ? 'Conturile noi devin active după aprobare — verifică emailul pentru codul tău confirmat.'
+                          : 'New partner accounts activate after review — check your email for your confirmed code.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {status === 'success' && (
+                    <div
+                      role="status"
+                      className="bg-emerald-500/15 text-emerald-200 text-xs sm:text-sm font-semibold px-3.5 py-3 rounded-xl border border-emerald-500/35 flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      <span>
+                        {isRo ? 'Autentificare reușită! Te redirecționăm...' : 'Success! Redirecting...'}
+                      </span>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={status === 'loading' || status === 'success'}
+                    className="w-full h-12 sm:h-[52px] bg-[#e32f8c] hover:bg-[#ff3b9e] text-white rounded-xl font-black uppercase tracking-wider text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 shadow-[0_0_24px_rgba(227,47,140,0.38)] hover:shadow-[0_0_32px_rgba(227,47,140,0.58)] cursor-pointer"
                   >
-                    <div className="flex items-start gap-2.5">
+                    {status === 'loading' ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
+                        <span>{isRo ? 'Se trimite codul...' : 'Sending verification...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>{isRo ? 'Trimite Cod pe Email' : 'Send Email Code'}</span>
+                        <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleOtpSubmit} noValidate className="space-y-4">
+                  <div className="rounded-xl bg-[#e32f8c]/10 border border-[#e32f8c]/30 px-3.5 py-3 flex items-start gap-2.5">
+                    <KeyRound className="w-4 h-4 text-[#ff66b2] shrink-0 mt-0.5" aria-hidden="true" />
+                    <div className="text-xs text-zinc-200 leading-relaxed">
+                      <p className="font-bold text-white">
+                        {isRo ? 'Email trimis cu succes' : 'Verification email sent'}
+                      </p>
+                      <p className="text-zinc-300 mt-0.5">
+                        {isRo
+                          ? 'Introdu cele 6 cifre din email sau apasă butonul «Intră în cont» direct din mesaj.'
+                          : 'Enter the 6-digit code from your email or click “Sign In Instantly” inside the message.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 px-0.5">
+                      <label className="text-[11px] font-black uppercase tracking-widest text-zinc-300">
+                        {isRo ? 'Cod de 6 cifre' : '6-Digit Code'}
+                      </label>
+                      <span className="text-[11px] text-zinc-500 font-semibold">
+                        {isRo ? 'Valabil 10 min' : 'Valid 10 min'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-6 gap-2 sm:gap-2.5">
+                      {otpDigits.map((digit, idx) => (
+                        <input
+                          key={idx}
+                          ref={(el) => {
+                            otpInputRefs.current[idx] = el;
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={6}
+                          autoComplete={idx === 0 ? 'one-time-code' : 'off'}
+                          aria-label={isRo ? `Cifra ${idx + 1}` : `Digit ${idx + 1}`}
+                          value={digit}
+                          onChange={(e) => handleOtpChange(idx, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                          className="h-13 sm:h-14 w-full text-center text-xl sm:text-2xl font-mono font-black text-white bg-black/70 border border-white/15 rounded-xl focus:outline-none focus:border-[#e32f8c] focus:ring-2 focus:ring-[#e32f8c]/25 transition-all"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {status === 'error' && errorMessage && (
+                    <div
+                      role="alert"
+                      className="bg-red-500/10 text-red-200 text-xs sm:text-sm font-semibold px-3.5 py-3 rounded-xl border border-red-500/35 flex items-start gap-2.5 leading-relaxed"
+                    >
                       <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
                       <span>{errorMessage}</span>
                     </div>
-                    <p className="text-[11px] text-zinc-400 pl-6.5 font-medium">
-                      {isRo
-                        ? 'Conturile noi devin active după aprobare — verifică emailul pentru codul tău confirmat.'
-                        : 'New partner accounts activate after review — check your email for your confirmed code.'}
-                    </p>
-                  </div>
-                )}
-
-                {status === 'success' && (
-                  <div
-                    role="status"
-                    className="bg-emerald-500/15 text-emerald-200 text-xs sm:text-sm font-semibold px-3.5 py-3 rounded-xl border border-emerald-500/35 flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-                    <span>
-                      {isRo ? 'Autentificare reușită! Te redirecționăm...' : 'Success! Redirecting...'}
-                    </span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={status === 'loading' || status === 'success'}
-                  className="w-full h-12 sm:h-[52px] bg-[#e32f8c] hover:bg-[#ff3b9e] text-white rounded-xl font-black uppercase tracking-wider text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 shadow-[0_0_24px_rgba(227,47,140,0.38)] hover:shadow-[0_0_32px_rgba(227,47,140,0.58)] cursor-pointer"
-                >
-                  {status === 'loading' ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
-                      <span>{isRo ? 'Se verifică...' : 'Signing in...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>{isRo ? 'Accesează Dashboard' : 'Enter Dashboard'}</span>
-                      <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                    </>
                   )}
-                </button>
-              </form>
+
+                  {status === 'success' && (
+                    <div
+                      role="status"
+                      className="bg-emerald-500/15 text-emerald-200 text-xs sm:text-sm font-semibold px-3.5 py-3 rounded-xl border border-emerald-500/35 flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      <span>
+                        {isRo ? 'Autentificare reușită! Te redirecționăm...' : 'Verified! Redirecting...'}
+                      </span>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={status === 'loading' || status === 'success' || otpDigits.some((d) => !d)}
+                    className="w-full h-12 sm:h-[52px] bg-[#e32f8c] hover:bg-[#ff3b9e] text-white rounded-xl font-black uppercase tracking-wider text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(227,47,140,0.38)] hover:shadow-[0_0_32px_rgba(227,47,140,0.58)] cursor-pointer"
+                  >
+                    {status === 'loading' ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
+                        <span>{isRo ? 'Se verifică codul...' : 'Verifying code...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>{isRo ? 'Confirmă și Intră în Dashboard' : 'Confirm & Enter Dashboard'}</span>
+                        <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={resending || resendCooldown > 0}
+                      className="inline-flex items-center justify-center sm:justify-start gap-1.5 font-bold text-[#ff66b2] hover:text-white disabled:text-zinc-500 disabled:cursor-not-allowed transition-colors py-1 cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${resending ? 'animate-spin' : ''}`} />
+                      <span>
+                        {resendCooldown > 0
+                          ? isRo
+                            ? `Retrimite codul (${resendCooldown}s)`
+                            : `Resend code (${resendCooldown}s)`
+                          : isRo
+                            ? 'Retrimite codul pe email'
+                            : 'Resend email code'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep('credentials');
+                        setChallengeToken('');
+                        setOtpDigits(['', '', '', '', '', '']);
+                        clearError();
+                      }}
+                      className="inline-flex items-center justify-center sm:justify-end gap-1 font-semibold text-zinc-400 hover:text-white transition-colors py-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>{isRo ? 'Schimbă datele' : 'Change details'}</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-center text-zinc-500 font-medium">
+                    {isRo
+                      ? 'După confirmare, rămâi conectat pe acest dispozitiv timp de 60 de zile.'
+                      : 'Once confirmed, this device stays signed in for 60 days.'}
+                  </p>
+                </form>
+              )}
 
               <div className="mt-6 pt-5 border-t border-white/10 flex flex-col items-center gap-2 text-center">
                 <p className="text-xs sm:text-sm text-zinc-400 font-medium">

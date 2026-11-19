@@ -391,12 +391,12 @@ export const DIGITAL_PROGRAM_PRODUCTS: Product[] = [
     benefits: {
       ro: [
         'Structură completă pe zile de antrenament, exerciții, serii și repetări',
-        'Selecția exercițiilor de bază și izolare pentru creștere musculară maximă',
+        'Selecția exercițiilor de bază și izolare pentru creștere musculară echilibrată',
         'Disponibil în Română sau Engleză — livrare instantă pe email',
       ],
       en: [
-        'Full weekly training split with exercises, sets, and rep ranges',
-        'Compound and isolation exercise selection for maximum hypertrophy',
+        'Full weekly training split with mapped exercises, sets, and rep ranges',
+        'Compound and isolation exercise selection for balanced hypertrophy',
         'Available in Romanian or English — instant delivery via email',
       ],
     },
@@ -451,24 +451,24 @@ export const DIGITAL_PROGRAM_PRODUCTS: Product[] = [
       ],
     },
     description: {
-      ro: 'Programul de tehnică, structură a antrenamentului și progresie la împins (4×4–6 reps). Livrare instantă pe email.',
-      en: 'Bench press technique, workout structure, and 4×4–6 progression system. Instant email delivery.',
+      ro: 'Sistem dedicat pentru tehnică, structură și progresie constantă la împins la piept. Livrare instantă pe email.',
+      en: 'Dedicated bench press system covering setup biomechanics, workout structure, and strength progression. Instant email delivery.',
     },
     benefits: {
       ro: [
-        'Setup și tehnică: poziția picioarelor, blocarea omoplaților și traiectoria barei',
-        'Sistem clar de progresie 4×4–6 repetări + exerciții accesorii',
+        'Biomecanică și setup stabil pe bancă pentru transfer maxim de forță',
+        'Metodă clară de progresie pas-cu-pas + exerciții accesorii esențiale',
         'Disponibil în Română sau Engleză — livrare instantă pe email',
       ],
       en: [
-        'Setup and technique: leg drive, locked upper back, and controlled bar path',
-        'Clear 4×4–6 progression system + accessory exercises',
+        'Tight bench setup biomechanics for maximum pressing stability',
+        'Clear step-by-step progression framework + key accessory lifts',
         'Available in Romanian or English — instant delivery via email',
       ],
     },
     specs: {
       weight: 'Format Digital (Livrare Instantă)',
-      dimensions: 'Progresie 4×4–6 · RO / EN',
+      dimensions: 'Sistem Bench · RO / EN',
     },
   },
   {

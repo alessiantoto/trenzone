@@ -54,8 +54,9 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false, // Hide "X-Powered-By: Next.js"
   
-  // Server Actions configuration
+  // Server Actions & global 404 with Multiple Root Layouts ([locale] + admin)
   experimental: {
+    globalNotFound: true,
     serverActions: {
       bodySizeLimit: '25mb',
       allowedOrigins: ['localhost:3000', '127.0.0.1:3000', 'localhost:3001', 'trenzone.fit', 'www.trenzone.fit', '192.168.1.166:3000'],

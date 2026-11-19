@@ -17,6 +17,8 @@ import { formatPublicReviews } from "@/lib/utils/reviews";
 import { generateProductSchema, generateBreadcrumbSchema, generateFAQSchema } from "@/lib/schema";
 import { getSiteUrl } from "@/lib/site-config";
 import { isDigitalProgramItem } from "@/lib/programs";
+import { resolveProgramDetailForProduct } from "@/lib/program-details";
+import { ProgramDetailsSection } from "@/components/programs/ProgramDetailsSection";
 import { getResolvedProductFaqs, filterInfluencersForProduct } from "@/lib/product-features";
 
 export const revalidate = 2592000; // Cache product page for 30 days — admin actions & "Șterge Cache" trigger on-demand revalidation
@@ -193,6 +195,7 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
   const sectionVideos = filteredMedia.videos;
   const videoTitle = locale === 'en' ? filteredMedia.titleEn : filteredMedia.titleRo;
   const videoSubtitle = locale === 'en' ? filteredMedia.subtitleEn : filteredMedia.subtitleRo;
+  const programDetail = isCurrentDigital ? resolveProgramDetailForProduct(product) : null;
 
 
   return (
@@ -218,6 +221,14 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
       <div className="relative z-10">
         <ProductMainContainer product={product} initialStats={stats} />
       </div>
+
+      {/* 1.5 Digital Program Rich Breakdown (Chapters, Target Audience & Structure) */}
+      {programDetail && (
+        <>
+          <div className="trenzone-luminous-divider" />
+          <ProgramDetailsSection detail={programDetail} locale={locale} />
+        </>
+      )}
 
       <div className="trenzone-luminous-divider" />
 

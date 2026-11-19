@@ -7,6 +7,7 @@ import { WelcomeDiscountEmail } from '../components/email/WelcomeDiscountEmail';
 import { AwbEmailTemplate } from '../components/email/AwbEmailTemplate';
 import { ReturnConfirmationEmail } from '../components/email/ReturnConfirmationEmail';
 import { AffiliateApprovalEmail } from '../components/email/AffiliateApprovalEmail';
+import { AffiliateOtpEmail } from '../components/email/AffiliateOtpEmail';
 import { FulfillmentDispatchEmail } from '../components/email/FulfillmentDispatchEmail';
 import { ProgramDeliveryEmail } from '../components/email/ProgramDeliveryEmail';
 import { FulfillmentOrderSummary } from '@/types/fulfillment';
@@ -783,6 +784,61 @@ export async function sendAffiliateUpdateEmail(
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error('❌ [MAIL SERVICE] Affiliate Update Exception:', errMsg);
+    throw error instanceof Error ? error : new Error(errMsg);
+  }
+}
+
+/**
+ * SEND AFFILIATE LOGIN OTP + MAGIC LINK EMAIL
+ */
+export async function sendAffiliateOtpEmail(params: {
+  email: string;
+  name: string;
+  affiliateCode: string;
+  otpCode: string;
+  magicLinkUrl: string;
+  locale: 'ro' | 'en';
+  expiresMinutes?: number;
+}) {
+  const { email, name, affiliateCode, otpCode, magicLinkUrl, locale, expiresMinutes = 10 } = params;
+  const subject =
+    locale === 'en'
+      ? `Your TrenZone verification code: ${otpCode}`
+      : `Codul tău de conectare TrenZone: ${otpCode}`;
+
+  try {
+    const result = await resend.emails.send({
+      from: getResendFromEmail(),
+      reply_to: 'trenzone483@gmail.com',
+      to: [email],
+      subject,
+      react: (
+        <AffiliateOtpEmail
+          name={name}
+          affiliateCode={affiliateCode}
+          otpCode={otpCode}
+          magicLinkUrl={magicLinkUrl}
+          locale={locale}
+          expiresMinutes={expiresMinutes}
+        />
+      ),
+    });
+
+    if (result.error) {
+      const errMsg = result.error.message || JSON.stringify(result.error);
+      console.error('❌ [MAIL SERVICE] Affiliate OTP FAILED:', errMsg);
+      await logEmailToDb(email, subject, 'affiliate-otp', 'failed', errMsg, { affiliateCode, locale });
+      throwAlreadyLoggedResendError(result.error);
+    }
+
+    await logEmailToDb(email, subject, 'affiliate-otp', 'sent', null, { affiliateCode, locale });
+    return { success: true, id: result.data?.id };
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ [MAIL SERVICE] Affiliate OTP Exception:', errMsg);
+    if (!(error as any)?.__emailLogged) {
+      await logEmailToDb(email, subject, 'affiliate-otp', 'failed', errMsg, { affiliateCode, locale });
+    }
     throw error instanceof Error ? error : new Error(errMsg);
   }
 }

@@ -131,7 +131,7 @@ export function getDefaultProductHighlights(
         },
         {
           icon: 'target',
-          title: { ro: 'SISTEM 4×4–6 PRO', en: '4×4–6 PROGRESSION' },
+          title: { ro: 'PROGRESIE BENCH', en: 'BENCH PROGRESSION' },
           subtitle: { ro: 'Structură clară pentru PR', en: 'Built for heavy bench PRs' },
         },
         {

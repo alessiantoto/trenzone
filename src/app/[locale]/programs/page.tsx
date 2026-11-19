@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { getSiteUrl } from "@/lib/site-config";
 import { generateFAQSchema } from "@/lib/schema";
 import { ProgramsShowcaseSection } from "@/components/programs/ProgramsShowcaseSection";
+import { ProgramDetailsSection } from "@/components/programs/ProgramDetailsSection";
 import { ProgramsFaqSection } from "@/components/programs/ProgramsFaqSection";
 import { getProducts } from "@/lib/api";
 import { PROGRAM_SLUGS, PROGRAM_UUIDS } from "@/lib/programs";
@@ -19,12 +20,12 @@ export async function generateMetadata({
   const isRo = locale !== "en";
 
   const title = isRo
-    ? "Programe Digitale Vlad Tren — Food Plan & Bench Program (PDF RO / EN) | TrenZone®"
-    : "Vlad Tren Digital Programs — Food Plan & Bench Program (PDF EN / RO) | TrenZone®";
+    ? "Programe Digitale Vlad Tren — Food Plan, Training Program & Bench Program (PDF RO / EN) | TrenZone®"
+    : "Vlad Tren Digital Programs — Food Plan, Training Program & Bench Program (PDF EN / RO) | TrenZone®";
 
   const description = isRo
-    ? "Descarcă instant pe email programele oficiale Vlad Tren: Food Plan (Nutriție, Masă Musculară & Slăbire în 10 capitole) și Bench Program (8 săptămâni pentru forță și PR la împins la piept). Disponibile în Română și Engleză."
-    : "Instant email PDF delivery of Vlad Tren's official programs: Food Plan (10-chapter Nutrition, Muscle Gain & Fat Loss Guide) and Bench Program (8-Week Bench Press Strength Protocol). Available in English and Romanian.";
+    ? "Descarcă instant pe email programele oficiale Vlad Tren: Food Plan (Nutriție & Meniuri), Training Program (Split complet pe grupe musculare) și Bench Program (Tehnică & Progresie la piept). Disponibile în Română și Engleză."
+    : "Instant email PDF delivery of Vlad Tren's official programs: Food Plan (Nutrition & Meal Plans), Training Program (Complete Workout Split), and Bench Program (Bench Technique & Progression). Available in English and Romanian.";
 
   const canonicalUrl = `${BASE_URL}/${locale}/programs`;
 
@@ -107,22 +108,22 @@ export default async function ProgramsPage({
         {
           question: "Ce conține concret fiecare program și pe care să îl aleg?",
           answer:
-            "Food Plan este ghidul complet în 10 capitole care îți arată exact cum să îți structurezi mesele, proteinele și caloriile — cu exemple concrete de meniuri zilnice atât pentru creștere în masă musculară, cât și pentru slăbire/definire. Bench Program este sistemul de antrenament dedicat forței la împins: poziționarea pe bancă, structura săptămânală, sistemul de progresie 4×4–6 repetări și exercițiile accesorii.",
+            "Food Plan este ghidul complet de alimentație (principii, structură de mese, exemple complete pentru masă musculară sau slăbire și ghid de suplimente). Training Program îți oferă structura săptămânală de antrenament pe toate grupele musculare cu serii, repetări și reguli de progres. Bench Program este sistemul specializat pentru mecanică, stabilitate și progresie la împins la piept.",
         },
         {
           question: "Cu ce mă ajută Bench Program dacă mă antrenez deja la sală?",
           answer:
-            "În program ai reguli clare: știi exact când crești greutatea pe bară (când atingi 4 serii × 6 repetări curate), cum îți dozezi efortul (1–2 repetări în rezervă) și ce accesorii îți întăresc tricepșii, umerii și spatele pentru stabilitate maximă.",
+            "Îți oferă o structură clară de setup, volum și progresie: știi exact cum să îți stabilizezi poziția pe bancă, când este momentul să adaugi greutate fără să strici execuția și cum să depășești stagnarea.",
         },
         {
           question: "Food Plan-ul conține alimente scumpe sau greu de găsit?",
           answer:
-            "Nu. Planul este construit pe alimente simple și accesibile pe care le găsești în orice magazin: ouă, piept de pui, vită, orez, cartofi, ovăz, brânză cottage, telemea, iaurt grecesc, fructe și legume.",
+            "Nu. Planul este construit pe alimente simple și accesibile din orice supermarket, cu strategii practice pentru a economisi timp și bani la cumpărături.",
         },
         {
           question: "Sunt potrivite și pentru începători sau doar pentru avansați?",
           answer:
-            "Ambele ghiduri sunt scrise direct și practic, fără teorie complicată. Dacă ești la început, îți scutesc luni întregi de încercări și greșeli, iar dacă ai deja experiență, îți oferă structura de progresie ca să treci peste plafonare.",
+            "Toate cele 3 ghiduri sunt scrise direct și practic, fără teorie complicată. Dacă ești la început, îți scutesc luni întregi de încercări și greșeli, iar dacă ai deja experiență, îți oferă structura de progresie ca să treci peste plafonare.",
         },
         {
           question: "Cum primesc programele după plată și în ce limbă sunt?",
@@ -134,22 +135,22 @@ export default async function ProgramsPage({
         {
           question: "What is inside each program and which one should I choose?",
           answer:
-            "Food Plan is a complete 10-chapter nutrition guide with sample meal plans for both muscle gain and fat loss. Bench Program is the strength system built to increase your bench press using setup mechanics, the 4×4–6 progression model, and key accessory lifts.",
+            "Food Plan is the complete nutrition guide covering macronutrients, meal structure, sample days for muscle gain or fat loss, and supplements. Training Program provides a complete weekly split across every major muscle group. Bench Program is the specialized system for setup biomechanics, strength progression, and breaking bench plateaus.",
         },
         {
           question: "How will the Bench Program help if I already train at the gym?",
           answer:
-            "It gives you a clear rulebook: you know exactly when to add weight to the bar (once you hit 4 sets of 6 clean reps), how to manage fatigue (1–2 reps in reserve), and which accessories build lockout strength.",
+            "It gives you a clear rulebook for setup, intensity, and progression so you know exactly when to add weight safely, how to stay tight on the bench, and what to adjust when lifts stall.",
         },
         {
           question: "Does the Food Plan require expensive or complicated ingredients?",
           answer:
-            "No. Every meal is built around simple, affordable supermarket staples: eggs, chicken breast, beef, rice, potatoes, oats, cottage cheese, Greek yogurt, fruit, and vegetables.",
+            "No. Meals are built around accessible, affordable supermarket staples alongside practical prep strategies that save both time and money.",
         },
         {
           question: "Are these guides suitable for beginners or only advanced lifters?",
           answer:
-            "Both guides are written in a direct, practical style with zero fluff, saving beginners months of trial and error while giving intermediate and advanced lifters the exact structure to break plateaus.",
+            "All 3 guides are written in a direct, practical style with zero fluff, saving beginners months of trial and error while giving intermediate and advanced lifters the exact structure to break plateaus.",
         },
         {
           question: "How do I receive the programs after payment, and in what language?",
@@ -171,6 +172,11 @@ export default async function ProgramsPage({
       <div className="relative z-10 pt-4">
         <ProgramsShowcaseSection standalonePage={true} products={allProducts} />
       </div>
+
+      <div className="trenzone-luminous-divider" />
+
+      {/* Interactive Rich Content & Audience Breakdown for All 3 PDFs + Bundle */}
+      <ProgramDetailsSection standaloneTabs={true} locale={locale} />
 
       <div className="trenzone-luminous-divider" />
 

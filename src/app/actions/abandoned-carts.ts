@@ -2,11 +2,17 @@
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { isAdminAuthorized } from "./admin-auth";
-import { resend } from "@/lib/resend-service";
+import { resend, logEmailToDb } from "@/lib/resend-service";
 import { AbandonedCartEmail } from "@/components/email/AbandonedCartEmail";
 import { getEmailTemplate } from "@/app/actions/email-templates";
 import { getSiteUrl, getResendFromEmail } from "@/lib/site-config";
-import { convertToRon, getProductPrice, getServerExchangeRates, normalizeCartItemsCurrency } from "@/utils/pricing";
+import { convertToRon, getServerExchangeRates } from "@/utils/pricing";
+import {
+  buildNormalizedAbandonedItems,
+  executeAbandonedCartsRecovery,
+  parseSessionItemsArray,
+  resolveAbandonedCartLocale,
+} from "@/lib/abandoned-carts-runner";
 
 export interface AbandonedCartItem {
   id: string;
@@ -89,56 +95,6 @@ export interface GetAbandonedCartsResult {
   stats: AbandonedCartsStats;
   availableCoupons: AvailableRecoveryCoupon[];
   default72hCoupon?: string;
-}
-
-function parseSessionItemsArray(rawItems: any): any[] {
-  if (typeof rawItems === 'string') {
-    try {
-      const parsed = JSON.parse(rawItems);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return Array.isArray(rawItems) ? rawItems : [];
-}
-
-function buildNormalizedAbandonedItems(
-  rawItems: any,
-  sessionCurrency: string,
-  expectedTotal: any,
-  liveRates?: Record<string, number>
-): AbandonedCartItem[] {
-  const parsed = parseSessionItemsArray(rawItems);
-  const preNormalized = parsed.map((item: any, idx: number) => {
-    let priceNum = 0;
-    if (typeof item?.price === 'number') {
-      priceNum = item.price;
-    } else if (item?.price && typeof item.price === 'object') {
-      priceNum = getProductPrice(item.price, sessionCurrency, liveRates);
-    } else {
-      priceNum = parseFloat(String(item?.price || 0)) || 0;
-    }
-
-    return {
-      id: String(item?.id || `item-${idx}`),
-      name:
-        typeof item?.name === 'object' && item.name !== null
-          ? item.name.ro || item.name.en || 'Produs'
-          : String(item?.name || 'Produs'),
-      quantity: Math.max(1, Number(item?.quantity) || 1),
-      price: Number(priceNum) || 0,
-      image: item?.image || item?.selectedVariant?.image || undefined,
-      selectedVariant: item?.selectedVariant || null,
-    };
-  });
-
-  return normalizeCartItemsCurrency(
-    preNormalized,
-    sessionCurrency,
-    expectedTotal,
-    liveRates
-  );
 }
 
 function computeSessionTotalInRon(
@@ -522,21 +478,25 @@ export async function sendManualRecoveryEmail(
     couponValue = couponData?.value || 10;
   }
 
-  const locale = (session.country === 'RO' || !session.country) ? 'ro' : 'en';
-  const customerName = session.first_name || (locale === 'en' ? 'Friend' : 'Prieten');
-  
+  const locale = resolveAbandonedCartLocale(session);
+  const customerName = String(session.first_name || '').trim();
+  const firstName = customerName ? customerName.split(/\s+/)[0] : '';
+
   const defaultSubject = locale === 'en'
-    ? (couponCode ? `Here is your ${couponValue}% discount for your cart!` : "Did you forget something in your cart?")
-    : (couponCode ? `Ai ${couponValue}% reducere pentru produsele din coș!` : "Ți-ai uitat produsele în coș!");
+    ? (couponCode ? `Here is your ${couponValue}% discount for your cart!` : "You left items in your TrenZone cart")
+    : (couponCode ? `Ai ${couponValue}% reducere pentru produsele din coș!` : "Ai lăsat produse în coșul tău TrenZone");
 
   const rawSubject = customOptions?.customSubject || (couponCode
     ? defaultSubject
     : (template ? (locale === 'en' ? template.subject_en : template.subject_ro) : defaultSubject));
 
   const finalSubject = (rawSubject || defaultSubject)
-    .replace('{{name}}', customerName.split(' ')[0])
-    .replace('{{coupon}}', couponCode || '')
-    .replace('{{value}}', String(couponValue || ''));
+    .replace(/\{\{name\}\}/g, firstName)
+    .replace(/\{\{coupon\}\}/g, couponCode || '')
+    .replace(/\{\{value\}\}/g, String(couponValue || ''))
+    .replace(/,\s*([.!?])/g, '$1')
+    .replace(/\s+,/g, ',')
+    .trim();
 
   const siteUrl = getSiteUrl();
   const cartCheckoutUrl = `${siteUrl}/${locale}/checkout${couponCode ? `?coupon=${encodeURIComponent(couponCode)}` : ''}`;
@@ -565,9 +525,13 @@ export async function sendManualRecoveryEmail(
 
   const resendResult = await resend.emails.send(emailPayload);
   if (resendResult.error) {
+    const errMsg = resendResult.error.message || 'Necunoscută';
     console.error("❌ [sendManualRecoveryEmail] Resend error:", resendResult.error);
-    throw new Error(`Eroare la trimiterea emailului: ${resendResult.error.message || 'Necunoscută'}`);
+    await logEmailToDb(emailClean, finalSubject, `abandoned-${templateType}`, 'failed', errMsg, { sessionId, manual: true });
+    throw new Error(`Eroare la trimiterea emailului: ${errMsg}`);
   }
+
+  await logEmailToDb(emailClean, finalSubject, `abandoned-${templateType}`, 'sent', null, { sessionId, couponCode: couponCode || null, manual: true });
 
   // 6. Update recovery_emails_sent in DB
   const existingSent = session.recovery_emails_sent || {};
@@ -605,159 +569,7 @@ export async function runAbandonedCartsAutomation() {
     throw new Error("Acces neautorizat.");
   }
 
-  const now = new Date();
-  // Window: from 120h (5 days) ago up to 24h ago (ensuring a full 24h buffer for recent shoppers)
-  const lowerBound = new Date(now.getTime() - (120 * 60 * 60 * 1000));
-  const upperBound = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-
-  const { data: sessions, error } = await supabaseAdmin
-    .from('checkout_sessions')
-    .select('*')
-    .eq('status', 'initiated')
-    .gte('created_at', lowerBound.toISOString())
-    .lte('created_at', upperBound.toISOString());
-
-  if (error) throw error;
-  if (!sessions || sessions.length === 0) {
-    return {
-      success: true,
-      processed: 0,
-      emailsSent: 0,
-      emailsSent24h: 0,
-      emailsSent72h: 0,
-      message: "Nu există coșuri abandonate eligibile în fereastra de 24h - 120h."
-    };
-  }
-
-  let emailsSent = 0;
-  let emailsSent24h = 0;
-  let emailsSent72h = 0;
-
-  const template24h = await getEmailTemplate('abandoned_24h');
-  const template72h = await getEmailTemplate('abandoned_72h');
-  const liveRates = await getServerExchangeRates();
-
-  const { data: setting72h } = await supabaseAdmin.from('store_settings').select('value').eq('key', 'abandoned_72h_coupon').single();
-  const couponCode72h = setting72h?.value || 'TREN10';
-  const { data: couponData72h } = await supabaseAdmin.from('coupons').select('value').eq('code', couponCode72h).single();
-  const couponValue72h = couponData72h?.value || 10;
-
-  for (const session of sessions) {
-    if (!session.email) continue;
-    const emailObj = session.email.toLowerCase().trim();
-
-    // 1. Check unsubscribed
-    const { data: unsubData } = await supabaseAdmin
-      .from('unsubscribed_emails')
-      .select('marketing')
-      .eq('email', emailObj)
-      .maybeSingle();
-
-    if (unsubData && unsubData.marketing === false) {
-      continue;
-    }
-
-    // 2. Check if user already placed an order after session creation
-    const { data: recentOrder } = await supabaseAdmin
-      .from('orders')
-      .select('id')
-      .eq('customer_email', emailObj)
-      .gte('created_at', session.created_at)
-      .limit(1);
-
-    if (recentOrder && recentOrder.length > 0) {
-      await supabaseAdmin.from('checkout_sessions').update({ status: 'recovered' }).eq('id', session.id);
-      continue;
-    }
-
-    // 3. Determine email type based on last interaction time
-    const sessionDate = new Date(session.updated_at || session.created_at);
-    const hoursSince = (now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60);
-    const recoveryEmailsSent = session.recovery_emails_sent || {};
-
-    let templateToUse = null;
-    let emailType = '';
-
-    if (hoursSince >= 72 && !recoveryEmailsSent['72h']) {
-      templateToUse = template72h;
-      emailType = '72h';
-    } else if (hoursSince >= 24 && hoursSince < 72 && !recoveryEmailsSent['24h']) {
-      templateToUse = template24h;
-      emailType = '24h';
-    }
-
-    if (!templateToUse || !emailType) continue;
-
-    const locale = (session.country === 'RO' || !session.country) ? 'ro' : 'en';
-    const customerName = session.first_name || (locale === 'en' ? 'Friend' : 'Prieten');
-    const baseSubject = locale === 'en' ? templateToUse.subject_en : templateToUse.subject_ro;
-    const default24hSubject = locale === 'en' ? 'You left items in your cart!' : 'Ai lăsat produse în coș!';
-    const finalSubject = (emailType === '72h'
-      ? (locale === 'en' ? `Here is your ${couponValue72h}% discount for your cart!` : `Ai ${couponValue72h}% reducere pentru produsele din coș!`)
-      : (baseSubject || default24hSubject)
-    )
-      .replace('{{name}}', customerName.split(' ')[0])
-      .replace('{{coupon}}', couponCode72h)
-      .replace('{{value}}', String(couponValue72h));
-
-    const siteUrl = getSiteUrl();
-    const autoCartUrl = `${siteUrl}/${locale}/checkout${emailType === '72h' ? `?coupon=${encodeURIComponent(couponCode72h)}` : ''}`;
-    const sessionCurrency = String(session.currency || (locale === 'ro' ? 'RON' : 'EUR')).toUpperCase().trim() || 'RON';
-    const normalizedItems = buildNormalizedAbandonedItems(session.items, sessionCurrency, session.total_amount, liveRates);
-
-    try {
-      const resendResult = await resend.emails.send({
-        from: getResendFromEmail(),
-        to: emailObj,
-        subject: finalSubject,
-        react: AbandonedCartEmail({
-          customerName,
-          items: normalizedItems,
-          locale: locale as 'ro' | 'en',
-          baseUrl: siteUrl,
-          currency: sessionCurrency,
-          cartUrl: autoCartUrl,
-          templateData: templateToUse as any,
-          userEmail: emailObj,
-          couponCode: emailType === '72h' ? couponCode72h : undefined,
-          couponValue: emailType === '72h' ? couponValue72h : undefined
-        }) as any
-      });
-      if (resendResult.error) {
-        throw new Error(resendResult.error.message || 'Resend error');
-      }
-
-      recoveryEmailsSent[emailType] = true;
-      recoveryEmailsSent[`${emailType}_sent_at`] = new Date().toISOString();
-      if (emailType === '72h') {
-        recoveryEmailsSent.last_coupon_code = couponCode72h;
-        recoveryEmailsSent.last_coupon_value = couponValue72h;
-      }
-      recoveryEmailsSent.automated = true;
-      await supabaseAdmin
-        .from('checkout_sessions')
-        .update({ recovery_emails_sent: recoveryEmailsSent })
-        .eq('id', session.id);
-
-      emailsSent++;
-      if (emailType === '24h') emailsSent24h++;
-      if (emailType === '72h') emailsSent72h++;
-
-      // Throttle 600ms to stay safely below Resend's 2 requests/second rate limit
-      await new Promise(resolve => setTimeout(resolve, 600));
-    } catch (err) {
-      console.error(`Failed to send ${emailType} email to ${emailObj}:`, err);
-    }
-  }
-
-  return {
-    success: true,
-    processed: sessions.length,
-    emailsSent,
-    emailsSent24h,
-    emailsSent72h,
-    message: `Trimiterea automată a fost finalizată: ${emailsSent} emailuri trimise (${emailsSent24h} de 24h, ${emailsSent72h} de 72h cu 10% reducere).`
-  };
+  return executeAbandonedCartsRecovery();
 }
 
 /**

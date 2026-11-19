@@ -38,7 +38,7 @@ function throwAlreadyLoggedResendError(err: any): never {
   throw out;
 }
 
-async function logEmailToDb(
+export async function logEmailToDb(
   recipient: string,
   subject: string,
   type: string,
